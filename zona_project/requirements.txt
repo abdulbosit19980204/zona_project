@@ -1,0 +1,2 @@
+# Ishlab chiqish: loyihani o'zgartiriladigan rejimda o'rnatadi (Django ilova + interfeys) + Claude SDK + server.
+-e .[ai,server]

@@ -1,0 +1,163 @@
+# Responsibility Intelligence Platform
+
+**Clear Ownership. Better Execution.** — kim nimaga javob beradi.
+
+Oddiy org chart emas: kompaniya → bo'lim → jamoa → xodim → biznes jarayon → vazifa zanjiri. Har bir jarayonda
+kim **egasi**, kim **bajaradi**, kim **tasdiqlaydi**, kim **nazorat qiladi**, kim **yordam beradi**, kim **zaxira**.
+Rahbar bitta xodimni tanlab, uning barcha vazifalari, vakolatlari, aloqalari va javobgarlik chegaralarini bitta
+xaritada ko'radi. Egasiz jarayonlar, mas'ulsiz vazifalar va kesishgan mas'uliyat avtomatik topiladi.
+
+## Arxitektura
+
+```
+Brauzer ──► Next.js (3000) ──/api/*──► Django + DRF (8000) ──► SQLite
+   │                                        ▲
+   └──────── WebSocket /ws/events/ ─────────┘  (Channels/Daphne: jonli yangilanish)
+```
+
+| Qism | Texnologiyalar |
+|---|---|
+| Frontend | Next.js 16, React 19, TypeScript · Tailwind CSS 4, shadcn/ui, Lucide, Framer Motion · React Flow (XYFlow), Three.js + React Three Fiber · Zustand, TanStack Query, Axios · React Hook Form + Zod, Recharts, date-fns, Sonner, next-intl |
+| Backend | Django, Django REST Framework, SimpleJWT (access 30 daq / refresh 14 kun, rotatsiya), Channels + Daphne (WebSocket), SQLite |
+| AI | Claude (rasmiy SDK), Gemini, Grok, OpenAI, DeepSeek, Mistral, Groq, OpenRouter, Azure, Ollama, istalgan OpenAI-mos API |
+
+## Loyiha tuzilmasi
+
+```
+zona_project/
+├─ pyproject.toml          backend pip paketi (stargroup-zona)
+├─ requirements.txt        pip install -r requirements.txt
+│
+├─ backend/                Django — API, WebSocket, ma'lumotlar bazasi
+│  ├─ manage.py
+│  ├─ config/              settings.py, urls.py, asgi.py (HTTP + WebSocket)
+│  └─ zona/                asosiy ilova (boshqa Django loyihaga ham ulanadi)
+│     ├─ models.py          Bo'lim, Jamoa, Xodim, Jarayon, Rol, Vazifa, Vakolat, Taklif, AI...
+│     ├─ views*.py          API: tuzilma, kirish (JWT), tasdiqlashlar, admin, AI
+│     ├─ realtime.py        WebSocket iste'molchisi va xabar tarqatish
+│     ├─ search/            ko'p tilli qidiruv (lotin/kirill/rus, imlo xatolari, sinonimlar)
+│     ├─ ai/                AI provayderlar va so'rovlar
+│     └─ tests.py
+│
+└─ frontend/               Next.js ilova
+   ├─ src/app/             sahifalar (har bir menyu bandi — alohida papka)
+   ├─ src/components/
+   │  ├─ layout/           chap menyu, yuqori panel, Ctrl+K buyruqlar oynasi
+   │  ├─ views/            sahifa tarkibi (overview, organization-map, employee-360, ...)
+   │  ├─ graph/            React Flow tugunlari va chiziqlari
+   │  ├─ three/            3D mas'uliyat xaritasi (React Three Fiber)
+   │  ├─ panels/ forms/ settings/ charts/ common/
+   │  └─ ui/               shadcn/ui komponentlari
+   ├─ src/lib/             API mijozi (axios + JWT yangilash), tiplar, hisoblash modeli
+   ├─ src/hooks/           TanStack Query hooklari, WebSocket
+   ├─ src/stores/          Zustand: sessiya va interfeys sozlamalari
+   └─ src/i18n/messages/   uz.json · ru.json · en.json
+```
+
+## Ishga tushirish (ishlab chiqish)
+
+**1. Backend** (Python 3.10+):
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate                  # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
+cd backend
+python manage.py migrate
+python manage.py zona_seed              # namuna ma'lumot (ixtiyoriy)
+python manage.py createsuperuser        # birinchi administrator
+python manage.py runserver              # http://127.0.0.1:8000  (Daphne: HTTP + WebSocket)
+```
+
+**2. Frontend** (Node.js 20+), alohida terminalda:
+
+```bash
+cd frontend
+npm install
+copy .env.example .env.local            # ixtiyoriy; standart sozlamalar ishlaydi
+npm run dev                             # http://localhost:3000
+```
+
+Brauzerda `http://localhost:3000` ni oching va administrator bilan kiring.
+
+## Sahifalar
+
+| Bo'lim | Sahifa | Nima ko'rinadi |
+|---|---|---|
+| Asosiy | Umumiy ko'rinish | KPI, tashkiliy salomatlik (qamrov %), bo'lim va rol taqsimoti, e'tibor talab qiladiganlar, so'nggi faoliyat |
+| | Tashkiliy xarita | React Flow: kompaniya → bo'lim → jamoa → xodim → jarayon. Qidiruv, rol filtri, faqat muammolar, o'ng panel |
+| | Mas'uliyat xaritasi 3D | Three.js: bo'limlar halqasi, xodimlar va jarayonlar fazoda; tanlanganda bog'lanishlar yorishadi |
+| | Bo'limlar · Xodimlar | Tuzilma, jamoalar, rollar soni; xodimni bosing → **Xodim 360°** |
+| | Savol kimga? | Istalgan tilda erkin matn → kim javob beradi (qidiruv + AI) |
+| Boshqaruv | Mas'uliyatlar | Jadval (ommaviy o'tkazish) yoki doska (sudrab o'tkazish) |
+| | Biznes jarayonlar · Matritsa | Egasi, ijrochilar, nazorat, zaxira; jarayon × xodim rollar jadvali |
+| | Tasdiqlashlar | Kuzatuvchi taklif beradi → muharrir/admin tasdiqlaydi |
+| Tahlil | Tahlil · Yuklama · Bo'shliqlar · Hisobotlar | Rollar qamrovi, ortiqcha yuklama, egasiz/nazoratsiz/zaxirasiz jarayonlar, Excel, AI audit |
+| Tizim | Tarix · Sozlamalar | O'zgarishlar jurnali (jonli); profil, foydalanuvchilar, AI, qidiruv lug'ati |
+
+Yuqori panel: bo'lim doirasi, yo'l ko'rsatkichi, global qidiruv (`Ctrl K`), bildirishnomalar, kun/tun rejimi,
+til (o'zbek / rus / ingliz), profil menyusi. Rollar rang bilan emas, **chiziq uslubi** bilan farqlanadi.
+
+## Huquqlar
+
+| Rol | Nima qila oladi |
+|---|---|
+| Administrator | hammasi + foydalanuvchilar, AI sozlamalari (Django superuser ham administrator) |
+| Muharrir | tuzilma, vazifa, rol, vakolatni tahrirlash; takliflarni tasdiqlash; qidiruv lug'ati |
+| Kuzatuvchi | ko'rish, qidirish, "Savol kimga?", o'zgarish taklif qilish |
+
+## AI ni ulash
+
+1. Administrator bo'lib kiring → **Sozlamalar → AI → Provayder qo'shish**. Turini tanlang va API kalitni kiriting
+   (kalit serverda shifrlangan holda saqlanadi, brauzerga qaytarilmaydi).
+2. **Sinash** — kalitni tekshiradi va modellar ro'yxatini yuklaydi.
+3. **Vazifalar uchun modellar**: *Savolni yo'naltirish*, *Xodim tahlili*, *Tuzilma auditi* — har biriga provayder,
+   model, fikrlash darajasi va zaxira model tanlang.
+4. Sarf jadvalida har bir model bo'yicha so'rovlar va tokenlar ko'rinadi.
+
+AI yoqilmagan bo'lsa ham "Savol kimga?" mahalliy ko'p tilli qidiruv bilan ishlaydi.
+
+## Ishlab chiqarish
+
+Backend muhit o'zgaruvchilari: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS`,
+`DJANGO_CSRF_TRUSTED_ORIGINS`, `ZONA_DB_PATH`, `ZONA_ENCRYPTION_KEY`, `ZONA_FRONTEND_URL`, `ZONA_CORS_ORIGINS`.
+
+```bash
+cd backend && daphne -b 0.0.0.0 -p 8000 config.asgi:application
+cd frontend && npm run build && npm start      # BACKEND_URL=http://<backend>:8000
+```
+
+Bir nechta backend jarayoni ishlatilsa, `CHANNEL_LAYERS` ni Redis'ga o'tkazing (`channels-redis`) —
+standart xotiradagi qatlam faqat bitta jarayon uchun. Nginx ortida `/ws/` uchun WebSocket upgrade'ni yoqing
+va frontendga `NEXT_PUBLIC_WS_URL=wss://<domen>/ws/events/` bering.
+
+## Boshqa Django loyihaga ulash
+
+```bash
+pip install "/yo'l/zona_project[ai,server]"
+```
+
+```python
+# settings.py
+INSTALLED_APPS += ["daphne", "rest_framework", "rest_framework_simplejwt.token_blacklist", "channels", "zona"]
+ASGI_APPLICATION = "config.asgi.application"   # asgi.py da zona.routing.websocket_urlpatterns ni ulang
+ZONA = {"COMPANY_NAME": "StarGroup", "CORS_ORIGINS": ["https://ui.example.com"]}
+
+# urls.py
+path("", include("zona.urls")),                # /api/...
+```
+
+## Testlar
+
+```bash
+cd backend && python manage.py test zona          # backend
+cd frontend && npx tsc --noEmit && npm run lint   # frontend
+```
+
+## API (qisqacha)
+
+Hammasi `/api/` ostida, `Authorization: Bearer <access>`:
+`auth/login|refresh|logout|me|password` · `state/` (butun tuzilma) · `events/` · `departments/ teams/ members/
+authorities/ systems/ processes/ roles/ tasks/ edge-cases/ synonyms/` (CRUD) · `tasks/{id}/move/`,
+`tasks/bulk-move/` · `approvals/` (+ `approve/ reject/ cancel/`) · `search/?q=` · `ai/route|person|audit/` ·
+`admin/users/`, `admin/ai/providers|tasks|usage/` · `export.xlsx`. WebSocket: `/ws/events/?token=<access>`.

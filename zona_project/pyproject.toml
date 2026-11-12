@@ -1,0 +1,36 @@
+# pip paketi — backend (Django ilova "zona"). Interfeys alohida: frontend/ (Next.js).
+#   pip install .            yoki     pip install -e ".[ai,server]"   (ishlab chiqish)
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stargroup-zona"
+dynamic = ["version"]
+description = "Responsibility Architecture: kim nimaga javob beradi. Django REST + WebSocket backend."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "LicenseRef-Proprietary"
+authors = [{ name = "StarGroup IT" }]
+dependencies = [
+    "Django>=4.2",
+    "djangorestframework>=3.14",
+    "djangorestframework-simplejwt>=5.4",
+    "channels>=4.2",
+    "openpyxl>=3.1",
+    "cryptography>=42",
+]
+
+[project.optional-dependencies]
+ai = ["anthropic>=2.8,<3"]                                        # Claude uchun rasmiy SDK
+server = ["daphne>=4.1", "whitenoise>=6.6"]                       # ASGI server (HTTP + WebSocket)
+
+[tool.setuptools.package-dir]
+"" = "backend"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["zona*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "zona.__version__" }

@@ -1,0 +1,97 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useTranslations } from "next-intl";
+import { useEffect } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
+
+import { useModel, useOrgMutation } from "@/hooks/use-org";
+import { orgApi } from "@/lib/api/endpoints";
+import type { Member } from "@/lib/api/types";
+
+import { CheckboxField, fromId, FormDialog, NONE, Row, SelectField, TextareaField, TextField, toId } from "./form-kit";
+import { departmentOptions, memberOptions, teamOptions } from "./options";
+
+const schema = z.object({
+  name: z.string().trim().min(2).max(80),
+  role: z.string().trim().min(2).max(80),
+  department: z.string(),
+  team: z.string(),
+  manager: z.string(),
+  is_team: z.boolean(),
+  phone: z.string().max(40),
+  telegram: z.string().max(64),
+  email: z.union([z.literal(""), z.email()]),
+  location: z.string().max(120),
+  trigger: z.string().max(200),
+  does: z.string().max(3000),
+  excludes: z.string().max(3000),
+});
+type Values = z.infer<typeof schema>;
+
+/** Xodim: lavozim, bo'lim/jamoa, rahbar, aloqa ma'lumotlari va javobgarlik chegaralari. */
+export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  member?: Member;
+  presetDepartment?: number | null;
+}) {
+  const t = useTranslations();
+  const model = useModel();
+  const form = useForm<Values>({ resolver: zodResolver(schema) });
+  const dept = useWatch({ control: form.control, name: "department" });
+
+  useEffect(() => {
+    if (!open) return;
+    form.reset({
+      name: member?.name ?? "", role: member?.role ?? "",
+      department: fromId(member ? member.department : presetDepartment), team: fromId(member?.team), manager: fromId(member?.manager),
+      is_team: member?.is_team ?? false, phone: member?.phone ?? "", telegram: member?.telegram ?? "", email: member?.email ?? "",
+      location: member?.location ?? "", trigger: member?.trigger ?? "", does: member?.does ?? "", excludes: member?.excludes ?? "",
+    });
+  }, [open, member, presetDepartment, form]);
+
+  const save = useOrgMutation(
+    (v: Values) => {
+      const body = { ...v, department: toId(v.department), team: toId(v.team), manager: toId(v.manager) };
+      return member ? orgApi.members.update(member.id, body) : orgApi.members.create(body);
+    },
+    member ? t("common.saved") : t("forms.member.created"),
+  );
+  const remove = useOrgMutation(() => orgApi.members.remove(member!.id), t("common.deleted"));
+  const managers = memberOptions(model, t("common.none")).filter((o) => o.value !== String(member?.id));
+
+  return (
+    <FormDialog
+      wide open={open} onOpenChange={onOpenChange}
+      title={member ? t("forms.member.edit") : t("forms.member.new")}
+      onSubmit={form.handleSubmit(async (v) => { await save.mutateAsync(v); onOpenChange(false); })}
+      submitting={save.isPending}
+      onDelete={member ? () => remove.mutateAsync(undefined) : undefined}
+      deleteConfirm={member ? t("forms.member.deleteConfirm", { count: model.load.get(member.id) ?? 0 }) : undefined}
+    >
+      <Row>
+        <TextField control={form.control} name="name" label={t("forms.member.name")} />
+        <TextField control={form.control} name="role" label={t("forms.member.position")} />
+      </Row>
+      <Row>
+        <SelectField control={form.control} name="department" label={t("forms.department")} options={departmentOptions(model, t("forms.noDepartment"))} />
+        <SelectField control={form.control} name="team" label={t("forms.teamField")} options={teamOptions(model, dept && dept !== NONE ? Number(dept) : null, t("forms.noTeam"))} />
+      </Row>
+      <Row>
+        <SelectField control={form.control} name="manager" label={t("forms.member.manager")} options={managers} />
+        <TextField control={form.control} name="location" label={t("forms.member.location")} />
+      </Row>
+      <Row>
+        <TextField control={form.control} name="phone" label={t("forms.phone")} placeholder="+998 90 123 45 67" />
+        <TextField control={form.control} name="telegram" label="Telegram" placeholder="username" />
+      </Row>
+      <TextField control={form.control} name="email" label="Email" type="email" />
+      <CheckboxField control={form.control} name="is_team" label={t("forms.member.isTeam")} />
+      <TextField control={form.control} name="trigger" label={t("forms.member.trigger")} />
+      <TextareaField control={form.control} name="does" label={t("forms.member.does")} />
+      <TextareaField control={form.control} name="excludes" label={t("forms.member.excludes")} />
+    </FormDialog>
+  );
+}

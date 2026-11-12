@@ -1,0 +1,78 @@
+import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
+
+import { useAuth } from "@/stores/auth";
+
+import type { TokenPair } from "./types";
+
+/** API manzili. Standart: "/api" — Next.js rewrites orqali Django'ga yo'naltiriladi (next.config.ts). */
+export const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "/api").replace(/\/$/, "");
+
+export const api = axios.create({
+  baseURL: API_BASE + "/",
+  headers: { "Content-Type": "application/json" },
+});
+
+api.interceptors.request.use((config) => {
+  const token = useAuth.getState().access;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+/* Access token muddati tugasa: refresh bilan bitta marta yangilab, so'rovni qaytaramiz.
+   Bir vaqtda kelgan 401 javoblar bitta yangilash so'rovini kutadi. */
+let refreshing: Promise<string | null> | null = null;
+
+async function refreshAccess(): Promise<string | null> {
+  const refresh = useAuth.getState().refresh;
+  if (!refresh) return null;
+  try {
+    const { data } = await axios.post<TokenPair>(`${API_BASE}/auth/refresh/`, { refresh });
+    useAuth.getState().setTokens(data);
+    return data.access;
+  } catch {
+    useAuth.getState().logout();
+    return null;
+  }
+}
+
+type RetriableConfig = InternalAxiosRequestConfig & { _retry?: boolean };
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const config = error.config as RetriableConfig | undefined;
+    if (error.response?.status === 401 && config && !config._retry && !config.url?.startsWith("auth/")) {
+      config._retry = true;
+      refreshing ??= refreshAccess().finally(() => {
+        refreshing = null;
+      });
+      const token = await refreshing;
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        return api(config);
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+function flatten(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(flatten).join(" ");
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, v]) => (["detail", "non_field_errors"].includes(key) ? flatten(v) : `${key}: ${flatten(v)}`))
+      .join("; ");
+  }
+  return String(value ?? "");
+}
+
+/** Har qanday xatoni foydalanuvchiga ko'rsatiladigan matnga aylantiradi. */
+export function errorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) return "Server bilan aloqa yo'q";
+    const text = flatten(error.response.data);
+    return text || `Xatolik (${error.response.status})`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
