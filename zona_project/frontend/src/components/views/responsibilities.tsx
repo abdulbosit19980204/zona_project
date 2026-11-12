@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { MemberAvatar } from "@/components/common/member-avatar";
 import { Page, PageHeader } from "@/components/common/page";
 import { fromId, NONE, toId } from "@/components/forms/form-kit";
+import { ExecutorsPicker, executorsOf } from "@/components/forms/executors-picker";
 import { ProposeDialog } from "@/components/forms/propose-dialog";
 import { TaskDialog } from "@/components/forms/task-dialog";
 import { Button } from "@/components/ui/button";
@@ -46,12 +47,12 @@ export function Responsibilities() {
   const visible = useMemo(() => {
     const q = norm(query.trim());
     return model.state.tasks.filter((task) => {
-      const m = task.owner ? model.member.get(task.owner) : undefined;
-      if (scope && (!m || !inScope(m))) return false;
+      const ids = executorsOf(task);
+      if (scope && !ids.some((id) => { const m = model.member.get(id); return m && inScope(m); })) return false;
       const p = task.process ? model.process.get(task.process) : undefined;
       if (system !== NONE && String(p?.system ?? "") !== system) return false;
-      if (owner === "none" && task.owner) return false;
-      if (owner !== "all" && owner !== "none" && String(task.owner) !== owner) return false;
+      if (owner === "none" && ids.length) return false;
+      if (owner !== "all" && owner !== "none" && !ids.includes(Number(owner))) return false;
       return !q || norm(`${task.title} ${p?.name ?? ""} ${model.systemName(p)} ${task.note}`).includes(q);
     });
   }, [model, query, system, owner, scope, inScope]);
@@ -62,9 +63,6 @@ export function Responsibilities() {
     [propose],
   );
 
-  const changeOwner =(task: Task, value: string) => {
-    if (can.edit) move.mutate({ id: task.id, to: toId(value) });
-  };
   const columns = [...model.memberOrder.filter(inScope).map((m) => ({ id: m.id as number | null, member: m })), ...(scope ? [] : [{ id: null, member: undefined }])];
 
   return (
@@ -135,14 +133,13 @@ export function Responsibilities() {
                 )}
                 <TableHead>{t("forms.task.title")}</TableHead>
                 <TableHead>{t("forms.task.process")}</TableHead>
-                <TableHead className="w-64">{t("forms.task.owner")}</TableHead>
+                <TableHead className="w-80">{t("forms.task.executors")}</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {visible.map((task) => {
                 const p = task.process ? model.process.get(task.process) : undefined;
-                const m = task.owner ? model.member.get(task.owner) : undefined;
                 return (
                   <TableRow key={task.id}>
                     {can.edit && (
@@ -153,28 +150,7 @@ export function Responsibilities() {
                     <TableCell className="max-w-md whitespace-normal">{task.title}{task.is_custom && <span className="ml-2 rounded border border-primary/40 px-1 text-[10px] text-primary">{t("responsibilities.new")}</span>}</TableCell>
                     <TableCell className="text-muted-foreground">{p ? <>{p.name}<div className="text-xs">{model.systemName(p)}</div></> : "—"}</TableCell>
                     <TableCell>
-                      {can.edit ? (
-                        <Select value={fromId(task.owner)} onValueChange={(v) => changeOwner(task, v)}>
-                          <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NONE}>{t("common.unassigned")}</SelectItem>
-                            {model.memberOrder.map((mm) => <SelectItem key={mm.id} value={String(mm.id)}>{mm.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <span className="flex items-center gap-2"><MemberAvatar member={m} size={22} />{m?.name ?? t("common.unassigned")}</span>
-                      )}
-                      {task.fallbacks.length > 0 && (
-                        <button type="button" onClick={() => can.edit && setEdit(task)} className="mt-1 flex flex-wrap items-center gap-1 text-left text-xs text-muted-foreground" title={t("forms.task.fallbacksHint")}>
-                          {task.fallbacks.map((f, i) => (
-                            <span key={f.member} className="inline-flex items-center gap-1" title={f.condition || undefined}>
-                              <span className="text-primary">→</span>
-                              <span className="font-mono text-[10px]">{i + 2}.</span>
-                              {model.member.get(f.member)?.name ?? "?"}
-                            </span>
-                          ))}
-                        </button>
-                      )}
+                      <ExecutorsPicker task={task} disabled={!can.edit} />
                     </TableCell>
                     <TableCell>
                       {can.edit
@@ -190,7 +166,8 @@ export function Responsibilities() {
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-3">
           {columns.map(({ id, member }) => {
-            const tasks = visible.filter((x) => (x.owner ?? null) === id);
+            // vazifa har bir ijrochisining ustunida ko'rinadi; navbatdagilarda tartib raqami bilan
+            const tasks = visible.filter((x) => (id === null ? !executorsOf(x).length : executorsOf(x).includes(id)));
             return (
               <div
                 key={id ?? "none"}
@@ -201,7 +178,7 @@ export function Responsibilities() {
                   const task = dragging !== null ? model.task.get(dragging) : undefined;
                   setDragging(null);
                   setOver(null);
-                  if (!task || (task.owner ?? null) === id) return;
+                  if (!task || (task.owner ?? null) === id || (id !== null && executorsOf(task).includes(id))) return;
                   if (can.edit) move.mutate({ id: task.id, to: id });
                   else setPropose({ ...task, owner: id });
                 }}
@@ -224,7 +201,14 @@ export function Responsibilities() {
                       className={cn("cursor-grab rounded-lg border bg-background p-2.5 text-[13px] hover:border-foreground/25", dragging === task.id && "opacity-40")}
                     >
                       {task.title}
-                      <div className="mt-1 truncate text-[11px] text-muted-foreground">{task.process ? model.process.get(task.process)?.name : "—"}</div>
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className="min-w-0 flex-1 truncate">{task.process ? model.process.get(task.process)?.name : "—"}</span>
+                        {id !== null && executorsOf(task).length > 1 && (
+                          <span className={cn("shrink-0 rounded px-1 font-mono", task.owner === id ? "bg-primary/10 text-primary" : "bg-muted")}>
+                            {t("responsibilities.step", { n: executorsOf(task).indexOf(id) + 1 })}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {!tasks.length && <p className="p-4 text-center text-xs text-muted-foreground">{t("responsibilities.dropHere")}</p>}

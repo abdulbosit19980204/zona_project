@@ -47,6 +47,9 @@ export const orgApi = {
     ...resource<Task>("tasks"),
     move: (id: number, owner: number | null) => post<Task>(`tasks/${id}/move/`, { owner }),
     bulkMove: (ids: number[], owner: number | null) => post<{ moved: number }>("tasks/bulk-move/", { ids, owner }),
+    /** Jarayonning barcha vazifalariga ijrochi qo'shish / olib tashlash. */
+    processExecutor: (process: number, member: number, remove = false) =>
+      post<{ changed: number }>("tasks/process-executor/", { process, member, remove }),
   },
   roles: {
     create: (body: Omit<ProcessRole, "id">) => post<ProcessRole>("roles/", body),

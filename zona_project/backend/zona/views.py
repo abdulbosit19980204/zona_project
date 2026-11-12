@@ -13,7 +13,7 @@ from .ai import service as ai_service
 from .api import ZonaViewSet, zona_api
 from .exporter import workbook_bytes
 from .models import (Authority, ChangeRequest, Department, EdgeCase, Event, Member, Process, ProcessRole, Synonym,
-                     System, Task, Team)
+                     System, Task, TaskFallback, Team)
 from .permissions import CanView, ReadOrEdit, role_of
 from .search import debug as search_debug
 from .search import search as run_search
@@ -243,6 +243,50 @@ class TaskViewSet(ZonaViewSet):
         with transaction.atomic():
             moved = sum(self._move(t, owner) for t in Task.objects.filter(pk__in=ids).select_related("owner"))
         return Response({"moved": moved})
+
+    @action(detail=False, methods=["post"], url_path="process-executor")
+    def process_executor(self, request):
+        """Jarayonning barcha vazifalariga ijrochi qo'shish yoki olib tashlash.
+
+        {"process": id, "member": id, "remove": false}
+        Qo'shish: xodim har bir vazifaga navbatning oxiriga qo'shiladi (mas'ulsiz vazifada asosiy bo'ladi).
+        Olib tashlash: navbatdan chiqadi; asosiy bo'lgan vazifada keyingi navbatdagi asosiy bo'ladi.
+        """
+        try:
+            process = Process.objects.get(pk=int(request.data.get("process")))
+            member = Member.objects.get(pk=int(request.data.get("member")))
+        except (Process.DoesNotExist, Member.DoesNotExist, TypeError, ValueError):
+            return Response({"detail": "Jarayon yoki xodim topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
+        remove = bool(request.data.get("remove"))
+        changed = 0
+        with transaction.atomic():
+            for task in process.tasks.select_related("owner").prefetch_related("fallbacks"):
+                chain = list(task.fallbacks.all())
+                if remove:
+                    if task.owner_id == member.id:
+                        nxt = chain[0] if chain else None
+                        task.owner = nxt.member if nxt else None
+                        task.save(update_fields=["owner", "updated_at"])
+                        if nxt:
+                            nxt.delete()
+                        changed += 1
+                    elif any(f.member_id == member.id for f in chain):
+                        task.fallbacks.filter(member=member).delete()
+                        task.save(update_fields=["updated_at"])
+                        changed += 1
+                elif task.owner_id is None:
+                    task.owner = member
+                    task.save(update_fields=["owner", "updated_at"])
+                    changed += 1
+                elif task.owner_id != member.id and all(f.member_id != member.id for f in chain):
+                    order = max((f.order for f in chain), default=1) + 1
+                    TaskFallback.objects.create(task=task, member=member, order=order)
+                    task.save(update_fields=["updated_at"])
+                    changed += 1
+            if changed:
+                log(request, Event.ROLE, subject=process.name, **({"from_name": member.name} if remove else {"to_name": member.name}),
+                    text=f"Ijrochi {'olib tashlandi' if remove else 'qoʻshildi'}: {changed} ta vazifa")
+        return Response({"changed": changed})
 
     def _move(self, task, owner):
         if task.owner == owner:

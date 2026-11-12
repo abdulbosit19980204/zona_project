@@ -109,15 +109,25 @@ export function buildModel(state: OrgState): Model {
   const tasksOf = new Map<number, Task[]>();
   const fallbackTasksOf = new Map<number, Task[]>();
   const load = new Map<number, number>();
+  // exec: jarayon -> ijrochi -> vazifalar soni (asosiy mas'ul ham, navbatdagilar ham ijrochi).
+  // mainExec: faqat asosiy mas'ullar — "ijrochilar bo'lingan" ogohlantirishi uchun.
   const exec = new Map<number, Map<number, number>>();
+  const mainExec = new Map<number, Map<number, number>>();
+  const bump = (map: Map<number, Map<number, number>>, pid: number, mid: number) => {
+    const m = map.get(pid) ?? new Map<number, number>();
+    m.set(mid, (m.get(mid) ?? 0) + 1);
+    map.set(pid, m);
+  };
   for (const t of state.tasks) {
     if (t.process) push(tasksOf, t.process, t);
-    for (const f of t.fallbacks ?? []) push(fallbackTasksOf, f.member, t);
+    for (const f of t.fallbacks ?? []) {
+      push(fallbackTasksOf, f.member, t);
+      if (t.process) bump(exec, t.process, f.member);
+    }
     if (t.owner) load.set(t.owner, (load.get(t.owner) ?? 0) + 1);
     if (t.process && t.owner) {
-      const m = exec.get(t.process) ?? new Map<number, number>();
-      m.set(t.owner, (m.get(t.owner) ?? 0) + 1);
-      exec.set(t.process, m);
+      bump(exec, t.process, t.owner);
+      bump(mainExec, t.process, t.owner);
     }
   }
   const rolesOf = new Map<number, ProcessRole[]>();
@@ -150,7 +160,7 @@ export function buildModel(state: OrgState): Model {
   for (const p of state.processes) {
     const owners = (rolesOf.get(p.id) ?? []).filter((r) => r.role === "owner").map((r) => r.member)
       .sort((a, b) => (rank.get(a) ?? 1e6) - (rank.get(b) ?? 1e6));
-    const execs = [...(exec.get(p.id) ?? new Map<number, number>()).entries()].sort((a, b) => b[1] - a[1]);
+    const execs = [...(mainExec.get(p.id) ?? new Map<number, number>()).entries()].sort((a, b) => b[1] - a[1]);
     primaryOwner.set(p.id, owners[0] ?? execs[0]?.[0] ?? null);
     const tasks = tasksOf.get(p.id) ?? [];
     const unassigned = tasks.filter((t) => !t.owner).length;

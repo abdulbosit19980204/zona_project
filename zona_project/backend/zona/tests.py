@@ -207,6 +207,26 @@ class StructureTests(Base):
         people = {p["member"]: p for p in search("marshrutga nuqta qoshish")["people"]}
         self.assertIn("fallback", people[j.id]["via"])
 
+    def test_process_executor_add_remove(self):
+        self.login("editor")
+        p = Process.objects.get(name="ProTarget: klient")
+        n = p.tasks.count()
+        s, sup = Member.objects.get(name="Saidabror"), Member.objects.get(name="Supervayzerlar")
+        r = self.call("post", "tasks/process-executor/", {"process": p.id, "member": sup.id})
+        self.assertEqual(r.json()["changed"], n)
+        for task in p.tasks.all():
+            self.assertEqual(task.owner, s)
+            self.assertEqual(list(task.fallbacks.values_list("member_id", flat=True)), [sup.id])
+        # takror qo'shish hech narsani o'zgartirmaydi
+        self.assertEqual(self.call("post", "tasks/process-executor/", {"process": p.id, "member": sup.id}).json()["changed"], 0)
+        # asosiyni olib tashlasa, navbatdagi asosiy bo'ladi
+        self.call("post", "tasks/process-executor/", {"process": p.id, "member": s.id, "remove": True})
+        for task in p.tasks.all():
+            self.assertEqual(task.owner, sup)
+            self.assertFalse(task.fallbacks.exists())
+        self.login("viewer")
+        self.assertEqual(self.call("post", "tasks/process-executor/", {"process": p.id, "member": s.id}).status_code, 403)
+
     def test_index_describes_api(self):
         data = self.client.get("/").json()
         self.assertEqual(data["api"], "/api/")

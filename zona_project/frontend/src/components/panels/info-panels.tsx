@@ -158,14 +158,17 @@ export function ProcessPanel({ processId, onSelect }: { processId: number; onSel
   const [edit, setEdit] = useState(false);
   const [task, setTask] = useState<Task | null | undefined>(undefined);
   const [addMember, setAddMember] = useState<string>("");
-  const [addRole, setAddRole] = useState<ProcessRoleKey>("backup");
+  const [addRole, setAddRole] = useState<ProcessRoleKey | "executor">("backup");
   const p = model.process.get(processId);
   const removeRole = useOrgMutation((id: number) => (can.edit ? orgApi.roles.remove(id) : approvalsApi.create("role_remove", { role_id: id }, "").then(() => undefined)),
     can.edit ? t("forms.roles.saved") : t("forms.roles.proposed"));
   const add = useOrgMutation(async (): Promise<unknown> => {
+    // ijrochi jarayon roli emas: u vazifalar orqali beriladi (har bir vazifaga navbat bilan)
+    if (addRole === "executor") return orgApi.tasks.processExecutor(processId, Number(addMember));
     const body = { process: processId, member: Number(addMember), role: addRole };
     return can.edit ? orgApi.roles.create(body) : approvalsApi.create("role_add", body, "");
   }, can.edit ? t("forms.roles.saved") : t("forms.roles.proposed"));
+  const removeExecutor = useOrgMutation((member: number) => orgApi.tasks.processExecutor(processId, member, true), t("forms.roles.saved"));
   if (!p) return null;
   const links = model.linksOfProcess.get(p.id) ?? [];
   const tasks = model.tasksOf.get(p.id) ?? [];
@@ -210,6 +213,11 @@ export function ProcessPanel({ processId, onSelect }: { processId: number; onSel
                             <X className="size-3" />
                           </button>
                         )}
+                        {w.roleId === null && can.edit && (
+                          <button className="grid size-5 place-items-center rounded-full text-muted-foreground hover:text-destructive" onClick={() => removeExecutor.mutate(w.member)} title={t("panel.removeExecutor")}>
+                            <X className="size-3" />
+                          </button>
+                        )}
                       </span>
                     ) : null;
                   })}
@@ -224,9 +232,11 @@ export function ProcessPanel({ processId, onSelect }: { processId: number; onSel
             <SelectTrigger size="sm" className="w-full"><SelectValue placeholder={t("nav.employees")} /></SelectTrigger>
             <SelectContent>{model.memberOrder.map((mm) => <SelectItem key={mm.id} value={String(mm.id)}>{mm.name}</SelectItem>)}</SelectContent>
           </Select>
-          <Select value={addRole} onValueChange={(v) => setAddRole(v as ProcessRoleKey)}>
+          <Select value={addRole} onValueChange={(v) => setAddRole(v as ProcessRoleKey | "executor")}>
             <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent>{PROCESS_ROLES.map((r) => <SelectItem key={r} value={r}>{t(`roles.${r}`)}</SelectItem>)}</SelectContent>
+            <SelectContent>
+              {(can.edit ? ROLE_ORDER : PROCESS_ROLES).map((r) => <SelectItem key={r} value={r}>{t(`roles.${r}`)}</SelectItem>)}
+            </SelectContent>
           </Select>
           <Button size="sm" disabled={!addMember || add.isPending} onClick={() => add.mutate(undefined)}>{can.edit ? t("common.add") : t("forms.roles.propose")}</Button>
         </div>
@@ -236,6 +246,11 @@ export function ProcessPanel({ processId, onSelect }: { processId: number; onSel
           <Row key={task.id} onClick={() => (can.edit ? setTask(task) : undefined)}>
             <MemberAvatar member={task.owner ? model.member.get(task.owner) : null} size={22} />
             <span className="min-w-0 flex-1 truncate" title={task.title}>{task.title}</span>
+            {task.fallbacks.length > 0 && (
+              <span className="shrink-0 rounded-full bg-muted px-1.5 font-mono text-[10px] text-muted-foreground" title={task.fallbacks.map((f) => model.member.get(f.member)?.name).join(", ")}>
+                +{task.fallbacks.length}
+              </span>
+            )}
           </Row>
         ))}
         {can.edit && <Button size="sm" variant="outline" className="mt-2" onClick={() => setTask(null)}><Plus className="size-4" />{t("forms.task.new")}</Button>}
