@@ -3,9 +3,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2, CircleAlert, KeyRound, Loader2, Pencil, Plug, Plus, Zap } from "lucide-react";
+import { CheckCircle2, CircleAlert, KeyRound, Languages, Loader2, Pencil, Plug, Plus, Zap } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -30,6 +30,7 @@ const KEYS = {
   tasks: ["admin", "ai", "tasks"] as const,
   usage: ["admin", "ai", "usage"] as const,
   summary: ["admin", "ai", "summary"] as const,
+  translate: ["admin", "ai", "translate"] as const,
 };
 
 /** AI ulanishlari: provayderlar (kalitlar shifrlangan holda saqlanadi), har bir vazifa uchun model, sarf. */
@@ -61,6 +62,8 @@ export function AiTab() {
       <div className="grid gap-4 xl:grid-cols-3">
         {tasks.data?.map((c) => <TaskConfigCard key={c.task} config={c} providers={providers.data ?? []} kinds={kindMap} />)}
       </div>
+
+      <TranslateSection />
 
       <UsageSection />
       <ProviderDialog open={edit !== undefined} onOpenChange={(o) => !o && setEdit(undefined)} provider={edit ?? undefined} kinds={kinds.data ?? []} />
@@ -268,6 +271,64 @@ function TaskConfigCard({ config, providers, kinds }: { config: AITaskConfig; pr
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/** Mavjud ma'lumotlarni (masalan, avval kiritilganlarini) bir bosishda barcha tillarga tarjima qilish. */
+function TranslateSection() {
+  const t = useTranslations("ai.translation");
+  const qc = useQueryClient();
+  const status = useQuery({
+    queryKey: KEYS.translate,
+    queryFn: adminApi.translate.status,
+    refetchInterval: (q) => (q.state.data?.running ? 2500 : false),
+  });
+  const start = useMutation({
+    mutationFn: adminApi.translate.start,
+    onSuccess: (data) => {
+      qc.setQueryData(KEYS.translate, data);
+      toast.success(t("started"));
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const s = status.data;
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    // fon tarjimasi tugadi: tuzilmani yangilaymiz
+    if (wasRunning.current && s && !s.running) void qc.invalidateQueries({ queryKey: queryKeys.state });
+    wasRunning.current = !!s?.running;
+  }, [s, qc]);
+
+  return (
+    <Card className="mt-6 gap-3 p-5">
+      <div className="flex flex-wrap items-start gap-3">
+        <span className="grid size-9 place-items-center rounded-lg border bg-muted/50"><Languages className="size-4" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">{t("title")}</div>
+          <p className="text-sm text-muted-foreground">{t("hint")}</p>
+        </div>
+        <Button disabled={!s?.enabled || s.running || start.isPending || !s.pending} onClick={() => start.mutate()}>
+          {s?.running || start.isPending ? <Loader2 className="size-4 animate-spin" /> : <Languages className="size-4" />}
+          {s?.running ? t("running") : t("run")}
+        </Button>
+      </div>
+      {s && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          {!s.enabled ? (
+            <span className="text-muted-foreground">{t("off")}</span>
+          ) : s.pending ? (
+            <span>{t("pending", { count: s.pending })}</span>
+          ) : (
+            <span className="flex items-center gap-1 text-success"><CheckCircle2 className="size-4" />{t("allDone")}</span>
+          )}
+          {s.last_error && (
+            <span className="flex min-w-0 items-center gap-1 text-destructive" title={s.last_error}>
+              <CircleAlert className="size-4 shrink-0" /><span className="truncate">{s.last_error}</span>
+            </span>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

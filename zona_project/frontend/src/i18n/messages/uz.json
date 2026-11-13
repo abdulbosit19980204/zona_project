@@ -19,7 +19,12 @@
     "settings": "Sozlamalar",
     "toggle": "Menyuni yigʻish/yoyish",
     "collapse": "Yigʻish",
-    "groups": { "main": "Asosiy", "management": "Boshqaruv", "analytics": "Tahlil", "system": "Tizim" }
+    "groups": {
+      "main": "Asosiy",
+      "management": "Boshqaruv",
+      "analytics": "Tahlil",
+      "system": "Tizim"
+    }
   },
   "top": {
     "search": "Qidirish…",
@@ -44,7 +49,11 @@
     "my360": "Mening xaritam 360°",
     "logout": "Chiqish",
     "newTask": "Yangi vazifa",
-    "status": { "live": "Jonli", "connecting": "Ulanmoqda", "offline": "Oflayn" }
+    "status": {
+      "live": "Jonli",
+      "connecting": "Ulanmoqda",
+      "offline": "Oflayn"
+    }
   },
   "common": {
     "add": "Qoʻshish",
@@ -79,7 +88,11 @@
       "backup": "Asosiy masʼul yoʻqligida oʻrnini bosadi"
     }
   },
-  "appRoles": { "admin": "Administrator", "editor": "Muharrir", "viewer": "Kuzatuvchi" },
+  "appRoles": {
+    "admin": "Administrator",
+    "editor": "Muharrir",
+    "viewer": "Kuzatuvchi"
+  },
   "login": {
     "title": "Tizimga kirish",
     "subtitle": "Masʼuliyat arxitekturasi — kim nimaga javob beradi",
@@ -236,8 +249,16 @@
       "created": "Xodim qoʻshildi",
       "deleteConfirm": "Oʻchirilsinmi? {count} ta vazifa masʼulsiz qoladi."
     },
-    "dept": { "new": "Yangi boʻlim", "edit": "Boʻlimni tahrirlash", "deleteConfirm": "Boʻlim oʻchirilsinmi? Xodimlar boʻlimsiz qoladi." },
-    "team": { "new": "Yangi jamoa", "edit": "Jamoani tahrirlash", "lead": "Jamoa rahbari" },
+    "dept": {
+      "new": "Yangi boʻlim",
+      "edit": "Boʻlimni tahrirlash",
+      "deleteConfirm": "Boʻlim oʻchirilsinmi? Xodimlar boʻlimsiz qoladi."
+    },
+    "team": {
+      "new": "Yangi jamoa",
+      "edit": "Jamoani tahrirlash",
+      "lead": "Jamoa rahbari"
+    },
     "process": {
       "new": "Yangi jarayon",
       "edit": "Jarayonni tahrirlash",
@@ -261,7 +282,8 @@
       "propose": "Taklif yuborish",
       "proposed": "Taklif tasdiqlashga yuborildi",
       "saved": "Rollar saqlandi"
-    }
+    },
+    "anyLanguage": "Istalgan tilda yozing — AI boshqa tillarga oʻzi tarjima qiladi"
   },
   "approvals": {
     "approve": "Tasdiqlash",
@@ -287,8 +309,18 @@
     "role": "Rol",
     "send": "Yuborish",
     "submitted": "Taklif yuborildi",
-    "kinds": { "task_owner": "Vazifa masʼulini almashtirish", "role_add": "Rol berish", "role_remove": "Rolni olish" },
-    "status": { "pending": "Kutilmoqda", "approved": "Tasdiqlangan", "rejected": "Rad etilgan", "cancelled": "Qaytarilgan", "all": "Hammasi" }
+    "kinds": {
+      "task_owner": "Vazifa masʼulini almashtirish",
+      "role_add": "Rol berish",
+      "role_remove": "Rolni olish"
+    },
+    "status": {
+      "pending": "Kutilmoqda",
+      "approved": "Tasdiqlangan",
+      "rejected": "Rad etilgan",
+      "cancelled": "Qaytarilgan",
+      "all": "Hammasi"
+    }
   },
   "issues": {
     "no_owner": "Egasi yoʻq",
@@ -439,7 +471,13 @@
     "placeholder": "Muammo yoki savolni yozing…",
     "tryAi": "Boshqacha yozib koʻring yoki AI dan soʻrang.",
     "via": "Asos",
-    "viaKind": { "task": "vazifalari", "process": "jarayondagi roli", "member": "lavozim tavsifi", "edge": "maxsus holat", "fallback": "navbatdagi masʼul" },
+    "viaKind": {
+      "task": "vazifalari",
+      "process": "jarayondagi roli",
+      "member": "lavozim tavsifi",
+      "edge": "maxsus holat",
+      "fallback": "navbatdagi masʼul"
+    },
     "whoAnswers": "Kim javob beradi"
   },
   "map3d": {
@@ -488,7 +526,12 @@
     "saved": "Saqlandi",
     "user": "Foydalanuvchi",
     "usersHint": "Kimlar tizimga kira oladi va qanday huquq bilan.",
-    "tabs": { "profile": "Profil", "users": "Foydalanuvchilar", "ai": "AI", "dictionary": "Lugʻat" }
+    "tabs": {
+      "profile": "Profil",
+      "users": "Foydalanuvchilar",
+      "ai": "AI",
+      "dictionary": "Lugʻat"
+    }
   },
   "ai": {
     "active": "Faol",
@@ -536,11 +579,27 @@
     "testOk": "Ulandi: {ms} ms, {models} ta model",
     "thinking": "AI tahlil qilmoqda…",
     "usage": "Sarf (30 kun)",
-    "task": { "route": "Savolni yoʻnaltirish", "person": "Xodim tahlili", "audit": "Tuzilma auditi" },
+    "task": {
+      "route": "Savolni yoʻnaltirish",
+      "person": "Xodim tahlili",
+      "audit": "Tuzilma auditi",
+      "translate": "Tarjima"
+    },
     "taskHint": {
       "route": "“Savol kimga?” — erkin matndan masʼulni topadi",
       "person": "Xodim 360° — vazifa, vakolat va xavflarni tahlil qiladi",
-      "audit": "Hisobotlar — butun tuzilmadagi boʻshliq va xavflar"
+      "audit": "Hisobotlar — butun tuzilmadagi boʻshliq va xavflar",
+      "translate": "Maʼlumotlarni uz/ru/en tillariga avtomatik tarjima qiladi — xodim bitta tilda yozadi"
+    },
+    "translation": {
+      "title": "Maʼlumotlar tarjimasi",
+      "hint": "Vazifa, jarayon, boʻlim, lavozim va boshqa matnlar istalgan tilda kiritiladi — AI qolgan tillarga oʻzi tarjima qiladi. Yangi yozuvlar saqlanganda avtomatik tarjima boʻladi; bu tugma avval kiritilganlarini tarjima qiladi.",
+      "run": "Hammasini tarjima qilish",
+      "running": "Tarjima qilinmoqda…",
+      "pending": "{count} ta matn tarjima kutmoqda",
+      "allDone": "Barcha matnlar tarjima qilingan",
+      "off": "Yoqish uchun yuqoridagi “Tarjima” vazifasida provayder va modelni tanlang",
+      "started": "Tarjima fonda boshlandi"
     }
   },
   "cheatsheet": {

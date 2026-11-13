@@ -4,7 +4,7 @@ import type {
   AdminUserInput, AIProvider, AIProviderKind, AIRouteResult, AITaskConfig, AITaskKey, AITestResult, AIText, AIUsage,
   AIUsageSummary, AuditEvent, Authority, ChangeKind, ChangePayload, ChangeRequest, ChangeStatus, Department,
   EdgeCase, LoginResponse, Me, Member, OrgState, Process, ProcessRole, SearchResult, Synonym, SystemItem, Task, Team,
-  TokenPair,
+  TokenPair, TranslateStatus,
 } from "./types";
 
 const get = async <T>(url: string, params?: Record<string, string | number | boolean>) => (await api.get<T>(url, { params })).data;
@@ -96,6 +96,10 @@ export const adminApi = {
   usage: {
     list: () => get<AIUsage[]>("admin/ai/usage/"),
     summary: () => get<AIUsageSummary>("admin/ai/usage/summary/"),
+  },
+  translate: {
+    status: () => get<TranslateStatus>("admin/ai/translate/"),
+    start: () => post<TranslateStatus>("admin/ai/translate/"),
   },
   synonyms: {
     list: () => get<Synonym[]>("synonyms/"),

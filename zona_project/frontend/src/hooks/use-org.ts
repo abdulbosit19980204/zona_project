@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { errorMessage } from "@/lib/api/client";
 import { approvalsApi, orgApi } from "@/lib/api/endpoints";
 import type { ChangeStatus, Member, Me } from "@/lib/api/types";
+import { localizeState } from "@/lib/localize";
 import { buildModel, type Model } from "@/lib/model";
 import { useUI } from "@/stores/ui";
 
@@ -19,7 +20,9 @@ export const queryKeys = {
 /** Butun tuzilma (bitta so'rov) va undan hisoblangan model. */
 export function useOrg() {
   const query = useQuery({ queryKey: queryKeys.state, queryFn: orgApi.state });
-  const model = useMemo<Model | null>(() => (query.data ? buildModel(query.data) : null), [query.data]);
+  const locale = useUI((s) => s.locale);
+  // matnlar tanlangan tilda (AI tarjimalari); tarjima bo'lmasa asl matn
+  const model = useMemo<Model | null>(() => (query.data ? buildModel(localizeState(query.data, locale)) : null), [query.data, locale]);
   return { ...query, model };
 }
 

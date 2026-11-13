@@ -38,6 +38,7 @@ urlpatterns = [
     path("api/ai/route/", views_ai.route, name="ai-route"),
     path("api/ai/person/", views_ai.person, name="ai-person"),
     path("api/ai/audit/", views_ai.audit, name="ai-audit"),
+    path("api/admin/ai/translate/", views_admin.translate, name="ai-translate"),
     path("api/export.xlsx", views.export_xlsx, name="export"),
     path("api/", include(router.urls)),
 ]

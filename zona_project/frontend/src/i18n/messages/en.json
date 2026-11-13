@@ -19,7 +19,12 @@
     "settings": "Settings",
     "toggle": "Toggle menu",
     "collapse": "Collapse",
-    "groups": { "main": "Main", "management": "Management", "analytics": "Analytics", "system": "System" }
+    "groups": {
+      "main": "Main",
+      "management": "Management",
+      "analytics": "Analytics",
+      "system": "System"
+    }
   },
   "top": {
     "search": "Search…",
@@ -44,7 +49,11 @@
     "my360": "My 360° map",
     "logout": "Sign out",
     "newTask": "New task",
-    "status": { "live": "Live", "connecting": "Connecting", "offline": "Offline" }
+    "status": {
+      "live": "Live",
+      "connecting": "Connecting",
+      "offline": "Offline"
+    }
   },
   "common": {
     "add": "Add",
@@ -79,7 +88,11 @@
       "backup": "Steps in when the owner is away"
     }
   },
-  "appRoles": { "admin": "Administrator", "editor": "Editor", "viewer": "Viewer" },
+  "appRoles": {
+    "admin": "Administrator",
+    "editor": "Editor",
+    "viewer": "Viewer"
+  },
   "login": {
     "title": "Sign in",
     "subtitle": "Responsibility architecture — who is accountable for what",
@@ -236,8 +249,16 @@
       "created": "Employee added",
       "deleteConfirm": "Delete? {count, plural, one {# task} other {# tasks}} will be left unassigned."
     },
-    "dept": { "new": "New department", "edit": "Edit department", "deleteConfirm": "Delete department? Employees will be left without one." },
-    "team": { "new": "New team", "edit": "Edit team", "lead": "Team lead" },
+    "dept": {
+      "new": "New department",
+      "edit": "Edit department",
+      "deleteConfirm": "Delete department? Employees will be left without one."
+    },
+    "team": {
+      "new": "New team",
+      "edit": "Edit team",
+      "lead": "Team lead"
+    },
     "process": {
       "new": "New process",
       "edit": "Edit process",
@@ -261,7 +282,8 @@
       "propose": "Send proposal",
       "proposed": "Proposal sent for approval",
       "saved": "Roles saved"
-    }
+    },
+    "anyLanguage": "Write in any language — AI translates it into the others"
   },
   "approvals": {
     "approve": "Approve",
@@ -287,8 +309,18 @@
     "role": "Role",
     "send": "Send",
     "submitted": "Proposal sent",
-    "kinds": { "task_owner": "Change task owner", "role_add": "Assign role", "role_remove": "Remove role" },
-    "status": { "pending": "Pending", "approved": "Approved", "rejected": "Rejected", "cancelled": "Withdrawn", "all": "All" }
+    "kinds": {
+      "task_owner": "Change task owner",
+      "role_add": "Assign role",
+      "role_remove": "Remove role"
+    },
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Withdrawn",
+      "all": "All"
+    }
   },
   "issues": {
     "no_owner": "No owner",
@@ -439,7 +471,13 @@
     "placeholder": "Describe a problem or question…",
     "tryAi": "Try different wording or ask AI.",
     "via": "Because of",
-    "viaKind": { "task": "their tasks", "process": "process role", "member": "job description", "edge": "special case", "fallback": "next in line" },
+    "viaKind": {
+      "task": "their tasks",
+      "process": "process role",
+      "member": "job description",
+      "edge": "special case",
+      "fallback": "next in line"
+    },
     "whoAnswers": "Who answers"
   },
   "map3d": {
@@ -488,7 +526,12 @@
     "saved": "Saved",
     "user": "User",
     "usersHint": "Who can sign in, and with what access.",
-    "tabs": { "profile": "Profile", "users": "Users", "ai": "AI", "dictionary": "Dictionary" }
+    "tabs": {
+      "profile": "Profile",
+      "users": "Users",
+      "ai": "AI",
+      "dictionary": "Dictionary"
+    }
   },
   "ai": {
     "active": "Active",
@@ -536,11 +579,27 @@
     "testOk": "Connected: {ms} ms, {models} models",
     "thinking": "AI is analyzing…",
     "usage": "Usage (30 days)",
-    "task": { "route": "Question routing", "person": "Employee analysis", "audit": "Structure audit" },
+    "task": {
+      "route": "Question routing",
+      "person": "Employee analysis",
+      "audit": "Structure audit",
+      "translate": "Translation"
+    },
     "taskHint": {
       "route": "“Who to ask?” — finds the owner from free text",
       "person": "Employee 360° — analyzes tasks, authorities and risks",
-      "audit": "Reports — gaps and risks across the whole structure"
+      "audit": "Reports — gaps and risks across the whole structure",
+      "translate": "Automatically translates data into uz/ru/en — staff write in one language"
+    },
+    "translation": {
+      "title": "Data translation",
+      "hint": "Tasks, processes, departments, positions and other texts can be entered in any language — AI translates them into the others. New records are translated automatically on save; this button translates what was entered earlier.",
+      "run": "Translate everything",
+      "running": "Translating…",
+      "pending": "{count, plural, one {# text is} other {# texts are}} waiting for translation",
+      "allDone": "All texts are translated",
+      "off": "To enable it, choose a provider and model in the “Translation” task above",
+      "started": "Translation started in the background"
     }
   },
   "cheatsheet": {

@@ -60,6 +60,9 @@ export function useRealtime(currentUser: string | undefined) {
               description: `${data.data.actor}: ${data.data.text || data.data.kind}`,
             });
           }
+        } else if (data.type === "state") {
+          // AI tarjimani tugatdi: matnlar tanlangan tilda yangilanadi
+          void qc.invalidateQueries({ queryKey: queryKeys.state });
         } else if (data.type === "approval") {
           void qc.invalidateQueries({ queryKey: ["approvals"] });
           void qc.invalidateQueries({ queryKey: queryKeys.state });

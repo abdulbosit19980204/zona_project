@@ -11,10 +11,11 @@ from rest_framework.parsers import JSONParser
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 
+from . import translation
 from .ai import providers
 from .ai import service as ai_service
 from .ai.providers import AIError
-from .api import ZonaViewSet
+from .api import ZonaViewSet, zona_api
 from .auth import AUTHENTICATION, revoke_all
 from .models import AIProvider, AITaskConfig, AIUsage, Member, Profile
 from .permissions import IsZonaAdmin, role_of
@@ -110,6 +111,14 @@ class AITaskViewSet(AdminMixin, mixins.ListModelMixin, mixins.RetrieveModelMixin
                 if not m:
                     return Response({"ok": False, "error": "Xodim yo'q"})
                 data, meta = ai_service.person(m.id, request.user)
+            elif cfg.task == AITaskConfig.TRANSLATE:
+                text = str(request.data.get("text") or "Klientni boshqa agentga o'tkazish")
+                translated, error = translation.translate_texts([text], request.user)
+                if text not in translated:
+                    return Response({"ok": False, "error": error or "AI tarjima qaytarmadi"})
+                tr = translated[text]
+                return Response({"ok": True, "result": {"text": f"RU: {tr['ru']} · EN: {tr['en']}", **tr},
+                                 "meta": {"model": cfg.model, "latency_ms": 0}})
             else:
                 data, meta = ai_service.audit(request.user)
         except AIError as e:
@@ -133,3 +142,14 @@ class AIUsageViewSet(AdminMixin, mixins.ListModelMixin, viewsets.GenericViewSet)
         by_task = (AIUsage.objects.filter(at__gte=since).values("task")
                    .annotate(calls=Count("id"), tokens=Sum("input_tokens") + Sum("output_tokens")).order_by("task"))
         return Response({"since": since, "models": list(rows), "tasks": list(by_task)})
+
+
+@zona_api(["GET", "POST"], [IsZonaAdmin])
+def translate(request):
+    """Tarjima holati (GET) yoki tarjimasi yo'q barcha matnlarni fonda tarjima qilishni boshlash (POST)."""
+    if request.method == "POST":
+        if not translation.enabled():
+            return Response({"detail": "Avval 'Tarjima' AI vazifasini yoqing: provayder va model tanlang."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        translation.start()
+    return Response(translation.status())

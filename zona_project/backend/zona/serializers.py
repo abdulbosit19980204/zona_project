@@ -3,12 +3,30 @@ from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from rest_framework import serializers
 
+from . import translation
 from .crypto import decrypt, encrypt, mask
 from .models import (AIProvider, AITaskConfig, AIUsage, Authority, ChangeRequest, Department, EdgeCase, Event, Member,
                      Process, ProcessRole, Profile, Synonym, System, Task, TaskFallback, Team)
 from .permissions import role_of
 
 User = get_user_model()
+
+
+class I18nMixin:
+    """Tarjima qilinadigan model: javobga `i18n` qo'shiladi; foydalanuvchi o'z tilidagi ko'rinishni
+    o'zgartirmay qaytarsa, asl matn saqlanadi (tarjima behuda yangilanmaydi)."""
+
+    def request_lang(self):
+        return translation.request_lang(self.context.get("request"))
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        data["i18n"] = translation.public(obj)
+        return data
+
+    def update(self, instance, validated):
+        translation.keep_source(instance, validated, self.request_lang())
+        return super().update(instance, validated)
 
 
 def _not_blank(value, msg):
@@ -18,7 +36,7 @@ def _not_blank(value, msg):
     return value
 
 
-class DepartmentSerializer(serializers.ModelSerializer):
+class DepartmentSerializer(I18nMixin, serializers.ModelSerializer):
     class Meta:
         model = Department
         fields = ["id", "name", "description", "order"]
@@ -28,14 +46,14 @@ class DepartmentSerializer(serializers.ModelSerializer):
         return _not_blank(value, "Nomi bo'sh bo'lmasin.")
 
 
-class SystemSerializer(serializers.ModelSerializer):
+class SystemSerializer(I18nMixin, serializers.ModelSerializer):
     class Meta:
         model = System
         fields = ["id", "name", "order"]
         read_only_fields = ["order"]
 
 
-class TeamSerializer(serializers.ModelSerializer):
+class TeamSerializer(I18nMixin, serializers.ModelSerializer):
     lead = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all(), allow_null=True, required=False)
 
     class Meta:
@@ -47,7 +65,7 @@ class TeamSerializer(serializers.ModelSerializer):
         return _not_blank(value, "Jamoa nomi bo'sh bo'lmasin.")
 
 
-class MemberSerializer(serializers.ModelSerializer):
+class MemberSerializer(I18nMixin, serializers.ModelSerializer):
     department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all(), allow_null=True, required=False)
     team = serializers.PrimaryKeyRelatedField(queryset=Team.objects.all(), allow_null=True, required=False)
     manager = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all(), allow_null=True, required=False)
@@ -83,7 +101,7 @@ class MemberSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class AuthoritySerializer(serializers.ModelSerializer):
+class AuthoritySerializer(I18nMixin, serializers.ModelSerializer):
     class Meta:
         model = Authority
         fields = ["id", "member", "title", "scope", "order"]
@@ -93,7 +111,7 @@ class AuthoritySerializer(serializers.ModelSerializer):
         return _not_blank(value, "Vakolat matni bo'sh bo'lmasin.")
 
 
-class ProcessSerializer(serializers.ModelSerializer):
+class ProcessSerializer(I18nMixin, serializers.ModelSerializer):
     system = serializers.PrimaryKeyRelatedField(queryset=System.objects.all(), allow_null=True, required=False)
 
     class Meta:
@@ -122,10 +140,10 @@ class TaskFallbackSerializer(serializers.Serializer):
     condition = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
 
     def to_representation(self, obj):
-        return {"member": obj.member_id, "condition": obj.condition}
+        return {"member": obj.member_id, "condition": obj.condition, "i18n": translation.public(obj)}
 
 
-class TaskSerializer(serializers.ModelSerializer):
+class TaskSerializer(I18nMixin, serializers.ModelSerializer):
     process = serializers.PrimaryKeyRelatedField(queryset=Process.objects.all(), allow_null=True, required=False)
     owner = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all(), allow_null=True, required=False)
     # 2-, 3-... navbatdagi mas'ullar, tartib bilan. Yuborilsa, ro'yxat to'liq almashtiriladi.
@@ -156,7 +174,7 @@ class TaskSerializer(serializers.ModelSerializer):
         fallbacks = validated.pop("fallbacks", None)
         task = super().create(validated)
         if fallbacks is not None:
-            self._set_fallbacks(task, fallbacks)
+            self._set_fallbacks(task, fallbacks, self.request_lang())
         return task
 
     @transaction.atomic
@@ -164,18 +182,31 @@ class TaskSerializer(serializers.ModelSerializer):
         fallbacks = validated.pop("fallbacks", None)
         task = super().update(instance, validated)
         if fallbacks is not None:
-            self._set_fallbacks(task, fallbacks)
+            self._set_fallbacks(task, fallbacks, self.request_lang())
         elif "owner" in validated and task.owner_id:
             # yangi asosiy mas'ul navbatda ham turgan bo'lsa, navbatdan chiqadi
             task.fallbacks.filter(member_id=task.owner_id).delete()
         return task
 
     @staticmethod
-    def _set_fallbacks(task, items):
+    def _set_fallbacks(task, items, lang=None):
+        old = list(TaskFallback.objects.filter(task=task))
+
+        def carry(condition):
+            # shart matni o'zgarmagan bo'lsa (asl yoki joriy tildagi ko'rinishi), tarjimalari ham saqlanadi
+            for o in old:
+                if condition and condition in (o.condition.strip(), (translation.current(o, "condition", lang) or "").strip()):
+                    return o.condition, o.i18n
+            return condition, {}
+
         task.fallbacks.all().delete()
-        TaskFallback.objects.bulk_create([
-            TaskFallback(task=task, member=i["member"], condition=i["condition"], order=n)
-            for n, i in enumerate(items, start=2)])
+        rows = []
+        for n, i in enumerate(items, start=2):
+            condition, i18n = carry(i["condition"])
+            rows.append(TaskFallback(task=task, member=i["member"], condition=condition, i18n=i18n, order=n))
+        TaskFallback.objects.bulk_create(rows)  # bulk_create signal bermaydi — tarjimani o'zimiz so'raymiz
+        if any(translation.pending_fields(r) for r in rows):
+            translation.schedule()
         if hasattr(task, "_prefetched_objects_cache"):
             task._prefetched_objects_cache.pop("fallbacks", None)
 
@@ -186,7 +217,7 @@ class EventSerializer(serializers.ModelSerializer):
         fields = ["id", "kind", "subject", "from_name", "to_name", "text", "actor", "at"]
 
 
-class EdgeCaseSerializer(serializers.ModelSerializer):
+class EdgeCaseSerializer(I18nMixin, serializers.ModelSerializer):
     first_owner = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all(), allow_null=True, required=False)
 
     class Meta:

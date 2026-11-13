@@ -4,11 +4,15 @@ export type RoleKey = "owner" | "executor" | "approver" | "supervisor" | "contri
 export type ProcessRoleKey = Exclude<RoleKey, "executor">;
 export type AppRole = "admin" | "editor" | "viewer";
 
+/** AI tarjimalari: {"ru": {"title": "..."}, "en": {...}}. Faqat asl matnga mos (yaroqli) tarjimalar keladi. */
+export type I18n = Partial<Record<"uz" | "ru" | "en", Record<string, string>>>;
+
 export interface Department {
   id: number;
   name: string;
   description: string;
   order: number;
+  i18n?: I18n;
 }
 
 export interface Team {
@@ -18,6 +22,7 @@ export interface Team {
   description: string;
   lead: number | null;
   order: number;
+  i18n?: I18n;
 }
 
 export interface Member {
@@ -36,6 +41,7 @@ export interface Member {
   telegram: string;
   location: string;
   order: number;
+  i18n?: I18n;
 }
 
 export interface Authority {
@@ -44,12 +50,14 @@ export interface Authority {
   title: string;
   scope: string;
   order: number;
+  i18n?: I18n;
 }
 
 export interface SystemItem {
   id: number;
   name: string;
   order: number;
+  i18n?: I18n;
 }
 
 export interface Process {
@@ -58,6 +66,7 @@ export interface Process {
   system: number | null;
   description: string;
   order: number;
+  i18n?: I18n;
 }
 
 export interface ProcessRole {
@@ -71,6 +80,7 @@ export interface ProcessRole {
 export interface TaskFallback {
   member: number;
   condition: string;
+  i18n?: I18n;
 }
 
 export interface Task {
@@ -82,6 +92,7 @@ export interface Task {
   note: string;
   is_custom: boolean;
   order: number;
+  i18n?: I18n;
 }
 
 export interface EdgeCase {
@@ -90,6 +101,7 @@ export interface EdgeCase {
   first_owner: number | null;
   then_text: string;
   order: number;
+  i18n?: I18n;
 }
 
 export interface Permissions {
@@ -128,7 +140,7 @@ export interface AnonymousMe {
 export interface Meta {
   company: string;
   title: string;
-  ai: { route: boolean; person: boolean; audit: boolean };
+  ai: { route: boolean; person: boolean; audit: boolean; translate: boolean };
   pending_approvals: number;
 }
 
@@ -276,7 +288,7 @@ export interface AIProviderKind {
   effort?: boolean;
 }
 
-export type AITaskKey = "route" | "person" | "audit";
+export type AITaskKey = "route" | "person" | "audit" | "translate";
 export type Effort = "" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface AITaskConfig {
@@ -354,4 +366,15 @@ export type RealtimeMessage =
   | { type: "hello"; data: { user: string } }
   | { type: "pong" }
   | { type: "event"; data: AuditEvent }
-  | { type: "approval"; data: { id: number; status: ChangeStatus; title: string } };
+  | { type: "approval"; data: { id: number; status: ChangeStatus; title: string } }
+  | { type: "state"; data: { translated: number } };
+
+/** Fonda AI tarjima holati (Sozlamalar → AI). */
+export interface TranslateStatus {
+  enabled: boolean;
+  running: boolean;
+  pending: number;
+  last_error: string;
+  last_run: string | null;
+  translated: number;
+}

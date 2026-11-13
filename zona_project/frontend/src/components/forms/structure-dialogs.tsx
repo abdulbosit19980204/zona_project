@@ -31,6 +31,7 @@ export function DepartmentDialog({ open, onOpenChange, department }: Open & { de
   const remove = useOrgMutation(() => orgApi.departments.remove(department!.id), t("common.deleted"));
   return (
     <FormDialog
+      translated
       open={open} onOpenChange={onOpenChange} title={department ? t("forms.dept.edit") : t("forms.dept.new")}
       onSubmit={form.handleSubmit(async (v) => { await save.mutateAsync(v); onOpenChange(false); })}
       submitting={save.isPending} onDelete={department ? () => remove.mutateAsync(undefined) : undefined}
@@ -69,6 +70,7 @@ export function TeamDialog({ open, onOpenChange, team, presetDepartment }: Open 
   const remove = useOrgMutation(() => orgApi.teams.remove(team!.id), t("common.deleted"));
   return (
     <FormDialog
+      translated
       open={open} onOpenChange={onOpenChange} title={team ? t("forms.team.edit") : t("forms.team.new")}
       onSubmit={form.handleSubmit(async (v) => { await save.mutateAsync(v); onOpenChange(false); })}
       submitting={save.isPending} onDelete={team ? () => remove.mutateAsync(undefined) : undefined}
@@ -113,6 +115,7 @@ export function ProcessDialog({ open, onOpenChange, process }: Open & { process?
   const remove = useOrgMutation(() => orgApi.processes.remove(process!.id), t("common.deleted"));
   return (
     <FormDialog
+      translated
       open={open} onOpenChange={onOpenChange} title={process ? t("forms.process.edit") : t("forms.process.new")}
       onSubmit={form.handleSubmit(async (v) => { await save.mutateAsync(v); onOpenChange(false); })}
       submitting={save.isPending} onDelete={process ? () => remove.mutateAsync(undefined) : undefined}
@@ -146,6 +149,7 @@ export function AuthorityDialog({ open, onOpenChange, authority, memberId }: Ope
   const remove = useOrgMutation(() => orgApi.authorities.remove(authority!.id), t("common.deleted"));
   return (
     <FormDialog
+      translated
       open={open} onOpenChange={onOpenChange} title={authority ? t("forms.authority.edit") : t("forms.authority.new")}
       description={t("forms.authority.hint")}
       onSubmit={form.handleSubmit(async (v) => { await save.mutateAsync(v); onOpenChange(false); })}

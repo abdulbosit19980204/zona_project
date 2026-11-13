@@ -11,6 +11,7 @@ from collections import defaultdict
 
 from django.db.models import Count, Max
 
+from .. import translation
 from ..models import Department, EdgeCase, Member, Process, ProcessRole, Synonym, Task, TaskFallback
 from .normalize import tokens, trigrams, word_spans
 from .synonyms import BUILTIN
@@ -35,18 +36,19 @@ class Index:
             self.roles[r.process_id].append((r.member_id, r.role))
         self.docs = []
         add = self._add
+        v = translation.variants  # asl matn + AI tarjimalari: istalgan tilda qidirish mumkin
         for t in self.tasks:
             p = t.process
-            add("task", t.id, [(t.title, 1.0), (p.name if p else "", 0.5),
-                                (p.system.name if p and p.system else "", 0.35), (t.note, 0.4)])
+            add("task", t.id, [(v(t, "title"), 1.0), (v(p, "name") if p else "", 0.5),
+                                (p.system.name if p and p.system else "", 0.35), (v(t, "note"), 0.4)])
         for p in self.processes.values():
-            add("process", p.id, [(p.name, 1.0), (p.description, 0.5), (p.system.name if p.system else "", 0.4)])
+            add("process", p.id, [(v(p, "name"), 1.0), (v(p, "description"), 0.5), (p.system.name if p.system else "", 0.4)])
         for m in self.members.values():
-            add("member", m.id, [(m.name, 1.0), (m.role, 0.75), (m.trigger, 0.8), (m.does, 0.55)])
+            add("member", m.id, [(v(m, "name"), 1.0), (v(m, "role"), 0.75), (v(m, "trigger"), 0.8), (v(m, "does"), 0.55)])
         for e in self.edges:
-            add("edge", e.id, [(e.situation, 1.0), (e.then_text, 0.3)])
+            add("edge", e.id, [(v(e, "situation"), 1.0), (v(e, "then_text"), 0.3)])
         for d in self.departments:
-            add("department", d.id, [(d.name, 1.0), (d.description, 0.4)])
+            add("department", d.id, [(v(d, "name"), 1.0), (v(d, "description"), 0.4)])
 
         self.df = defaultdict(int)
         for doc in self.docs:
@@ -110,7 +112,7 @@ class Index:
         return extra
 
     # ---------------------------------------------------------- qidiruv
-    def search(self, query, limit=12):
+    def search(self, query, limit=12, lang=None):
         base = list(dict.fromkeys(tokens(query)))
         if not base:
             return None
@@ -152,9 +154,9 @@ class Index:
                 score *= 0.35 + 0.65 * frac
                 results.append((score, score / mass, doc, matched))
         results.sort(key=lambda r: -r[0])
-        return self._shape(query, base, expanded, results, prepared, limit)
+        return self._shape(query, base, expanded, results, prepared, limit, lang)
 
-    def _shape(self, query, base, expanded, results, prepared, limit):
+    def _shape(self, query, base, expanded, results, prepared, limit, lang=None):
         by_kind = defaultdict(list)
         for score, cov, doc, _ in results:
             if cov >= 0.18 or len(by_kind[doc["kind"]]) < 3:
@@ -213,8 +215,11 @@ class Index:
             "terms": base,
             "expanded": sorted(expanded),
             "people": out_people,
-            "tasks": [{"id": tid, "score": round(s, 3), "hl": hl(task_map[tid].title)} for s, _, tid in by_kind["task"][:limit]],
-            "processes": [{"id": i, "score": round(s, 3), "hl": hl(self.processes[i].name)} for s, _, i in by_kind["process"][:6]],
+            # belgilash foydalanuvchi ko'radigan (tanlangan tildagi) matn bo'yicha
+            "tasks": [{"id": tid, "score": round(s, 3), "hl": hl(translation.current(task_map[tid], "title", lang))}
+                      for s, _, tid in by_kind["task"][:limit]],
+            "processes": [{"id": i, "score": round(s, 3), "hl": hl(translation.current(self.processes[i], "name", lang))}
+                          for s, _, i in by_kind["process"][:6]],
             "members": [{"id": i, "score": round(s, 3)} for s, _, i in by_kind["member"][:5]],
             "edge_cases": [{"id": i, "score": round(s, 3)} for s, _, i in by_kind["edge"][:4]],
             "departments": [{"id": i, "score": round(s, 3)} for s, _, i in by_kind["department"][:3]],
@@ -228,6 +233,7 @@ def _version():
                          (TaskFallback, "id")):
         agg = model.objects.aggregate(c=Count("id"), m=Max(field))
         parts.append((agg["c"], str(agg["m"])))
+    parts.append(translation.version())  # fonda tarjima qo'shilsa, indeks yangilanadi
     return tuple(parts)
 
 
@@ -240,8 +246,8 @@ def get_index():
         return _cache["index"]
 
 
-def search(query, limit=12):
-    return get_index().search(query, limit) or {
+def search(query, limit=12, lang=None):
+    return get_index().search(query, limit, lang) or {
         "query": query, "terms": [], "expanded": [], "people": [], "tasks": [], "processes": [],
         "members": [], "edge_cases": [], "departments": []}
 

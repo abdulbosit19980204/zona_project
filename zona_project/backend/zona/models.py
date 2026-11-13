@@ -12,6 +12,7 @@ class Department(models.Model):
     name = models.CharField("Nomi", max_length=80, unique=True)
     description = models.CharField("Tavsif", max_length=200, blank=True)
     order = models.PositiveIntegerField("Tartib", default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
 
     class Meta:
         ordering = ["order", "id"]
@@ -27,6 +28,7 @@ class System(models.Model):
 
     name = models.CharField("Nomi", max_length=60, unique=True)
     order = models.PositiveIntegerField("Tartib", default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
 
     class Meta:
         ordering = ["order", "name"]
@@ -46,6 +48,7 @@ class Team(models.Model):
     lead = models.ForeignKey("Member", verbose_name="Rahbari", null=True, blank=True,
                              on_delete=models.SET_NULL, related_name="led_teams")
     order = models.PositiveIntegerField("Tartib", default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
 
     class Meta:
         ordering = ["department", "order", "id"]
@@ -77,6 +80,7 @@ class Member(models.Model):
     telegram = models.CharField("Telegram", max_length=64, blank=True)
     location = models.CharField("Joylashuv / ofis", max_length=120, blank=True)
     order = models.PositiveIntegerField("Tartib", default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -96,6 +100,7 @@ class Process(models.Model):
                                on_delete=models.SET_NULL, related_name="processes")
     description = models.TextField("Tavsif", blank=True)
     order = models.PositiveIntegerField("Tartib", default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -144,6 +149,7 @@ class Task(models.Model):
     note = models.TextField("Izoh", blank=True)
     is_custom = models.BooleanField("Qo'lda qo'shilgan", default=False)
     order = models.PositiveIntegerField("Tartib", default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -166,6 +172,7 @@ class TaskFallback(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name="fallback_tasks")
     condition = models.CharField("Qachon unga o'tadi", max_length=200, blank=True)
     order = models.PositiveIntegerField(default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
 
     class Meta:
         ordering = ["task", "order", "id"]
@@ -207,6 +214,7 @@ class EdgeCase(models.Model):
                                     on_delete=models.SET_NULL, related_name="edge_cases")
     then_text = models.CharField("Qachon boshqa zonaga o'tadi", max_length=300, blank=True)
     order = models.PositiveIntegerField("Tartib", default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
 
     class Meta:
         ordering = ["order", "id"]
@@ -224,6 +232,7 @@ class Authority(models.Model):
     title = models.CharField("Vakolat", max_length=200)
     scope = models.CharField("Doirasi / chegarasi", max_length=200, blank=True)
     order = models.PositiveIntegerField(default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
 
     class Meta:
         ordering = ["member", "order", "id"]
@@ -353,11 +362,12 @@ class AIProvider(models.Model):
 class AITaskConfig(models.Model):
     """Har bir ish uchun alohida model sozlamasi."""
 
-    ROUTE, PERSON, AUDIT = "route", "person", "audit"
+    ROUTE, PERSON, AUDIT, TRANSLATE = "route", "person", "audit", "translate"
     TASKS = [
         (ROUTE, "Savol kimga: savolni mas'ulga yo'naltirish"),
         (PERSON, "Xodim tahlili: vazifa, vakolat va chegaralar"),
         (AUDIT, "Tashkilot auditi: bo'shliq va kesishmalar"),
+        (TRANSLATE, "Tarjima: matnlarni uz/ru/en tillariga o'girish"),
     ]
     EFFORTS = [("", "Standart"), ("low", "Past"), ("medium", "O'rta"), ("high", "Yuqori"),
                ("xhigh", "Juda yuqori"), ("max", "Maksimal")]

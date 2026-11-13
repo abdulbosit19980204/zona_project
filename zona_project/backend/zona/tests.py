@@ -1,3 +1,5 @@
+import json
+import re
 from io import BytesIO
 from unittest import mock
 
@@ -6,6 +8,7 @@ from django.core.management import call_command
 from django.test import TestCase, TransactionTestCase, override_settings
 from openpyxl import load_workbook
 
+from . import translation
 from .ai import providers
 from .crypto import decrypt
 from .models import (AIProvider, AITaskConfig, AIUsage, Authority, Department, Event, Member, Process, ProcessRole,
@@ -39,8 +42,10 @@ class Base(TestCase):
         self.refresh_token = r.json()["refresh"]
         return r.json()
 
-    def call(self, method, url, data=None):
+    def call(self, method, url, data=None, lang=None):
         headers = {"Authorization": f"Bearer {self.token}"} if getattr(self, "token", None) else {}
+        if lang:
+            headers["X-Lang"] = lang
         return getattr(self.client, method)(API + url, data, content_type="application/json", headers=headers)
 
 
@@ -134,7 +139,7 @@ class AdminTests(Base):
     def test_task_config_requires_model(self):
         self.login("admin")
         tasks = self.call("get", "admin/ai/tasks/").json()
-        self.assertEqual({t["task"] for t in tasks}, {"route", "person", "audit"})
+        self.assertEqual({t["task"] for t in tasks}, {"route", "person", "audit", "translate"})
         r = self.call("patch", "admin/ai/tasks/route/", {"enabled": True})
         self.assertEqual(r.status_code, 400)
 
@@ -154,7 +159,7 @@ class StructureTests(Base):
         for key in ("departments", "members", "authorities", "processes", "roles", "tasks", "edge_cases"):
             self.assertTrue(data[key], key)
         self.assertEqual(data["me"]["username"], "viewer")
-        self.assertEqual(set(data["meta"]["ai"]), {"route", "person", "audit"})
+        self.assertEqual(set(data["meta"]["ai"]), {"route", "person", "audit", "translate"})
 
     def test_member_contacts_and_authority(self):
         self.login("editor")
@@ -194,8 +199,8 @@ class StructureTests(Base):
         chain = [{"member": s.id, "condition": "  qila olmasa "}, {"member": x.id}]
         r = self.call("patch", f"tasks/{t.id}/", {"fallbacks": chain})
         self.assertEqual(r.status_code, 200, r.content)
-        self.assertEqual(r.json()["fallbacks"], [{"member": s.id, "condition": "qila olmasa"},
-                                                 {"member": x.id, "condition": ""}])
+        self.assertEqual(r.json()["fallbacks"], [{"member": s.id, "condition": "qila olmasa", "i18n": {}},
+                                                 {"member": x.id, "condition": "", "i18n": {}}])
         # takror yoki asosiy mas'ul navbatda bo'lmaydi
         self.assertEqual(self.call("patch", f"tasks/{t.id}/", {"fallbacks": [{"member": x.id}, {"member": x.id}]}).status_code, 400)
         self.assertEqual(self.call("patch", f"tasks/{t.id}/", {"fallbacks": [{"member": t.owner_id}]}).status_code, 400)
@@ -388,3 +393,86 @@ class AITests(Base):
         self.assertEqual(providers.parse_json('Javob: {"a": 2} tamom'), {"a": 2})
         with self.assertRaises(providers.AIError):
             providers.parse_json("json yo'q")
+
+
+def fake_translator(provider, model, system, user, **kwargs):
+    """Soxta AI: rus matnini "ru" deb aniqlaydi, boshqa tillarga prefiks qo'shib "tarjima qiladi"."""
+    out = []
+    for item in json.loads(user)["items"]:
+        text = item["text"]
+        ru = bool(re.search(r"[Ѐ-ӿ]", text))
+        out.append({"id": item["id"], "source": "ru" if ru else "uz", "uz": f"UZ {text}" if ru else text,
+                    "ru": text if ru else f"RU {text}", "en": f"EN {text}"})
+    return providers.Result(json.dumps({"items": out}, ensure_ascii=False), 10, 10)
+
+
+@override_settings(ZONA_TRANSLATE_ASYNC=False)
+class TranslationTests(Base):
+    def setUp(self):
+        provider = AIProvider.objects.create(name="T", kind="openai")
+        AITaskConfig.objects.update_or_create(task="translate", defaults={"enabled": True, "provider": provider, "model": "m"})
+
+    def translate(self):
+        with mock.patch.object(providers, "call", side_effect=fake_translator):
+            return translation.translate_pending()
+
+    def state_task(self, tid, lang=None):
+        return next(t for t in self.call("get", "state/", lang=lang).json()["tasks"] if t["id"] == tid)
+
+    def test_written_in_any_language_translated_to_all(self):
+        self.login("editor")
+        tid = self.call("post", "tasks/", {"title": "Новый клиент: добавить в маршрут"}, lang="uz").json()["id"]
+        self.assertGreater(self.translate(), 0)
+        i18n = self.state_task(tid)["i18n"]
+        self.assertEqual(i18n["ru"]["title"], "Новый клиент: добавить в маршрут")  # asl matn o'z tilida o'zgarmaydi
+        self.assertEqual(i18n["uz"]["title"], "UZ Новый клиент: добавить в маршрут")
+        self.assertEqual(i18n["en"]["title"], "EN Новый клиент: добавить в маршрут")
+        self.assertEqual(translation.status()["pending"], 0)
+        # qidiruv tarjima bo'yicha ham topadi
+        self.assertIn(tid, [t["id"] for t in search("Новый клиент маршрут")["tasks"]])
+
+    def test_unchanged_localized_text_keeps_source(self):
+        self.login("editor")
+        task = Task.objects.filter(title__startswith="Klientni boshqa agentga").first()
+        self.translate()
+        # ingliz tilidagi interfeysda faqat izoh o'zgardi: sarlavha inglizcha qaytadi, lekin asl matn saqlanadi
+        original = task.title
+        r = self.call("patch", f"tasks/{task.id}/", {"title": f"EN {original}", "note": "Muhim"}, lang="en")
+        self.assertEqual(r.status_code, 200, r.content)
+        task.refresh_from_db()
+        self.assertEqual(task.title, original)
+        self.assertEqual(translation.pending_fields(task), ["note"])
+        self.assertEqual(r.json()["i18n"]["en"]["title"], f"EN {original}")
+        # sarlavha haqiqatan o'zgarsa: yangi asl matn, eski tarjimalar ko'rsatilmaydi
+        self.call("patch", f"tasks/{task.id}/", {"title": "Перевести клиента"}, lang="ru")
+        task.refresh_from_db()
+        self.assertEqual(task.title, "Перевести клиента")
+        self.assertNotIn("title", self.state_task(task.id)["i18n"].get("en", {}))
+        self.translate()
+        self.assertEqual(self.state_task(task.id)["i18n"]["uz"]["title"], "UZ Перевести клиента")
+
+    def test_fallback_condition_translation_survives_resave(self):
+        self.login("editor")
+        task = Task.objects.filter(fallbacks__condition__gt="").first()
+        fb = task.fallbacks.first()
+        self.translate()
+        ru = self.state_task(task.id)["fallbacks"][0]["i18n"]["ru"]["condition"]
+        r = self.call("patch", f"tasks/{task.id}/", {"fallbacks": [{"member": fb.member_id, "condition": ru}]}, lang="ru")
+        self.assertEqual(r.status_code, 200, r.content)
+        new = task.fallbacks.get()
+        self.assertEqual(new.condition, fb.condition)
+        self.assertEqual(translation.pending_fields(new), [])
+
+    def test_ai_error_keeps_text_and_reports(self):
+        self.login("editor")
+        tid = self.call("post", "tasks/", {"title": "Yangi vazifa"}).json()["id"]
+        with mock.patch.object(providers, "call", side_effect=providers.AIError("limit")):
+            self.assertEqual(translation.translate_pending(), 0)
+        self.assertEqual(self.state_task(tid)["title"], "Yangi vazifa")
+        self.login("admin")
+        st = self.call("get", "admin/ai/translate/").json()
+        self.assertTrue(st["enabled"])
+        self.assertGreater(st["pending"], 0)
+        self.assertIn("limit", st["last_error"])
+        self.login("editor")
+        self.assertEqual(self.call("get", "admin/ai/translate/").status_code, 403)

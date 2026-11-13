@@ -1,6 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 import { useAuth } from "@/stores/auth";
+import { useUI } from "@/stores/ui";
 
 import type { TokenPair } from "./types";
 
@@ -15,6 +16,8 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = useAuth.getState().access;
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Tanlangan til: backend shu tildagi tahrirni taniydi, qidiruv va Excel shu tilda bo'ladi
+  config.headers["X-Lang"] = useUI.getState().locale;
   return config;
 });
 

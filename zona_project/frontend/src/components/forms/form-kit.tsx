@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Languages, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 import { Controller, type Control, type FieldPath, type FieldValues } from "react-hook-form";
@@ -14,6 +14,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useOrg } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
 
 /** Radix Select bo'sh qiymatni qabul qilmaydi: "tanlanmagan" shu belgi bilan ifodalanadi. */
@@ -27,7 +28,7 @@ export interface Option {
 }
 
 export function FormDialog({
-  open, onOpenChange, title, description, children, onSubmit, submitting, submitLabel, onDelete, deleteConfirm, wide,
+  open, onOpenChange, title, description, children, onSubmit, submitting, submitLabel, onDelete, deleteConfirm, wide, translated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -40,6 +41,8 @@ export function FormDialog({
   onDelete?: () => Promise<unknown> | void;
   deleteConfirm?: string;
   wide?: boolean;
+  /** Matnlar AI orqali boshqa tillarga tarjima qilinadi: foydalanuvchiga eslatma ko'rsatiladi. */
+  translated?: boolean;
 }) {
   const t = useTranslations("common");
   const [confirming, setConfirming] = useState(false);
@@ -49,6 +52,7 @@ export function FormDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
+          {translated && <TranslateNote />}
         </DialogHeader>
         <form
           noValidate
@@ -188,4 +192,16 @@ export function CheckboxField<T extends FieldValues>({ control, name, label, des
 
 export function Row({ children }: { children: ReactNode }) {
   return <div className="grid gap-4 sm:grid-cols-2">{children}</div>;
+}
+
+/** "Istalgan tilda yozing" eslatmasi — faqat AI tarjima yoqilgan bo'lsa. */
+function TranslateNote() {
+  const t = useTranslations("forms");
+  const { data } = useOrg();
+  if (!data?.meta.ai.translate) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Languages className="size-3.5 shrink-0 text-primary" />{t("anyLanguage")}
+    </p>
+  );
 }

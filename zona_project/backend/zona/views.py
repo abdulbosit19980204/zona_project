@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from . import conf
+from . import conf, translation
 from .ai import service as ai_service
 from .api import ZonaViewSet, zona_api
 from .exporter import workbook_bytes
@@ -81,7 +81,7 @@ def search(request):
         limit = max(1, min(int(request.query_params.get("limit", 12)), 50))
     except ValueError:
         limit = 12
-    return Response(run_search(q, limit))
+    return Response(run_search(q, limit, translation.request_lang(request)))
 
 
 @zona_api(["GET"], [ReadOrEdit])
@@ -312,12 +312,31 @@ class TaskViewSet(ZonaViewSet):
 
 @zona_api(["GET"], [CanView])
 def export_xlsx(request):
-    members = list(Member.objects.select_related("department"))
-    processes = list(Process.objects.select_related("system"))
-    tasks = list(Task.objects.select_related("owner", "process__system").prefetch_related("fallbacks"))
+    """Excel: matnlar foydalanuvchi tanlagan tilda (tarjima bo'lmasa — asl matn)."""
+    lang = translation.request_lang(request)
+
+    def loc(objs):
+        for o in objs:
+            translation.localize(o, lang)
+            for rel in ("department", "owner", "process", "first_owner"):
+                if getattr(o, f"{rel}_id", None) and rel in o._state.fields_cache:
+                    translation.localize(getattr(o, rel), lang)
+            if isinstance(o, Process) and o.system_id:
+                translation.localize(o.system, lang)
+        return objs
+
+    members = loc(list(Member.objects.select_related("department")))
+    processes = loc(list(Process.objects.select_related("system")))
+    tasks = loc(list(Task.objects.select_related("owner", "process__system").prefetch_related("fallbacks")))
+    for t in tasks:
+        if t.process_id and t.process.system_id:
+            translation.localize(t.process.system, lang)
+        for f in t.fallbacks.all():
+            translation.localize(f, lang)
     roles = list(ProcessRole.objects.all())
-    auths = list(Authority.objects.all())
-    edges = [(e.situation, _name(e.first_owner), e.then_text) for e in EdgeCase.objects.select_related("first_owner")]
+    auths = loc(list(Authority.objects.all()))
+    edges = [(e.situation, _name(e.first_owner), e.then_text)
+             for e in loc(list(EdgeCase.objects.select_related("first_owner")))]
     content = workbook_bytes(conf.get("COMPANY_NAME"), members, processes, tasks, roles, edges, auths)
     stamp = datetime.now(timezone.get_current_timezone()).strftime("%Y-%m-%d")
     resp = HttpResponse(content, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

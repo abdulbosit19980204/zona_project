@@ -70,6 +70,7 @@ export function TaskDialog({ open, onOpenChange, task, preset }: {
 
   return (
     <FormDialog
+      translated
       open={open}
       onOpenChange={onOpenChange}
       title={task ? t("forms.task.edit") : t("forms.task.new")}

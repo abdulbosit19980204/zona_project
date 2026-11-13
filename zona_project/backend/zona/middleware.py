@@ -23,7 +23,7 @@ class ZonaCorsMiddleware:
             response = self.get_response(request)
         if allowed:
             response["Access-Control-Allow-Origin"] = origin
-            response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-CSRFToken"
+            response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-CSRFToken, X-Lang"
             response["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
             response["Access-Control-Max-Age"] = "600"
             response["Vary"] = "Origin"

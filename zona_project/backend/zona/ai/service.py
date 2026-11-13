@@ -17,6 +17,7 @@ DEFAULTS = {
     AITaskConfig.ROUTE: {"effort": "low", "max_tokens": 2500},
     AITaskConfig.PERSON: {"effort": "medium", "max_tokens": 4000},
     AITaskConfig.AUDIT: {"effort": "high", "max_tokens": 8000},
+    AITaskConfig.TRANSLATE: {"effort": "low", "max_tokens": 8000},
 }
 LANGS = {"uz": "o'zbek (lotin)", "uz-cyrl": "o'zbek (kirill)", "ru": "rus", "en": "ingliz"}
 

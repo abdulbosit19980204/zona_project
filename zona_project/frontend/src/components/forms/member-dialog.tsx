@@ -64,6 +64,7 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
 
   return (
     <FormDialog
+      translated
       wide open={open} onOpenChange={onOpenChange}
       title={member ? t("forms.member.edit") : t("forms.member.new")}
       onSubmit={form.handleSubmit(async (v) => { await save.mutateAsync(v); onOpenChange(false); })}
