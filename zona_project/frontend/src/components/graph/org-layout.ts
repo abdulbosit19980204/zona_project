@@ -24,6 +24,8 @@ export interface OrgNodeData extends Record<string, unknown> {
   selected: boolean;
   match: boolean;
   collapsed?: boolean;
+  /** Vertikal ko'rinishda ota tugun ostida ustun bo'lib tizilgan (chap tomondan ulanadi). */
+  stacked?: boolean;
 }
 
 export interface RoleEdgeData extends Record<string, unknown> {

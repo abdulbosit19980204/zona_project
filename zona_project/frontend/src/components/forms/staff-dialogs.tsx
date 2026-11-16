@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, FileUp, Link2, Loader2, Minus, Plus, Repeat2, SquarePen, Type } from "lucide-react";
+import { ArrowRight, ExternalLink, FileUp, Link2, TriangleAlert, Loader2, Minus, Plus, Repeat2, SquarePen, Type } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -340,6 +340,46 @@ async function toBase64(file: File) {
   return btoa(bin);
 }
 
+/** Server ocha olmaydigan (faqat brauzerda, hisob orqali ochiladigan) sahifalar. */
+/** Linklarni solishtirish uchun: #bo'lim, oxirgi "/" va bo'shliqlarsiz. */
+const sameLink = (a: string, b: string) => !!a && !!b && a.trim().replace(/[#?].*$/, "").replace(/\/+$/, "") === b.trim().replace(/[#?].*$/, "").replace(/\/+$/, "");
+
+export const browserOnly = (url: string) => /^https?:\/\/(www\.)?claude\.ai\/(artifact|public\/artifacts)\//i.test(url.trim());
+
+/** Claude artifact kabi sahifa: ochib, Ctrl+A / Ctrl+C qilib, shu yerga joylash — joylanishi bilan tahlil boshlanadi. */
+function PasteFromPage({ url, value, onChange, onPasted }: { url: string; value: string; onChange: (v: string) => void; onPasted: (v: string) => void }) {
+  const t = useTranslations("staff.paste");
+  return (
+    <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+      <div className="text-sm font-medium">{t("title")}</div>
+      <ol className="grid gap-2 text-sm sm:grid-cols-3">
+        {[1, 2, 3].map((n) => (
+          <li key={n} className="flex gap-2 rounded-md border bg-card px-3 py-2">
+            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">{n}</span>
+            <span className="text-[13px] leading-snug">{t(`step${n}`)}</span>
+          </li>
+        ))}
+      </ol>
+      <Button asChild variant="outline" size="sm">
+        <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4" />{t("open")}</a>
+      </Button>
+      <Textarea
+        rows={5} className="max-h-40 text-xs" placeholder={t("placeholder")} value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onPaste={(e) => {
+          const pasted = e.clipboardData.getData("text");
+          if (pasted.trim().length > 50) {
+            e.preventDefault();
+            onChange(pasted);
+            onPasted(pasted);
+          }
+        }}
+      />
+      {!!value && <p className="text-xs text-muted-foreground">{t("chars", { count: value.length })}</p>}
+    </div>
+  );
+}
+
 export function ImportDialog({ open, onOpenChange, preset, projects }: {
   open: boolean; onOpenChange: (o: boolean) => void; preset: ImportPreset; projects: StaffProject[];
 }) {
@@ -353,18 +393,23 @@ export function ImportDialog({ open, onOpenChange, preset, projects }: {
   const [target, setTarget] = useState<string>(preset.project ? String(preset.project) : NONE);
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<StaffDiff[] | null>(null);
+  const [pageText, setPageText] = useState("");
+  const syncBrowserOnly = !!syncProject && browserOnly(syncProject.source_url);
+  const urlBrowserOnly = source === "url" && browserOnly(url);
 
-  const body = async (): Promise<StaffImportBody> => {
+  const body = async (pasted?: string): Promise<StaffImportBody> => {
     const common = { project: toId(target), name: name.trim() || undefined };
-    if (source === "url") return { ...common, url: url.trim() };
+    if (source === "url") return { ...common, url: url.trim(), ...(browserOnly(url) ? { text: pasted ?? pageText } : {}) };
     if (source === "text") return { ...common, text };
     if (!file) throw new Error(t("chooseFile"));
     return { ...common, file_b64: await toBase64(file), filename: file.name };
   };
 
   const run = useMutation({
-    mutationFn: async (apply: boolean) => (syncProject ? staffApi.sync(syncProject.id, apply) : staffApi.import({ ...(await body()), apply })),
-    onSuccess: async (res, apply) => {
+    mutationFn: async ({ apply, pasted }: { apply: boolean; pasted?: string }) => (syncProject
+      ? staffApi.sync(syncProject.id, apply, syncBrowserOnly ? pasted ?? pageText : "")
+      : staffApi.import({ ...(await body(pasted)), apply })),
+    onSuccess: async (res, { apply }) => {
       if (!apply) {
         setPreview(res.projects);
         return;
@@ -378,11 +423,15 @@ export function ImportDialog({ open, onOpenChange, preset, projects }: {
 
   // manba linki saqlangan jamoa uchun: darhol farqlarni ko'rsatamiz
   useEffect(() => {
-    if (syncProject) run.mutate(false);
+    if (syncProject && !syncBrowserOnly) run.mutate({ apply: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ready = syncProject || (source === "url" ? /^https?:\/\//.test(url.trim()) : source === "text" ? text.trim().length > 10 : !!file);
+  const pageReady = pageText.trim().length > 50;
+  const ready = syncProject
+    ? !syncBrowserOnly || pageReady
+    : source === "url" ? /^https?:\/\//.test(url.trim()) && (!urlBrowserOnly || pageReady) : source === "text" ? text.trim().length > 10 : !!file;
+  const autoPreview = (pasted: string) => run.mutate({ apply: false, pasted });
   const changes = preview?.reduce((n, d) => n + d.summary.added + d.summary.removed + d.summary.replaced + d.summary.changed + (d.project.exists ? 0 : 1), 0) ?? 0;
 
   return (
@@ -404,8 +453,22 @@ export function ImportDialog({ open, onOpenChange, preset, projects }: {
             </Tabs>
             {source === "url" && (
               <div className="space-y-1.5">
-                <Input placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
-                <p className="text-xs text-muted-foreground">{t("urlHint")}</p>
+                <Input
+                  placeholder="https://..." value={url} autoFocus
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setUrl(v);
+                    // link qaysi jamoaning manbasi bo'lsa — o'sha jamoa; yangi link — yangi jamoa (boshqasining ustiga yozilmasin)
+                    const owner = projects.find((p) => sameLink(p.source_url, v));
+                    if (v.trim()) setTarget(owner ? String(owner.id) : NONE);
+                  }}
+                />
+                {(() => {
+                  const owner = projects.find((p) => sameLink(p.source_url, url));
+                  return owner ? <p className="text-xs text-success">{t("linkOwner", { name: owner.name })}</p> : null;
+                })()}
+                {!urlBrowserOnly && <p className="text-xs text-muted-foreground">{t("urlHint")}</p>}
+                {urlBrowserOnly && <PasteFromPage url={url} value={pageText} onChange={setPageText} onPasted={autoPreview} />}
               </div>
             )}
             {source === "file" && (
@@ -441,17 +504,18 @@ export function ImportDialog({ open, onOpenChange, preset, projects }: {
           </div>
         )}
 
+        {syncBrowserOnly && !preview && <PasteFromPage url={syncProject.source_url} value={pageText} onChange={setPageText} onPasted={autoPreview} />}
         {run.isPending && !preview && <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t("reading")}</div>}
         {preview && <Preview diffs={preview} />}
 
         <DialogFooter className="gap-2">
-          {preview && !syncProject && <Button variant="ghost" onClick={() => setPreview(null)}>{t("back")}</Button>}
+          {preview && (!syncProject || syncBrowserOnly) && <Button variant="ghost" onClick={() => setPreview(null)}>{t("back")}</Button>}
           {!preview ? (
-            <Button disabled={!ready || run.isPending} onClick={() => run.mutate(false)}>
+            <Button disabled={!ready || run.isPending} onClick={() => run.mutate({ apply: false })}>
               {run.isPending && <Loader2 className="size-4 animate-spin" />}{t("previewBtn")}
             </Button>
           ) : (
-            <Button disabled={run.isPending || !changes} onClick={() => run.mutate(true)}>
+            <Button disabled={run.isPending || !changes} onClick={() => run.mutate({ apply: true })}>
               {run.isPending && <Loader2 className="size-4 animate-spin" />}{changes ? t("apply") : t("noChanges")}
             </Button>
           )}
@@ -466,6 +530,12 @@ function Preview({ diffs }: { diffs: StaffDiff[] }) {
   const who = (name: string, territory: string) => (name || t("vacancy")) + (territory ? ` · ${territory}` : "");
   return (
     <div className="space-y-4">
+      {diffs.filter((d) => d.project.exists && d.summary.removed >= 5 && d.summary.removed > d.summary.total / 2).map((d) => (
+        <div key={`warn-${d.project.name}`} className="flex gap-2.5 rounded-lg border border-destructive/40 bg-destructive/8 px-4 py-3 text-sm text-destructive">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          <span>{t("bigRemoval", { name: d.project.name, removed: d.summary.removed, added: d.summary.added })}</span>
+        </div>
+      ))}
       {diffs.map((d) => (
         <div key={d.project.name} className="rounded-lg border">
           <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-4 py-2.5">

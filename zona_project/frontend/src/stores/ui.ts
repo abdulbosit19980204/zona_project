@@ -6,6 +6,8 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { RoleKey } from "@/lib/api/types";
 
 export type Locale = "uz" | "ru" | "en";
+/** Xarita yo'nalishi: LR — chapdan o'ngga (gorizontal), TB — yuqoridan pastga (vertikal). */
+export type MapDir = "LR" | "TB";
 
 /** Interfeys holati (brauzerda saqlanadi): menyu, til, bo'lim doirasi, xarita sozlamalari. */
 interface UIState {
@@ -15,6 +17,8 @@ interface UIState {
   hiddenRoles: RoleKey[];
   onlyIssues: boolean;
   collapsedDepts: number[];
+  mapDir: MapDir;
+  setMapDir: (dir: MapDir) => void;
   toggleSidebar: () => void;
   setLocale: (locale: Locale) => void;
   setScope: (scope: number | null) => void;
@@ -32,6 +36,8 @@ export const useUI = create<UIState>()(
       hiddenRoles: [],
       onlyIssues: false,
       collapsedDepts: [],
+      mapDir: "LR",
+      setMapDir: (mapDir) => set({ mapDir }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setLocale: (locale) => set({ locale }),
       setScope: (scope) => set({ scope }),

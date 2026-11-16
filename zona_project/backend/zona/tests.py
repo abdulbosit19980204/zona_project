@@ -525,6 +525,46 @@ class StaffTests(Base):
         self.assertEqual(self.imp(apply=True, text=html).status_code, 403)
         self.assertEqual(len(self.call("get", "staff/").json()["people"]), 4)
 
+    def test_copied_page_text_import(self):
+        """Claude artifact sahifasidan Ctrl+A/Ctrl+C qilingan matn — link manba sifatida saqlanadi."""
+        from .models import StaffPerson, StaffProject
+        self.login("editor")
+        text = chr(10).join([
+            "Структура полевой команды Textbrand", "12 позиций", "РОП", "1",
+            "РУКОВОДИТЕЛЬ ОТДЕЛА ПРОДАЖ", "Bosh Rahbar Aliyevich", "Textbrand · Узбекистан",
+            "Ташкент", "3 чел.",
+            "Guruh Boshliq Karimovich", "СВР", "SVR Tash 1 · Ташкент · +998 77 729 99 44",
+            "ТП", "Birinchi Xodim Valiyevna", "SR1 Tashkent", "Ташкент", "+998 90 641 27 97",
+            "Вакансия", "Вакансия", "SR4 Tashkent", "Ташкент", "нет телефона",
+            "Юг", "RSM Mintaqa Rahbari · Самарканд · +998 90 983 51 03",
+            "СВР — вакансия", "Вакансия", "SVR SW 1 · Самарканд",
+            "ТП", "Ikkinchi (Eski) Xodim ●", "SR Samarkand 1", "Самарканд", "998901112233",
+        ])
+        url = "https://claude.ai/artifact/AbCdEf123"
+        r = self.imp(url=url)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Ctrl+A", r.json()["detail"])
+        r = self.imp(apply=True, url=url, text=text)
+        self.assertEqual(r.status_code, 200, r.content)
+        project = StaffProject.objects.get(name="Textbrand")
+        self.assertEqual(project.source_url, url)
+        self.assertEqual(project.people.count(), 7)
+        head = StaffPerson.objects.get(territory="SVR Tash 1")
+        self.assertEqual((head.role, head.manager.name, head.unit.title), ("SVR", "Bosh Rahbar Aliyevich", "Ташкент"))
+        sr1 = StaffPerson.objects.get(territory="SR1 Tashkent")
+        self.assertEqual((sr1.manager, sr1.phone), (head, "+998 90 641 27 97"))
+        self.assertTrue(StaffPerson.objects.get(territory="SR4 Tashkent").is_vacancy)
+        rsm = StaffPerson.objects.get(name="Mintaqa Rahbari")
+        self.assertEqual((rsm.role, rsm.unit.title), ("RSM", "Юг"))
+        sw1 = StaffPerson.objects.get(territory="SVR SW 1")
+        self.assertTrue(sw1.is_vacancy)
+        self.assertEqual(sw1.manager, rsm)
+        last = StaffPerson.objects.get(territory="SR Samarkand 1")
+        self.assertEqual((last.name, last.manager, last.phone), ("Ikkinchi (Eski) Xodim", sw1, "+998 90 111 22 33"))
+        # manbadan yangilash ham nusxa olingan matn bilan ishlaydi
+        r = self.call("post", f"staff/projects/{project.id}/sync/", {"text": text.replace("Birinchi Xodim Valiyevna", "Yangi Odam Testov")})
+        self.assertEqual(r.json()["projects"][0]["summary"]["replaced"], 1)
+
     def test_vacate_assign_and_seat_history(self):
         from .models import StaffPerson
         self.login("editor")

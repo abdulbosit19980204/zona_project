@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Download, ExternalLink, FileJson, FileSpreadsheet, Network, Pencil, Phone, Plus, RefreshCw, Search, Upload, UserPlus, UserRound, Users } from "lucide-react";
+import { Building2, Download, ExternalLink, FileJson, FileSpreadsheet, Network, Pencil, Phone, Plus, RefreshCw, Search, Upload, UserPlus, UserRound, Users } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -23,17 +23,17 @@ import { staffApi } from "@/lib/api/endpoints";
 import type { StaffPerson, StaffProject } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { StaffMap } from "./staff-map";
-import { buildIndex, matchesTerms, personLabel, RoleChip, searchTerms, STAFF_KEY, StaffContacts, type Index } from "./staff-shared";
+import { buildTree, StaffMap, type StaffTree } from "./staff-map";
+import { buildIndex, matchesTerms, personLabel, ROLE_TONE, RoleChip, searchTerms, STAFF_KEY, StaffContacts, type Index } from "./staff-shared";
 
 export { STAFF_KEY };
 
-/** Dala jamoalari: StarGroup ichidagi brendlar (Heinz, BIC, L'Oréal...) savdo tuzilmasi — ko'rish, qidirish, import/eksport. */
+/** Kontaktlar: StarGroup ichidagi brendlar (Heinz, BIC, L'Oréal...) savdo tuzilmasi — ko'rish, qidirish, import/eksport. */
 export function Staff() {
   const t = useTranslations("staff");
   const can = useCan();
   const query = useQuery({ queryKey: STAFF_KEY, queryFn: staffApi.state });
-  const [active, setActive] = useState<number | "all">("all");
+  const [chosen, setActive] = useState<number | "all">("all");
   const [q, setQ] = useState("");
   const [edit, setEdit] = useState<{ person?: StaffPerson; project: number } | null>(null);
   const [projectEdit, setProjectEdit] = useState<StaffProject | null | undefined>(undefined);
@@ -43,6 +43,8 @@ export function Staff() {
   const data = query.data;
   const index = useMemo(() => buildIndex(data), [data]);
   const projects = data?.projects ?? [];
+  // tanlangan jamoa o'chirilgan bo'lsa — "Hammasi"ga qaytamiz
+  const active = chosen !== "all" && !projects.some((p) => p.id === chosen) ? "all" : chosen;
   const current = active === "all" ? null : projects.find((p) => p.id === active) ?? null;
   const scoped = (data?.people ?? []).filter((p) => !current || p.project === current.id);
 
@@ -198,57 +200,121 @@ function ProjectChip({ active, onClick, label, count }: { active: boolean; onCli
   );
 }
 
-function PersonLine({ person: p, onOpen, onAssign, compact }: {
-  person: StaffPerson; onOpen?: (p: StaffPerson) => void; onAssign?: (p: StaffPerson) => void; compact?: boolean;
+interface TreeHandlers {
+  index: Index;
+  tree: StaffTree;
+  onOpen?: (p: StaffPerson) => void;
+  onAssign?: (p: StaffPerson) => void;
+}
+
+/** Daraxtdagi xodim kartasi: rol, ism, hudud · shahar, telefon; vakansiyada — "Tayinlash". */
+function PersonCard({ person: p, onOpen, onAssign, lead, reports }: {
+  person: StaffPerson; onOpen?: (p: StaffPerson) => void; onAssign?: (p: StaffPerson) => void; lead?: boolean; reports?: number;
 }) {
   const t = useTranslations("staff");
   return (
     <div
-      className={cn("group grid grid-cols-[auto_1fr_auto] items-start gap-x-2.5 px-3.5 py-2", onOpen && "cursor-pointer hover:bg-muted/50")}
+      className={cn(
+        "group relative flex min-h-11 items-center gap-2.5 rounded-xl border bg-card px-2.5 py-1.5 shadow-[0_6px_16px_-14px_rgba(0,0,0,0.6)] transition-colors",
+        onOpen && "cursor-pointer hover:border-primary/50",
+        lead && "border-foreground/20 bg-muted/40",
+        p.is_vacancy && "border-dashed border-destructive/50 bg-destructive/5",
+      )}
       onClick={() => onOpen?.(p)}
     >
-      <RoleChip role={p.role} vacancy={p.is_vacancy} />
-      <div className="min-w-0">
-        <div className={cn("truncate text-sm font-medium", p.is_vacancy && "text-destructive")}>{p.is_vacancy ? t("vacancy") : p.name}</div>
-        <div className="flex flex-wrap gap-x-2.5 text-xs text-muted-foreground">
-          <span className="font-mono">{p.territory || "—"}</span>
-          {!compact && p.city && <span>{p.city}</span>}
-          {p.phone && (
-            <a href={`tel:${p.phone.replace(/\s/g, "")}`} onClick={(e) => e.stopPropagation()} className="font-mono hover:text-foreground">{p.phone}</a>
-          )}
+      <span className={cn("grid size-8 shrink-0 place-items-center rounded-full font-mono text-[10px] font-bold", p.is_vacancy ? "bg-destructive/12 text-destructive" : ROLE_TONE[p.role])}>
+        {p.role}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className={cn("truncate text-[13px] font-semibold leading-tight", p.is_vacancy && "text-destructive")}>{p.is_vacancy ? t("vacancy") : p.name}</div>
+        <div className="truncate text-[11.5px] text-muted-foreground">
+          <span className="font-mono">{p.territory || t(`roles.${p.role}`)}</span>
+          {p.city && ` · ${p.city}`}
+          {!!reports && <span> · {t("seats", { count: reports })}</span>}
         </div>
       </div>
-      <div className="flex items-center gap-0.5">
-        {p.is_vacancy && onAssign ? (
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={(e) => { e.stopPropagation(); onAssign(p); }}>
-            <UserPlus className="size-3.5" />{t("staffing.assignShort")}
-          </Button>
-        ) : (
-          <StaffContacts person={p} compact className="opacity-60 group-hover:opacity-100" />
-        )}
-        {onOpen && <Pencil className="ml-1 size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />}
-      </div>
+      {p.is_vacancy && onAssign ? (
+        <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" onClick={(e) => { e.stopPropagation(); onAssign(p); }}>
+          <UserPlus className="size-3.5" />{t("staffing.assignShort")}
+        </Button>
+      ) : (
+        <StaffContacts person={p} compact className="shrink-0 opacity-50 group-hover:opacity-100" />
+      )}
     </div>
   );
 }
 
-/** Bitta jamoa: yuqori rahbar → yo'nalishlar → supervayzer guruhlari (rahbarlik zanjiri bo'yicha). */
+/** Yo'nalish sarlavhasi (ustun boshi). */
+function UnitPill({ title, size, vacancies }: { title: string; size: number; vacancies: number }) {
+  const t = useTranslations("staff");
+  return (
+    <div className="mx-auto flex w-fit max-w-full items-center gap-2 rounded-full border bg-card px-3.5 py-1.5 shadow-sm">
+      <Users className="size-3.5 shrink-0 text-primary" />
+      <span className="truncate text-[13px] font-semibold">{title}</span>
+      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{size}</span>
+      {vacancies > 0 && <span className="shrink-0 rounded-full bg-destructive/12 px-1.5 font-mono text-[10.5px] text-destructive">{t("vacancies", { count: vacancies })}</span>}
+    </div>
+  );
+}
+
+/** Tugun va uning bolalari — chapdagi chiziqlar bilan bog'langan ichma-ich daraxt. */
+function Branch({ keys, h }: { keys: string[]; h: TreeHandlers }) {
+  if (!keys.length) return null;
+  return (
+    <ul className="org-tree">
+      {keys.map((k) => {
+        const kids = h.tree.kids.get(k) ?? [];
+        return (
+          <li key={k}>
+            <TreeNode k={k} h={h} lead={!!kids.length} />
+            <Branch keys={kids} h={h} />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function TreeNode({ k, h, lead }: { k: string; h: TreeHandlers; lead?: boolean }) {
+  const [kind, raw] = k.split(":");
+  const id = Number(raw);
+  if (kind === "unit") return <UnitPill title={h.index.unit.get(id) ?? ""} size={h.tree.size.get(k) ?? 0} vacancies={h.tree.vacancies.get(k) ?? 0} />;
+  const p = h.index.person.get(id);
+  if (!p) return null;
+  return <PersonCard person={p} onOpen={h.onOpen} onAssign={h.onAssign} lead={lead} reports={lead ? h.tree.size.get(k) : undefined} />;
+}
+
+/** Ustun: tepada yo'nalish (yoki guruh rahbari), ostida ichma-ich daraxt. */
+function Column({ k, h }: { k: string; h: TreeHandlers }) {
+  const kids = h.tree.kids.get(k) ?? [];
+  return (
+    <div className="org-col">
+      <TreeNode k={k} h={h} lead={!!kids.length} />
+      <Branch keys={kids} h={h} />
+    </div>
+  );
+}
+
+/** Bitta jamoa: yuqori rahbar → yo'nalishlar (ustunlar) → guruh rahbarlari → xodimlar, chiziqlar bilan bog'langan. */
 function ProjectView({ project, index, canEdit, onOpen, onAssign, onAdd, onEditProject, onSync }: {
   project: StaffProject; index: Index; canEdit: boolean; onAssign?: (p: StaffPerson) => void;
   onOpen: (p: StaffPerson) => void; onAdd: () => void; onEditProject: () => void; onSync: () => void;
 }) {
   const t = useTranslations("staff");
   const locale = useLocale() as keyof typeof DATE_LOCALES;
+  const tree = useMemo(() => buildTree([project], index), [project, index]);
+  const pk = `project:${project.id}`;
   const people = index.byProject.get(project.id) ?? [];
-  const roots = people.filter((p) => !p.manager || !index.person.has(p.manager));
-  const open = canEdit ? onOpen : undefined;
-  const sections = [...project.units.map((u) => ({ id: u.id as number | null, title: u.title })), { id: null, title: t("noUnit") }]
-    .map((u) => ({ ...u, people: people.filter((p) => p.unit === u.id && !roots.includes(p)) }))
-    .filter((s) => s.people.length);
+  const h: TreeHandlers = { index, tree, onOpen: canEdit ? onOpen : undefined, onAssign };
+  const top = tree.kids.get(pk) ?? [];
+  // bitta yuqori rahbar bo'lsa — u tepada, uning bolalari ustunlar; aks holda yuqori darajaning o'zi ustunlar
+  const rootKey = top.length === 1 && top[0].startsWith("person:") ? top[0] : null;
+  const columns = rootKey ? tree.kids.get(rootKey) ?? [] : top;
+  const root = rootKey ? index.person.get(Number(rootKey.split(":")[1])) : undefined;
 
   return (
     <section>
-      <div className="mb-3 flex flex-wrap items-end gap-x-4 gap-y-2 border-b-2 border-foreground pb-2">
+      <div className="mb-4 flex flex-wrap items-end gap-x-4 gap-y-2 border-b pb-2.5">
         <h2 className="text-xl font-bold">{project.name}</h2>
         <span className="text-sm text-muted-foreground">
           {t("seats", { count: people.length })} · {t("vacancies", { count: people.filter((p) => p.is_vacancy).length })}
@@ -270,64 +336,23 @@ function ProjectView({ project, index, canEdit, onOpen, onAssign, onAdd, onEditP
         </div>
       </div>
 
-      {!!roots.length && (
-        <div className="mb-4 flex flex-wrap justify-center gap-3">
-          {roots.map((r) => (
-            <Card key={r.id} className="min-w-72 gap-0 border-2 border-foreground/80 p-0">
-              <div className="px-3.5 pt-2.5 text-center text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">{t(`roles.${r.role}`)}</div>
-              <PersonLine person={r} onOpen={open} onAssign={onAssign} />
-            </Card>
-          ))}
+      {root && (
+        <div className="flex flex-col items-center">
+          <div className="mb-1.5 flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10.5px] font-semibold tracking-wider text-primary uppercase">
+            <Building2 className="size-3" />{project.name}
+          </div>
+          <div className="w-full max-w-sm">
+            <PersonCard person={root} onOpen={h.onOpen} onAssign={onAssign} lead reports={people.length - 1} />
+          </div>
+          {!!columns.length && <div className="h-6 border-l-[1.5px] border-[var(--edge-struct)]" />}
         </div>
       )}
-
-      {sections.map((s) => <UnitBlock key={String(s.id)} title={s.title} people={s.people} index={index} onOpen={open} onAssign={onAssign} />)}
+      {!!columns.length && (
+        <div className="org-cols">
+          {columns.map((k) => <Column key={k} k={k} h={h} />)}
+        </div>
+      )}
     </section>
-  );
-}
-
-function UnitBlock({ title, people, index, onOpen, onAssign }: {
-  title: string; people: StaffPerson[]; index: Index; onOpen?: (p: StaffPerson) => void; onAssign?: (p: StaffPerson) => void;
-}) {
-  const t = useTranslations("staff");
-  const inUnit = new Set(people.map((p) => p.id));
-  // guruh boshlig'i: shu yo'nalishda qo'l ostidagilari bor xodim (RSM, SVR...)
-  const heads = people.filter((p) => (index.children.get(p.id) ?? []).some((c) => inUnit.has(c.id)));
-  const headIds = new Set(heads.map((h) => h.id));
-  const loose = people.filter((p) => !headIds.has(p.id) && !(p.manager && headIds.has(p.manager)));
-  const looseByManager = new Map<number | null, StaffPerson[]>();
-  for (const p of loose) looseByManager.set(p.manager, [...(looseByManager.get(p.manager) ?? []), p]);
-
-  return (
-    <div className="mb-5">
-      <div className="mb-2 flex items-baseline gap-3">
-        <h3 className="font-semibold">{title}</h3>
-        <span className="text-xs text-muted-foreground">{t("seats", { count: people.length })}</span>
-      </div>
-      <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {heads.map((h) => {
-          const members = (index.children.get(h.id) ?? []).filter((c) => inUnit.has(c.id) && !headIds.has(c.id));
-          return (
-            <Card key={h.id} className="gap-0 overflow-hidden p-0">
-              <div className={cn("border-b bg-muted/40", h.is_vacancy && "bg-destructive/5")}><PersonLine person={h} onOpen={onOpen} onAssign={onAssign} /></div>
-              <div className="divide-y">{members.map((m) => <PersonLine key={m.id} person={m} onOpen={onOpen} onAssign={onAssign} compact />)}</div>
-              {!members.length && <div className="px-3.5 py-2 text-xs text-muted-foreground">{t("subTeams", { count: (index.children.get(h.id) ?? []).length })}</div>}
-            </Card>
-          );
-        })}
-        {[...looseByManager.entries()].map(([mid, list]) => {
-          const boss = mid ? index.person.get(mid) : undefined;
-          return (
-            <Card key={`loose-${mid}`} className="gap-0 overflow-hidden p-0">
-              <div className="border-b bg-muted/40 px-3.5 py-2 text-xs text-muted-foreground">
-                {boss ? t("directTo", { name: personLabel(boss, t("vacancy")) }) : t("noManager")}
-              </div>
-              <div className="divide-y">{list.map((m) => <PersonLine key={m.id} person={m} onOpen={onOpen} onAssign={onAssign} compact />)}</div>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 

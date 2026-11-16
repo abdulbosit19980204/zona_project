@@ -58,12 +58,14 @@ export const orgApi = {
   exportXlsx: async () => (await api.get<Blob>("export.xlsx", { responseType: "blob" })).data,
 };
 
-/** Dala jamoalari: brendlar bo'yicha savdo tuzilmasi, import/eksport. */
+/** Kontaktlar (dala jamoalari): brendlar bo'yicha savdo tuzilmasi, import/eksport. */
 export const staffApi = {
   state: () => get<StaffState>("staff/"),
   /** apply=false — faqat farqlar (preview); apply=true — bazaga yoziladi. */
   import: (body: StaffImportBody) => post<{ projects: StaffDiff[]; applied?: boolean }>("staff/import/", body),
-  sync: (project: number, apply = false) => post<{ projects: StaffDiff[]; applied?: boolean }>(`staff/projects/${project}/sync/`, { apply }),
+  /** text — brauzerda ochilib nusxa olingan sahifa matni (Claude artifact kabi server ocha olmaydigan manba uchun). */
+  sync: (project: number, apply = false, text = "") =>
+    post<{ projects: StaffDiff[]; applied?: boolean }>(`staff/projects/${project}/sync/`, { apply, ...(text ? { text } : {}) }),
   projects: resource<StaffProject>("staff/projects"),
   people: resource<StaffPerson>("staff/people"),
   /** Xodim ishdan bo'shadi — o'rin vakansiya bo'ladi (hudud, rahbar, qo'l ostidagilar saqlanadi). */

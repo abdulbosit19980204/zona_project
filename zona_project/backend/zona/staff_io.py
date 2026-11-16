@@ -14,6 +14,7 @@ Moslashtirish: avval hudud kodi (lavozim o'rni) bo'yicha — odam almashsa "alma
 keyin F.I.Sh. bo'yicha (hududi o'zgargan xodim).
 """
 import csv
+import html
 import io
 import json
 import re
@@ -24,6 +25,7 @@ from collections import Counter
 from django.db import transaction
 from django.utils import timezone
 
+from . import staff_text
 from .models import StaffPerson, StaffProject, StaffUnit
 
 FORMAT = "zona-staff"
@@ -321,15 +323,32 @@ def parse(content, filename="", name="", source_url=""):
     if "const DATA" in text or "<html" in text[:2000].lower() or "<!doctype" in text[:200].lower():
         data = _grab_json(text, "DATA")
         if not data:
-            raise StaffImportError("Sahifada jamoa ma'lumoti (const DATA) topilmadi.")
+            plain = _html_text(text)
+            if staff_text.looks_like(plain):
+                return staff_text.from_text(plain, name or _title_name(text), source_url)
+            raise StaffImportError("Sahifada jamoa ma'lumoti topilmadi.")
         doc = from_artifact(data, _grab_json(text, "ROP"), _grab_json(text, "BR"),
                             name or _title_name(text), source_url)
         if not doc["project"]["name"]:
             raise StaffImportError("Loyiha nomini kiriting.")
         return {doc["project"]["name"]: doc}
     if filename.lower().endswith((".csv", ".tsv", ".txt")) or "\n" in text:
-        return from_rows(_csv_rows(text), name, source_url)
+        try:
+            return from_rows(_csv_rows(text), name, source_url)
+        except StaffImportError:
+            if not staff_text.looks_like(text):
+                raise
+        # sahifadan nusxa olingan oddiy matn (Ctrl+A, Ctrl+C)
+        return staff_text.from_text(text, name, source_url)
     raise StaffImportError("Format tanilmadi: link, HTML sahifa, JSON, Excel (.xlsx) yoki CSV bo'lishi kerak.")
+
+
+def _html_text(page):
+    """HTML -> ko'rinadigan matn (qatorlar bo'yicha)."""
+    page = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", page)
+    page = re.sub(r"(?i)<br\s*/?>|</(div|p|li|tr|h\d|section|article|td|th)>", "\n", page)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", page))
+    return "\n".join(ln.strip() for ln in text.split("\n") if ln.strip())
 
 
 def _from_json(data, name, source_url):
@@ -365,8 +384,8 @@ def fetch(url):
         raise StaffImportError("Link http:// yoki https:// bilan boshlansin.")
     if re.match(r"^https?://(www\.)?claude\.ai/(artifact|public/artifacts)/", url, re.I):
         raise StaffImportError(
-            "Claude artifact linkini server o'qiy olmaydi: ma'lumot faqat brauzerda, Claude hisobi orqali ochiladi. "
-            "Sahifadagi ma'lumotni JSON/Excel qilib yuklang yoki Claude'dan shu link bo'yicha yangilashni so'rang.")
+            "Claude artifact sahifasini server ocha olmaydi (u faqat brauzerda, Claude hisobi orqali ochiladi). "
+            "Linkni oching, sahifa ichiga bir marta bosing, Ctrl+A va Ctrl+C bosing, so'ng matnni shu yerga joylang.")
     m = re.match(r"^https?://docs\.google\.com/spreadsheets/d/([\w-]+)", url)
     if m and "output=csv" not in url and "format=csv" not in url:
         gid = re.search(r"[#&?]gid=(\d+)", url)
@@ -453,11 +472,12 @@ def diff(project, doc):
     units_new = {u["key"]: u["title"] for u in doc["units"]}
     units_old = {u["key"]: u["title"] for u in old["units"]}
     replaced, changed, same = [], [], 0
+    keep = set(doc.get("keep_empty") or [])
     for i, j in pairs:
         a, b = o[i], n[j]
         diffs = []
         for f in ("role", "position", "territory", "region", "city", "phone", "email", "telegram", "note"):
-            if (a[f] or "") != (b[f] or "") and not (f in ("note", "telegram") and not b[f]):
+            if (a[f] or "") != (b[f] or "") and not ((f in ("note", "telegram") or f in keep) and not b[f]):
                 diffs.append({"field": f, "from": a[f], "to": b[f]})
         if units_old.get(a["unit"], a["unit"]) != units_new.get(b["unit"], b["unit"]):
             diffs.append({"field": "unit", "from": units_old.get(a["unit"], ""), "to": units_new.get(b["unit"], "")})
@@ -516,6 +536,7 @@ def apply(doc, project=None):
     for j in added:
         objs[doc["people"][j]["key"]] = StaffPerson(project=project)
     today = timezone.localdate()
+    keep = set(doc.get("keep_empty") or [])
     for order, p in enumerate(doc["people"]):
         obj = objs[p["key"]]
         holder_changed = obj.pk is not None and (fold(obj.name) != fold(p["name"]) or obj.is_vacancy != p["vacancy"])
@@ -524,8 +545,11 @@ def apply(doc, project=None):
             obj.telegram, obj.since = "", (None if p["vacancy"] else today)
         if p["telegram"]:
             obj.telegram = p["telegram"]
-        obj.name, obj.role, obj.position, obj.territory = p["name"], p["role"], p["position"], p["territory"]
-        obj.region, obj.city, obj.phone, obj.email = p["region"], p["city"], p["phone"], p["email"]
+        obj.name, obj.role, obj.territory = p["name"], p["role"], p["territory"]
+        obj.city, obj.phone, obj.email = p["city"], p["phone"], p["email"]
+        for f in ("position", "region"):
+            if p[f] or f not in keep or obj.pk is None:
+                setattr(obj, f, p[f])
         if p["note"] or obj.pk is None:
             obj.note = p["note"]
         obj.is_vacancy, obj.unit, obj.order = p["vacancy"], units.get(p["unit"]), order

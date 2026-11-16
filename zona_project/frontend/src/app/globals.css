@@ -228,3 +228,57 @@
     animation: none;
   }
 }
+
+/* Kontaktlar ro'yxati: bir-biriga chiziqlar bilan bog'langan tuzilma (org-chart) */
+.org-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  row-gap: 1.75rem;
+}
+.org-col {
+  position: relative;
+  padding: 1.75rem 0.5rem 0;
+}
+.org-col::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  border-top: 1.5px solid var(--edge-struct);
+}
+.org-col:first-child::before { left: 50%; }
+.org-col:last-child::before { right: 50%; }
+.org-col:only-child::before { display: none; }
+.org-col::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 1.75rem;
+  border-left: 1.5px solid var(--edge-struct);
+}
+.org-tree { margin-left: 1rem; }
+.org-tree > li {
+  position: relative;
+  padding-left: 1.25rem;
+  padding-top: 0.5rem;
+}
+.org-tree > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px solid var(--edge-struct);
+}
+.org-tree > li:last-child::before { bottom: auto; height: calc(0.5rem + 22px); }
+.org-tree > li::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(0.5rem + 22px);
+  width: 1rem;
+  border-top: 1.5px solid var(--edge-struct);
+  border-bottom-left-radius: 6px;
+}

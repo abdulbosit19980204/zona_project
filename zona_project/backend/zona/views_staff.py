@@ -123,7 +123,8 @@ class StaffProjectViewSet(ZonaViewSet):
         project = self.get_object()
         if not project.source_url:
             return Response({"detail": "Bu jamoa uchun manba linki saqlanmagan."}, status=status.HTTP_400_BAD_REQUEST)
-        return _run_import(request, {"url": project.source_url, "apply": request.data.get("apply")}, project)
+        return _run_import(request, {"url": project.source_url, "text": request.data.get("text") or "",
+                                     "apply": request.data.get("apply")}, project)
 
 
 class StaffPersonViewSet(ZonaViewSet):
@@ -198,6 +199,9 @@ class StaffPersonViewSet(ZonaViewSet):
 
 def _load(data):
     """So'rov tanasidan manbani o'qish: url | text | file_b64 (+filename)."""
+    if data.get("text") and data.get("url"):
+        # brauzerda ochilib nusxa olingan sahifa matni (Claude artifact kabi) — link manba sifatida saqlanadi
+        return str(data["text"]), "", str(data["url"]).strip()
     if data.get("url"):
         content, fname = staff_io.fetch(str(data["url"]))
         return content, fname or str(data.get("filename") or ""), str(data["url"]).strip()
@@ -223,6 +227,11 @@ def _run_import(request, data, project=None):
         return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     if project is None and data.get("project"):
         project = StaffProject.objects.filter(pk=data.get("project")).first()
+    if project is None and url and len(docs) == 1:
+        # shu link qaysi jamoaning manbasi bo'lsa — o'sha jamoa yangilanadi (nomi matnda boshqacha bo'lsa ham)
+        base = url.split("#")[0].rstrip("/")
+        project = next((p for p in StaffProject.objects.exclude(source_url="")
+                        if p.source_url.split("#")[0].rstrip("/") == base), None)
     if project is not None:
         if len(docs) > 1:
             names = ", ".join(docs)

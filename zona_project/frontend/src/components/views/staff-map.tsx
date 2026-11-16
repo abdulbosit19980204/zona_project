@@ -14,6 +14,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { DATE_LOCALES } from "@/components/common/activity";
+import { DirectionToggle, orientTree } from "@/components/graph/direction";
 import { Shell } from "@/components/graph/nodes";
 import type { OrgEdge } from "@/components/graph/org-layout";
 import { edgeTypes } from "@/components/graph/role-edge";
@@ -23,6 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import type { StaffPerson, StaffProject, StaffRole, StaffState } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { useUI } from "@/stores/ui";
 
 import { matchesTerms, ROLE_TONE, RoleChip, searchTerms, StaffContacts, tenure, type Index } from "./staff-shared";
 
@@ -40,6 +42,7 @@ interface StaffNodeData extends Record<string, unknown> {
   vacancies: number;
   hasKids: boolean;
   collapsed: boolean;
+  stacked?: boolean;
   onToggle?: () => void;
   dim: boolean;
   selected: boolean;
@@ -59,7 +62,7 @@ const key = (kind: Kind, id: number) => `${kind}:${id}`;
 const kindOf = (k: string) => k.split(":")[0] as Kind;
 const idOf = (k: string) => Number(k.split(":")[1]);
 
-interface Tree {
+export interface StaffTree {
   kids: Map<string, string[]>;
   parent: Map<string, string>;
   size: Map<string, number>;
@@ -71,7 +74,7 @@ interface Tree {
  * Xodim rahbari bilan bir yo'nalishda bo'lsa — rahbari ostida, aks holda yo'nalishi ostida.
  * Yo'nalish — uning yuqori xodimlari bitta rahbarga bo'ysunsa, o'sha rahbar ostida.
  */
-function buildTree(projects: StaffProject[], index: Index): Tree {
+export function buildTree(projects: StaffProject[], index: Index): StaffTree {
   const parent = new Map<string, string>();
   for (const pr of projects) {
     const pk = key("project", pr.id);
@@ -138,7 +141,7 @@ function buildTree(projects: StaffProject[], index: Index): Tree {
   return { kids, parent, size, vacancies };
 }
 
-function ancestors(k: string, tree: Tree) {
+function ancestors(k: string, tree: StaffTree) {
   const out: string[] = [];
   for (let cur = tree.parent.get(k); cur; cur = tree.parent.get(cur)) out.push(cur);
   return out;
@@ -146,7 +149,7 @@ function ancestors(k: string, tree: Tree) {
 
 interface Placed { x: number; y: number; w: number; h: number; depth: number }
 
-function layout(tree: Tree, collapsed: (k: string) => boolean) {
+function layout(tree: StaffTree, collapsed: (k: string) => boolean) {
   const pos = new Map<string, Placed>();
   const edges: [string, string][] = [];
   let cursor = 40;
@@ -304,6 +307,7 @@ function MapCanvas(props: StaffMapProps) {
   const [query, setQuery] = useState("");
   const [panel, setPanel] = useState(true);
   const [toggled, setToggled] = useState<Map<string, boolean>>(new Map());
+  const dir = useUI((s) => s.mapDir);
 
   const projects = useMemo(() => (active === "all" ? data.projects : data.projects.filter((p) => p.id === active)), [data.projects, active]);
   const tree = useMemo(() => buildTree(projects, index), [projects, index]);
@@ -348,11 +352,12 @@ function MapCanvas(props: StaffMapProps) {
         },
       };
     });
+    const oriented = orientTree(nodes, dir, new Map(edges.map(([s, tg]) => [tg, s])));
     const edgeList: OrgEdge[] = edges.map(([s, tg]) => ({
       id: `${s}>${tg}`, source: s, target: tg, type: "role", data: { role: "struct", label: "", highlight: false, dim: false },
     }));
-    return { nodes, edges: edgeList };
-  }, [tree, toggled, matchPath, active, index, projects.length, t, toggle]);
+    return { nodes: oriented, edges: edgeList };
+  }, [tree, toggled, matchPath, active, index, projects.length, t, toggle, dir]);
 
   const focusKey = hover ?? selected;
   const related = useMemo(() => {
@@ -368,13 +373,13 @@ function MapCanvas(props: StaffMapProps) {
       ...n.data,
       selected: n.id === selected,
       match: !!matches?.has(n.id),
-      dim: related ? !related.has(n.id) : !!matches && !matches.has(n.id) && !matchPath.has(n.id),
+      dim: related ? !related.has(n.id) : !!matches?.size && !matches.has(n.id) && !matchPath.has(n.id),
     },
   })), [graph.nodes, selected, matches, matchPath, related]);
   const edges = useMemo(() => graph.edges.map((e) => ({
     ...e,
     data: e.data
-      ? { ...e.data, highlight: !!related?.has(e.source) && !!related?.has(e.target), dim: related ? !(related.has(e.source) && related.has(e.target)) : !!matches && !matchPath.has(e.source) }
+      ? { ...e.data, highlight: !!related?.has(e.source) && !!related?.has(e.target), dim: related ? !(related.has(e.source) && related.has(e.target)) : !!matches?.size && !matchPath.has(e.source) }
       : e.data,
   })), [graph.edges, related, matches, matchPath]);
 
@@ -390,7 +395,7 @@ function MapCanvas(props: StaffMapProps) {
   useEffect(() => {
     const id = setTimeout(() => void flow.fitView({ ...fitRef.current, duration: 400 }), 60);
     return () => clearTimeout(id);
-  }, [active, flow]);
+  }, [active, dir, flow]);
 
   // tanlangan tugunga yaqinlashish (yig'ilgan bo'lsa — avval yoyiladi, keyin markazlanadi)
   const pending = useRef<string | null>(null);
@@ -492,6 +497,7 @@ function MapCanvas(props: StaffMapProps) {
             </DropdownMenuContent>
           </DropdownMenu>
           {canEdit && <Button className="pointer-events-auto" onClick={props.onImport}><Upload className="size-4" />{t("staff.import")}</Button>}
+          <DirectionToggle />
           <Button className="pointer-events-auto" variant="outline" size="icon" onClick={props.onList} aria-label={t("staff.view.list")} title={t("staff.view.list")}>
             <List className="size-4" />
           </Button>
@@ -597,7 +603,7 @@ function Header({ icon, title, sub, actions }: { icon: ReactNode; title: ReactNo
   );
 }
 
-type PanelProps = StaffMapProps & { selected: string | null; tree: Tree; projects: StaffProject[]; onSelect: (k: string) => void };
+type PanelProps = StaffMapProps & { selected: string | null; tree: StaffTree; projects: StaffProject[]; onSelect: (k: string) => void };
 
 function StaffPanel(props: PanelProps) {
   const { selected, tree } = props;

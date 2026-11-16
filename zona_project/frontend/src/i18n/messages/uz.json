@@ -25,7 +25,7 @@
       "analytics": "Tahlil",
       "system": "Tizim"
     },
-    "staff": "Dala jamoalari"
+    "staff": "Kontaktlar"
   },
   "top": {
     "search": "Qidirish…",
@@ -71,7 +71,11 @@
     "saved": "Saqlandi",
     "saving": "Saqlanmoqda…",
     "unassigned": "Masʼul belgilanmagan",
-    "yes": "Ha"
+    "yes": "Ha",
+    "mapDir": {
+      "toVertical": "Vertikal koʻrinish (yuqoridan pastga)",
+      "toHorizontal": "Gorizontal koʻrinish (chapdan oʻngga)"
+    }
   },
   "roles": {
     "owner": "Egasi",
@@ -631,8 +635,8 @@
     "footer": "Savol hech bir turga kirmasa — “Savol kimga?” sahifasida erkin matn bilan soʻrang."
   },
   "staff": {
-    "title": "Dala jamoalari",
-    "description": "StarGroup brendlari boʻyicha savdo tuzilmasi: kim qaysi hududda, kimga boʻysunadi. Qidiring, tahrirlang, link yoki fayldan yangilang.",
+    "title": "Kontaktlar",
+    "description": "StarGroup brendlari boʻyicha xodimlar va ularning telefonlari: kim qaysi hududda, kimga boʻysunadi. Qidiring, bogʻlaning, link yoki fayldan yangilang.",
     "export": "Eksport",
     "import": "Import",
     "all": "Hammasi",
@@ -675,10 +679,10 @@
       "file": "Fayl",
       "text": "Matn"
     },
-    "urlHint": "JSON, CSV, Google Sheets havolasi yoki ichida jamoa maʼlumoti boʻlgan HTML sahifa. Claude artifact linkini server ocha olmaydi — undan JSON yoki Excel yuklang.",
+    "urlHint": "JSON, CSV, Google Sheets havolasi yoki jamoa maʼlumoti boʻlgan sahifa. Claude artifact linki kiritilsa — sahifa matnini joylash yoʻli koʻrsatiladi.",
     "fileHint": "Excel (.xlsx — eksport shabloni), JSON, CSV yoki saqlangan HTML sahifa.",
-    "textPlaceholder": "JSON yoki sahifa kodi (const DATA = …)",
-    "textHint": "Sahifa kodi yoki JSON ni shu yerga joylang.",
+    "textPlaceholder": "Sahifa matni, JSON yoki sahifa kodi",
+    "textHint": "Sahifadan nusxa olingan matn (Ctrl+A, Ctrl+C), JSON yoki sahifa kodi — oʻzi taniydi.",
     "target": "Qaysi jamoaga",
     "targetAuto": "Avtomatik (nomi boʻyicha) / yangi",
     "nameAuto": "Fayldan olinadi",
@@ -790,6 +794,17 @@
         "transfer": "Boshqa oʻringa oʻtdi",
         "leave": "Dekret / uzoq taʼtil"
       }
-    }
+    },
+    "paste": {
+      "title": "Bu sahifani server ocha olmaydi — matnini joylang, qolganini tizim oʻzi ajratadi",
+      "step1": "Linkni oching (pastdagi tugma)",
+      "step2": "Sahifa ichiga bir marta bosing, keyin Ctrl+A va Ctrl+C",
+      "step3": "Shu yerga Ctrl+V — tahlil oʻzi boshlanadi",
+      "open": "Linkni yangi oynada ochish",
+      "placeholder": "Sahifa matnini shu yerga joylang (Ctrl+V)…",
+      "chars": "{count} belgi"
+    },
+    "linkOwner": "Bu link “{name}” jamoasining manbasi — oʻsha jamoa yangilanadi",
+    "bigRemoval": "Diqqat: “{name}” jamoasidan {removed} kishi oʻchiriladi, {added} kishi qoʻshiladi. Toʻgʻri jamoa tanlanganiga ishonch hosil qiling."
   }
 }

@@ -25,7 +25,7 @@
       "analytics": "Analytics",
       "system": "System"
     },
-    "staff": "Field Teams"
+    "staff": "Contacts"
   },
   "top": {
     "search": "Search…",
@@ -71,7 +71,11 @@
     "saved": "Saved",
     "saving": "Saving…",
     "unassigned": "Unassigned",
-    "yes": "Yes"
+    "yes": "Yes",
+    "mapDir": {
+      "toVertical": "Vertical view (top to bottom)",
+      "toHorizontal": "Horizontal view (left to right)"
+    }
   },
   "roles": {
     "owner": "Owner",
@@ -631,8 +635,8 @@
     "footer": "If your question fits no type, ask it in your own words on the “Who to ask?” page."
   },
   "staff": {
-    "title": "Field Teams",
-    "description": "Sales structure for StarGroup brands: who covers which territory and who they report to. Search, edit, update from a link or a file.",
+    "title": "Contacts",
+    "description": "People across StarGroup brands and their phone numbers: who covers which territory and who they report to. Search, get in touch, update from a link or a file.",
     "export": "Export",
     "import": "Import",
     "all": "All",
@@ -675,10 +679,10 @@
       "file": "File",
       "text": "Text"
     },
-    "urlHint": "JSON, CSV, a Google Sheets link or an HTML page with team data. The server can't open Claude artifact links — download JSON or Excel from it.",
+    "urlHint": "JSON, CSV, a Google Sheets link or a page with team data. For a Claude artifact link you'll be shown how to paste the page text.",
     "fileHint": "Excel (.xlsx — the export template), JSON, CSV or a saved HTML page.",
-    "textPlaceholder": "JSON or page source (const DATA = …)",
-    "textHint": "Paste page source or JSON here.",
+    "textPlaceholder": "Page text, JSON or page source",
+    "textHint": "Text copied from a page (Ctrl+A, Ctrl+C), JSON or page source — detected automatically.",
     "target": "Into which team",
     "targetAuto": "Automatic (by name) / new",
     "nameAuto": "Taken from the file",
@@ -790,6 +794,17 @@
         "transfer": "Moved to another position",
         "leave": "Maternity / long leave"
       }
-    }
+    },
+    "paste": {
+      "title": "The server can't open this page — paste its text and the system will parse the rest",
+      "step1": "Open the link (button below)",
+      "step2": "Click inside the page, then Ctrl+A and Ctrl+C",
+      "step3": "Ctrl+V here — parsing starts automatically",
+      "open": "Open the link in a new tab",
+      "placeholder": "Paste the page text here (Ctrl+V)…",
+      "chars": "{count} characters"
+    },
+    "linkOwner": "This link is the source of “{name}” — that team will be updated",
+    "bigRemoval": "Careful: {removed} people will be removed from “{name}” and {added} added. Make sure the right team is selected."
   }
 }

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { RoleLine } from "@/components/common/role";
 import { ProcessDialog } from "@/components/forms/structure-dialogs";
+import { DirectionToggle, orientTree } from "@/components/graph/direction";
 import { edgeTypes } from "@/components/graph/role-edge";
 import { nodeTypes } from "@/components/graph/nodes";
 import { layoutOrg, relatedTo, type OrgNode } from "@/components/graph/org-layout";
@@ -39,10 +40,16 @@ function MapCanvas() {
   const [panel, setPanel] = useState(true);
   const [newProcess, setNewProcess] = useState(false);
 
-  const graph = useMemo(
-    () => layoutOrg(model, { scope, collapsed: collapsedDepts, hiddenRoles, onlyIssues, roleLabel: (r) => t(`roles.${r}`) }),
-    [model, scope, collapsedDepts, hiddenRoles, onlyIssues, t],
-  );
+  const dir = useUI((s) => s.mapDir);
+  const graph = useMemo(() => {
+    const g = layoutOrg(model, { scope, collapsed: collapsedDepts, hiddenRoles, onlyIssues, roleLabel: (r) => t(`roles.${r}`) });
+    // vertikal ko'rinish uchun ota tugunlar: tuzilma bog'lanishi, jarayon uchun — egasi (bo'lmasa birinchi bog'langan)
+    const parents = new Map<string, string>();
+    for (const e of g.edges) if (e.data?.role === "struct") parents.set(e.target, e.source);
+    for (const e of g.edges) if (e.data?.role === "owner" && !parents.has(e.target)) parents.set(e.target, e.source);
+    for (const e of g.edges) if (!parents.has(e.target)) parents.set(e.target, e.source);
+    return { ...g, nodes: orientTree(g.nodes, dir, parents) };
+  }, [model, scope, collapsedDepts, hiddenRoles, onlyIssues, t, dir]);
 
   // xaritada qidiruv: nom, lavozim va jarayon ichidagi vazifalar matni bo'yicha
   const matches = useMemo(() => {
@@ -93,6 +100,15 @@ function MapCanvas() {
     setLastFocus(focusParam);
     if (focusParam) setSelected(focusParam);
   }
+  // yo'nalish almashganda xaritani qayta sig'dirish
+  const fitRef = useRef(fitOptions);
+  useEffect(() => {
+    fitRef.current = fitOptions;
+  }, [fitOptions]);
+  useEffect(() => {
+    const id = setTimeout(() => void flow.fitView({ ...fitRef.current, duration: 400 }), 60);
+    return () => clearTimeout(id);
+  }, [dir, flow]);
   const centerRef = useRef(centerOn);
   useEffect(() => {
     centerRef.current = centerOn;
@@ -154,6 +170,7 @@ function MapCanvas() {
           </div>
           {matches && <span className="pointer-events-auto self-center text-xs text-muted-foreground">{t("org.found", { count: matches.size })}</span>}
           {can.edit && <Button className="pointer-events-auto" variant="outline" onClick={() => setNewProcess(true)}><Plus className="size-4" />{t("forms.process.new")}</Button>}
+          <DirectionToggle />
           <Button className="pointer-events-auto" variant="outline" size="icon" onClick={() => setPanel((p) => !p)} aria-label={t("org.panel")}>
             {panel ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
           </Button>

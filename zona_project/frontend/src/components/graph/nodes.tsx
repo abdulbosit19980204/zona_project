@@ -14,7 +14,8 @@ import type { OrgNode } from "./org-layout";
 
 const hidden = "!h-2 !w-2 !min-w-0 !border-0 !bg-transparent";
 
-export function Shell({ data, className, children }: { data: Pick<OrgNode["data"], "selected" | "match" | "dim">; className?: string; children: React.ReactNode }) {
+export function Shell({ data, className, children }: { data: Pick<OrgNode["data"], "selected" | "match" | "dim" | "stacked">; className?: string; children: React.ReactNode }) {
+  const vertical = useUI((s) => s.mapDir) === "TB";
   return (
     <div
       className={cn(
@@ -25,9 +26,9 @@ export function Shell({ data, className, children }: { data: Pick<OrgNode["data"
         className,
       )}
     >
-      <Handle type="target" position={Position.Left} className={hidden} isConnectable={false} />
+      <Handle type="target" position={vertical && !data.stacked ? Position.Top : Position.Left} className={hidden} isConnectable={false} />
       {children}
-      <Handle type="source" position={Position.Right} className={hidden} isConnectable={false} />
+      <Handle type="source" position={vertical ? Position.Bottom : Position.Right} className={hidden} isConnectable={false} />
     </div>
   );
 }
