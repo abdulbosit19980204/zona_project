@@ -52,3 +52,30 @@ def audit(request):
     except AIError as e:
         return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response({**result, "meta": meta})
+
+
+@zona_api(["POST"], [CanView])
+def workload(request):
+    """Yuklama tahlili (vaqt asosida): ortiqcha yuklama, tavsiyalar, zonalar bo'yicha eng mos xodim."""
+    try:
+        result, meta = service.workload(request.user, str(request.data.get("lang") or "uz"))
+    except AIError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response({**result, "meta": meta})
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def estimate(request):
+    """Savollarga vaqtni AI bilan taxminlash (qo'lda kiritilganlarga tegilmaydi)."""
+    try:
+        result, meta = service.estimate_times(request.user)
+    except AIError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response({**result, "meta": meta})
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def estimate_rules(request):
+    """Qoida bo'yicha (AI'siz) boshlang'ich taxmin: faqat vaqti avtomatik bo'lgan savollar uchun."""
+    from . import timeload
+    return Response({"updated": timeload.apply_estimates()})

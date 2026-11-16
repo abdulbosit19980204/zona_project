@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2, CircleAlert, KeyRound, Languages, Loader2, Pencil, Plug, Plus, Zap } from "lucide-react";
+import { CheckCircle2, CircleAlert, KeyRound, Languages, Loader2, Pencil, Plug, Plus, Sparkles, Zap } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -48,6 +48,18 @@ export function AiTab() {
         {t("ai.providers")}
       </SectionTitle>
       <p className="-mt-1 mb-3 text-sm text-muted-foreground">{t("ai.providersHint")}</p>
+      {providers.data?.filter((p) => p.kind === "gemini" && !p.has_key).map((p) => (
+        <Card key={`free-${p.id}`} className="mb-3 gap-2 border-primary/40 bg-primary/5 p-4">
+          <div className="flex items-center gap-2 font-semibold"><Sparkles className="size-4 text-primary" />{t("ai.free.title")}</div>
+          <ol className="list-decimal space-y-1 pl-5 text-sm">
+            <li>{t("ai.free.step1")} <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="font-medium text-primary underline">aistudio.google.com/apikey</a></li>
+            <li>{t("ai.free.step2")}</li>
+            <li>{t("ai.free.step3")}</li>
+          </ol>
+          <p className="text-xs text-muted-foreground">{t("ai.free.note")}</p>
+          <Button size="sm" className="w-fit" onClick={() => setEdit(p)}><KeyRound className="size-4" />{t("ai.free.enterKey")}</Button>
+        </Card>
+      ))}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {providers.data?.map((p) => <ProviderCard key={p.id} provider={p} kind={kindMap.get(p.kind)} onEdit={() => setEdit(p)} />)}
         {providers.data && !providers.data.length && (

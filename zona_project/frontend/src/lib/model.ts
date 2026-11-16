@@ -38,6 +38,37 @@ export interface Issue {
   count?: number;
 }
 
+/* ------------------------------------------------------------------ vaqt yuklamasi
+ * Formula backend/zona/timeload.py dagi bilan bir xil:
+ * haftalik daqiqa = bir martalik vaqt × haftasiga soni; mas'ul — 100%, 1-zaxira — 15%, keyingilari — 5%.
+ * bandlik = (mas'ul + zaxira soatlari) / haftalik sig'im; 85% dan yuqori — ortiqcha, 70% dan — band. */
+export const FALLBACK_SHARE = [0.15, 0.05] as const;
+export const OVERLOAD = 0.85;
+export const BUSY = 0.7;
+export const weekMinutes = (t: Task) => (t.minutes || 0) * (t.per_week || 0);
+export type LoadStatus = "over" | "busy" | "ok";
+
+export interface TimeLoad {
+  member: Member;
+  ownerMin: number;
+  backupMin: number;
+  hours: number;
+  capacity: number;
+  util: number;
+  status: LoadStatus;
+  /** zona id (yoki null) -> haftalik daqiqa (mas'ul sifatida) */
+  zones: Map<number | null, number>;
+  tasks: Task[];
+}
+
+export interface Recommendation {
+  kind: "reassign" | "capacity";
+  task?: Task;
+  from: number;
+  to?: number;
+  hours: number;
+}
+
 export interface Workload {
   member: Member;
   tasks: number;
@@ -46,6 +77,9 @@ export interface Workload {
   other: number;
   score: number; // tasks + 3 * (egalik + boshqa rollar)
   excessive: boolean;
+  hours: number;
+  util: number;
+  status: LoadStatus;
 }
 
 export interface Model {
@@ -76,6 +110,11 @@ export interface Model {
   conflicts: number;
   coverage: { owner: number; supervisor: number; approver: number; backup: number; tasks: number };
   workload: Workload[];
+  timeLoad: Map<number, TimeLoad>;
+  recommendations: Recommendation[];
+  totalWeekHours: number;
+  /** vaqt ma'lumoti bormi (hech bo'lmasa bitta savolda) */
+  hasTime: boolean;
   deptOf: (m: Member) => number;
   teamsOf: (deptId: number) => Team[];
   membersOf: (deptId: number) => Member[];
@@ -200,7 +239,41 @@ export function buildModel(state: OrgState): Model {
   });
   const active = raw.filter((w) => w.score > 0);
   const avg = active.reduce((s, w) => s + w.score, 0) / Math.max(1, active.length);
-  const workload = raw.map((w) => ({ ...w, excessive: active.length > 2 && w.score > avg * 1.35 }));
+
+  // vaqt yuklamasi
+  const timeLoad = new Map<number, TimeLoad>();
+  for (const m of state.members) {
+    timeLoad.set(m.id, { member: m, ownerMin: 0, backupMin: 0, hours: 0, capacity: m.capacity || 40, util: 0, status: "ok", zones: new Map(), tasks: [] });
+  }
+  for (const t of state.tasks) {
+    const w = weekMinutes(t);
+    const zid = t.process ? process.get(t.process)?.zone ?? null : null;
+    const o = t.owner ? timeLoad.get(t.owner) : undefined;
+    if (o) {
+      o.ownerMin += w;
+      o.tasks.push(t);
+      o.zones.set(zid, (o.zones.get(zid) ?? 0) + w);
+    }
+    t.fallbacks.forEach((f, i) => {
+      const b = timeLoad.get(f.member);
+      if (b) b.backupMin += w * (i === 0 ? FALLBACK_SHARE[0] : FALLBACK_SHARE[1]);
+    });
+  }
+  for (const v of timeLoad.values()) {
+    v.hours = (v.ownerMin + v.backupMin) / 60;
+    v.util = v.hours / Math.max(v.capacity, 0.1);
+    v.status = v.util > OVERLOAD ? "over" : v.util > BUSY ? "busy" : "ok";
+  }
+  const hasTime = state.tasks.some((t) => weekMinutes(t) > 0);
+  const totalWeekHours = state.tasks.reduce((s, t) => s + weekMinutes(t), 0) / 60;
+  const recommendations = recommend(timeLoad, process);
+  const workload = raw.map((w) => {
+    const tl = timeLoad.get(w.member.id)!;
+    return {
+      ...w, hours: tl.hours, util: tl.util, status: tl.status,
+      excessive: hasTime ? tl.status === "over" : active.length > 2 && w.score > avg * 1.35,
+    };
+  });
 
   const level = (pid: number): IssueLevel | null => {
     const list = issues.get(pid) ?? [];
@@ -218,7 +291,7 @@ export function buildModel(state: OrgState): Model {
     issueProcesses: state.processes.filter((p) => (issues.get(p.id) ?? []).length),
     unassignedTasks: state.tasks.filter((t) => !t.owner),
     orphanTasks: state.tasks.filter((t) => !t.process),
-    conflicts, coverage, workload, deptOf,
+    conflicts, coverage, workload, timeLoad, recommendations, totalWeekHours, hasTime, deptOf,
     teamsOf: (deptId) => state.teams.filter((t) => t.department === deptId),
     membersOf: (deptId) => memberOrder.filter((m) => deptOf(m) === deptId),
     membersOfTeam: (teamId, deptId) => memberOrder.filter((m) => deptOf(m) === deptId && (m.team ?? null) === teamId),
@@ -240,3 +313,48 @@ export function initials(name: string): string {
   const w = words[0] ?? "?";
   return w.slice(0, 1).toUpperCase() + w.slice(1, 2);
 }
+
+/**
+ * Qoidaga asoslangan tavsiyalar (backend timeload.recommendations bilan bir xil):
+ * ortiqcha yuklangan xodimning eng ko'p vaqt oladigan savolini avval rahbariga (ish ko'p bo'lganda yordam beradi),
+ * keyin shu zonadagi bir xil darajali hamkasbiga, keyin zaxirasiga — bandligi past bo'lsa — o'tkazish.
+ * L3, tashqi hamkor va biznes (tasdiqlovchi) almashtiruvchi emas. Yetmasa — sig'im tavsiyasi.
+ */
+function recommend(load: Map<number, TimeLoad>, process: Map<number, Process>): Recommendation[] {
+  const sim = new Map([...load].map(([id, v]) => [id, { ...v }]));
+  const recs: Recommendation[] = [];
+  const zoneOf = (t: Task) => (t.process ? process.get(t.process)?.zone ?? null : null);
+  for (const [mid, v] of [...sim].sort((a, b) => b[1].util - a[1].util)) {
+    if (v.status !== "over") continue;
+    const need = v.hours - v.capacity * BUSY;
+    let moved = 0;
+    for (const t of [...v.tasks].sort((a, b) => weekMinutes(b) - weekMinutes(a))) {
+      if (moved >= need) break;
+      const me = v.member;
+      const zone = zoneOf(t);
+      const cands = [
+        ...(me.manager ? [me.manager] : []),
+        ...[...sim].filter(([o, ov]) => o !== mid && ov.member.level === me.level && ov.tasks.some((x) => zoneOf(x) === zone)).map(([o]) => o),
+        ...t.fallbacks.map((f) => f.member),
+      ];
+      const best = [...new Set(cands)].find((c) => {
+        const cv = sim.get(c);
+        return !!cv && c !== mid && cv.status === "ok" && cv.member.level !== "L3" && cv.member.level !== "EXT"
+          && (cv.member.level !== "BIZ" || me.level === "BIZ");
+      });
+      if (best === undefined) continue;
+      const h = weekMinutes(t) / 60;
+      recs.push({ kind: "reassign", task: t, from: mid, to: best, hours: Math.round(h * 10) / 10 });
+      moved += h;
+      const bv = sim.get(best)!;
+      bv.hours += h;
+      bv.util = bv.hours / Math.max(bv.capacity, 0.1);
+      if (bv.util > BUSY) bv.status = "busy";
+    }
+    if (moved < need) recs.push({ kind: "capacity", from: mid, hours: Math.round((need - moved) * 10) / 10 });
+  }
+  return recs;
+}
+
+/** "1 soat 30 daq" kabi qisqa ko'rinish uchun: soatlarni bir xonali kasr bilan. */
+export const fmtHours = (h: number) => (h >= 10 ? Math.round(h).toString() : (Math.round(h * 10) / 10).toString());

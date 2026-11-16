@@ -2,13 +2,14 @@
 
 import { useMutation } from "@tanstack/react-query";
 import {
-  AlertTriangle, Bot, ChevronDown, ChevronRight, Download, FileJson, FileText, MessageSquareQuote, Pencil, Plus, Search, Sparkles, Star,
+  AlertTriangle, Bot, ChevronDown, Clock, ChevronRight, Download, FileJson, FileText, MessageSquareQuote, Pencil, Plus, Search, Sparkles, Star,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { MemberAvatar } from "@/components/common/member-avatar";
+import { TimeChip } from "@/components/common/time";
 import { Page, PageHeader, StatCard } from "@/components/common/page";
 import { ZoneIcon } from "@/components/common/zone-icon";
 import { askerKey } from "@/components/forms/askers";
@@ -24,7 +25,7 @@ import { useCan, useModel, useScope } from "@/hooks/use-org";
 import { errorMessage } from "@/lib/api/client";
 import { knowledgeApi } from "@/lib/api/endpoints";
 import type { KnowledgeFormat, Process, Task, Zone } from "@/lib/api/types";
-import type { Model } from "@/lib/model";
+import { fmtHours, weekMinutes, type Model } from "@/lib/model";
 import { cn } from "@/lib/utils";
 
 const norm = (s: string) => s.toLowerCase().replace(/[ʻʼ’‘`´]/g, "'");
@@ -129,8 +130,9 @@ export function Processes() {
         )}
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label={t("knowledge.stats.questions")} value={stats.questions} icon={MessageSquareQuote} />
+        <StatCard label={t("time.totalWeek")} value={`${fmtHours(model.totalWeekHours)} ${t("time.h")}`} icon={Clock} />
         <StatCard label={t("knowledge.stats.frequent")} value={stats.frequent} icon={Star} />
         <StatCard label={t("knowledge.stats.withRule")} value={`${stats.withRule}/${stats.questions}`} icon={FileText} tone={stats.withRule < stats.questions ? "warning" : "default"} />
         <Card className="gap-2 p-4">
@@ -167,6 +169,7 @@ export function Processes() {
           const procs = model.state.processes.filter((p) => (z ? p.zone === z.id : !p.zone) && visible.has(p.id));
           if (!procs.length) return null;
           const qCount = procs.reduce((n, p) => n + (visible.get(p.id)?.length ?? 0), 0);
+          const zoneH = procs.reduce((n, p) => n + (model.tasksOf.get(p.id) ?? []).reduce((s, x) => s + weekMinutes(x), 0), 0) / 60;
           return (
             <section key={z?.id ?? "none"}>
               <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -176,6 +179,7 @@ export function Processes() {
                   {z?.description && <p className="max-w-3xl text-sm text-muted-foreground">{z.description}</p>}
                 </div>
                 <span className="text-xs text-muted-foreground">{t("knowledge.zoneMeta", { processes: procs.length, questions: qCount })}</span>
+                {zoneH > 0 && <span className="flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs"><Clock className="size-3" />{fmtHours(zoneH)} {t("time.hPerWeek")}</span>}
                 {can.edit && <Button variant="ghost" size="sm" onClick={() => setEditProcess({ zone: z?.id ?? null })}><Plus className="size-4" />{t("forms.process.new")}</Button>}
               </div>
               <div className="grid gap-3 xl:grid-cols-2">
@@ -225,6 +229,7 @@ function ProcessCard({ process: p, zone, tasks, model, canEdit, expanded, onEdit
   const level = model.level(p.id);
   const owners = (model.rolesOf.get(p.id) ?? []).filter((r) => r.role === "owner").map((r) => model.member.get(r.member)).filter((m) => !!m);
   const frequent = tasks.filter((x) => x.frequent).length;
+  const procHours = (model.tasksOf.get(p.id) ?? []).reduce((s, x) => s + weekMinutes(x), 0) / 60;
   const color = zone?.color ?? "#64748B";
   return (
     <Card className="gap-0 overflow-hidden p-0" style={{ borderTop: `3px solid ${color}` }}>
@@ -245,6 +250,7 @@ function ProcessCard({ process: p, zone, tasks, model, canEdit, expanded, onEdit
               {owners.length ? owners.map((m) => m.name).join(", ") : <span className="text-destructive">{t("org.noOwner")}</span>}
             </span>
             <span>{t("knowledge.questionsCount", { count: tasks.length })}</span>
+            {procHours > 0 && <span className="flex items-center gap-1 font-mono"><Clock className="size-3" />{fmtHours(procHours)} {t("time.hPerWeek")}</span>}
             {!!frequent && <span className="flex items-center gap-1 text-warning"><Star className="size-3 fill-current" />{frequent}</span>}
           </div>
         </div>
@@ -281,6 +287,7 @@ function QuestionRow({ task, model, canEdit, onEdit }: { task: Task; model: Mode
             {task.frequent && <Star className="size-3.5 shrink-0 fill-warning text-warning" />}
             <span className="cursor-pointer" onClick={() => setOpen((v) => !v)}>{task.title}</span>
             {!task.rule && <span className="rounded border border-dashed px-1 text-[10px] font-normal text-muted-foreground">{t("knowledge.noRule")}</span>}
+            <TimeChip task={task} />
           </div>
           {/* zanjir */}
           <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11.5px]">

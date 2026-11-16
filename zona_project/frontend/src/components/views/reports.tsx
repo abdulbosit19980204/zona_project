@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { Markdown } from "@/components/common/markdown";
+import { STATUS_COLOR } from "@/components/common/time";
 import { Page, PageHeader } from "@/components/common/page";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useModel } from "@/hooks/use-org";
 import { errorMessage } from "@/lib/api/client";
 import { aiApi, orgApi } from "@/lib/api/endpoints";
+import { fmtHours } from "@/lib/model";
 
 /** Hisobotlar: Excel eksport, AI audit va chop etiladigan qisqa hisobot. */
 export function Reports() {
@@ -83,6 +85,9 @@ export function Reports() {
               <TableHead className="text-right">{t("workload.approvals")}</TableHead>
               <TableHead className="text-right">{t("panel.authority")}</TableHead>
               <TableHead className="text-right">{t("workload.score")}</TableHead>
+              <TableHead className="text-right">{t("time.hPerWeek")}</TableHead>
+              <TableHead className="text-right">{t("time.capacity")}</TableHead>
+              <TableHead className="text-right">{t("time.utilShort")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -94,7 +99,10 @@ export function Reports() {
                 <TableCell className="text-right font-mono">{w.owned}</TableCell>
                 <TableCell className="text-right font-mono">{w.approvals}</TableCell>
                 <TableCell className="text-right font-mono">{(model.authorities.get(w.member.id) ?? []).length}</TableCell>
-                <TableCell className={w.excessive ? "text-right font-mono font-semibold text-warning" : "text-right font-mono"}>{w.score}</TableCell>
+                <TableCell className="text-right font-mono">{w.score}</TableCell>
+                <TableCell className="text-right font-mono">{fmtHours(w.hours)}</TableCell>
+                <TableCell className="text-right font-mono">{w.member.capacity}</TableCell>
+                <TableCell className="text-right font-mono font-semibold" style={{ color: STATUS_COLOR[w.status] }}>{Math.round(w.util * 100)}%</TableCell>
               </TableRow>
             ))}
           </TableBody>

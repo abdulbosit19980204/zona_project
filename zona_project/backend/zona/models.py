@@ -106,6 +106,8 @@ class Member(models.Model):
     level = models.CharField("Daraja", max_length=4, choices=LEVELS, blank=True)
     duties = models.JSONField("Qaysi holatlarda javob beradi (aniq vazifalar)", default=list, blank=True)
     escalation = models.TextField("Hal qila olmasa — kimga o'tkazadi", blank=True)
+    capacity = models.FloatField("Haftalik sig'im (soat)", default=40,
+                                 help_text="Shu murojaatlarga haftasiga ajrata oladigan vaqt; jamoa uchun — jami")
     # aloqa
     email = models.EmailField("Email", blank=True)
     phone = models.CharField("Telefon", max_length=40, blank=True)
@@ -187,6 +189,11 @@ class Task(models.Model):
     examples = models.JSONField("Savol qanday beriladi (misollar)", default=list, blank=True)
     asker = models.CharField("Kim so'raydi", max_length=60, blank=True)
     frequent = models.BooleanField("Doimiy tushadigan savol", default=False)
+    # --- vaqt: yuklama, tahlil va tavsiyalar shundan hisoblanadi ---
+    TIME_SOURCES = [("auto", "Avtomatik taxmin"), ("manual", "Qo'lda kiritilgan"), ("ai", "AI taxmini")]
+    minutes = models.PositiveIntegerField("Bir marta bajarish vaqti (daqiqa)", default=0)
+    per_week = models.FloatField("Haftasiga necha marta tushadi", default=0)
+    time_source = models.CharField("Vaqt manbasi", max_length=6, choices=TIME_SOURCES, blank=True)
     is_custom = models.BooleanField("Qo'lda qo'shilgan", default=False)
     order = models.PositiveIntegerField("Tartib", default=0)
     i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
@@ -402,12 +409,13 @@ class AIProvider(models.Model):
 class AITaskConfig(models.Model):
     """Har bir ish uchun alohida model sozlamasi."""
 
-    ROUTE, PERSON, AUDIT, TRANSLATE = "route", "person", "audit", "translate"
+    ROUTE, PERSON, AUDIT, TRANSLATE, WORKLOAD = "route", "person", "audit", "translate", "workload"
     TASKS = [
         (ROUTE, "Savol kimga: savolni mas'ulga yo'naltirish"),
         (PERSON, "Xodim tahlili: vazifa, vakolat va chegaralar"),
         (AUDIT, "Tashkilot auditi: bo'shliq va kesishmalar"),
         (TRANSLATE, "Tarjima: matnlarni uz/ru/en tillariga o'girish"),
+        (WORKLOAD, "Yuklama tahlili: vaqt, ortiqcha yuklama va tavsiyalar"),
     ]
     EFFORTS = [("", "Standart"), ("low", "Past"), ("medium", "O'rta"), ("high", "Yuqori"),
                ("xhigh", "Juda yuqori"), ("max", "Maksimal")]

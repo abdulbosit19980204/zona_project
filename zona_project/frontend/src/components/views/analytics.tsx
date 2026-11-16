@@ -6,7 +6,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { axisProps, CHART, ChartCard, SERIES, tooltipStyle } from "@/components/charts/chart-kit";
 import { Page, PageHeader, StatCard } from "@/components/common/page";
 import { useModel } from "@/hooks/use-org";
-import { PROCESS_ROLES } from "@/lib/model";
+import { fmtHours, PROCESS_ROLES, weekMinutes } from "@/lib/model";
 
 /** Mas'uliyat tahlili: rollar qamrovi, bo'limlar bo'yicha taqsimot, tizimlar bo'yicha muammolar, egalik jamlanishi. */
 export function Analytics() {
@@ -42,6 +42,22 @@ export function Analytics() {
     .sort((a, b) => b.owned - a.owned)
     .slice(0, 10);
 
+  // vaqt bo'yicha: zonalar, eng og'ir savollar, bir odamga bog'liqlik
+  const totalH = model.totalWeekHours || 1;
+  const byZone = [...model.state.zones.map((z) => ({ id: z.id as number | null, name: z.name, color: z.color })), { id: null, name: t("knowledge.noZone"), color: "#64748B" }]
+    .map((z) => {
+      const ts = model.state.tasks.filter((x) => (x.process ? model.process.get(x.process)?.zone ?? null : null) === z.id);
+      return { name: z.name, color: z.color, hours: +(ts.reduce((s, x) => s + weekMinutes(x), 0) / 60).toFixed(1), noBackup: +(ts.filter((x) => !x.fallbacks.length).reduce((s, x) => s + weekMinutes(x), 0) / 60).toFixed(1) };
+    })
+    .filter((z) => z.hours > 0)
+    .sort((a, b) => b.hours - a.hours);
+  const heavy = [...model.state.tasks].sort((a, b) => weekMinutes(b) - weekMinutes(a)).slice(0, 10)
+    .map((x) => ({ name: x.title.length > 48 ? `${x.title.slice(0, 46)}…` : x.title, hours: +(weekMinutes(x) / 60).toFixed(1) }));
+  const byHours = [...model.timeLoad.values()].sort((a, b) => b.ownerMin - a.ownerMin);
+  const top2H = byHours.slice(0, 2).reduce((s, v) => s + v.ownerMin / 60, 0) / totalH;
+  const noBackupH = model.state.tasks.filter((x) => !x.fallbacks.length).reduce((s, x) => s + weekMinutes(x), 0) / 60;
+  const unassignedH = model.state.tasks.filter((x) => !x.owner).reduce((s, x) => s + weekMinutes(x), 0) / 60;
+
   const totalOwned = model.state.processes.length || 1;
   const topShare = concentration.slice(0, 2).reduce((s, r) => s + r.owned, 0) / totalOwned;
 
@@ -55,6 +71,42 @@ export function Analytics() {
         <StatCard label={t("overview.cov.backup")} value={pct(c.backup)} progress={c.backup} tone={c.backup < 0.5 ? "warning" : "default"} />
         <StatCard label={t("overview.cov.tasks")} value={pct(c.tasks)} progress={c.tasks} />
       </div>
+      {model.hasTime && (
+        <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label={t("time.totalWeek")} value={`${fmtHours(model.totalWeekHours)} ${t("time.h")}`} />
+            <StatCard label={t("time.top2Share")} value={pct(top2H)} progress={top2H} tone={top2H > 0.6 ? "warning" : "default"} />
+            <StatCard label={t("time.noBackupH")} value={`${fmtHours(noBackupH)} ${t("time.h")}`} tone={noBackupH > totalH * 0.3 ? "warning" : "default"} />
+            <StatCard label={t("time.unassignedH")} value={`${fmtHours(unassignedH)} ${t("time.h")}`} tone={unassignedH > 0 ? "warning" : "default"} />
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <ChartCard title={t("time.byZone")} description={t("time.byZoneHint")}>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={byZone} layout="vertical" margin={{ left: 8 }}>
+                  <CartesianGrid horizontal={false} stroke={CHART.grid} />
+                  <XAxis type="number" {...axisProps} unit={` ${t("time.h")}`} />
+                  <YAxis type="category" dataKey="name" {...axisProps} width={150} />
+                  <Tooltip {...tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="hours" name={t("time.hPerWeek")} fill={CHART.primary} radius={[0, 4, 4, 0]} maxBarSize={22} />
+                  <Bar dataKey="noBackup" name={t("time.noBackupShort")} fill={CHART.warning} radius={[0, 4, 4, 0]} maxBarSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+            <ChartCard title={t("time.heavy")} description={t("time.heavyHint")}>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={heavy} layout="vertical" margin={{ left: 8 }}>
+                  <CartesianGrid horizontal={false} stroke={CHART.grid} />
+                  <XAxis type="number" {...axisProps} unit={` ${t("time.h")}`} />
+                  <YAxis type="category" dataKey="name" {...axisProps} width={230} tick={{ fontSize: 10.5 }} />
+                  <Tooltip {...tooltipStyle} />
+                  <Bar dataKey="hours" name={t("time.hPerWeek")} fill={CHART.violet} radius={[0, 4, 4, 0]} maxBarSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </div>
+        </>
+      )}
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <ChartCard title={t("analytics.rolesByDept")} description={t("analytics.rolesByDeptHint")}>
           <ResponsiveContainer width="100%" height={300}>

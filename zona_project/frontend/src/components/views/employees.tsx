@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
 import { MemberAvatar } from "@/components/common/member-avatar";
+import { LoadBar } from "@/components/common/time";
 import { EmptyState, Page, PageHeader } from "@/components/common/page";
 import { ZoneIcon } from "@/components/common/zone-icon";
 import { LEVELS, MemberDialog } from "@/components/forms/member-dialog";
@@ -222,6 +223,7 @@ function PersonCard({ m, model, canEdit, onEdit }: { m: Member; model: Model; ca
 
       {/* pastki qism: zonalar, savollar, nazorat */}
       <div className="mt-auto space-y-2 border-t bg-muted/20 px-5 py-3">
+        {model.hasTime && model.timeLoad.get(m.id) && <LoadBar load={model.timeLoad.get(m.id)!} />}
         {!!cov.zones.length && (
           <div className="flex flex-wrap items-center gap-1.5">
             {cov.zones.map(({ zone, owner, backup }) => (

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { ContactLinks } from "@/components/common/contacts";
+import { TimeChip } from "@/components/common/time";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,7 @@ export function BotTestDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                 <div className="border-b bg-muted/40 px-4 py-2.5">
                   <div className="text-[11px] text-muted-foreground">{[best.zone, best.process].filter(Boolean).join(" → ")}</div>
                   <div className="font-semibold">{best.question}</div>
+                  {!!best.minutes && <TimeChip task={{ minutes: best.minutes, per_week: best.per_week, time_source: "manual" }} className="mt-1" />}
                 </div>
                 <div className="space-y-3 px-4 py-3">
                   {best.responsible && <Who label={t("botWho")} c={best.responsible} primary />}

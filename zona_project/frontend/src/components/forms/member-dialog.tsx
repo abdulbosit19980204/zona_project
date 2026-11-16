@@ -10,7 +10,7 @@ import { useModel, useOrgMutation } from "@/hooks/use-org";
 import { orgApi } from "@/lib/api/endpoints";
 import type { Member, MemberLevel } from "@/lib/api/types";
 
-import { CheckboxField, fromId, FormDialog, NONE, Row, SelectField, TextareaField, TextField, toId } from "./form-kit";
+import { CheckboxField, fromId, FormDialog, NONE, NumberField, Row, SelectField, TextareaField, TextField, toId } from "./form-kit";
 import { departmentOptions, memberOptions, teamOptions } from "./options";
 
 export const LEVELS: MemberLevel[] = ["L1", "L2", "L3", "LEAD", "BIZ", "EXT"];
@@ -32,6 +32,7 @@ const schema = z.object({
   level: z.string(),
   duties: z.string().max(8000),
   escalation: z.string().max(3000),
+  capacity: z.number().min(0).max(2000),
 });
 type Values = z.infer<typeof schema>;
 
@@ -55,6 +56,7 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
       is_team: member?.is_team ?? false, phone: member?.phone ?? "", telegram: member?.telegram ?? "", email: member?.email ?? "",
       location: member?.location ?? "", trigger: member?.trigger ?? "", does: member?.does ?? "", excludes: member?.excludes ?? "",
       level: member?.level || NONE, duties: (member?.duties ?? []).join(String.fromCharCode(10)), escalation: member?.escalation ?? "",
+      capacity: member?.capacity ?? 40,
     });
   }, [open, member, presetDepartment, form]);
 
@@ -64,6 +66,7 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
         ...v, department: toId(v.department), team: toId(v.team), manager: toId(v.manager),
         level: (v.level === NONE ? "" : v.level) as Member["level"],
         duties: v.duties.split(String.fromCharCode(10)).map((x) => x.trim()).filter(Boolean),
+        capacity: Number(v.capacity),
       };
       return member ? orgApi.members.update(member.id, body) : orgApi.members.create(body);
     },
@@ -111,6 +114,7 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
       <TextareaField control={form.control} name="duties" label={t("people.duties")} description={t("people.dutiesHint")} rows={5} />
       <TextareaField control={form.control} name="excludes" label={t("forms.member.excludes")} rows={2} />
       <TextareaField control={form.control} name="escalation" label={t("people.escalation")} rows={2} />
+      <NumberField control={form.control} name="capacity" label={t("time.capacity")} description={t("time.capacityHint")} step="1" />
     </FormDialog>
   );
 }

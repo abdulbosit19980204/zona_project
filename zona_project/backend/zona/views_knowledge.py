@@ -53,6 +53,8 @@ def item(task, lang=None):
         "note": cur(task, "note"),
         "asker": task.asker,
         "frequent": task.frequent,
+        "minutes": task.minutes,
+        "per_week": task.per_week,
         "responsible": _contact(task.owner, lang),
         "escalation": [{**(_contact(f.member, lang) or {}), "condition": cur(f, "condition")}
                        for f in task.fallbacks.select_related("member").order_by("order")],
@@ -84,6 +86,8 @@ def answer_text(it):
     if it["zone"] or it["process"]:
         lines.append("Zona: " + " → ".join(x for x in (it["zone"], it["process"]) if x))
     lines.append(f"Kim javob beradi: {who(it['responsible'])}")
+    if it.get("minutes"):
+        lines.append(f"Taxminiy vaqt: ~{it['minutes']} daqiqa")
     if it["rule"]:
         lines.append(f"Qoida: {it['rule']}")
     for n, e in enumerate(it["escalation"], start=2):

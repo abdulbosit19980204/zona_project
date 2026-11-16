@@ -5,7 +5,7 @@ import type {
   AIUsageSummary, AuditEvent, Authority, ChangeKind, ChangePayload, ChangeRequest, ChangeStatus, Department,
   EdgeCase, LoginResponse, Me, Member, OrgState, Process, ProcessRole, SearchResult, Synonym, SystemItem, Task, Team,
   StaffAssignBody, StaffDiff, StaffImportBody, StaffPerson, StaffProject, StaffState, TokenPair, TranslateStatus,
-  BotAnswer, KnowledgeFormat, Zone,
+  AIWorkload, BotAnswer, KnowledgeFormat, Zone,
 } from "./types";
 
 const get = async <T>(url: string, params?: Record<string, string | number | boolean>) => (await api.get<T>(url, { params })).data;
@@ -91,6 +91,12 @@ export const aiApi = {
   route: (question: string) => post<AIRouteResult>("ai/route/", { question }),
   person: (member: number, lang: string) => post<AIText>("ai/person/", { member, lang }),
   audit: (lang: string) => post<AIText>("ai/audit/", { lang }),
+  /** Vaqt asosidagi yuklama tahlili va tavsiyalar. */
+  workload: (lang: string) => post<AIWorkload>("ai/workload/", { lang }),
+  /** Vaqti qo'lda kiritilmagan savollarga AI taxmini. */
+  estimate: () => post<{ updated: number; total: number }>("ai/estimate/"),
+  /** AI'siz, qoida bo'yicha boshlang'ich taxmin. */
+  estimateRules: () => post<{ updated: number }>("ai/estimate-rules/"),
 };
 
 /** Savollar bazasi: bot javobi va AI uchun eksport. */

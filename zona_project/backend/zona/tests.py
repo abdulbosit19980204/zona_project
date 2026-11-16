@@ -10,7 +10,7 @@ from openpyxl import load_workbook
 
 from . import translation
 from .ai import providers
-from .crypto import decrypt
+from .crypto import decrypt, encrypt
 from .models import (AIProvider, AITaskConfig, AIUsage, Authority, Department, Event, Member, Process, ProcessRole,
                      Profile, Task)
 from .search import search
@@ -139,8 +139,8 @@ class AdminTests(Base):
     def test_task_config_requires_model(self):
         self.login("admin")
         tasks = self.call("get", "admin/ai/tasks/").json()
-        self.assertEqual({t["task"] for t in tasks}, {"route", "person", "audit", "translate"})
-        r = self.call("patch", "admin/ai/tasks/route/", {"enabled": True})
+        self.assertEqual({t["task"] for t in tasks}, {"route", "person", "audit", "translate", "workload"})
+        r = self.call("patch", "admin/ai/tasks/route/", {"enabled": True, "provider": None, "model": ""})
         self.assertEqual(r.status_code, 400)
 
 
@@ -159,7 +159,7 @@ class StructureTests(Base):
         for key in ("departments", "members", "authorities", "processes", "roles", "tasks", "edge_cases"):
             self.assertTrue(data[key], key)
         self.assertEqual(data["me"]["username"], "viewer")
-        self.assertEqual(set(data["meta"]["ai"]), {"route", "person", "audit", "translate"})
+        self.assertEqual(set(data["meta"]["ai"]), {"route", "person", "audit", "translate", "workload"})
 
     def test_member_contacts_and_authority(self):
         self.login("editor")
@@ -183,7 +183,7 @@ class StructureTests(Base):
         r = self.call("get", "export.xlsx")
         self.assertEqual(r.status_code, 200)
         wb = load_workbook(BytesIO(r.content))
-        self.assertEqual(wb.sheetnames, ["Xodimlar", "To'liq ro'yxat", "Matritsa", "Aralash holatlar"])
+        self.assertEqual(wb.sheetnames, ["Xodimlar", "To'liq ro'yxat", "Matritsa", "Aralash holatlar", "Vaqt yuklamasi", "Savollar vaqti"])
 
     def test_fallback_chain(self):
         # seed: avval Supervayzer, qila olmasa Saidabror
@@ -350,7 +350,7 @@ class SearchTests(Base):
 
 class AITests(Base):
     def setUp(self):
-        self.provider = AIProvider.objects.create(name="Test", kind="openai", api_key_enc="")
+        self.provider = AIProvider.objects.create(name="Test", kind="openai", api_key_enc=encrypt("sk-test-key"))
         AITaskConfig.objects.update_or_create(task="route", defaults={"enabled": True, "provider": self.provider, "model": "m1"})
 
     def test_route_falls_back_to_search_when_ai_disabled(self):
@@ -378,7 +378,7 @@ class AITests(Base):
         self.assertEqual((log.ok, log.input_tokens, log.user), (True, 1200, "viewer"))
 
     def test_fallback_model_used_on_error(self):
-        backup = AIProvider.objects.create(name="Zaxira", kind="openai")
+        backup = AIProvider.objects.create(name="Zaxira", kind="openai", api_key_enc=encrypt("sk-test-key"))
         AITaskConfig.objects.filter(task="route").update(fallback_provider=backup, fallback_model="m2")
         ok = providers.Result('{"language":"uz","summary":"","candidates":[],"process_ids":[],"task_ids":[],"answer":"ok","needs_clarification":false,"clarifying_question":""}', 10, 5)
         with mock.patch.object(providers, "call", side_effect=[providers.AIError("limit"), ok]):
@@ -409,7 +409,7 @@ def fake_translator(provider, model, system, user, **kwargs):
 @override_settings(ZONA_TRANSLATE_ASYNC=False)
 class TranslationTests(Base):
     def setUp(self):
-        provider = AIProvider.objects.create(name="T", kind="openai")
+        provider = AIProvider.objects.create(name="T", kind="openai", api_key_enc=encrypt("sk-test-key"))
         AITaskConfig.objects.update_or_create(task="translate", defaults={"enabled": True, "provider": provider, "model": "m"})
 
     def translate(self):
@@ -744,3 +744,65 @@ class MemberProfileTests(Base):
         self.assertTrue(full["people"])
         self.assertIn("duties", full["people"][0])
         self.assertIn("## Kim nima uchun javob beradi", self.call("get", "knowledge/export.md").content.decode())
+
+
+class TimeLoadTests(Base):
+    def setUp(self):
+        from . import knowledge_seed
+        knowledge_seed.apply(log=lambda *_: None)
+
+    def test_estimates_respect_manual_and_load(self):
+        from . import timeload
+        from .models import Member, Task
+        t = Task.objects.filter(title="Parolni tiklash").first()
+        self.assertEqual((t.minutes, t.time_source), (5, "auto"))
+        self.assertTrue(t.per_week > 0)
+        self.login("editor")
+        r = self.call("patch", f"tasks/{t.id}/", {"minutes": 7, "per_week": 3})
+        self.assertEqual(r.json()["time_source"], "manual")
+        timeload.apply_estimates()
+        t.refresh_from_db()
+        self.assertEqual((t.minutes, t.per_week), (7, 3))  # qo'lda kiritilgan saqlanadi
+        load = timeload.member_load()
+        owner = load[t.owner_id]
+        self.assertGreater(owner["owner_min"], 0)
+        self.assertAlmostEqual(owner["total_h"], (owner["owner_min"] + owner["backup_min"]) / 60)
+        # kichik sig'im — ortiqcha yuklama va tavsiya
+        Member.objects.filter(pk=t.owner_id).update(capacity=1)
+        load = timeload.member_load()
+        self.assertEqual(load[t.owner_id]["status"], "over")
+        recs = timeload.recommendations(load)
+        self.assertTrue(any(r.get("from") == t.owner_id or r.get("member") == t.owner_id for r in recs))
+        ctx = timeload.context_for_ai()
+        self.assertTrue(ctx["people"] and ctx["heaviest_questions"])
+
+    def test_ai_status_requires_key_and_free_default(self):
+        from .ai import service
+        from .models import AIProvider, AITaskConfig
+        st = service.status()
+        p = AIProvider.objects.get()
+        self.assertEqual(p.kind, "gemini")
+        self.assertEqual(AITaskConfig.objects.get(task="workload").model, service.FREE_MODEL)
+        self.assertFalse(any(st.values()))  # kalitsiz — tayyor emas
+        p.api_key_enc = encrypt("AIza-test")
+        p.save()
+        self.assertTrue(all(service.status().values()))
+
+    def test_workload_ai_cleans_ids(self):
+        from unittest import mock
+        from .ai import providers, service
+        from .models import AIProvider
+        service.status()
+        AIProvider.objects.update(api_key_enc=encrypt("AIza-test"))
+        fake = {"summary": "ok", "overloaded": [{"member_id": 999999, "reason": "x"}],
+                "recommendations": [{"kind": "reassign", "title": "t", "detail": "d", "priority": "high",
+                                     "task_ids": [999999], "from_id": 999999, "to_id": None}],
+                "best_fit": [], "risks": []}
+        import json as _json
+        with mock.patch.object(providers, "call", return_value=providers.Result(_json.dumps(fake), 10, 10)):
+            self.login("viewer")
+            r = self.call("post", "ai/workload/", {"lang": "uz"})
+        self.assertEqual(r.status_code, 200, r.content)
+        d = r.json()
+        self.assertEqual(d["overloaded"], [])
+        self.assertEqual((d["recommendations"][0]["task_ids"], d["recommendations"][0]["from_id"]), ([], None))

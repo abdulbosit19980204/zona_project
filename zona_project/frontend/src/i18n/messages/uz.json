@@ -595,13 +595,15 @@
       "route": "Savolni yoʻnaltirish",
       "person": "Xodim tahlili",
       "audit": "Tuzilma auditi",
-      "translate": "Tarjima"
+      "translate": "Tarjima",
+      "workload": "Yuklama tahlili"
     },
     "taskHint": {
       "route": "“Savol kimga?” — erkin matndan masʼulni topadi",
       "person": "Xodim 360° — vazifa, vakolat va xavflarni tahlil qiladi",
       "audit": "Hisobotlar — butun tuzilmadagi boʻshliq va xavflar",
-      "translate": "Maʼlumotlarni uz/ru/en tillariga avtomatik tarjima qiladi — xodim bitta tilda yozadi"
+      "translate": "Maʼlumotlarni uz/ru/en tillariga avtomatik tarjima qiladi — xodim bitta tilda yozadi",
+      "workload": "Vaqt asosida ortiqcha yuklama, tavsiyalar va savollarga vaqt taxmini"
     },
     "translation": {
       "title": "Maʼlumotlar tarjimasi",
@@ -612,6 +614,14 @@
       "allDone": "Barcha matnlar tarjima qilingan",
       "off": "Yoqish uchun yuqoridagi “Tarjima” vazifasida provayder va modelni tanlang",
       "started": "Tarjima fonda boshlandi"
+    },
+    "free": {
+      "title": "Bepul AI deyarli tayyor — faqat kalit kerak",
+      "step1": "Google hisobingiz bilan bepul kalit oling:",
+      "step2": "“Create API key” ni bosing va kalitni nusxalang (kredit karta shart emas)",
+      "step3": "Pastdagi tugmani bosib, kalitni “Google Gemini (bepul)” ga joylang — barcha AI vazifalari ishga tushadi",
+      "note": "Bepul tarifda kunlik so'rovlar soni cheklangan va Google bepul tarif ma'lumotlaridan modelni yaxshilashda foydalanishi mumkin. Sinov uchun mos; doimiy ish uchun pullik tarif yoki boshqa provayderni ulang.",
+      "enterKey": "Kalitni kiritish"
     }
   },
   "cheatsheet": {
@@ -917,5 +927,70 @@
     "frequent": "{count} doimiy",
     "supervisedBy": "Nazorat",
     "supervises": "Nazorat qiladi"
+  },
+  "time": {
+    "minutes": "Bir marta bajarish vaqti (daqiqa)",
+    "minutesHint": "“Ha/yo'q” javobi — 2-5, oddiy o'zgartirish — 5-15, texnik nosozlik — 20-60",
+    "perWeek": "Haftasiga necha marta",
+    "perWeekHint": "Taxminan; oyiga bir marta — 0.25",
+    "capacity": "Haftalik sig'im (soat)",
+    "capacityHint": "Shu murojaatlarga haftasiga ajrata oladigan vaqt; jamoa uchun — jami",
+    "minutesShort": "{n} daq",
+    "perWeekShort": "{n}/hafta",
+    "h": "soat",
+    "hPerWeek": "soat/hafta",
+    "utilShort": "Bandlik",
+    "source": {
+      "auto": "Avtomatik taxmin — aniqlashtiring",
+      "manual": "Qo'lda kiritilgan",
+      "ai": "AI taxmini"
+    },
+    "weekLoad": "Haftalik yuklama",
+    "totalWeek": "Haftalik ish hajmi",
+    "totalCapacity": "Umumiy sig'im",
+    "avgUtil": "O'rtacha bandlik",
+    "overloaded": "Ortiqcha yuklangan",
+    "status": {
+      "over": "Ortiqcha",
+      "busy": "Band",
+      "ok": "Me'yorda"
+    },
+    "workloadDescription": "Har bir savol qancha vaqt oladi × haftasiga necha marta tushadi. Mas'ul to'liq, zaxira esa ulush oladi; sig'imdan 85% ortig'i — ortiqcha yuklama.",
+    "noData": "Savollarga vaqt kiritilmagan",
+    "noDataHint": "Avval qoida bo'yicha boshlang'ich taxmin qo'ying, keyin AI bilan yoki qo'lda aniqlashtiring.",
+    "ruleEstimate": "Qoida bo'yicha taxmin qo'yish",
+    "aiEstimate": "AI bilan vaqtni taxminlash",
+    "aiAnalyze": "AI tahlili",
+    "estimated": "{count} ta savolga vaqt qo'yildi",
+    "aiHint": "AI ulanmagan: bepul Google Gemini kalitini kiritsangiz, tahlil va tavsiyalar ishlaydi.",
+    "aiSettings": "AI sozlamalari",
+    "guessedHint": "{total} ta savoldan {guessed} tasining vaqti taxminiy (avto yoki AI). Aniqroq natija uchun savollarda vaqtni qo'lda tasdiqlang.",
+    "chart": "Kim haftasiga necha soat band",
+    "chartHint": "Ko'k — mas'ul sifatida, binafsha — zaxira sifatida; romb — haftalik sig'im",
+    "ownerH": "Mas'ul (soat)",
+    "backupH": "Zaxira (soat)",
+    "recsTitle": "Tavsiyalar",
+    "recsHint": "Ortiqcha yuklangan xodimning eng ko'p vaqt oladigan savoli — rahbariga, shu zonadagi hamkasbiga yoki zaxirasiga (bandligi past bo'lsa).",
+    "noRecs": "Ortiqcha yuklama yo'q",
+    "recCapacity": "sig'im yetishmaydi — yana {hours} soat/hafta kerak (yordamchi yoki avtomatlashtirish)",
+    "aiTitle": "AI tahlili",
+    "bestFit": "Zonalar bo'yicha eng mos mas'ul",
+    "kind": {
+      "reassign": "O'tkazish",
+      "share": "Bo'lishish",
+      "automate": "Avtomatlashtirish",
+      "capacity": "Sig'im",
+      "hire": "Yangi xodim",
+      "rule": "Qoida",
+      "estimate": "Vaqtni aniqlash"
+    },
+    "top2Share": "Vaqtning 2 kishidagi ulushi",
+    "noBackupH": "Zaxirasiz savollar (soat/hafta)",
+    "unassignedH": "Mas'ulsiz savollar (soat/hafta)",
+    "byZone": "Zonalar bo'yicha haftalik soat",
+    "byZoneHint": "Sariq — shu zonadagi zaxirasiz savollar vaqti (bitta odamga bog'liq)",
+    "noBackupShort": "Zaxirasiz",
+    "heavy": "Eng ko'p vaqt oladigan savollar",
+    "heavyHint": "Bir martalik vaqt × haftasiga soni"
   }
 }

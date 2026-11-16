@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { errorMessage } from "@/lib/api/client";
 import { aiApi, orgApi } from "@/lib/api/endpoints";
+import { TimeChip } from "@/components/common/time";
 import { askerKey } from "@/components/forms/askers";
 import { StaffContacts } from "@/components/views/staff-shared";
 import { useCan, useModel } from "@/hooks/use-org";
@@ -261,7 +262,7 @@ function RuleCard({ taskId }: { taskId: number }) {
   return (
     <Card className="mt-6 gap-3 border-primary/40 p-5">
       <div className="text-xs text-muted-foreground">{[zone?.name, process?.name].filter(Boolean).join(" → ")}</div>
-      <div className="text-base font-semibold">{task.title}</div>
+      <div className="flex flex-wrap items-center gap-2 text-base font-semibold">{task.title}<TimeChip task={task} /></div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         {task.asker && <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{t(`knowledge.askers.${askerKey(task.asker)}`)}</span>}
         {task.asker && <ArrowRight className="size-3 text-muted-foreground" />}

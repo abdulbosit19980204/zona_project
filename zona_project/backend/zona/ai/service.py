@@ -18,7 +18,34 @@ DEFAULTS = {
     AITaskConfig.PERSON: {"effort": "medium", "max_tokens": 4000},
     AITaskConfig.AUDIT: {"effort": "high", "max_tokens": 8000},
     AITaskConfig.TRANSLATE: {"effort": "low", "max_tokens": 8000},
+    AITaskConfig.WORKLOAD: {"effort": "medium", "max_tokens": 8000},
 }
+
+# Sinov uchun bepul standart: Google Gemini (AI Studio kaliti bepul, kredit karta shart emas).
+# "-latest" taxalluslari Google eng yangi Flash modeliga avtomatik ulaydi — model nomi eskirib qolmaydi.
+FREE_PROVIDER = {"name": "Google Gemini (bepul)", "kind": "gemini"}
+FREE_MODEL, FREE_FALLBACK = "gemini-flash-latest", "gemini-flash-lite-latest"
+
+
+def ensure_free_default():
+    """Hech qanday provayder sozlanmagan bo'lsa — bepul Gemini'ni standart qilib qo'yadi.
+    Kalit ZONA_GEMINI_API_KEY muhit o'zgaruvchisidan olinadi yoki keyin "AI sozlamalari"da kiritiladi."""
+    import os
+
+    from ..crypto import encrypt
+    from ..models import AIProvider
+    if AIProvider.objects.exists():
+        return None
+    key = os.environ.get("ZONA_GEMINI_API_KEY", "").strip()
+    provider = AIProvider.objects.create(name=FREE_PROVIDER["name"], kind=FREE_PROVIDER["kind"], is_active=True,
+                                         api_key_enc=encrypt(key) if key else "")
+    for cfg in AITaskConfig.objects.all():
+        if not cfg.provider_id:
+            cfg.provider, cfg.model = provider, FREE_MODEL
+            cfg.fallback_provider, cfg.fallback_model = provider, FREE_FALLBACK
+            cfg.enabled = True
+            cfg.save()
+    return provider
 LANGS = {"uz": "o'zbek (lotin)", "uz-cyrl": "o'zbek (kirill)", "ru": "rus", "en": "ingliz"}
 
 
@@ -29,22 +56,37 @@ class AIUnavailable(AIError):
 def ensure_tasks():
     for key, _ in AITaskConfig.TASKS:
         AITaskConfig.objects.get_or_create(task=key, defaults=DEFAULTS[key])
+    ensure_free_default()
+    # yangi vazifa qo'shilganda (masalan, yuklama tahlili) — boshqa vazifalar ishlatgan provayder bilan to'ldiriladi
+    donor = AITaskConfig.objects.filter(enabled=True, provider__isnull=False).exclude(model="").first()
+    if donor:
+        for cfg in AITaskConfig.objects.filter(provider__isnull=True):
+            cfg.provider, cfg.model, cfg.enabled = donor.provider, donor.model, True
+            cfg.fallback_provider, cfg.fallback_model = donor.fallback_provider, donor.fallback_model
+            cfg.save()
     return list(AITaskConfig.objects.select_related("provider", "fallback_provider"))
+
+
+def _ready(provider):
+    """Provayder ishlashga tayyormi: faol va (kerak bo'lsa) API kaliti kiritilgan."""
+    if not provider or not provider.is_active:
+        return False
+    return not providers.PRESETS.get(provider.kind, {}).get("key") or bool(providers.api_key(provider))
 
 
 def status():
     """Frontend uchun: qaysi AI vazifalari ishlaydi."""
     out = {}
     for cfg in ensure_tasks():
-        out[cfg.task] = bool(cfg.enabled and cfg.provider and cfg.provider.is_active and cfg.model)
+        out[cfg.task] = bool(cfg.enabled and cfg.model and _ready(cfg.provider))
     return out
 
 
 def _chain(cfg):
     chain = []
-    if cfg.provider and cfg.provider.is_active and cfg.model:
+    if cfg.model and _ready(cfg.provider):
         chain.append((cfg.provider, cfg.model))
-    if cfg.fallback_provider and cfg.fallback_provider.is_active and (cfg.fallback_model or cfg.model):
+    if _ready(cfg.fallback_provider) and (cfg.fallback_model or cfg.model):
         chain.append((cfg.fallback_provider, cfg.fallback_model or cfg.model))
     return chain
 
@@ -55,6 +97,10 @@ def run(task, user, label, system, message, schema):
         raise AIUnavailable("Bu AI vazifasi o'chirilgan. Administrator 'AI sozlamalari'da yoqishi mumkin.")
     chain = _chain(cfg)
     if not chain:
+        if cfg.provider and cfg.provider.is_active and not _ready(cfg.provider):
+            hint = providers.PRESETS.get(cfg.provider.kind, {}).get("docs", "")
+            raise AIUnavailable(f"\"{cfg.provider.name}\" uchun API kalit kiritilmagan. Sozlamalar → AI bo'limida kiriting"
+                                + (f" (bepul kalit: {hint})." if hint else "."))
         raise AIUnavailable("AI vazifasi uchun provayder va model tanlanmagan.")
     if cfg.instructions:
         system += "\n\nQO'SHIMCHA KO'RSATMA (administrator):\n" + cfg.instructions
@@ -238,8 +284,111 @@ def person(member_id, user, lang="uz"):
 
 
 def audit(user, lang="uz"):
+    from .. import timeload
     ctx, _ = org_context()
+    load = timeload.context_for_ai()
+    time_ctx = json.dumps({"total_week_h": load["total_week_h"], "people": [
+        {k: p[k] for k in ("id", "name", "capacity_h", "owner_h", "backup_h", "utilization_pct", "status")} for p in load["people"]],
+        "heaviest_questions": load["heaviest_questions"][:15]}, ensure_ascii=False)
     system = (BASE_RULES.format(company=conf.get("COMPANY_NAME")) + "\n\n"
-              + AUDIT_TASK.format(lang=LANGS.get(lang, LANGS["uz"])) + "\n\nTUZILMA:\n" + ctx)
+              + AUDIT_TASK.format(lang=LANGS.get(lang, LANGS["uz"])) + "\n\nTUZILMA:\n" + ctx
+              + "\n\nVAQT YUKLAMASI (savol vaqti × haftasiga soni; bandlik = soat / sig'im). Auditda ortiqcha yuklama va "
+                "vaqt jamlanishini ham baholang:\n" + time_ctx)
     data, meta = run(AITaskConfig.AUDIT, user, "Tashkilot auditi", system, "Audit hisobotini tayyorla.", TEXT_SCHEMA)
     return {"text": str(data.get("text") or "")}, meta
+
+
+# ------------------------------------------------------------------ 5. Yuklama tahlili (vaqt asosida)
+WORKLOAD_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "overloaded": {"type": "array", "items": {"type": "object", "properties": {
+            "member_id": {"type": "integer"}, "reason": {"type": "string"}}, "required": ["member_id", "reason"]}},
+        "recommendations": {"type": "array", "items": {"type": "object", "properties": {
+            "kind": {"type": "string", "enum": ["reassign", "share", "automate", "capacity", "hire", "rule", "estimate"]},
+            "title": {"type": "string"}, "detail": {"type": "string"},
+            "task_ids": {"type": "array", "items": {"type": "integer"}},
+            "from_id": {"type": ["integer", "null"]}, "to_id": {"type": ["integer", "null"]},
+            "hours_per_week": {"type": "number"}, "priority": {"type": "string", "enum": ["high", "medium", "low"]}},
+            "required": ["kind", "title", "detail", "priority"]}},
+        "best_fit": {"type": "array", "items": {"type": "object", "properties": {
+            "zone": {"type": "string"}, "member_id": {"type": "integer"}, "why": {"type": "string"}},
+            "required": ["zone", "member_id", "why"]}},
+        "risks": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["summary", "overloaded", "recommendations", "best_fit", "risks"],
+}
+
+WORKLOAD_TASK = """VAZIFA: ish yuklamasini VAQT bo'yicha tahlil qil va aniq tavsiyalar ber.
+Ma'lumot real bazadan: har bir savol turi uchun bir martalik vaqt (min) va haftasiga soni (per_week), xodimning haftalik
+sig'imi (capacity_h), mas'ul (owner_h) va zaxira (backup_h) soatlari, bandlik (utilization_pct), zonalar bo'yicha soatlar.
+"source": auto — taxmin, manual — xodim kiritgan, ai — AI taxmini.
+1) summary: 3-5 gapda umumiy holat (jami soat, kim ortiqcha yuklangan, qaysi zona eng og'ir).
+2) overloaded: bandligi 85% dan oshganlar va sababi (qaysi savollar ko'p vaqt oladi).
+3) recommendations: aniq va bajariladigan: qaysi savolni (task_ids) kimdan (from_id) kimga (to_id) o'tkazish va necha soat
+   bo'shashi; yoki avtomatlashtirish (bot javob berishi mumkin bo'lgan oddiy savollar), sig'imni oshirish, yangi qoida.
+   O'tkazishda xodimning duties va not_for maydonlariga amal qil: not_for dagi ishni unga berma.
+4) best_fit: har bir zona uchun mas'uliyat yuzasidan eng mos xodim va nima uchun.
+5) risks: bitta odamga bog'liq jarayonlar, zaxirasiz og'ir savollar, taxminiy (auto) vaqtlar ko'pligi.
+Raqamlarni faqat berilgan ma'lumotdan ol. member_id va task_ids — faqat ma'lumotdagi id lar. Til: {lang}."""
+
+
+def workload(user, lang="uz"):
+    from .. import timeload
+    ctx = timeload.context_for_ai()
+    system = (BASE_RULES.format(company=conf.get("COMPANY_NAME")) + "\n\n" + WORKLOAD_TASK.format(lang=LANGS.get(lang, LANGS["uz"])))
+    data, meta = run(AITaskConfig.WORKLOAD, user, "Yuklama tahlili", system,
+                     "MA'LUMOT:\n" + json.dumps(ctx, ensure_ascii=False), WORKLOAD_SCHEMA)
+    ids = {p["id"] for p in ctx["people"]}
+    task_ids = {t.id for t in Task.objects.only("id")}
+    # model o'ylab topgan id larni tozalash
+    data["overloaded"] = [o for o in data.get("overloaded") or [] if o.get("member_id") in ids]
+    for r in data.get("recommendations") or []:
+        r["task_ids"] = [i for i in r.get("task_ids") or [] if i in task_ids]
+        for k in ("from_id", "to_id"):
+            if r.get(k) not in ids:
+                r[k] = None
+    data["best_fit"] = [b for b in data.get("best_fit") or [] if b.get("member_id") in ids]
+    return data, meta
+
+
+# ------------------------------------------------------------------ 6. Vaqtni AI bilan taxminlash
+ESTIMATE_SCHEMA = {
+    "type": "object",
+    "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
+        "id": {"type": "integer"}, "minutes": {"type": "integer"}, "per_week": {"type": "number"}},
+        "required": ["id", "minutes", "per_week"]}}},
+    "required": ["items"],
+}
+
+ESTIMATE_TASK = """VAZIFA: har bir savol turi uchun real taxmin ber:
+- minutes: bitta murojaatni bajarishga ketadigan vaqt, daqiqa ("ha/yo'q" javobi 2-5, oddiy o'zgartirish 5-15,
+  dostup ochish 10-20, texnik nosozlik 20-60, integratsiya/dastur xatosi 60-240, yangi funksiya 240-960);
+- per_week: distribyutsiya kompaniyasida (taxminan 200 agent) bu savol haftasiga necha marta tushadi.
+"frequent": true — doimiy tushadigan savol. Zona, jarayon, mas'ul va qoidaga qarab baholang. Faqat berilgan id lar."""
+
+
+def estimate_times(user, limit=120):
+    """Vaqti qo'lda kiritilmagan savollar uchun AI taxmini (manba: ai)."""
+    tasks = list(Task.objects.exclude(time_source="manual").select_related("process__zone", "owner")[:limit])
+    done = 0
+    for i in range(0, len(tasks), 40):
+        chunk = tasks[i:i + 40]
+        payload = [{"id": t.id, "q": t.title, "zone": t.process.zone.name if t.process_id and t.process.zone_id else "",
+                    "process": t.process.name if t.process_id else "", "owner": t.owner.name if t.owner else "",
+                    "rule": t.rule[:200], "frequent": t.frequent} for t in chunk]
+        data, meta = run(AITaskConfig.WORKLOAD, user, f"Vaqt taxmini: {len(chunk)} ta savol",
+                         BASE_RULES.format(company=conf.get("COMPANY_NAME")) + "\n\n" + ESTIMATE_TASK,
+                         json.dumps(payload, ensure_ascii=False), ESTIMATE_SCHEMA)
+        valid = {t.id for t in chunk}
+        for it in data.get("items") or []:
+            try:
+                tid, minutes, per_week = int(it["id"]), int(it["minutes"]), float(it["per_week"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if tid in valid and 1 <= minutes <= 7200 and 0 <= per_week <= 2000:
+                Task.objects.filter(pk=tid).exclude(time_source="manual").update(
+                    minutes=minutes, per_week=round(per_week, 2), time_source="ai")
+                done += 1
+    return {"updated": done, "total": len(tasks)}, meta if tasks else {}

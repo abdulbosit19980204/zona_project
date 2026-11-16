@@ -16,7 +16,7 @@ import { orgApi } from "@/lib/api/endpoints";
 import type { Task } from "@/lib/api/types";
 
 import { askerKey, ASKERS } from "./askers";
-import { CheckboxField, fromId, FormDialog, NONE, Row, SelectField, TextareaField, toId, type Option } from "./form-kit";
+import { CheckboxField, fromId, FormDialog, NONE, NumberField, Row, SelectField, TextareaField, toId, type Option } from "./form-kit";
 import { memberOptions, processOptions } from "./options";
 
 const schema = z.object({
@@ -28,6 +28,8 @@ const schema = z.object({
   examples: z.string().max(6000),
   asker: z.string(),
   frequent: z.boolean(),
+  minutes: z.number().int().min(0).max(7200),
+  per_week: z.number().min(0).max(2000),
   fallbacks: z.array(z.object({ member: z.string(), condition: z.string().max(200) })),
 });
 type Values = z.infer<typeof schema>;
@@ -54,6 +56,8 @@ export function TaskDialog({ open, onOpenChange, task, preset }: {
         examples: (task?.examples ?? []).join("\n"),
         asker: task?.asker || NONE,
         frequent: task?.frequent ?? false,
+        minutes: task?.minutes ?? 10,
+        per_week: task?.per_week ?? 1,
         fallbacks: (task?.fallbacks ?? []).map((f) => ({ member: String(f.member), condition: f.condition })),
       });
     }
@@ -74,6 +78,7 @@ export function TaskDialog({ open, onOpenChange, task, preset }: {
       const body = {
         title: v.title, owner, process: toId(v.process), note: v.note, fallbacks,
         rule: v.rule.trim(), examples, asker: v.asker === NONE ? "" : v.asker, frequent: v.frequent,
+        minutes: Number(v.minutes), per_week: Number(v.per_week),
       };
       return task ? orgApi.tasks.update(task.id, body) : orgApi.tasks.create(body);
     },
@@ -107,6 +112,10 @@ export function TaskDialog({ open, onOpenChange, task, preset }: {
           options={[{ value: NONE, label: "—" }, ...ASKERS.map((a) => ({ value: a, label: t(`knowledge.askers.${askerKey(a)}`) }))]}
         />
         <CheckboxField control={form.control} name="frequent" label={t("knowledge.frequent")} description={t("knowledge.frequentHint")} />
+      </Row>
+      <Row>
+        <NumberField control={form.control} name="minutes" label={t("time.minutes")} description={t("time.minutesHint")} step="1" />
+        <NumberField control={form.control} name="per_week" label={t("time.perWeek")} description={t("time.perWeekHint")} step="0.25" />
       </Row>
       <TextareaField control={form.control} name="note" label={t("forms.note")} rows={2} />
     </FormDialog>

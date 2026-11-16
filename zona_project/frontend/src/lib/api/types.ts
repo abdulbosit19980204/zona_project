@@ -42,6 +42,8 @@ export interface Member {
   duties: string[];
   /** Hal qila olmasa — kimga o'tkazadi. */
   escalation: string;
+  /** Haftalik sig'im, soat (jamoa uchun — jami). */
+  capacity: number;
   email: string;
   phone: string;
   telegram: string;
@@ -121,6 +123,12 @@ export interface Task {
   asker: string;
   /** Doimiy tushadigan savol. */
   frequent: boolean;
+  /** Bir marta bajarish vaqti, daqiqa. */
+  minutes: number;
+  /** Haftasiga necha marta tushadi. */
+  per_week: number;
+  /** Vaqt manbasi: avto taxmin, qo'lda yoki AI. */
+  time_source: "" | "auto" | "manual" | "ai";
   is_custom: boolean;
   order: number;
   i18n?: I18n;
@@ -171,7 +179,7 @@ export interface AnonymousMe {
 export interface Meta {
   company: string;
   title: string;
-  ai: { route: boolean; person: boolean; audit: boolean; translate: boolean };
+  ai: { route: boolean; person: boolean; audit: boolean; translate: boolean; workload: boolean };
   pending_approvals: number;
 }
 
@@ -320,7 +328,7 @@ export interface AIProviderKind {
   effort?: boolean;
 }
 
-export type AITaskKey = "route" | "person" | "audit" | "translate";
+export type AITaskKey = "route" | "person" | "audit" | "translate" | "workload";
 export type Effort = "" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface AITaskConfig {
@@ -533,6 +541,8 @@ export interface KnowledgeItem {
   note: string;
   asker: string;
   frequent: boolean;
+  minutes: number;
+  per_week: number;
   responsible: KnowledgeContact | null;
   escalation: KnowledgeContact[];
 }
@@ -545,3 +555,22 @@ export interface BotAnswer {
   alternatives: KnowledgeItem[];
 }
 export type KnowledgeFormat = "json" | "jsonl" | "chat" | "md";
+
+/** AI yuklama tahlili (POST /api/ai/workload/). */
+export interface AIWorkload {
+  summary: string;
+  overloaded: { member_id: number; reason: string }[];
+  recommendations: {
+    kind: "reassign" | "share" | "automate" | "capacity" | "hire" | "rule" | "estimate";
+    title: string;
+    detail: string;
+    task_ids?: number[];
+    from_id?: number | null;
+    to_id?: number | null;
+    hours_per_week?: number;
+    priority: "high" | "medium" | "low";
+  }[];
+  best_fit: { zone: string; member_id: number; why: string }[];
+  risks: string[];
+  meta: AIText["meta"];
+}

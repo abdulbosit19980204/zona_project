@@ -110,7 +110,49 @@ def build_workbook(company, members, processes, tasks, roles, edge_cases, author
         _row(ws4, i, list(values), bold_cols=(2,))
     _widths(ws4, [44, 24, 70])
     ws4.freeze_panes = "A2"
+    _time_sheets(wb, tasks)
     return wb
+
+
+def _time_sheets(wb, tasks):
+    """Vaqt yuklamasi: kim haftasiga necha soat band, sig'im va bandlik; eng ko'p vaqt oladigan savollar."""
+    from . import timeload
+    load = timeload.member_load()
+    ws = wb.create_sheet("Vaqt yuklamasi")
+    _header(ws, 1, ["Xodim", "Lavozim", "Daraja", "Mas'ul (soat/hafta)", "Zaxira (soat/hafta)", "Jami (soat/hafta)",
+                    "Sig'im (soat/hafta)", "Bandlik, %", "Holat", "Eng og'ir zona"])
+    status = {"over": "Ortiqcha yuklama", "busy": "Band", "ok": "Me'yorda"}
+    rows = sorted(load.values(), key=lambda v: -v["util"])
+    for r, v in enumerate(rows, 2):
+        m = v["member"]
+        top = max(v["zones"].items(), key=lambda kv: kv[1])[0] if v["zones"] else ""
+        _row(ws, r, [m.name, m.role, m.get_level_display() if m.level else "", round(v["owner_min"] / 60, 1),
+                     round(v["backup_min"] / 60, 1), round(v["total_h"], 1), m.capacity, round(v["util"] * 100),
+                     status[v["status"]], top], bold_cols=(1,))
+    _widths(ws, [24, 24, 22, 14, 14, 14, 14, 11, 18, 22])
+    ws.freeze_panes = "A2"
+    names = {v["member"].id: v["member"].name for v in rows}
+    recs = timeload.recommendations()
+    if recs:
+        r0 = len(rows) + 4
+        ws.cell(row=r0 - 1, column=1, value="Tavsiyalar (qoidaga asoslangan)").font = BOLD_FONT
+        for i, rec in enumerate(recs):
+            text = (f"\"{rec['title']}\" — {names.get(rec['from'], '')} → {names.get(rec['to'], '')}: -{rec['hours']} soat/hafta"
+                    if rec["kind"] == "reassign" else
+                    f"{names.get(rec['member'], '')}: sig'im yetishmaydi, yana {rec['hours']} soat/hafta kerak")
+            _row(ws, r0 + i, [text])
+            ws.merge_cells(start_row=r0 + i, start_column=1, end_row=r0 + i, end_column=10)
+
+    ws2 = wb.create_sheet("Savollar vaqti")
+    _header(ws2, 1, ["Savol turi", "Jarayon", "Mas'ul", "Bir martalik vaqt (daq)", "Haftasiga", "Soat/hafta", "Manba", "Doimiy"])
+    src = {"auto": "taxmin", "manual": "qo'lda", "ai": "AI"}
+    heavy = sorted(tasks, key=lambda t: -timeload.weekly_minutes(t))
+    for r, t in enumerate(heavy, 2):
+        _row(ws2, r, [t.title, t.process.name if t.process_id else "", t.owner.name if t.owner_id else UNASSIGNED,
+                      t.minutes, t.per_week, round(timeload.weekly_minutes(t) / 60, 2), src.get(t.time_source, ""),
+                      "ha" if t.frequent else ""])
+    _widths(ws2, [60, 34, 22, 12, 11, 11, 10, 9])
+    ws2.freeze_panes = "A2"
 
 
 def workbook_bytes(*args, **kwargs) -> bytes:

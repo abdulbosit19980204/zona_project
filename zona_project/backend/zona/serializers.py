@@ -85,7 +85,7 @@ class MemberSerializer(I18nMixin, serializers.ModelSerializer):
     class Meta:
         model = Member
         fields = ["id", "name", "role", "department", "team", "manager", "is_team", "trigger", "does", "excludes",
-                  "level", "duties", "escalation", "email", "phone", "telegram", "location", "order"]
+                  "level", "duties", "escalation", "capacity", "email", "phone", "telegram", "location", "order"]
         read_only_fields = ["order"]
 
     def validate_name(self, value):
@@ -182,11 +182,30 @@ class TaskSerializer(I18nMixin, serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = ["id", "title", "process", "owner", "fallbacks", "note", "rule", "examples", "asker", "frequent",
-                  "is_custom", "order"]
+                  "minutes", "per_week", "time_source", "is_custom", "order"]
         read_only_fields = ["is_custom", "order"]
 
     def validate_title(self, value):
         return _not_blank(value, "Vazifa matni bo'sh bo'lmasin.")
+
+    def validate_minutes(self, value):
+        if value > 60 * 24 * 5:
+            raise serializers.ValidationError("Juda katta: ko'pi bilan 5 ish kuni (7200 daqiqa).")
+        return value
+
+    def validate_per_week(self, value):
+        if value < 0 or value > 2000:
+            raise serializers.ValidationError("0 dan 2000 gacha.")
+        return round(value, 2)
+
+    def _mark_manual_time(self, attrs):
+        # foydalanuvchi vaqtni o'zi o'zgartirsa — "qo'lda"; avtomatik taxmin uni boshqa o'zgartirmaydi
+        if ("minutes" in attrs or "per_week" in attrs) and "time_source" not in attrs:
+            inst = self.instance
+            changed = inst is None or attrs.get("minutes", inst.minutes) != inst.minutes or \
+                attrs.get("per_week", inst.per_week) != inst.per_week
+            if changed:
+                attrs["time_source"] = "manual"
 
     def validate_examples(self, value):
         if not isinstance(value, list):
@@ -206,6 +225,7 @@ class TaskSerializer(I18nMixin, serializers.ModelSerializer):
                         {"fallbacks": "Bir xodim navbatda ikki marta yoki asosiy mas'ul bilan birga bo'lmasin."})
                 seen.add(item["member"].pk)
                 item["condition"] = (item.get("condition") or "").strip()
+        self._mark_manual_time(attrs)
         return attrs
 
     @transaction.atomic

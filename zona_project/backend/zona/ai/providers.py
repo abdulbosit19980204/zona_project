@@ -159,6 +159,9 @@ def _models_anthropic(provider):
 
 
 # ------------------------------------------------------------------ Gemini
+GEMINI_THINKING = {None: 0, "low": 0, "medium": 1024, "high": 4096, "xhigh": 8192, "max": 16384}
+
+
 def _call_gemini(provider, model, system, user, schema, max_tokens, effort, temperature):
     url = f"{base_url(provider)}/models/{model}:generateContent"
     gen = {"maxOutputTokens": max_tokens}
@@ -166,17 +169,23 @@ def _call_gemini(provider, model, system, user, schema, max_tokens, effort, temp
         gen["temperature"] = temperature
     if schema:
         gen["responseMimeType"] = "application/json"
+        gen["responseJsonSchema"] = schema  # tuzilgan javob; eski modellar qo'llamasa — olib tashlanadi
+    # "fikrlash" tokenlari maxOutputTokens ichidan ketadi: oddiy ishlarda o'chiriladi, javob kesilib qolmasin
+    gen["thinkingConfig"] = {"thinkingBudget": GEMINI_THINKING.get(effort, 1024)}
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}], "generationConfig": gen}
     headers = {"x-goog-api-key": api_key(provider)}
-    try:
-        data = _http("POST", url, headers, body)
-    except HTTPFail as e:
-        if e.status != 400:
-            raise
-        gen.pop("responseMimeType", None)
-        gen.pop("temperature", None)
-        data = _http("POST", url, headers, body)
+    # model qo'llamagan parametrlarni bosqichma-bosqich olib tashlash
+    steps = [lambda g: g.pop("thinkingConfig", None), lambda g: g.pop("responseJsonSchema", None),
+             lambda g: (g.pop("responseMimeType", None), g.pop("temperature", None))]
+    for i in range(len(steps) + 1):
+        try:
+            data = _http("POST", url, headers, body)
+            break
+        except HTTPFail as e:
+            if e.status != 400 or i == len(steps):
+                raise
+            steps[i](gen)
     cands = data.get("candidates") or []
     if not cands:
         reason = (data.get("promptFeedback") or {}).get("blockReason", "bo'sh javob")
@@ -184,6 +193,8 @@ def _call_gemini(provider, model, system, user, schema, max_tokens, effort, temp
     if cands[0].get("finishReason") in ("SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST"):
         raise AIError("Gemini xavfsizlik filtri javobni to'xtatdi")
     text = "".join(p.get("text", "") for p in cands[0].get("content", {}).get("parts", []) if not p.get("thought"))
+    if cands[0].get("finishReason") == "MAX_TOKENS" and not (schema and _complete_json(text)):
+        raise AIError("Javob max_tokens chegarasida uzilib qoldi: AI sozlamalarida limitni oshiring")
     u = data.get("usageMetadata", {})
     return Result(text, u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0))
 
@@ -263,7 +274,25 @@ def call(provider, model, system, user, schema=None, max_tokens=4000, effort="",
     if schema and provider.kind != "anthropic":
         system += "\n\nJavobni FAQAT shu JSON sxemaga mos yagona JSON obyekt sifatida qaytar:\n" + json.dumps(schema, ensure_ascii=False)
     fn = {"anthropic": _call_anthropic, "gemini": _call_gemini}.get(provider.kind, _call_openai)
-    return fn(provider, model, system, user, schema, max_tokens, effort or None, temperature)
+    # vaqtinchalik xatolar (limit, server band) — qisqa kutib qayta urinish; bepul tariflarda tez-tez uchraydi
+    for attempt, wait in enumerate((2, 6, None)):
+        try:
+            return fn(provider, model, system, user, schema, max_tokens, effort or None, temperature)
+        except HTTPFail as e:
+            if e.status not in RETRY_STATUS or wait is None:
+                raise
+            time.sleep(wait)
+
+
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+def _complete_json(text):
+    try:
+        json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", (text or "").strip()))
+        return True
+    except ValueError:
+        return False
 
 
 def list_models(provider):

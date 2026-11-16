@@ -595,13 +595,15 @@
       "route": "Question routing",
       "person": "Employee analysis",
       "audit": "Structure audit",
-      "translate": "Translation"
+      "translate": "Translation",
+      "workload": "Workload analysis"
     },
     "taskHint": {
       "route": "“Who to ask?” — finds the owner from free text",
       "person": "Employee 360° — analyzes tasks, authorities and risks",
       "audit": "Reports — gaps and risks across the whole structure",
-      "translate": "Automatically translates data into uz/ru/en — staff write in one language"
+      "translate": "Automatically translates data into uz/ru/en — staff write in one language",
+      "workload": "Time-based overload, recommendations and time estimates for questions"
     },
     "translation": {
       "title": "Data translation",
@@ -612,6 +614,14 @@
       "allDone": "All texts are translated",
       "off": "To enable it, choose a provider and model in the “Translation” task above",
       "started": "Translation started in the background"
+    },
+    "free": {
+      "title": "Free AI is almost ready — it only needs a key",
+      "step1": "Get a free key with your Google account:",
+      "step2": "Click “Create API key” and copy it (no credit card needed)",
+      "step3": "Click the button below and paste the key into “Google Gemini (bepul)” — all AI tasks start working",
+      "note": "The free tier has a daily request limit and Google may use free-tier data to improve its models. Good for testing; for ongoing use, connect a paid tier or another provider.",
+      "enterKey": "Enter key"
     }
   },
   "cheatsheet": {
@@ -917,5 +927,70 @@
     "frequent": "{count} frequent",
     "supervisedBy": "Supervised by",
     "supervises": "Supervises"
+  },
+  "time": {
+    "minutes": "Time per occurrence (min)",
+    "minutesHint": "Yes/no answer — 2-5, simple change — 5-15, technical fault — 20-60",
+    "perWeek": "Times per week",
+    "perWeekHint": "Approximate; once a month — 0.25",
+    "capacity": "Weekly capacity (h)",
+    "capacityHint": "Hours per week available for these requests; for a team — total",
+    "minutesShort": "{n} min",
+    "perWeekShort": "{n}/wk",
+    "h": "h",
+    "hPerWeek": "h/week",
+    "utilShort": "Utilisation",
+    "source": {
+      "auto": "Automatic estimate — please refine",
+      "manual": "Entered manually",
+      "ai": "AI estimate"
+    },
+    "weekLoad": "Weekly load",
+    "totalWeek": "Weekly workload",
+    "totalCapacity": "Total capacity",
+    "avgUtil": "Average utilisation",
+    "overloaded": "Overloaded",
+    "status": {
+      "over": "Overloaded",
+      "busy": "Busy",
+      "ok": "Normal"
+    },
+    "workloadDescription": "How long each question takes × how often it comes per week. The owner takes it fully, backups a share; above 85% of capacity is overload.",
+    "noData": "No time set for questions",
+    "noDataHint": "Set a rule-based starting estimate first, then refine with AI or manually.",
+    "ruleEstimate": "Estimate by rules",
+    "aiEstimate": "Estimate time with AI",
+    "aiAnalyze": "AI analysis",
+    "estimated": "Time set for {count} questions",
+    "aiHint": "AI isn't connected: add a free Google Gemini key to enable analysis and recommendations.",
+    "aiSettings": "AI settings",
+    "guessedHint": "{guessed} of {total} questions have estimated time (auto or AI). Confirm times manually for accuracy.",
+    "chart": "Hours per week per person",
+    "chartHint": "Blue — as owner, violet — as backup; diamond — weekly capacity",
+    "ownerH": "Owner (h)",
+    "backupH": "Backup (h)",
+    "recsTitle": "Recommendations",
+    "recsHint": "An overloaded person's most time-consuming question goes to their manager, a same-zone peer or a backup (if their load is low).",
+    "noRecs": "No overload",
+    "recCapacity": "not enough capacity — {hours} more h/week needed (helper or automation)",
+    "aiTitle": "AI analysis",
+    "bestFit": "Best owner per zone",
+    "kind": {
+      "reassign": "Reassign",
+      "share": "Share",
+      "automate": "Automate",
+      "capacity": "Capacity",
+      "hire": "New hire",
+      "rule": "Rule",
+      "estimate": "Refine time"
+    },
+    "top2Share": "Time share of top 2 people",
+    "noBackupH": "Questions without backup (h/week)",
+    "unassignedH": "Questions without owner (h/week)",
+    "byZone": "Hours per week by zone",
+    "byZoneHint": "Yellow — time of questions without a backup (single point of failure)",
+    "noBackupShort": "No backup",
+    "heavy": "Most time-consuming questions",
+    "heavyHint": "Time per occurrence × times per week"
   }
 }

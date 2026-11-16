@@ -419,7 +419,7 @@ MEMBERS = [
         "authorities": [("Qurilma berish va ish joyini tayyorlash", "Kompyuter, printer, telefon, tarmoq")],
     },
     {
-        "name": "Pro-target", "role": "ProTarget operatori va support", "level": "EXT", "manager": None,
+        "name": "Pro-target", "role": "ProTarget operatori va support", "level": "EXT", "manager": None, "capacity": 20,
         "trigger": "ProTarget ma'lumotlari yoki ProTarget dasturidagi muammo",
         "does": "ProTarget tomonidan biriktirilgan alohida operator: dasturdagi ma'lumotlar bilan ishlaydi va dastur muammolari "
                 "bo'yicha yordam beradi.",
@@ -435,7 +435,7 @@ MEMBERS = [
         "authorities": [("Klientni tasdiqlash", "ProTarget")],
     },
     {
-        "name": "Dasturchilar jamoasi", "role": "Dasturchilar", "level": "L3", "manager": None,
+        "name": "Dasturchilar jamoasi", "role": "Dasturchilar", "level": "L3", "manager": None, "capacity": 80,
         "trigger": "Yangi aksiya, dastur o'zgarishi, hisoblash yoki integratsiya xatosi",
         "does": "Dasturlar, integratsiya va hisobotlarni ishlab chiqadi va tuzatadi.",
         "duties": [
@@ -448,7 +448,7 @@ MEMBERS = [
         "escalation": "Server resurslari yoki infratuzilma kerak bo'lsa — Abdulbosit Tuychiev.",
     },
     {
-        "name": "Supervayzerlar", "role": "Savdo supervayzeri", "level": "BIZ", "manager": None,
+        "name": "Supervayzerlar", "role": "Savdo supervayzeri", "level": "BIZ", "manager": None, "capacity": 120,
         "trigger": "Agentning klienti, marshruti, plani yoki ma'lumotini o'zgartirish so'rovi",
         "does": "Agentlar ishini nazorat qiladi va ma'lumotni o'zgartirish so'rovlarini tasdiqlaydi.",
         "duties": [
@@ -474,6 +474,8 @@ def apply_members(log=print):
             continue
         for f in ("role", "level", "trigger", "does", "duties", "excludes", "escalation"):
             setattr(m, f, spec[f])
+        if "capacity" in spec and m.capacity == 40:  # faqat standart qiymat bo'lsa (qo'lda o'zgartirilganiga tegmaydi)
+            m.capacity = spec["capacity"]
         if spec.get("manager") in by_name:
             m.manager = by_name[spec["manager"]]
         m.save()
@@ -535,6 +537,9 @@ def apply(dry_run=False, log=print):
         if zone in ASKER:
             Task.objects.filter(pk=t.pk).update(asker=ASKER[zone])
     stats["members"] = apply_members(log)
+    from . import timeload
+    stats["estimated"] = timeload.apply_estimates()
+    log(f"Vaqt taxmini qo'yildi: {stats['estimated']} ta savol (qo'lda kiritilganlarga tegilmadi)")
     log(f"Zonalar: {stats['zones']}, jarayonlar: {stats['processes']}, qoidali savollar: {stats['questions']}")
     for m in stats["missing"]:
         log(f"  topilmadi — {m}")
