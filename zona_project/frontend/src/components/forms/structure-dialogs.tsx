@@ -88,25 +88,26 @@ export function TeamDialog({ open, onOpenChange, team, presetDepartment }: Open 
 /* ------------------------------------------------------------------ jarayon */
 const processSchema = z.object({
   name: z.string().trim().min(2).max(120),
+  zone: z.string(),
   system: z.string(),
   newSystem: z.string().max(60),
   description: z.string().max(2000),
   owner: z.string(),
 });
 
-export function ProcessDialog({ open, onOpenChange, process }: Open & { process?: Process }) {
+export function ProcessDialog({ open, onOpenChange, process, zone }: Open & { process?: Process; zone?: number | null }) {
   const t = useTranslations();
   const model = useModel();
   const form = useForm<z.infer<typeof processSchema>>({ resolver: zodResolver(processSchema) });
   useEffect(() => {
     if (open) {
-      form.reset({ name: process?.name ?? "", system: fromId(process?.system), newSystem: "", description: process?.description ?? "", owner: NONE });
+      form.reset({ name: process?.name ?? "", zone: fromId(process ? process.zone : zone), system: fromId(process?.system), newSystem: "", description: process?.description ?? "", owner: NONE });
     }
-  }, [open, process, form]);
+  }, [open, process, zone, form]);
   const save = useOrgMutation(async (v: z.infer<typeof processSchema>) => {
     let system = toId(v.system);
     if (v.newSystem.trim()) system = (await orgApi.systems.create({ name: v.newSystem.trim() })).id;
-    const body = { name: v.name, description: v.description, system };
+    const body = { name: v.name, description: v.description, system, zone: toId(v.zone) };
     const saved = process ? await orgApi.processes.update(process.id, body) : await orgApi.processes.create(body);
     const owner = toId(v.owner);
     if (!process && owner) await orgApi.roles.create({ process: saved.id, member: owner, role: "owner" });
@@ -122,6 +123,10 @@ export function ProcessDialog({ open, onOpenChange, process }: Open & { process?
       deleteConfirm={t("forms.process.deleteConfirm")}
     >
       <TextField control={form.control} name="name" label={t("forms.name")} />
+      <SelectField
+        control={form.control} name="zone" label={t("knowledge.zone")}
+        options={[{ value: NONE, label: "—" }, ...model.state.zones.map((z) => ({ value: String(z.id), label: z.name }))]}
+      />
       <Row>
         <SelectField control={form.control} name="system" label={t("forms.process.system")} options={systemOptions(model, t("forms.process.noSystem"))} />
         <TextField control={form.control} name="newSystem" label={t("forms.process.newSystem")} />

@@ -1,13 +1,12 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRight, Loader2, MessageCircleQuestion, Search, Sparkles } from "lucide-react";
+import { ArrowRight, Loader2, Mail, MessageCircleQuestion, Search, Sparkles, UserRound, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
-import { ContactLinks } from "@/components/common/contacts";
 import { Highlight } from "@/components/common/highlight";
 import { MemberAvatar } from "@/components/common/member-avatar";
 import { EmptyState, Page, PageHeader, SectionTitle } from "@/components/common/page";
@@ -19,8 +18,10 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { errorMessage } from "@/lib/api/client";
 import { aiApi, orgApi } from "@/lib/api/endpoints";
-import type { AICandidate, SearchResult } from "@/lib/api/types";
-import { useModel } from "@/hooks/use-org";
+import { askerKey } from "@/components/forms/askers";
+import { StaffContacts } from "@/components/views/staff-shared";
+import { useCan, useModel } from "@/hooks/use-org";
+import type { AICandidate, Member, SearchResult } from "@/lib/api/types";
 
 const EXAMPLES = {
   uz: ["Mijoz to'lovi tushmadi", "VPN ishlamayapti", "1C da hisobot chiqmayapti", "yangi xodimga kirish huquqi"],
@@ -136,7 +137,7 @@ function Candidate({ c }: { c: AICandidate }) {
         <span className="font-mono text-sm font-semibold">{Math.round(c.confidence)}%</span>
       </div>
       {c.reason && <p className="mt-2 text-xs text-muted-foreground">{c.reason}</p>}
-      <div className="mt-2"><ContactLinks contact={m} /></div>
+      <div className="mt-2"><Reach m={m} /></div>
     </div>
   );
 }
@@ -147,8 +148,10 @@ function LocalResults({ result }: { result: SearchResult }) {
   if (!result.people.length && !result.tasks.length) {
     return <div className="mt-6"><EmptyState icon={Search} title={t("common.nothingFound")} hint={t("ask.tryAi")} /></div>;
   }
+  const top = result.tasks.map((h) => model.task.get(h.id)).find((x) => x && (x.rule || x.fallbacks.length));
   return (
     <>
+      {top && <RuleCard taskId={top.id} />}
       <SectionTitle>{t("ask.whoAnswers")}</SectionTitle>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {result.people.slice(0, 6).map((p, i) => {
@@ -168,7 +171,7 @@ function LocalResults({ result }: { result: SearchResult }) {
                 <Progress value={p.confidence} className="h-1.5" /><span className="w-10 text-right font-mono">{Math.round(p.confidence)}%</span>
               </div>
               {!!p.via.length && <p className="line-clamp-2 text-xs text-muted-foreground">{t("ask.via")}: {p.via.slice(0, 4).map((v) => (t.has(`ask.viaKind.${v}`) ? t(`ask.viaKind.${v}`) : v)).join(" · ")}</p>}
-              <ContactLinks contact={m} />
+              <Reach m={m} />
             </Card>
           );
         })}
@@ -215,5 +218,75 @@ function LocalResults({ result }: { result: SearchResult }) {
       )}
       {!!result.expanded.length && <p className="mt-4 text-xs text-muted-foreground">{t("ask.expanded")}: {result.expanded.slice(0, 16).join(", ")}</p>}
     </>
+  );
+}
+
+/** Mas'ul bilan bog'lanish: qo'ng'iroq, Telegram, WhatsApp; jamoa bo'lsa — Kontaktlar sahifasidagi odamlari. */
+function Reach({ m }: { m: Member }) {
+  const t = useTranslations();
+  const can = useCan();
+  const has = !!(m.phone || m.telegram);
+  // "Supervayzerlar" -> "supervayzer": Kontaktlar sahifasida shu rol bo'yicha qidiruv
+  const stem = m.name.toLowerCase().replace(/(lari|lar)\b/g, "").split(/\s+/)[0];
+  return (
+    <div className="space-y-2">
+      {has ? <StaffContacts person={{ phone: m.phone, telegram: m.telegram }} />
+        : <p className="text-xs text-muted-foreground">{t("ask.noContacts")}</p>}
+      <div className="flex flex-wrap gap-1.5">
+        {m.email && (
+          <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs"><a href={`mailto:${m.email}`}><Mail className="size-3.5" />{m.email}</a></Button>
+        )}
+        <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+          <Link href={`/employees/${m.id}`}><UserRound className="size-3.5" />{!has && can.edit ? t("ask.addContacts") : t("ask.profile")}</Link>
+        </Button>
+        {m.is_team && (
+          <Button asChild size="sm" variant="outline" className="h-7 px-2 text-xs">
+            <Link href={`/staff?q=${encodeURIComponent(stem)}`}><UsersRound className="size-3.5" />{t("ask.teamContacts")}</Link>
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Eng mos savol uchun tayyor javob: qoida va kim → kim zanjiri (bot ham shuni yuboradi). */
+function RuleCard({ taskId }: { taskId: number }) {
+  const t = useTranslations();
+  const model = useModel();
+  const task = model.task.get(taskId);
+  if (!task) return null;
+  const process = task.process ? model.process.get(task.process) : undefined;
+  const zone = model.zoneOf(process);
+  const owner = task.owner ? model.member.get(task.owner) : undefined;
+  return (
+    <Card className="mt-6 gap-3 border-primary/40 p-5">
+      <div className="text-xs text-muted-foreground">{[zone?.name, process?.name].filter(Boolean).join(" → ")}</div>
+      <div className="text-base font-semibold">{task.title}</div>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        {task.asker && <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{t(`knowledge.askers.${askerKey(task.asker)}`)}</span>}
+        {task.asker && <ArrowRight className="size-3 text-muted-foreground" />}
+        <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 font-medium text-primary">{owner?.name ?? t("common.unassigned")}</span>
+        {task.fallbacks.map((f, i) => (
+          <span key={i} className="flex items-center gap-1.5" title={f.condition}>
+            <ArrowRight className="size-3 text-muted-foreground" />
+            <span className="rounded-full border px-2 py-0.5 text-muted-foreground">{model.member.get(f.member)?.name}</span>
+          </span>
+        ))}
+      </div>
+      {task.rule && (
+        <div className="rounded-lg border-l-[3px] border-primary bg-muted/30 px-3 py-2">
+          <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-wider text-primary">{t("knowledge.rule")}</div>
+          <p className="whitespace-pre-line text-[13px] leading-relaxed">{task.rule}</p>
+        </div>
+      )}
+      {task.fallbacks.some((f) => f.condition) && (
+        <ol className="space-y-1 text-[12.5px]">
+          {task.fallbacks.map((f, i) => f.condition && (
+            <li key={i}><b className="font-medium">{i + 2}. {model.member.get(f.member)?.name}</b> — <span className="text-muted-foreground">{f.condition}</span></li>
+          ))}
+        </ol>
+      )}
+      {owner && <Reach m={owner} />}
+    </Card>
   );
 }

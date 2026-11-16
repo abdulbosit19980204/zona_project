@@ -17,7 +17,7 @@ from django.conf import settings
 from django.db import close_old_connections, transaction
 from django.utils import timezone
 
-from .models import AITaskConfig, Authority, Department, EdgeCase, Member, Process, System, Task, TaskFallback, Team
+from .models import AITaskConfig, Authority, Department, EdgeCase, Member, Process, System, Task, TaskFallback, Team, Zone
 
 log = logging.getLogger(__name__)
 
@@ -25,10 +25,11 @@ LANGS = ("uz", "ru", "en")
 FIELDS = {
     Department: ("name", "description"),
     System: ("name",),
+    Zone: ("name", "description"),
     Team: ("name", "description"),
     Member: ("role", "trigger", "does", "excludes"),
     Process: ("name", "description"),
-    Task: ("title", "note"),
+    Task: ("title", "note", "rule"),
     TaskFallback: ("condition",),
     EdgeCase: ("situation", "then_text"),
     Authority: ("title", "scope"),

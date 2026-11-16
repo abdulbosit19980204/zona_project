@@ -8,7 +8,7 @@
     "ask": "Savol kimga?",
     "cheatsheet": "Kimga murojaat",
     "responsibilities": "Masʼuliyatlar",
-    "processes": "Biznes jarayonlar",
+    "processes": "Jarayonlar va savollar",
     "matrix": "Masʼuliyat matritsasi",
     "approvals": "Tasdiqlashlar",
     "analytics": "Masʼuliyat tahlili",
@@ -483,12 +483,19 @@
       "edge": "maxsus holat",
       "fallback": "navbatdagi masʼul"
     },
-    "whoAnswers": "Kim javob beradi"
+    "whoAnswers": "Kim javob beradi",
+    "noContacts": "Telefon yoki Telegram kiritilmagan",
+    "addContacts": "Kontakt qo'shish",
+    "profile": "Profil",
+    "teamContacts": "Jamoa kontaktlari"
   },
   "map3d": {
     "hint": "Aylantiring, yaqinlashtiring, tugunni bosing — bogʻlanishlar yorishadi.",
     "member": "Xodim",
-    "process": "Jarayon"
+    "process": "Jarayon",
+    "team": "Jamoa",
+    "department": "Bo'lim",
+    "zones": "Zonalar"
   },
   "dictionary": {
     "add": "Qoʻshish",
@@ -806,5 +813,70 @@
     },
     "linkOwner": "Bu link “{name}” jamoasining manbasi — oʻsha jamoa yangilanadi",
     "bigRemoval": "Diqqat: “{name}” jamoasidan {removed} kishi oʻchiriladi, {added} kishi qoʻshiladi. Toʻgʻri jamoa tanlanganiga ishonch hosil qiling."
+  },
+  "knowledge": {
+    "title": "Jarayonlar va savollar bazasi",
+    "description": "Zona → jarayon → savol: kim so'raydi, kim javob beradi, javob bermasa kimga o'tadi va aniq qoida. Shu baza AI va Telegram bot uchun eksport qilinadi.",
+    "botTest": "Botni sinash",
+    "botTestHint": "Agent yozadigan savolni kiriting — Telegram bot xuddi shunday javob qaytaradi.",
+    "botPlaceholder": "Masalan: klient bazada bor, lekin menda ko'rinmayapti",
+    "botAsk": "So'rash",
+    "botFound": "Aniq javob topildi · ishonch {confidence}%",
+    "botNotFound": "Aniq qoida topilmadi — savolni bazaga qo'shish kerak",
+    "botWho": "Kim javob beradi",
+    "botNext": "navbat",
+    "botTelegramPreview": "Telegram'da shunday ko'rinadi",
+    "botAlternatives": "Yaqin savollar",
+    "copy": "Nusxa",
+    "copied": "Nusxalandi",
+    "export": "AI uchun eksport",
+    "exportFor": "Savollar bazasini yuklab olish",
+    "fmt": {
+      "jsonl": "JSONL (RAG / vektor baza)",
+      "jsonlHint": "Har qatorda bitta savol, qoida va mas'ul",
+      "chat": "Chat JSONL (fine-tuning)",
+      "chatHint": "Har bir misol: savol → tayyor javob",
+      "json": "To'liq JSON",
+      "jsonHint": "Zonalar va barcha savollar, kontaktlar bilan",
+      "md": "Markdown hujjat",
+      "mdHint": "Odam o'qishi yoki AI'ga matn sifatida berish uchun",
+      "frequentOnly": "Faqat doimiy savollar (chat JSONL)"
+    },
+    "stats": {
+      "questions": "Savol turlari",
+      "frequent": "Doimiy savollar",
+      "withRule": "Qoidasi yozilgan",
+      "aiReady": "AI uchun tayyorlik",
+      "aiReadyHint": "Qoida va misoli bor savollar ulushi · {examples} ta misol"
+    },
+    "filter": "Qidirish: savol, misol, qoida yoki jarayon…",
+    "filters": {
+      "all": "Hammasi",
+      "frequent": "Doimiy",
+      "norule": "Qoidasi yo'q"
+    },
+    "noZone": "Zonasiz",
+    "zoneMeta": "{processes} jarayon · {questions} savol",
+    "questionsCount": "{count} savol",
+    "addQuestion": "Savol qo'shish",
+    "noRule": "qoida yo'q",
+    "rule": "Aniq qoida",
+    "ruleHint": "Savol kelganda kim nima qiladi va qachon keyingisiga o'tadi. Bot shu matnni yuboradi.",
+    "rulePlaceholder": "1) Agent supervayzeriga yozadi…\n2) Supervayzer…\n3) Topilmasa — Operator…",
+    "examples": "Qanday so'raladi (misollar)",
+    "examplesHint": "Har qatorga bittadan — agentlar yozadigan iboralar. AI shular bo'yicha o'rganadi.",
+    "examplesPlaceholder": "klient agentda ko'rinmayapti\nклиент не отображается",
+    "asker": "Kim so'raydi",
+    "askers": {
+      "agent": "Agent",
+      "supervisor": "Supervayzer",
+      "operator": "Operator",
+      "office": "Ofis xodimi",
+      "anyone": "Hamma",
+      "other": "Boshqa"
+    },
+    "frequent": "Doimiy tushadigan savol",
+    "frequentHint": "Bot va AI uchun birinchi navbatda",
+    "zone": "Zona"
   }
 }

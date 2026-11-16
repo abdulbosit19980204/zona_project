@@ -15,7 +15,8 @@ import { useModel, useOrgMutation } from "@/hooks/use-org";
 import { orgApi } from "@/lib/api/endpoints";
 import type { Task } from "@/lib/api/types";
 
-import { fromId, FormDialog, NONE, Row, SelectField, TextareaField, toId, type Option } from "./form-kit";
+import { askerKey, ASKERS } from "./askers";
+import { CheckboxField, fromId, FormDialog, NONE, Row, SelectField, TextareaField, toId, type Option } from "./form-kit";
 import { memberOptions, processOptions } from "./options";
 
 const schema = z.object({
@@ -23,6 +24,10 @@ const schema = z.object({
   owner: z.string(),
   process: z.string(),
   note: z.string().max(2000),
+  rule: z.string().max(3000),
+  examples: z.string().max(6000),
+  asker: z.string(),
+  frequent: z.boolean(),
   fallbacks: z.array(z.object({ member: z.string(), condition: z.string().max(200) })),
 });
 type Values = z.infer<typeof schema>;
@@ -45,6 +50,10 @@ export function TaskDialog({ open, onOpenChange, task, preset }: {
         owner: fromId(task ? task.owner : preset?.owner),
         process: fromId(task ? task.process : preset?.process),
         note: task?.note ?? "",
+        rule: task?.rule ?? "",
+        examples: (task?.examples ?? []).join("\n"),
+        asker: task?.asker || NONE,
+        frequent: task?.frequent ?? false,
         fallbacks: (task?.fallbacks ?? []).map((f) => ({ member: String(f.member), condition: f.condition })),
       });
     }
@@ -61,7 +70,11 @@ export function TaskDialog({ open, onOpenChange, task, preset }: {
         seen.add(member);
         return [{ member, condition: f.condition.trim() }];
       });
-      const body = { title: v.title, owner, process: toId(v.process), note: v.note, fallbacks };
+      const examples = v.examples.split("\n").map((x) => x.trim()).filter(Boolean);
+      const body = {
+        title: v.title, owner, process: toId(v.process), note: v.note, fallbacks,
+        rule: v.rule.trim(), examples, asker: v.asker === NONE ? "" : v.asker, frequent: v.frequent,
+      };
       return task ? orgApi.tasks.update(task.id, body) : orgApi.tasks.create(body);
     },
     task ? t("common.saved") : t("forms.task.created"),
@@ -85,6 +98,16 @@ export function TaskDialog({ open, onOpenChange, task, preset }: {
         <SelectField control={form.control} name="process" label={t("forms.task.process")} options={processOptions(model, t("forms.noProcess"))} />
       </Row>
       <FallbackEditor control={form.control} options={memberOptions(model, "—").filter((o) => o.value !== NONE)} />
+      {/* savollar bazasi: AI va Telegram bot shu maydonlardan o'qiydi */}
+      <TextareaField control={form.control} name="rule" label={t("knowledge.rule")} description={t("knowledge.ruleHint")} rows={4} placeholder={t("knowledge.rulePlaceholder")} />
+      <TextareaField control={form.control} name="examples" label={t("knowledge.examples")} description={t("knowledge.examplesHint")} rows={3} placeholder={t("knowledge.examplesPlaceholder")} />
+      <Row>
+        <SelectField
+          control={form.control} name="asker" label={t("knowledge.asker")}
+          options={[{ value: NONE, label: "—" }, ...ASKERS.map((a) => ({ value: a, label: t(`knowledge.askers.${askerKey(a)}`) }))]}
+        />
+        <CheckboxField control={form.control} name="frequent" label={t("knowledge.frequent")} description={t("knowledge.frequentHint")} />
+      </Row>
       <TextareaField control={form.control} name="note" label={t("forms.note")} rows={2} />
     </FormDialog>
   );

@@ -13,13 +13,13 @@ from .ai import service as ai_service
 from .api import ZonaViewSet, zona_api
 from .exporter import workbook_bytes
 from .models import (Authority, ChangeRequest, Department, EdgeCase, Event, Member, Process, ProcessRole, Synonym,
-                     System, Task, TaskFallback, Team)
+                     System, Task, TaskFallback, Team, Zone)
 from .permissions import CanView, ReadOrEdit, role_of
 from .search import debug as search_debug
 from .search import search as run_search
 from .serializers import (AuthoritySerializer, DepartmentSerializer, EdgeCaseSerializer, EventSerializer,
                           MemberSerializer, ProcessRoleSerializer, ProcessSerializer, SynonymSerializer,
-                          SystemSerializer, TaskSerializer, TeamSerializer, user_payload)
+                          SystemSerializer, TaskSerializer, TeamSerializer, ZoneSerializer, user_payload)
 
 UNASSIGNED = "Biriktirilmagan"
 
@@ -56,6 +56,7 @@ def state(request):
         "teams": TeamSerializer(Team.objects.all(), many=True).data,
         "members": MemberSerializer(Member.objects.all(), many=True).data,
         "authorities": AuthoritySerializer(Authority.objects.all(), many=True).data,
+        "zones": ZoneSerializer(Zone.objects.all(), many=True).data,
         "systems": SystemSerializer(System.objects.all(), many=True).data,
         "processes": ProcessSerializer(Process.objects.all(), many=True).data,
         "roles": ProcessRoleSerializer(ProcessRole.objects.all(), many=True).data,
@@ -116,6 +117,14 @@ class TeamViewSet(ZonaViewSet):
         log(self.request, Event.MEMBER, from_name=instance.name,
             text=f"Jamoa o'chirildi, {instance.members.count()} xodim jamoasiz qoldi")
         instance.delete()
+
+
+class ZoneViewSet(ZonaViewSet):
+    queryset = Zone.objects.all()
+    serializer_class = ZoneSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(order=self.next_order())
 
 
 class SystemViewSet(ZonaViewSet):

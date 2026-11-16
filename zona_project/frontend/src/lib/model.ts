@@ -3,7 +3,7 @@
  * Barcha sahifalar (xarita, matritsa, analitika, bo'shliqlar) shu bitta manbadan foydalanadi.
  */
 import type {
-  Authority, Department, Member, OrgState, Process, ProcessRole, RoleKey, Task, Team,
+  Authority, Department, Member, OrgState, Process, ProcessRole, RoleKey, Task, Team, Zone,
 } from "@/lib/api/types";
 
 export const ROLE_ORDER: RoleKey[] = ["owner", "executor", "approver", "supervisor", "contributor", "backup"];
@@ -56,6 +56,8 @@ export interface Model {
   process: Map<number, Process>;
   task: Map<number, Task>;
   systemName: (p: Process | undefined) => string;
+  zone: Map<number, Zone>;
+  zoneOf: (p: Process | undefined) => Zone | undefined;
   tasksOf: Map<number, Task[]>;
   /** xodim -> u navbatdagi mas'ul bo'lgan vazifalar */
   fallbackTasksOf: Map<number, Task[]>;
@@ -98,6 +100,7 @@ export function buildModel(state: OrgState): Model {
   const process = byId(state.processes);
   const task = byId(state.tasks);
   const systems = byId(state.systems);
+  const zones = byId(state.zones ?? []);
 
   const deptOf = (m: Member) => (m.department && dept.has(m.department) ? m.department : 0);
   const deptOrder = [...state.departments.map((d) => d.id), 0];
@@ -207,6 +210,8 @@ export function buildModel(state: OrgState): Model {
   return {
     state, dept, team, member, process, task,
     systemName: (p) => (p?.system ? systems.get(p.system)?.name ?? "" : ""),
+    zone: zones,
+    zoneOf: (p) => (p?.zone ? zones.get(p.zone) : undefined),
     tasksOf, fallbackTasksOf, rolesOf, linksOfMember, linksOfProcess,
     link: (pid, mid) => links.get(`${pid}|${mid}`),
     primaryOwner, load, authorities, reports, issues,

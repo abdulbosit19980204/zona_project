@@ -8,7 +8,7 @@
     "ask": "Who to ask?",
     "cheatsheet": "Who to contact",
     "responsibilities": "Responsibilities",
-    "processes": "Business Processes",
+    "processes": "Processes & questions",
     "matrix": "Responsibility Matrix",
     "approvals": "Approval Workflows",
     "analytics": "Responsibility Analytics",
@@ -483,12 +483,19 @@
       "edge": "special case",
       "fallback": "next in line"
     },
-    "whoAnswers": "Who answers"
+    "whoAnswers": "Who answers",
+    "noContacts": "No phone or Telegram yet",
+    "addContacts": "Add contacts",
+    "profile": "Profile",
+    "teamContacts": "Team contacts"
   },
   "map3d": {
     "hint": "Rotate, zoom and click a node — its connections light up.",
     "member": "Employee",
-    "process": "Process"
+    "process": "Process",
+    "team": "Team",
+    "department": "Department",
+    "zones": "Zones"
   },
   "dictionary": {
     "add": "Add",
@@ -806,5 +813,70 @@
     },
     "linkOwner": "This link is the source of “{name}” — that team will be updated",
     "bigRemoval": "Careful: {removed} people will be removed from “{name}” and {added} added. Make sure the right team is selected."
+  },
+  "knowledge": {
+    "title": "Processes & question base",
+    "description": "Zone → process → question: who asks, who answers, who's next and the exact rule. Exported for AI and the Telegram bot.",
+    "botTest": "Test the bot",
+    "botTestHint": "Type an agent's question — the Telegram bot will answer the same way.",
+    "botPlaceholder": "E.g.: the client is in the database but I can't see it",
+    "botAsk": "Ask",
+    "botFound": "Exact answer found · confidence {confidence}%",
+    "botNotFound": "No rule found — add this question to the base",
+    "botWho": "Who answers",
+    "botNext": "in line",
+    "botTelegramPreview": "How it looks in Telegram",
+    "botAlternatives": "Similar questions",
+    "copy": "Copy",
+    "copied": "Copied",
+    "export": "Export for AI",
+    "exportFor": "Download the question base",
+    "fmt": {
+      "jsonl": "JSONL (RAG / vector store)",
+      "jsonlHint": "One question per line with rule and owner",
+      "chat": "Chat JSONL (fine-tuning)",
+      "chatHint": "Each example: question → ready answer",
+      "json": "Full JSON",
+      "jsonHint": "Zones and all questions with contacts",
+      "md": "Markdown document",
+      "mdHint": "For reading or as plain text for AI",
+      "frequentOnly": "Frequent questions only (chat JSONL)"
+    },
+    "stats": {
+      "questions": "Question types",
+      "frequent": "Frequent questions",
+      "withRule": "With a rule",
+      "aiReady": "AI readiness",
+      "aiReadyHint": "Share of questions with a rule and examples · {examples} examples"
+    },
+    "filter": "Search: question, example, rule or process…",
+    "filters": {
+      "all": "All",
+      "frequent": "Frequent",
+      "norule": "No rule"
+    },
+    "noZone": "No zone",
+    "zoneMeta": "{processes} processes · {questions} questions",
+    "questionsCount": "{count, plural, one {# question} other {# questions}}",
+    "addQuestion": "Add question",
+    "noRule": "no rule",
+    "rule": "Exact rule",
+    "ruleHint": "Who does what when the question comes in, and when it moves on. The bot sends this text.",
+    "rulePlaceholder": "1) The agent messages their supervisor…\n2) The supervisor…\n3) If not found — the operator…",
+    "examples": "How people ask (examples)",
+    "examplesHint": "One per line — phrases agents write. The AI learns from them.",
+    "examplesPlaceholder": "client not visible for the agent\nklient agentda ko'rinmayapti",
+    "asker": "Who asks",
+    "askers": {
+      "agent": "Agent",
+      "supervisor": "Supervisor",
+      "operator": "Operator",
+      "office": "Office staff",
+      "anyone": "Anyone",
+      "other": "Other"
+    },
+    "frequent": "Frequent question",
+    "frequentHint": "Prioritised for the bot and AI",
+    "zone": "Zone"
   }
 }

@@ -26,6 +26,7 @@ export function localizeState(state: OrgState, locale: Locale): OrgState {
     teams: all(state.teams),
     members: all(state.members),
     authorities: all(state.authorities),
+    zones: all(state.zones ?? []),
     systems: all(state.systems),
     processes: all(state.processes),
     tasks: state.tasks.map((t) => ({ ...pick(t, locale), fallbacks: all(t.fallbacks) })),

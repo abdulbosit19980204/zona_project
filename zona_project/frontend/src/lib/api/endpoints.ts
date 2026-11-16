@@ -5,6 +5,7 @@ import type {
   AIUsageSummary, AuditEvent, Authority, ChangeKind, ChangePayload, ChangeRequest, ChangeStatus, Department,
   EdgeCase, LoginResponse, Me, Member, OrgState, Process, ProcessRole, SearchResult, Synonym, SystemItem, Task, Team,
   StaffAssignBody, StaffDiff, StaffImportBody, StaffPerson, StaffProject, StaffState, TokenPair, TranslateStatus,
+  BotAnswer, KnowledgeFormat, Zone,
 } from "./types";
 
 const get = async <T>(url: string, params?: Record<string, string | number | boolean>) => (await api.get<T>(url, { params })).data;
@@ -41,6 +42,7 @@ export const orgApi = {
   members: resource<Member>("members"),
   authorities: resource<Authority>("authorities"),
   systems: resource<SystemItem>("systems"),
+  zones: resource<Zone>("zones"),
   processes: resource<Process>("processes"),
   edgeCases: resource<EdgeCase>("edge-cases"),
   tasks: {
@@ -89,6 +91,13 @@ export const aiApi = {
   route: (question: string) => post<AIRouteResult>("ai/route/", { question }),
   person: (member: number, lang: string) => post<AIText>("ai/person/", { member, lang }),
   audit: (lang: string) => post<AIText>("ai/audit/", { lang }),
+};
+
+/** Savollar bazasi: bot javobi va AI uchun eksport. */
+export const knowledgeApi = {
+  ask: (question: string) => post<BotAnswer>("bot/ask/", { question }),
+  export: async (fmt: KnowledgeFormat, frequent = false) =>
+    (await api.get<Blob>(`knowledge/export.${fmt}`, { params: frequent ? { frequent: 1 } : {}, responseType: "blob" })).data,
 };
 
 export const adminApi = {

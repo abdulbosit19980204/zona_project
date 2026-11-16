@@ -6,7 +6,7 @@ from rest_framework import serializers
 from . import translation
 from .crypto import decrypt, encrypt, mask
 from .models import (AIProvider, AITaskConfig, AIUsage, Authority, ChangeRequest, Department, EdgeCase, Event, Member,
-                     Process, ProcessRole, Profile, Synonym, System, Task, TaskFallback, Team)
+                     Process, ProcessRole, Profile, Synonym, System, Task, TaskFallback, Team, Zone)
 from .permissions import role_of
 
 User = get_user_model()
@@ -51,6 +51,18 @@ class SystemSerializer(I18nMixin, serializers.ModelSerializer):
         model = System
         fields = ["id", "name", "order"]
         read_only_fields = ["order"]
+
+
+class ZoneSerializer(I18nMixin, serializers.ModelSerializer):
+    class Meta:
+        model = Zone
+        fields = ["id", "key", "name", "description", "icon", "color", "order"]
+        read_only_fields = ["order"]
+
+    def validate_icon(self, value):
+        if value not in Zone.ICONS:
+            raise serializers.ValidationError(f"Ikonka: {', '.join(Zone.ICONS)}")
+        return value
 
 
 class TeamSerializer(I18nMixin, serializers.ModelSerializer):
@@ -113,10 +125,11 @@ class AuthoritySerializer(I18nMixin, serializers.ModelSerializer):
 
 class ProcessSerializer(I18nMixin, serializers.ModelSerializer):
     system = serializers.PrimaryKeyRelatedField(queryset=System.objects.all(), allow_null=True, required=False)
+    zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.all(), allow_null=True, required=False)
 
     class Meta:
         model = Process
-        fields = ["id", "name", "system", "description", "order"]
+        fields = ["id", "name", "zone", "system", "description", "order"]
         read_only_fields = ["order"]
 
     def validate_name(self, value):
@@ -151,11 +164,20 @@ class TaskSerializer(I18nMixin, serializers.ModelSerializer):
 
     class Meta:
         model = Task
-        fields = ["id", "title", "process", "owner", "fallbacks", "note", "is_custom", "order"]
+        fields = ["id", "title", "process", "owner", "fallbacks", "note", "rule", "examples", "asker", "frequent",
+                  "is_custom", "order"]
         read_only_fields = ["is_custom", "order"]
 
     def validate_title(self, value):
         return _not_blank(value, "Vazifa matni bo'sh bo'lmasin.")
+
+    def validate_examples(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Ro'yxat bo'lishi kerak.")
+        out = list(dict.fromkeys(str(x).strip()[:300] for x in value if str(x).strip()))
+        if len(out) > 30:
+            raise serializers.ValidationError("Ko'pi bilan 30 ta misol.")
+        return out
 
     def validate(self, attrs):
         if "fallbacks" in attrs:

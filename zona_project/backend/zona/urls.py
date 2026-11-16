@@ -3,7 +3,7 @@ WebSocket manzillari alohida: zona.routing.websocket_urlpatterns (asgi.py)."""
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from . import views, views_admin, views_ai, views_approvals, views_auth, views_staff
+from . import views, views_admin, views_ai, views_approvals, views_auth, views_staff, views_knowledge
 
 app_name = "zona"
 
@@ -13,6 +13,7 @@ router.register("teams", views.TeamViewSet, basename="team")
 router.register("members", views.MemberViewSet, basename="member")
 router.register("authorities", views.AuthorityViewSet, basename="authority")
 router.register("systems", views.SystemViewSet, basename="system")
+router.register("zones", views.ZoneViewSet, basename="zone")
 router.register("processes", views.ProcessViewSet, basename="process")
 router.register("roles", views.ProcessRoleViewSet, basename="role")
 router.register("tasks", views.TaskViewSet, basename="task")
@@ -45,5 +46,7 @@ urlpatterns = [
     path("api/staff/import/", views_staff.staff_import, name="staff-import"),
     path("api/staff/export.<str:fmt>", views_staff.staff_export, name="staff-export"),
     path("api/export.xlsx", views.export_xlsx, name="export"),
+    path("api/bot/ask/", views_knowledge.bot_ask, name="bot-ask"),
+    path("api/knowledge/export.<str:fmt>", views_knowledge.knowledge_export, name="knowledge-export"),
     path("api/", include(router.urls)),
 ]

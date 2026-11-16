@@ -296,6 +296,8 @@ export interface StaffMapProps {
   onNewProject: () => void;
   onAssign: (p: StaffPerson) => void;
   onVacate: (p: StaffPerson) => void;
+  /** Boshqa sahifadan kelgan qidiruv (?q=). */
+  initialQuery?: string;
 }
 
 function MapCanvas(props: StaffMapProps) {
@@ -304,7 +306,7 @@ function MapCanvas(props: StaffMapProps) {
   const flow = useReactFlow();
   const [selected, setSelected] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(props.initialQuery ?? "");
   const [panel, setPanel] = useState(true);
   const [toggled, setToggled] = useState<Map<string, boolean>>(new Map());
   const dir = useUI((s) => s.mapDir);

@@ -28,7 +28,7 @@ class Index:
     def __init__(self):
         self.members = {m.id: m for m in Member.objects.all()}
         self.processes = {p.id: p for p in Process.objects.select_related("system")}
-        self.tasks = list(Task.objects.select_related("process__system").prefetch_related("fallbacks"))
+        self.tasks = list(Task.objects.select_related("process__system", "process__zone").prefetch_related("fallbacks"))
         self.edges = list(EdgeCase.objects.all())
         self.departments = list(Department.objects.all())
         self.roles = defaultdict(list)  # process -> [(member, role)]
@@ -40,7 +40,10 @@ class Index:
         for t in self.tasks:
             p = t.process
             add("task", t.id, [(v(t, "title"), 1.0), (v(p, "name") if p else "", 0.5),
-                                (p.system.name if p and p.system else "", 0.35), (v(t, "note"), 0.4)])
+                                (p.system.name if p and p.system else "", 0.35), (v(t, "note"), 0.4),
+                                # savol qanday so'ralishi — deyarli sarlavhadek muhim; qoida va zona — yordamchi
+                                (" ".join(t.examples or []), 0.9), (v(t, "rule"), 0.3),
+                                (p.zone.name if p and p.zone else "", 0.3)])
         for p in self.processes.values():
             add("process", p.id, [(v(p, "name"), 1.0), (v(p, "description"), 0.5), (p.system.name if p.system else "", 0.4)])
         for m in self.members.values():

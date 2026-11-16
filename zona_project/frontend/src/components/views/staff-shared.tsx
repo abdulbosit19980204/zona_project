@@ -29,8 +29,14 @@ const CYR: Record<string, string> = {
 export function fold(text: string) {
   return text.toLowerCase().replace(/[ʻʼ’‘`´']/g, "").replace(/[а-яёқғҳў]/g, (c) => CYR[c] ?? c).replace(/h/g, "x").replace(/\s+/g, " ").trim();
 }
+/** Rol nomlari ham qidiriladi: "supervayzer" -> SVR, "agent" -> TP. */
+const ROLE_WORDS: Record<StaffRole, string> = {
+  ROP: "rop rahbar руководитель head", ASM: "asm menejer manager", RSM: "rsm menejer manager",
+  SVR: "supervayzer supervisor супервайзер", KAM: "kam key account", TP: "agent savdo vakili торговый представитель sales",
+  MER: "merchendayzer мерчендайзер merchandiser", OTHER: "",
+};
 const haystack = (p: StaffPerson, project?: StaffProject, unit?: string, manager?: StaffPerson) =>
-  fold([p.name, p.is_vacancy ? "vakansiya vacancy" : "", p.role, p.position, p.territory, p.region, p.city, p.phone, p.email, p.note,
+  fold([p.name, p.is_vacancy ? "vakansiya vacancy" : "", p.role, ROLE_WORDS[p.role], p.position, p.territory, p.region, p.city, p.phone, p.email, p.note,
     project?.name, unit, manager?.name].join(" "))
   + " " + p.phone.replace(/\D/g, "");
 

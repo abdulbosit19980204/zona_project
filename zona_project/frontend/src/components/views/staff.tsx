@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Building2, Download, ExternalLink, FileJson, FileSpreadsheet, Network, Pencil, Phone, Plus, RefreshCw, Search, Upload, UserPlus, UserRound, Users } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -34,7 +35,9 @@ export function Staff() {
   const can = useCan();
   const query = useQuery({ queryKey: STAFF_KEY, queryFn: staffApi.state });
   const [chosen, setActive] = useState<number | "all">("all");
-  const [q, setQ] = useState("");
+  const params = useSearchParams();
+  const initialQuery = params.get("q") ?? "";
+  const [q, setQ] = useState(initialQuery);
   const [edit, setEdit] = useState<{ person?: StaffPerson; project: number } | null>(null);
   const [projectEdit, setProjectEdit] = useState<StaffProject | null | undefined>(undefined);
   const [importing, setImporting] = useState<ImportPreset | null>(null);
@@ -99,6 +102,7 @@ export function Staff() {
           onExport={(fmt) => exporter.mutate({ fmt })}
           exporting={exporter.isPending}
           onList={() => setView("list")}
+          initialQuery={initialQuery}
           onNewProject={() => setProjectEdit(null)}
           onAssign={(p) => setStaffing({ kind: "assign", id: p.id })}
           onVacate={(p) => setStaffing({ kind: "vacate", id: p.id })}

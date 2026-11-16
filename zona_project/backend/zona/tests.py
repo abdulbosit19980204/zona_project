@@ -635,3 +635,79 @@ class StaffTests(Base):
         self.assertIn("brauzerda", r.json()["detail"])
         self.assertEqual(self.imp(text="<html>bo'sh</html>").status_code, 400)
         self.assertEqual(self.imp(url="ftp://x").status_code, 400)
+
+
+class KnowledgeTests(Base):
+    """Savollar bazasi: zonalar, qoidalar, bot API va AI uchun eksport."""
+
+    def setUp(self):
+        from . import knowledge_seed
+        self.stats = knowledge_seed.apply(log=lambda *_: None)
+
+    def test_restructure_sets_zones_rules_and_chain(self):
+        from .models import Process, Task, Zone
+        self.assertEqual(Zone.objects.count(), 7)
+        self.assertFalse(Process.objects.filter(zone__isnull=True).exists())
+        t = Task.objects.get(title="Klient bazada bor, lekin agentda ko'rinmayapti")
+        self.assertTrue(t.frequent)
+        self.assertIn("marshrut", t.rule)
+        self.assertIn("klient agentda ko'rinmayapti", t.examples)
+        chain = list(t.fallbacks.order_by("order").values_list("member__name", "condition"))
+        self.assertEqual(chain[0][0], "Saidabror")
+        self.assertIn("topilmasa", chain[0][1])
+        self.assertFalse(Task.objects.filter(asker="").exclude(process__isnull=True).exists())
+        # qayta ishga tushirish xavfsiz
+        from . import knowledge_seed
+        again = knowledge_seed.apply(log=lambda *_: None)
+        self.assertEqual(again["questions"], self.stats["questions"])
+        self.assertFalse(Process.objects.filter(zone__isnull=True).exists())
+        self.assertEqual(Zone.objects.count(), 7)
+
+    def test_state_and_task_fields(self):
+        self.login("editor")
+        state = self.call("get", "state/").json()
+        self.assertEqual(len(state["zones"]), 7)
+        self.assertTrue(all(p["zone"] for p in state["processes"]))
+        task = next(t for t in state["tasks"] if t["frequent"])
+        self.assertIn("rule", task)
+        r = self.call("patch", f"tasks/{task['id']}/", {"examples": ["  birinchi  ", "birinchi", "", "ikkinchi"]})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["examples"], ["birinchi", "ikkinchi"])
+        self.assertEqual(self.call("patch", f"tasks/{task['id']}/", {"examples": "matn"}).status_code, 400)
+
+    def test_bot_ask_with_key_and_without(self):
+        from django.test import override_settings
+        r = self.client.post(API + "bot/ask/", {"question": "klient bazada bor lekin agentda ko'rinmayapti"},
+                             content_type="application/json")
+        self.assertIn(r.status_code, (401, 403))
+        with override_settings(ZONA={"COMPANY_NAME": "StarGroup", "BOT_API_KEY": "bot-secret"}):
+            r = self.client.post(API + "bot/ask/", {"question": "klientim agentda ko'rinmayapti, bazada bor"},
+                                 content_type="application/json", headers={"X-Bot-Key": "bot-secret"})
+            self.assertEqual(r.status_code, 200, r.content)
+            d = r.json()
+            self.assertTrue(d["found"], d)
+            self.assertEqual(d["best"]["question"], "Klient bazada bor, lekin agentda ko'rinmayapti")
+            self.assertEqual(d["best"]["responsible"]["name"], "Supervayzerlar")
+            self.assertIn("Qoida:", d["answer_text"])
+            self.assertEqual(self.client.post(API + "bot/ask/", {"question": "x"}, content_type="application/json",
+                                              headers={"X-Bot-Key": "bot-secret"}).status_code, 400)
+            wrong = self.client.post(API + "bot/ask/", {"question": "parol"}, content_type="application/json",
+                                     headers={"X-Bot-Key": "notogri"})
+            self.assertIn(wrong.status_code, (401, 403))
+        self.login("viewer")
+        self.assertEqual(self.call("post", "bot/ask/", {"question": "parolni unutdim"}).status_code, 200)
+
+    def test_knowledge_export_formats(self):
+        import json as _json
+        self.login("viewer")
+        full = _json.loads(self.call("get", "knowledge/export.json").content)
+        self.assertEqual(len(full["zones"]), 7)
+        self.assertTrue(any(i["rule"] for i in full["items"]))
+        lines = self.call("get", "knowledge/export.jsonl?frequent=1").content.decode().strip().split("\n")
+        self.assertTrue(all(_json.loads(ln)["frequent"] for ln in lines))
+        chat = [_json.loads(ln) for ln in self.call("get", "knowledge/export.chat?frequent=1").content.decode().strip().split("\n")]
+        self.assertEqual([m["role"] for m in chat[0]["messages"]], ["system", "user", "assistant"])
+        self.assertGreater(len(chat), len(lines))  # har bir misol alohida juftlik
+        md = self.call("get", "knowledge/export.md").content.decode()
+        self.assertIn("## Distributsiya", md)
+        self.assertEqual(self.call("get", "knowledge/export.pdf").status_code, 400)

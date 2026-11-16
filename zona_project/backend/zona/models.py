@@ -39,6 +39,31 @@ class System(models.Model):
         return self.name
 
 
+class Zone(models.Model):
+    """Mas'uliyat zonasi: savollar va jarayonlar guruhi (Distributsiya, ProTarget, 1C, IT infratuzilma...).
+
+    Bot va AI savolni avval zonaga, keyin jarayon va aniq savol turiga ajratadi."""
+
+    ICONS = ["truck", "smartphone", "database", "plug", "chart", "server", "shield", "users", "box"]
+
+    key = models.SlugField("Kalit", max_length=40, unique=True)
+    name = models.CharField("Nomi", max_length=80, unique=True)
+    description = models.CharField("Tavsif (qaysi savollar shu zonaga tushadi)", max_length=300, blank=True)
+    icon = models.CharField("Ikonka", max_length=20, default="box")
+    color = models.CharField("Rang", max_length=9, default="#3987FF")
+    order = models.PositiveIntegerField("Tartib", default=0)
+    i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        verbose_name = "Zona"
+        verbose_name_plural = "Zonalar"
+
+    def __str__(self):
+        return self.name
+
+
 class Team(models.Model):
     """Jamoa: bo'lim ichidagi guruh. Tuzilma: Kompaniya -> Bo'lim -> Jamoa -> Xodim."""
 
@@ -96,6 +121,8 @@ class Process(models.Model):
     """Biznes jarayon: bir yo'nalishdagi vazifalar to'plami."""
 
     name = models.CharField("Nomi", max_length=120)
+    zone = models.ForeignKey(Zone, verbose_name="Zona", null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name="processes")
     system = models.ForeignKey(System, verbose_name="Tizim", null=True, blank=True,
                                on_delete=models.SET_NULL, related_name="processes")
     description = models.TextField("Tavsif", blank=True)
@@ -147,6 +174,12 @@ class Task(models.Model):
     owner = models.ForeignKey(Member, verbose_name="Mas'ul (bajaradi)", null=True, blank=True,
                               on_delete=models.SET_NULL, related_name="tasks")
     note = models.TextField("Izoh", blank=True)
+    # --- savollar bazasi (AI / Telegram bot shu ma'lumotdan o'qiydi) ---
+    rule = models.TextField("Aniq qoida: nima qilinadi", blank=True,
+                            help_text="Savol kelganda kim nima qiladi, qachon keyingisiga o'tadi")
+    examples = models.JSONField("Savol qanday beriladi (misollar)", default=list, blank=True)
+    asker = models.CharField("Kim so'raydi", max_length=60, blank=True)
+    frequent = models.BooleanField("Doimiy tushadigan savol", default=False)
     is_custom = models.BooleanField("Qo'lda qo'shilgan", default=False)
     order = models.PositiveIntegerField("Tartib", default=0)
     i18n = models.JSONField("Tarjimalar (AI)", default=dict, blank=True, editable=False)

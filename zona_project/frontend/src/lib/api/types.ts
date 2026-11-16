@@ -60,9 +60,24 @@ export interface SystemItem {
   i18n?: I18n;
 }
 
+export type ZoneIcon = "truck" | "smartphone" | "database" | "plug" | "chart" | "server" | "shield" | "users" | "box";
+
+/** Mas'uliyat zonasi: savollar va jarayonlar guruhi (Distributsiya, ProTarget, 1C...). */
+export interface Zone {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  icon: ZoneIcon;
+  color: string;
+  order: number;
+  i18n?: I18n;
+}
+
 export interface Process {
   id: number;
   name: string;
+  zone: number | null;
   system: number | null;
   description: string;
   order: number;
@@ -90,6 +105,14 @@ export interface Task {
   owner: number | null;
   fallbacks: TaskFallback[];
   note: string;
+  /** Aniq qoida: savol kelganda kim nima qiladi, qachon keyingisiga o'tadi. */
+  rule: string;
+  /** Savol qanday so'raladi — AI va bot uchun misollar. */
+  examples: string[];
+  /** Kim so'raydi: Agent, Supervayzer, Operator... */
+  asker: string;
+  /** Doimiy tushadigan savol. */
+  frequent: boolean;
   is_custom: boolean;
   order: number;
   i18n?: I18n;
@@ -151,6 +174,7 @@ export interface OrgState {
   teams: Team[];
   members: Member[];
   authorities: Authority[];
+  zones: Zone[];
   systems: SystemItem[];
   processes: Process[];
   roles: ProcessRole[];
@@ -478,3 +502,38 @@ export interface StaffImportBody {
   project?: number | null;
   apply?: boolean;
 }
+
+/** Bot javobi (POST /api/bot/ask/). */
+export interface KnowledgeContact {
+  id: number;
+  name: string;
+  role: string;
+  phone: string;
+  telegram: string;
+  email: string;
+  is_team: boolean;
+  condition?: string;
+}
+export interface KnowledgeItem {
+  id: number;
+  zone: string;
+  process: string;
+  system: string;
+  question: string;
+  examples: string[];
+  rule: string;
+  note: string;
+  asker: string;
+  frequent: boolean;
+  responsible: KnowledgeContact | null;
+  escalation: KnowledgeContact[];
+}
+export interface BotAnswer {
+  question: string;
+  found: boolean;
+  confidence: number;
+  answer_text: string;
+  best: KnowledgeItem | null;
+  alternatives: KnowledgeItem[];
+}
+export type KnowledgeFormat = "json" | "jsonl" | "chat" | "md";
