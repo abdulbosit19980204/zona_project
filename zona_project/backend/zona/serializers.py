@@ -85,11 +85,28 @@ class MemberSerializer(I18nMixin, serializers.ModelSerializer):
     class Meta:
         model = Member
         fields = ["id", "name", "role", "department", "team", "manager", "is_team", "trigger", "does", "excludes",
-                  "email", "phone", "telegram", "location", "order"]
+                  "level", "duties", "escalation", "email", "phone", "telegram", "location", "order"]
         read_only_fields = ["order"]
 
     def validate_name(self, value):
         return _not_blank(value, "Ism bo'sh bo'lmasin.")
+
+    def validate_duties(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Ro'yxat bo'lishi kerak.")
+        out = list(dict.fromkeys(str(x).strip()[:300] for x in value if str(x).strip()))
+        if len(out) > 30:
+            raise serializers.ValidationError("Ko'pi bilan 30 ta vazifa.")
+        return out
+
+    def validate_manager(self, value):
+        node, seen = value, set()
+        while node and self.instance and node.pk not in seen:
+            if node.pk == self.instance.pk:
+                raise serializers.ValidationError("Xodim o'ziga yoki qo'l ostidagiga bo'ysuna olmaydi.")
+            seen.add(node.pk)
+            node = node.manager
+        return value
 
     def validate_telegram(self, value):
         return value.strip().lstrip("@")

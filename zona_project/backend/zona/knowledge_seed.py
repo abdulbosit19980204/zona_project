@@ -346,6 +346,144 @@ QUESTIONS = [
 ]
 
 
+# Xodimlar: kim qaysi holatda javob beradi (daraja, aniq vazifalar, nimaga murojaat qilinmaydi, kimga o'tkazadi)
+MEMBERS = [
+    {
+        "name": "Saidabror", "role": "Ma'lumotlar operatori", "level": "L1", "manager": None,
+        "trigger": "Dasturdagi ma'lumotni kiritish, o'zgartirish, o'chirish yoki chiqarib berish kerak",
+        "does": "1C va ProTarget'dagi savdo ma'lumotlarini yuritadi: supervayzer tasdiqlagan o'zgarishlarni bajaradi.",
+        "duties": [
+            "Klient, savdo nuqtasi va agent profilidagi ma'lumotni kiritadi va tuzatadi (1C, ProTarget)",
+            "Buyurtmani o'chiradi, tovar va miqdorni o'zgartiradi",
+            "Mavjud aksiya va chegirmani klientga biriktiradi yoki olib tashlaydi",
+            "Dublikat klientlarni birlashtiradi, yopilgan nuqtalarni ro'yxatdan chiqaradi",
+            "Kerakli ma'lumotni dasturdan chiqarib beradi (ro'yxat, eksport)",
+            "Supervayzer tasdiqlagan so'rovlarni bajaradi",
+        ],
+        "excludes": "Login, parol va dostup (Xusniddin); yangi aksiya yaratish, hisoblash va integratsiya xatosi (Dasturchilar); "
+                    "qurilma va tarmoq (Jahongir).",
+        "escalation": "Dastur ishlamasa — Xusniddin; aksiya hisoblanmasa yoki 1C ga o'tmasa — Dasturchilar jamoasi; "
+                      "ProTarget dasturining o'zida xato — Pro-target.",
+        "authorities": [("Ma'lumotni o'zgartirish va o'chirish", "Faqat supervayzer tasdiqlagan so'rov bo'yicha")],
+    },
+    {
+        "name": "Xusniddin", "role": "IT operator (L1)", "level": "L1", "manager": "Abdulbosit Tuychiev",
+        "trigger": "Kira olmayapman, dostup kerak yoki dastur ishlamayapti",
+        "does": "Birinchi yordam (L1): dostuplar to'g'ri ishlashini va dasturlar uzilishsiz ishlashini ta'minlaydi, "
+                "muammo bo'lsa kerakli xodimga xabar beradi.",
+        "duties": [
+            "Dostup ochadi, o'zgartiradi va yopadi: ProTarget, 1C, PRBC, pochta",
+            "Login, parol va bloklangan akkaunt muammolarini hal qiladi",
+            "Dasturlar (ProTarget, 1C, 1C bot, mobil ilova) to'g'ri ishlayotganini kuzatadi",
+            "Uzilish bo'lsa birinchi bo'lib aniqlaydi va kerakli mutaxassisga xabar beradi",
+            "Agent telefoni almashganda akkauntni yangi qurilmaga ko'chiradi",
+            "Murojaatni birinchi qabul qiladi, hal qilmasa — to'g'ri odamga yo'naltiradi",
+        ],
+        "excludes": "Klient, buyurtma, aksiya va marshrut ma'lumotini o'zgartirish (Operator); kabel, printer va qurilma (Jahongir); "
+                    "dasturiy o'zgarish (Dasturchilar).",
+        "escalation": "Server yoki tizimli uzilish — Abdulbosit Tuychiev; dastur xatosi — Dasturchilar jamoasi yoki Pro-target; "
+                      "qurilma va tarmoq — Jahongir.",
+        "authorities": [("Login, parol va huquqlarni berish", "ProTarget, 1C, PRBC, email"),
+                        ("Akkaunt va dostupni bloklash", "Yo'qolgan telefon, ishdan ketgan xodim")],
+    },
+    {
+        "name": "Abdulbosit Tuychiev", "role": "DevOps", "level": "LEAD", "manager": None,
+        "trigger": "Server, aloqa kanallari yoki dasturlarda tizimli uzilish; IT ishlari kechiksa",
+        "does": "Infratuzilma uzluksiz ishlashi uchun javob beradi; Xusniddin va Jahongir ishlari bajarilishini nazorat qiladi, "
+                "ish ko'p bo'lganda ularga yordam beradi.",
+        "duties": [
+            "Serverlar, ma'lumotlar bazasi va aloqa kanallari uzluksiz ishlashini ta'minlaydi",
+            "Tizimli uzilishlarni bartaraf etadi, zaxira nusxa va tiklashni yuritadi",
+            "Xusniddin va Jahongir ishlari o'z vaqtida bajarilishini nazorat qiladi",
+            "Ish ko'p bo'lganda yoki murakkab holatda ularga yordam beradi",
+            "L1 hal qila olmagan murakkab muammolarni hal qiladi",
+        ],
+        "excludes": "Kundalik ma'lumot kiritish (Operator) va oddiy parol tiklash — avval Xusniddin'ga.",
+        "escalation": "Dasturiy o'zgarish yoki integratsiya kodi kerak bo'lsa — Dasturchilar jamoasi.",
+        "authorities": [("IT ishlari bajarilishini nazorat qilish", "Xusniddin, Jahongir"),
+                        ("Server va infratuzilmaga o'zgartirish kiritish", "Serverlar, tarmoq kanallari, zaxira")],
+    },
+    {
+        "name": "Jahongir", "role": "IT texnik yordam", "level": "L1", "manager": "Abdulbosit Tuychiev",
+        "trigger": "Ofisdagi texnik ish: qurilma, kabel, tarmoq, printer",
+        "does": "Ofisda bajariladigan barcha texnik ishlar uchun mas'ul: qurilmalar, tarmoq qurish va kabel tortish.",
+        "duties": [
+            "Kompyuter, monitor, printer, skaner, IP-telefon va kameralarni sozlaydi va ta'mirlaydi",
+            "Tarmoq quradi, kabel tortadi, Wi-Fi va LAN rozetkalarini o'rnatadi",
+            "Yangi xodimga ish joyi, yangi agentga telefon tayyorlaydi",
+            "Internet, VPN va filial tarmog'idagi muammolarni hal qiladi",
+            "Texnika inventarini yuritadi, yo'qolgan yoki buzilganini almashtiradi",
+        ],
+        "excludes": "Dostup, parol va akkaunt (Xusniddin); dasturdagi ma'lumot (Operator); dastur xatosi (Dasturchilar).",
+        "escalation": "Server yoki butun tarmoq ishlamasa — Abdulbosit Tuychiev.",
+        "authorities": [("Qurilma berish va ish joyini tayyorlash", "Kompyuter, printer, telefon, tarmoq")],
+    },
+    {
+        "name": "Pro-target", "role": "ProTarget operatori va support", "level": "EXT", "manager": None,
+        "trigger": "ProTarget ma'lumotlari yoki ProTarget dasturidagi muammo",
+        "does": "ProTarget tomonidan biriktirilgan alohida operator: dasturdagi ma'lumotlar bilan ishlaydi va dastur muammolari "
+                "bo'yicha yordam beradi.",
+        "duties": [
+            "Klientlarni tasdiqlaydi",
+            "Aksiyalar va ularga bog'liq ma'lumotlarni ProTarget'da yuritadi",
+            "Mobil ilova va ProTarget dasturidagi xatolar bo'yicha yordam beradi",
+            "Yangilanishdan keyin chiqqan xatolarni tuzatadi",
+            "1C bilan almashinuvning ProTarget tomonini tekshiradi",
+        ],
+        "excludes": "1C, PRBC va Telegram bot bilan bog'liq ishlarda murojaat qilinmaydi.",
+        "escalation": "Muammo 1C yoki integratsiya kodida bo'lsa — Dasturchilar jamoasi.",
+        "authorities": [("Klientni tasdiqlash", "ProTarget")],
+    },
+    {
+        "name": "Dasturchilar jamoasi", "role": "Dasturchilar", "level": "L3", "manager": None,
+        "trigger": "Yangi aksiya, dastur o'zgarishi, hisoblash yoki integratsiya xatosi",
+        "does": "Dasturlar, integratsiya va hisobotlarni ishlab chiqadi va tuzatadi.",
+        "duties": [
+            "Yangi aksiya yaratadi va uning qoidalarini sozlaydi",
+            "1C, ProTarget va PRBC o'rtasidagi integratsiya xatolarini tuzatadi",
+            "1C bot va hisobotlardagi xatolarni tuzatadi, yangi ko'rsatkich qo'shadi",
+            "Yangi funksiya takliflarini baholaydi va ishlab chiqadi",
+        ],
+        "excludes": "Kundalik ma'lumot kiritish (Operator); dostup va parol (Xusniddin); qurilma va tarmoq (Jahongir).",
+        "escalation": "Server resurslari yoki infratuzilma kerak bo'lsa — Abdulbosit Tuychiev.",
+    },
+    {
+        "name": "Supervayzerlar", "role": "Savdo supervayzeri", "level": "BIZ", "manager": None,
+        "trigger": "Agentning klienti, marshruti, plani yoki ma'lumotini o'zgartirish so'rovi",
+        "does": "Agentlar ishini nazorat qiladi va ma'lumotni o'zgartirish so'rovlarini tasdiqlaydi.",
+        "duties": [
+            "Agentning birinchi murojaat nuqtasi: savolni qabul qiladi",
+            "Klientni agentga ulaydi va tashrif marshrutiga qo'shadi",
+            "Tashrif kunlari va planni kiritadi",
+            "Ma'lumotni o'zgartirish so'rovini tasdiqlab Operatorga beradi",
+        ],
+        "excludes": "Ma'lumotni 1C da o'zi o'zgartirmaydi — tasdiqlangan so'rovni Operator bajaradi.",
+        "escalation": "Ma'lumot o'zgarishi — Saidabror; dastur ishlamasa — Xusniddin.",
+    },
+]
+
+
+def apply_members(log=print):
+    from .models import Authority
+    by_name = {m.name: m for m in Member.objects.all()}
+    done = 0
+    for spec in MEMBERS:
+        m = by_name.get(spec["name"])
+        if not m:
+            log(f"  topilmadi — xodim: {spec['name']}")
+            continue
+        for f in ("role", "level", "trigger", "does", "duties", "excludes", "escalation"):
+            setattr(m, f, spec[f])
+        if spec.get("manager") in by_name:
+            m.manager = by_name[spec["manager"]]
+        m.save()
+        for order, (title, scope) in enumerate(spec.get("authorities", [])):
+            Authority.objects.update_or_create(member=m, title=title, defaults={"scope": scope, "order": order})
+        done += 1
+    log(f"Xodim profillari: {done}")
+    return done
+
+
 def _find_process(old, new):
     return Process.objects.filter(name=new).first() or Process.objects.filter(name=old).first()
 
@@ -396,6 +534,7 @@ def apply(dry_run=False, log=print):
         zone = t.process.zone.key if t.process and t.process.zone else None
         if zone in ASKER:
             Task.objects.filter(pk=t.pk).update(asker=ASKER[zone])
+    stats["members"] = apply_members(log)
     log(f"Zonalar: {stats['zones']}, jarayonlar: {stats['processes']}, qoidali savollar: {stats['questions']}")
     for m in stats["missing"]:
         log(f"  topilmadi — {m}")

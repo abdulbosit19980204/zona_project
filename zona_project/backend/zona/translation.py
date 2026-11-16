@@ -27,7 +27,7 @@ FIELDS = {
     System: ("name",),
     Zone: ("name", "description"),
     Team: ("name", "description"),
-    Member: ("role", "trigger", "does", "excludes"),
+    Member: ("role", "trigger", "does", "excludes", "escalation"),
     Process: ("name", "description"),
     Task: ("title", "note", "rule"),
     TaskFallback: ("condition",),

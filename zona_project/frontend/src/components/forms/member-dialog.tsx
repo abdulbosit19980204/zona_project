@@ -8,10 +8,12 @@ import { z } from "zod";
 
 import { useModel, useOrgMutation } from "@/hooks/use-org";
 import { orgApi } from "@/lib/api/endpoints";
-import type { Member } from "@/lib/api/types";
+import type { Member, MemberLevel } from "@/lib/api/types";
 
 import { CheckboxField, fromId, FormDialog, NONE, Row, SelectField, TextareaField, TextField, toId } from "./form-kit";
 import { departmentOptions, memberOptions, teamOptions } from "./options";
+
+export const LEVELS: MemberLevel[] = ["L1", "L2", "L3", "LEAD", "BIZ", "EXT"];
 
 const schema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -27,6 +29,9 @@ const schema = z.object({
   trigger: z.string().max(200),
   does: z.string().max(3000),
   excludes: z.string().max(3000),
+  level: z.string(),
+  duties: z.string().max(8000),
+  escalation: z.string().max(3000),
 });
 type Values = z.infer<typeof schema>;
 
@@ -49,12 +54,17 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
       department: fromId(member ? member.department : presetDepartment), team: fromId(member?.team), manager: fromId(member?.manager),
       is_team: member?.is_team ?? false, phone: member?.phone ?? "", telegram: member?.telegram ?? "", email: member?.email ?? "",
       location: member?.location ?? "", trigger: member?.trigger ?? "", does: member?.does ?? "", excludes: member?.excludes ?? "",
+      level: member?.level || NONE, duties: (member?.duties ?? []).join(String.fromCharCode(10)), escalation: member?.escalation ?? "",
     });
   }, [open, member, presetDepartment, form]);
 
   const save = useOrgMutation(
     (v: Values) => {
-      const body = { ...v, department: toId(v.department), team: toId(v.team), manager: toId(v.manager) };
+      const body = {
+        ...v, department: toId(v.department), team: toId(v.team), manager: toId(v.manager),
+        level: (v.level === NONE ? "" : v.level) as Member["level"],
+        duties: v.duties.split(String.fromCharCode(10)).map((x) => x.trim()).filter(Boolean),
+      };
       return member ? orgApi.members.update(member.id, body) : orgApi.members.create(body);
     },
     member ? t("common.saved") : t("forms.member.created"),
@@ -90,9 +100,17 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
       </Row>
       <TextField control={form.control} name="email" label="Email" type="email" />
       <CheckboxField control={form.control} name="is_team" label={t("forms.member.isTeam")} />
-      <TextField control={form.control} name="trigger" label={t("forms.member.trigger")} />
-      <TextareaField control={form.control} name="does" label={t("forms.member.does")} />
-      <TextareaField control={form.control} name="excludes" label={t("forms.member.excludes")} />
+      <Row>
+        <SelectField
+          control={form.control} name="level" label={t("people.level")}
+          options={[{ value: NONE, label: "—" }, ...LEVELS.map((l) => ({ value: l, label: t(`people.levels.${l}`) }))]}
+        />
+        <TextField control={form.control} name="trigger" label={t("forms.member.trigger")} />
+      </Row>
+      <TextareaField control={form.control} name="does" label={t("forms.member.does")} rows={2} />
+      <TextareaField control={form.control} name="duties" label={t("people.duties")} description={t("people.dutiesHint")} rows={5} />
+      <TextareaField control={form.control} name="excludes" label={t("forms.member.excludes")} rows={2} />
+      <TextareaField control={form.control} name="escalation" label={t("people.escalation")} rows={2} />
     </FormDialog>
   );
 }

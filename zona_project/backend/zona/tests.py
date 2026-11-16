@@ -711,3 +711,36 @@ class KnowledgeTests(Base):
         md = self.call("get", "knowledge/export.md").content.decode()
         self.assertIn("## Distributsiya", md)
         self.assertEqual(self.call("get", "knowledge/export.pdf").status_code, 400)
+
+
+class MemberProfileTests(Base):
+    def setUp(self):
+        from . import knowledge_seed
+        knowledge_seed.apply(log=lambda *_: None)
+
+    def test_profiles_and_supervision(self):
+        from .models import Member
+        x = Member.objects.filter(name="Xusniddin").first()
+        if not x:
+            self.skipTest("seed'da Xusniddin yo'q")
+        self.assertEqual(x.level, "L1")
+        self.assertTrue(any("Dostup ochadi" in d for d in x.duties))
+        self.assertIn("Abdulbosit", x.escalation)
+        self.login("editor")
+        state = self.call("get", "state/").json()
+        m = next(m for m in state["members"] if m["id"] == x.id)
+        self.assertEqual(m["level"], "L1")
+        r = self.call("patch", f"members/{x.id}/", {"duties": [" a ", "a", "b"], "level": "L2"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual((r.json()["duties"], r.json()["level"]), (["a", "b"], "L2"))
+        self.assertEqual(self.call("patch", f"members/{x.id}/", {"level": "L9"}).status_code, 400)
+        if x.manager_id:  # rahbarlik halqasi taqiqlanadi
+            self.assertEqual(self.call("patch", f"members/{x.manager_id}/", {"manager": x.id}).status_code, 400)
+
+    def test_export_includes_people(self):
+        import json as _json
+        self.login("viewer")
+        full = _json.loads(self.call("get", "knowledge/export.json").content)
+        self.assertTrue(full["people"])
+        self.assertIn("duties", full["people"][0])
+        self.assertIn("## Kim nima uchun javob beradi", self.call("get", "knowledge/export.md").content.decode())

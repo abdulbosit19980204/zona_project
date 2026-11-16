@@ -878,5 +878,44 @@
     "frequent": "Doimiy tushadigan savol",
     "frequentHint": "Bot va AI uchun birinchi navbatda",
     "zone": "Zona"
+  },
+  "people": {
+    "title": "Xodimlar: kim nima uchun javob beradi",
+    "description": "Har bir xodim qaysi holatlarda javob beradi, nimaga murojaat qilinmaydi, hal qila olmasa kimga o'tkazadi va kim nazorat qiladi.",
+    "flow": "Murojaat yo'li",
+    "leadHint": "barcha ishlar bajarilishini nazorat qiladi, ish ko'p bo'lsa yordam beradi",
+    "search": "Qidirish: ism, vazifa, holat…",
+    "level": "Daraja",
+    "levels": {
+      "L1": "L1 — birinchi yordam",
+      "L2": "L2 — mutaxassis",
+      "L3": "L3 — tizim va dasturlash",
+      "LEAD": "Nazorat",
+      "BIZ": "Biznes (tasdiqlovchi)",
+      "EXT": "Tashqi hamkor",
+      "L1Short": "L1",
+      "L2Short": "L2",
+      "L3Short": "L3",
+      "LEADShort": "Nazorat",
+      "BIZShort": "Biznes",
+      "EXTShort": "Tashqi"
+    },
+    "levelHint": {
+      "BIZ": "So'rovni qabul qiladi va tasdiqlaydi",
+      "L1": "Birinchi bo'lib hal qiladi yoki yo'naltiradi",
+      "L2": "Murakkab holatlar",
+      "L3": "Dastur va integratsiya",
+      "EXT": "Hamkor tomonidagi mutaxassis"
+    },
+    "when": "Qachon murojaat qilinadi",
+    "duties": "Qaysi holatlarda javob beradi",
+    "dutiesHint": "Har qatorga bitta aniq vazifa. Bot va AI shu ro'yxatdan foydalanadi.",
+    "notFor": "Murojaat qilmang",
+    "escalation": "Hal qila olmasa — kimga o'tkazadi",
+    "zoneTitle": "Mas'ul: {owner} · zaxira: {backup}",
+    "answers": "Mas'ul: {owner} savol · zaxira: {backup}",
+    "frequent": "{count} doimiy",
+    "supervisedBy": "Nazorat",
+    "supervises": "Nazorat qiladi"
   }
 }

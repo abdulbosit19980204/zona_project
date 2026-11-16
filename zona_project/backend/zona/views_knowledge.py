@@ -33,7 +33,8 @@ def _contact(m, lang=None):
     if not m:
         return None
     return {"id": m.id, "name": translation.current(m, "name", lang) if m.is_team else m.name,
-            "role": translation.current(m, "role", lang), "phone": m.phone, "telegram": m.telegram.lstrip("@"),
+            "role": translation.current(m, "role", lang), "level": m.level,
+            "phone": m.phone, "telegram": m.telegram.lstrip("@"),
             "email": m.email, "is_team": m.is_team}
 
 
@@ -56,6 +57,15 @@ def item(task, lang=None):
         "escalation": [{**(_contact(f.member, lang) or {}), "condition": cur(f, "condition")}
                        for f in task.fallbacks.select_related("member").order_by("order")],
     }
+
+
+def profile(m, lang=None):
+    """Xodim profili: kim, qaysi holatlarda javob beradi, nimaga murojaat qilinmaydi, kimga o'tkazadi."""
+    cur = lambda f: translation.current(m, f, lang)  # noqa: E731
+    return {**_contact(m, lang), "level_label": m.get_level_display() if m.level else "",
+            "when": cur("trigger"), "summary": cur("does"), "duties": list(m.duties or []),
+            "not_for": cur("excludes"), "escalation": cur("escalation"),
+            "supervisor": m.manager.name if m.manager else ""}
 
 
 def answer_text(it):
@@ -128,7 +138,9 @@ def knowledge_export(request, fmt):
     items = [item(t, lang) for t in qs]
     stamp = timezone.localdate().isoformat()
     if fmt == "json":
-        body = json.dumps({"generated": stamp, "zones": [{"name": translation.current(z, "name", lang),
+        body = json.dumps({"generated": stamp,
+                           "people": [profile(m, lang) for m in Member.objects.select_related("manager")],
+                           "zones": [{"name": translation.current(z, "name", lang),
                                                          "description": translation.current(z, "description", lang)}
                                                         for z in Zone.objects.all()],
                            "items": items}, ensure_ascii=False, indent=2)
@@ -148,7 +160,20 @@ def knowledge_export(request, fmt):
                                         ensure_ascii=False))
         return _file("\n".join(lines) + "\n", f"savollar-chat-{stamp}.jsonl", "application/x-ndjson")
     if fmt == "md":
-        out, zone, proc = [f"# Savollar bazasi — {conf.get('COMPANY_NAME')} ({stamp})", ""], None, None
+        out, zone, proc = [f"# Savollar bazasi — {conf.get('COMPANY_NAME')} ({stamp})", "", "## Kim nima uchun javob beradi", ""], None, None
+        for m in Member.objects.select_related("manager"):
+            p = profile(m, lang)
+            out.append(f"### {p['name']} — {p['role']}" + (f" ({p['level_label']})" if p["level_label"] else ""))
+            if p["when"]:
+                out.append(f"Qachon murojaat qilinadi: {p['when']}")
+            out += [f"- {d}" for d in p["duties"]]
+            if p["not_for"]:
+                out.append(f"Murojaat qilinmaydi: {p['not_for']}")
+            if p["escalation"]:
+                out.append(f"Hal qila olmasa: {p['escalation']}")
+            if p["supervisor"]:
+                out.append(f"Nazorat: {p['supervisor']}")
+            out.append("")
         for it in items:
             if it["zone"] != zone:
                 zone, proc = it["zone"], None

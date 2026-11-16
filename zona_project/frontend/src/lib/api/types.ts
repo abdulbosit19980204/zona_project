@@ -36,6 +36,12 @@ export interface Member {
   trigger: string;
   does: string;
   excludes: string;
+  /** Daraja: L1 birinchi yordam, L2, L3, LEAD nazorat, BIZ biznes, EXT tashqi hamkor. */
+  level: MemberLevel | "";
+  /** Qaysi holatlarda javob beradi — aniq vazifalar. */
+  duties: string[];
+  /** Hal qila olmasa — kimga o'tkazadi. */
+  escalation: string;
   email: string;
   phone: string;
   telegram: string;
@@ -43,6 +49,8 @@ export interface Member {
   order: number;
   i18n?: I18n;
 }
+
+export type MemberLevel = "L1" | "L2" | "L3" | "LEAD" | "BIZ" | "EXT";
 
 export interface Authority {
   id: number;

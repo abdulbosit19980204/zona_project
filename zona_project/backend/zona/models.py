@@ -87,6 +87,9 @@ class Team(models.Model):
 class Member(models.Model):
     """Xodim yoki butun jamoa."""
 
+    LEVELS = [("L1", "L1 — birinchi yordam"), ("L2", "L2 — mutaxassis"), ("L3", "L3 — tizim va dasturlash"),
+              ("LEAD", "Nazorat va rahbar"), ("BIZ", "Biznes (tasdiqlovchi)"), ("EXT", "Tashqi hamkor")]
+
     name = models.CharField("Ism yoki jamoa", max_length=80)
     role = models.CharField("Lavozim", max_length=80)
     department = models.ForeignKey(Department, verbose_name="Bo'lim", null=True, blank=True,
@@ -99,6 +102,10 @@ class Member(models.Model):
     trigger = models.CharField("Qaysi savol turi keladi", max_length=200, blank=True)
     does = models.TextField("Nima bilan shug'ullanadi", blank=True)
     excludes = models.TextField("Nima bilan shug'ullanmaydi", blank=True)
+    # --- javobgarlik profili (AI / bot ham shundan o'qiydi) ---
+    level = models.CharField("Daraja", max_length=4, choices=LEVELS, blank=True)
+    duties = models.JSONField("Qaysi holatlarda javob beradi (aniq vazifalar)", default=list, blank=True)
+    escalation = models.TextField("Hal qila olmasa — kimga o'tkazadi", blank=True)
     # aloqa
     email = models.EmailField("Email", blank=True)
     phone = models.CharField("Telefon", max_length=40, blank=True)

@@ -878,5 +878,44 @@
     "frequent": "Frequent question",
     "frequentHint": "Prioritised for the bot and AI",
     "zone": "Zone"
+  },
+  "people": {
+    "title": "People: who answers what",
+    "description": "When each person answers, what not to ask them, who they hand over to and who supervises them.",
+    "flow": "Request path",
+    "leadHint": "oversees all work and helps when the load is high",
+    "search": "Search: name, duty, situation…",
+    "level": "Level",
+    "levels": {
+      "L1": "L1 — first line",
+      "L2": "L2 — specialist",
+      "L3": "L3 — systems & development",
+      "LEAD": "Oversight",
+      "BIZ": "Business (approver)",
+      "EXT": "External partner",
+      "L1Short": "L1",
+      "L2Short": "L2",
+      "L3Short": "L3",
+      "LEADShort": "Oversight",
+      "BIZShort": "Business",
+      "EXTShort": "External"
+    },
+    "levelHint": {
+      "BIZ": "Takes and approves the request",
+      "L1": "Solves first or routes it",
+      "L2": "Complex cases",
+      "L3": "Software and integration",
+      "EXT": "Partner-side specialist"
+    },
+    "when": "When to contact",
+    "duties": "Situations they handle",
+    "dutiesHint": "One duty per line. The bot and AI use this list.",
+    "notFor": "Don't ask them about",
+    "escalation": "If they can't solve it — hands over to",
+    "zoneTitle": "Owner: {owner} · backup: {backup}",
+    "answers": "Owner of {owner} · backup for {backup}",
+    "frequent": "{count} frequent",
+    "supervisedBy": "Supervised by",
+    "supervises": "Supervises"
   }
 }
