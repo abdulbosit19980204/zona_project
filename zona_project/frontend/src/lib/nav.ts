@@ -1,6 +1,6 @@
 import {
   BadgeCheck, Building2, ChartColumn, FileChartColumn, Gauge, Grid3x3, History, LayoutDashboard, ListChecks,
-  MessageCircleQuestion, Network, Orbit, Settings, ShieldAlert, Signpost, Users, Workflow, type LucideIcon,
+  MessageCircleQuestion, Network, Orbit, Settings, ShieldAlert, Signpost, Users, UsersRound, Workflow, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -25,6 +25,7 @@ export const NAV: NavGroup[] = [
       { href: "/responsibility-map", key: "responsibilityMap", icon: Orbit },
       { href: "/departments", key: "departments", icon: Building2 },
       { href: "/employees", key: "employees", icon: Users },
+      { href: "/staff", key: "staff", icon: UsersRound },
       { href: "/ask", key: "ask", icon: MessageCircleQuestion },
       { href: "/cheatsheet", key: "cheatsheet", icon: Signpost },
     ],

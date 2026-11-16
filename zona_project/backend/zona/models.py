@@ -409,3 +409,76 @@ class AIUsage(models.Model):
         ordering = ["-at", "-id"]
         verbose_name = "AI so'rov"
         verbose_name_plural = "AI so'rovlar jurnali"
+
+
+# ---------------------------------------------------------------- dala jamoalari (brendlar bo'yicha)
+
+class StaffProject(models.Model):
+    """StarGroup ichidagi brend jamoasi (Heinz, BIC, L'Oréal...): savdo bo'limining dala tuzilmasi.
+
+    Ma'lumot link, fayl yoki Excel orqali import qilinadi va keyin shu manbadan yangilanadi.
+    """
+
+    name = models.CharField("Nomi", max_length=80, unique=True)
+    description = models.CharField("Tavsif", max_length=200, blank=True)
+    source_url = models.URLField("Manba (link)", max_length=500, blank=True)
+    synced_at = models.DateTimeField("Oxirgi import", null=True, blank=True)
+    order = models.PositiveIntegerField("Tartib", default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        verbose_name = "Brend jamoasi"
+        verbose_name_plural = "Brend jamoalari"
+
+    def __str__(self):
+        return self.name
+
+
+class StaffUnit(models.Model):
+    """Yo'nalish: Toshkent, Farg'ona vodiysi, Janubi-g'arb, KAM..."""
+
+    project = models.ForeignKey(StaffProject, on_delete=models.CASCADE, related_name="units")
+    key = models.CharField(max_length=60)
+    title = models.CharField("Nomi", max_length=120)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["project", "order", "id"]
+        constraints = [models.UniqueConstraint(fields=["project", "key"], name="zona_unique_staff_unit")]
+        verbose_name = "Yo'nalish"
+        verbose_name_plural = "Yo'nalishlar"
+
+    def __str__(self):
+        return f"{self.project.name} / {self.title}"
+
+
+class StaffPerson(models.Model):
+    """Dala xodimi yoki bo'sh o'rin (vakansiya). Lavozim o'rni = hudud kodi: odam almashsa, o'rin qoladi."""
+
+    ROLES = [("ROP", "Savdo bo'limi rahbari"), ("ASM", "ASM"), ("RSM", "RSM"), ("SVR", "Supervayzer"),
+             ("KAM", "KAM"), ("TP", "Savdo vakili"), ("MER", "Merchendayzer"), ("OTHER", "Boshqa")]
+
+    project = models.ForeignKey(StaffProject, on_delete=models.CASCADE, related_name="people")
+    unit = models.ForeignKey(StaffUnit, null=True, blank=True, on_delete=models.SET_NULL, related_name="people")
+    manager = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="reports")
+    name = models.CharField("F.I.Sh.", max_length=150, blank=True)
+    role = models.CharField("Rol", max_length=8, choices=ROLES, default="TP")
+    position = models.CharField("Lavozim (manbadagi)", max_length=80, blank=True)
+    territory = models.CharField("Hudud kodi", max_length=80, blank=True)
+    region = models.CharField("Region", max_length=80, blank=True)
+    city = models.CharField("Shahar", max_length=80, blank=True)
+    phone = models.CharField("Telefon", max_length=40, blank=True)
+    email = models.EmailField("Email", blank=True)
+    note = models.CharField("Izoh", max_length=255, blank=True)
+    is_vacancy = models.BooleanField("Vakansiya", default=False)
+    order = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["project", "order", "id"]
+        verbose_name = "Dala xodimi"
+        verbose_name_plural = "Dala xodimlari"
+
+    def __str__(self):
+        return f"{self.name or 'Vakansiya'} ({self.territory})"

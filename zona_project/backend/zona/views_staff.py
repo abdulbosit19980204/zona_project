@@ -1,0 +1,208 @@
+"""Dala jamoalari (brendlar bo'yicha savdo tuzilmasi): ko'rish, tahrirlash, import/eksport, manbadan yangilash."""
+import base64
+import binascii
+from datetime import datetime
+
+from django.http import HttpResponse
+from django.utils import timezone
+from rest_framework import serializers, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+from . import staff_io
+from .api import ZonaViewSet, zona_api
+from .models import Event, StaffPerson, StaffProject, StaffUnit
+from .permissions import CanView, ReadOrEdit
+from .views import log
+
+
+class StaffPersonSerializer(serializers.ModelSerializer):
+    unit = serializers.PrimaryKeyRelatedField(queryset=StaffUnit.objects.all(), allow_null=True, required=False)
+    manager = serializers.PrimaryKeyRelatedField(queryset=StaffPerson.objects.all(), allow_null=True, required=False)
+
+    class Meta:
+        model = StaffPerson
+        fields = ["id", "project", "unit", "manager", "name", "role", "position", "territory", "region", "city",
+                  "phone", "email", "note", "is_vacancy", "order"]
+        read_only_fields = ["order"]
+
+    def validate_phone(self, value):
+        return staff_io.phone(value)
+
+    def validate(self, attrs):
+        project = attrs.get("project", self.instance.project if self.instance else None)
+        for f in ("unit", "manager"):
+            obj = attrs.get(f)
+            if obj is not None and obj.project_id != project.id:
+                raise serializers.ValidationError({f: "Boshqa loyihaga tegishli."})
+        manager = attrs.get("manager")
+        if manager and self.instance:
+            node, seen = manager, set()
+            while node and node.pk not in seen:
+                if node.pk == self.instance.pk:
+                    raise serializers.ValidationError({"manager": "Xodim o'ziga yoki qo'l ostidagiga bo'ysuna olmaydi."})
+                seen.add(node.pk)
+                node = node.manager
+        name = (attrs.get("name", self.instance.name if self.instance else "") or "").strip()
+        vacancy = attrs.get("is_vacancy", self.instance.is_vacancy if self.instance else False)
+        if not name and not vacancy:
+            raise serializers.ValidationError({"name": "F.I.Sh. kiriting yoki o'rinni vakansiya deb belgilang."})
+        if vacancy:
+            attrs["name"] = ""
+        return attrs
+
+
+class StaffUnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffUnit
+        fields = ["id", "key", "title", "order"]
+
+
+class StaffProjectSerializer(serializers.ModelSerializer):
+    units = StaffUnitSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = StaffProject
+        fields = ["id", "name", "description", "source_url", "synced_at", "order", "units"]
+        read_only_fields = ["synced_at", "order"]
+
+
+def _projects():
+    return StaffProject.objects.prefetch_related("units", "people")
+
+
+@zona_api(["GET"], [CanView])
+def staff(request):
+    """Barcha brend jamoalari va xodimlari — bitta so'rovda (sahifa qidiruvni o'zi bajaradi)."""
+    projects = list(_projects())
+    return Response({
+        "projects": StaffProjectSerializer(projects, many=True).data,
+        "people": StaffPersonSerializer([p for pr in projects for p in pr.people.all()], many=True).data,
+    })
+
+
+class StaffProjectViewSet(ZonaViewSet):
+    queryset = StaffProject.objects.all()
+    serializer_class = StaffProjectSerializer
+
+    def perform_create(self, serializer):
+        p = serializer.save(order=self.next_order())
+        log(self.request, Event.MEMBER, to_name=p.name, text="Yangi brend jamoasi")
+
+    def perform_destroy(self, instance):
+        log(self.request, Event.MEMBER, from_name=instance.name,
+            text=f"Brend jamoasi o'chirildi ({instance.people.count()} xodim)")
+        instance.delete()
+
+    @action(detail=True, methods=["post"])
+    def sync(self, request, pk=None):
+        """Saqlangan manba linkidan qayta o'qish: {"apply": false} — faqat farqlarni ko'rsatadi."""
+        project = self.get_object()
+        if not project.source_url:
+            return Response({"detail": "Bu jamoa uchun manba linki saqlanmagan."}, status=status.HTTP_400_BAD_REQUEST)
+        return _run_import(request, {"url": project.source_url, "apply": request.data.get("apply")}, project)
+
+
+class StaffPersonViewSet(ZonaViewSet):
+    queryset = StaffPerson.objects.select_related("project")
+    serializer_class = StaffPersonSerializer
+
+    def perform_create(self, serializer):
+        p = serializer.save(order=(StaffPerson.objects.filter(project=serializer.validated_data["project"])
+                                   .order_by("-order").values_list("order", flat=True).first() or 0) + 1)
+        log(self.request, Event.MEMBER, subject=p.project.name, to_name=p.name or f"Vakansiya {p.territory}",
+            text=f"Dala jamoasiga qo'shildi: {p.territory}")
+
+    def perform_update(self, serializer):
+        old = serializer.instance.name
+        p = serializer.save()
+        if old != p.name:
+            log(self.request, Event.MOVED, subject=f"{p.project.name}: {p.territory}", from_name=old or "Vakansiya",
+                to_name=p.name or "Vakansiya", text="Lavozimda xodim almashdi")
+        else:
+            log(self.request, Event.EDITED, subject=p.project.name, to_name=p.name or p.territory, text="Xodim ma'lumoti yangilandi")
+
+    def perform_destroy(self, instance):
+        StaffPerson.objects.filter(manager=instance).update(manager=instance.manager)  # qo'l ostidagilar yuqoriga
+        log(self.request, Event.MEMBER, subject=instance.project.name, from_name=instance.name or instance.territory,
+            text="Dala jamoasidan o'chirildi")
+        instance.delete()
+
+
+def _load(data):
+    """So'rov tanasidan manbani o'qish: url | text | file_b64 (+filename)."""
+    if data.get("url"):
+        content, fname = staff_io.fetch(str(data["url"]))
+        return content, fname or str(data.get("filename") or ""), str(data["url"]).strip()
+    if data.get("file_b64"):
+        try:
+            content = base64.b64decode(str(data["file_b64"]), validate=False)
+        except (binascii.Error, ValueError):
+            raise staff_io.StaffImportError("Fayl o'qilmadi.") from None
+        if len(content) > staff_io.MAX_BYTES:
+            raise staff_io.StaffImportError("Fayl juda katta (5 MB dan oshiq).")
+        return content, str(data.get("filename") or ""), ""
+    if data.get("text"):
+        return str(data["text"]), "", ""
+    raise staff_io.StaffImportError("Link, fayl yoki matn kiriting.")
+
+
+def _run_import(request, data, project=None):
+    try:
+        content, fname, url = _load(data)
+        docs = staff_io.parse(content, fname, name=str(data.get("name") or (project.name if project else "")).strip(),
+                              source_url=url)
+    except staff_io.StaffImportError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    if project is None and data.get("project"):
+        project = StaffProject.objects.filter(pk=data.get("project")).first()
+    if project is not None:
+        if len(docs) > 1:
+            names = ", ".join(docs)
+            return Response({"detail": f"Faylda bir nechta jamoa bor ({names}): \"Yangi / avtomatik\" ni tanlang."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        doc = next(iter(docs.values()))
+        doc["project"]["name"] = project.name
+        if url:
+            doc["project"]["source_url"] = url
+        docs = {project.name: doc}
+    targets = {name: project or StaffProject.objects.filter(name__iexact=name).first() for name in docs}
+    if not data.get("apply"):
+        return Response({"projects": [staff_io.diff(targets[n], d) for n, d in docs.items()]})
+    out = []
+    for name, doc in docs.items():
+        obj, result = staff_io.apply(doc, targets[name])
+        s = result["summary"]
+        log(request, Event.MEMBER, subject=obj.name,
+            text=f"Tuzilma import qilindi: {s['total']} o'rin, +{s['added']} −{s['removed']}, almashdi {s['replaced']}, o'zgardi {s['changed']}")
+        out.append(result)
+    return Response({"projects": out, "applied": True})
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def staff_import(request):
+    """{"url"|"text"|"file_b64"+"filename", "name"?, "project"?: id, "apply": false}
+
+    apply=false — faqat farqlar (nima qo'shiladi, o'chiriladi, kim almashdi); apply=true — bazaga yoziladi.
+    """
+    return _run_import(request, request.data)
+
+
+@zona_api(["GET"], [CanView])
+def staff_export(request, fmt):
+    ids = request.query_params.get("project")
+    projects = _projects()
+    if ids:
+        projects = projects.filter(pk__in=[int(i) for i in ids.split(",") if i.isdigit()])
+    projects = list(projects)
+    stamp = datetime.now(timezone.get_current_timezone()).strftime("%Y-%m-%d")
+    base = projects[0].name if len(projects) == 1 else "stargroup"
+    base = "".join(c if c.isalnum() else "_" for c in base).strip("_") or "jamoa"
+    if fmt == "xlsx":
+        resp = HttpResponse(staff_io.export_xlsx(projects),
+                            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = f'attachment; filename="tuzilma_{base}_{stamp}.xlsx"'
+        return resp
+    resp = Response(staff_io.export_json(projects))
+    resp["Content-Disposition"] = f'attachment; filename="tuzilma_{base}_{stamp}.json"'
+    return resp

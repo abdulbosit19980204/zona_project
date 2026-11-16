@@ -378,3 +378,79 @@ export interface TranslateStatus {
   last_run: string | null;
   translated: number;
 }
+
+/* ---------------------------------------------------------------- dala jamoalari (brendlar) */
+export type StaffRole = "ROP" | "ASM" | "RSM" | "SVR" | "KAM" | "TP" | "MER" | "OTHER";
+
+export interface StaffUnit {
+  id: number;
+  key: string;
+  title: string;
+  order: number;
+}
+
+export interface StaffProject {
+  id: number;
+  name: string;
+  description: string;
+  source_url: string;
+  synced_at: string | null;
+  order: number;
+  units: StaffUnit[];
+}
+
+export interface StaffPerson {
+  id: number;
+  project: number;
+  unit: number | null;
+  manager: number | null;
+  name: string;
+  role: StaffRole;
+  position: string;
+  territory: string;
+  region: string;
+  city: string;
+  phone: string;
+  email: string;
+  note: string;
+  is_vacancy: boolean;
+  order: number;
+}
+
+export interface StaffState {
+  projects: StaffProject[];
+  people: StaffPerson[];
+}
+
+export interface StaffDiffItem {
+  name: string;
+  territory: string;
+  role: StaffRole;
+  vacancy: boolean;
+}
+
+export interface StaffChange {
+  field: string;
+  from: string;
+  to: string;
+}
+
+/** Import qilinsa nima o'zgaradi (preview). */
+export interface StaffDiff {
+  project: { id: number | null; name: string; exists: boolean; source_url: string };
+  summary: { total: number; added: number; removed: number; replaced: number; changed: number; same: number; vacancies: number; units: number };
+  added: StaffDiffItem[];
+  removed: StaffDiffItem[];
+  replaced: { territory: string; role: StaffRole; from: string; to: string; changes: StaffChange[] }[];
+  changed: (StaffDiffItem & { changes: StaffChange[] })[];
+}
+
+export interface StaffImportBody {
+  url?: string;
+  text?: string;
+  file_b64?: string;
+  filename?: string;
+  name?: string;
+  project?: number | null;
+  apply?: boolean;
+}

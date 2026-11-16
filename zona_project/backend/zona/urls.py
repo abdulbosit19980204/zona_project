@@ -3,7 +3,7 @@ WebSocket manzillari alohida: zona.routing.websocket_urlpatterns (asgi.py)."""
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from . import views, views_admin, views_ai, views_approvals, views_auth
+from . import views, views_admin, views_ai, views_approvals, views_auth, views_staff
 
 app_name = "zona"
 
@@ -17,6 +17,8 @@ router.register("processes", views.ProcessViewSet, basename="process")
 router.register("roles", views.ProcessRoleViewSet, basename="role")
 router.register("tasks", views.TaskViewSet, basename="task")
 router.register("edge-cases", views.EdgeCaseViewSet, basename="edgecase")
+router.register("staff/projects", views_staff.StaffProjectViewSet, basename="staff-project")
+router.register("staff/people", views_staff.StaffPersonViewSet, basename="staff-person")
 router.register("synonyms", views.SynonymViewSet, basename="synonym")
 router.register("approvals", views_approvals.ChangeRequestViewSet, basename="approval")
 router.register("admin/users", views_admin.UserViewSet, basename="admin-user")
@@ -39,6 +41,9 @@ urlpatterns = [
     path("api/ai/person/", views_ai.person, name="ai-person"),
     path("api/ai/audit/", views_ai.audit, name="ai-audit"),
     path("api/admin/ai/translate/", views_admin.translate, name="ai-translate"),
+    path("api/staff/", views_staff.staff, name="staff"),
+    path("api/staff/import/", views_staff.staff_import, name="staff-import"),
+    path("api/staff/export.<str:fmt>", views_staff.staff_export, name="staff-export"),
     path("api/export.xlsx", views.export_xlsx, name="export"),
     path("api/", include(router.urls)),
 ]

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import (AIProvider, AITaskConfig, AIUsage, Authority, ChangeRequest, Department, EdgeCase, Event, Member,
+from .models import (StaffPerson, StaffProject, StaffUnit, AIProvider, AITaskConfig, AIUsage, Authority, ChangeRequest, Department, EdgeCase, Event, Member,
                      Process, ProcessRole, Profile, Synonym, System, Task, TaskFallback, Team)
 
 
@@ -108,3 +108,22 @@ class EventAdmin(admin.ModelAdmin):
     list_display = ("at", "kind", "subject", "from_name", "to_name", "actor")
     list_filter = ("kind",)
     readonly_fields = [f.name for f in Event._meta.fields]
+
+
+
+class StaffUnitInline(admin.TabularInline):
+    model = StaffUnit
+    extra = 0
+
+
+@admin.register(StaffProject)
+class StaffProjectAdmin(admin.ModelAdmin):
+    list_display = ["name", "source_url", "synced_at"]
+    inlines = [StaffUnitInline]
+
+
+@admin.register(StaffPerson)
+class StaffPersonAdmin(admin.ModelAdmin):
+    list_display = ["name", "role", "territory", "city", "phone", "project", "is_vacancy"]
+    list_filter = ["project", "role", "is_vacancy"]
+    search_fields = ["name", "territory", "city", "phone"]

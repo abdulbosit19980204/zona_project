@@ -4,7 +4,7 @@ import type {
   AdminUserInput, AIProvider, AIProviderKind, AIRouteResult, AITaskConfig, AITaskKey, AITestResult, AIText, AIUsage,
   AIUsageSummary, AuditEvent, Authority, ChangeKind, ChangePayload, ChangeRequest, ChangeStatus, Department,
   EdgeCase, LoginResponse, Me, Member, OrgState, Process, ProcessRole, SearchResult, Synonym, SystemItem, Task, Team,
-  TokenPair, TranslateStatus,
+  StaffDiff, StaffImportBody, StaffPerson, StaffProject, StaffState, TokenPair, TranslateStatus,
 } from "./types";
 
 const get = async <T>(url: string, params?: Record<string, string | number | boolean>) => (await api.get<T>(url, { params })).data;
@@ -56,6 +56,18 @@ export const orgApi = {
     remove: (id: number) => del(`roles/${id}/`),
   },
   exportXlsx: async () => (await api.get<Blob>("export.xlsx", { responseType: "blob" })).data,
+};
+
+/** Dala jamoalari: brendlar bo'yicha savdo tuzilmasi, import/eksport. */
+export const staffApi = {
+  state: () => get<StaffState>("staff/"),
+  /** apply=false — faqat farqlar (preview); apply=true — bazaga yoziladi. */
+  import: (body: StaffImportBody) => post<{ projects: StaffDiff[]; applied?: boolean }>("staff/import/", body),
+  sync: (project: number, apply = false) => post<{ projects: StaffDiff[]; applied?: boolean }>(`staff/projects/${project}/sync/`, { apply }),
+  projects: resource<StaffProject>("staff/projects"),
+  people: resource<StaffPerson>("staff/people"),
+  export: async (fmt: "xlsx" | "json", project?: number) =>
+    (await api.get<Blob>(`staff/export.${fmt}`, { params: project ? { project } : {}, responseType: "blob" })).data,
 };
 
 export const approvalsApi = {

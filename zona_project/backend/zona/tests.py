@@ -476,3 +476,88 @@ class TranslationTests(Base):
         self.assertIn("limit", st["last_error"])
         self.login("editor")
         self.assertEqual(self.call("get", "admin/ai/translate/").status_code, 403)
+
+
+ARTIFACT_HTML = """<title>Структура команды Testbrand</title><script>
+const ROP={"name": "Bilalov Zamir", "phone": ""};
+const DATA={"branches": [{"id": "tashkent", "title": "Ташкент", "teams": [{"head": {"n": 1, "name": "Xalikov Valijon", "terr": "SVR Tash 1", "role": "SVR", "city": "Ташкент", "phone": "998777299944", "svr": true},
+ "members": [{"n": 2, "name": "Rashidova Shahnoza", "terr": "SR1 Tashkent", "role": "TP", "city": "Ташкент", "phone": "+998 90 641 27 97"},
+             {"n": 3, "name": "Вакансия", "terr": "SR4 Tashkent", "role": "VAC", "city": "Ташкент", "phone": ""}]}], "direct": []},
+ {"id": "spec", "title": "Спецканалы", "teams": [], "direct": [{"n": 4, "name": "Galimov Timur", "terr": "MR Tashkent H1", "role": "MER", "city": "", "phone": "+998 99 051 71 39"}]}]};
+</script>"""
+
+
+class StaffTests(Base):
+    def imp(self, apply=False, **body):
+        return self.call("post", "staff/import/", {**body, "apply": apply})
+
+    def test_import_preview_apply_and_reimport(self):
+        from .models import StaffPerson, StaffProject
+        self.login("editor")
+        prev = self.imp(text=ARTIFACT_HTML).json()["projects"][0]
+        self.assertEqual(prev["project"]["name"], "Testbrand")
+        self.assertFalse(prev["project"]["exists"])
+        self.assertEqual(prev["summary"]["added"], 5)
+        self.assertFalse(StaffProject.objects.exists())  # preview bazaga yozmaydi
+        r = self.imp(apply=True, text=ARTIFACT_HTML)
+        self.assertEqual(r.status_code, 200, r.content)
+        project = StaffProject.objects.get(name="Testbrand")
+        svr = StaffPerson.objects.get(territory="SVR Tash 1")
+        self.assertEqual(svr.phone, "+998 77 729 99 44")
+        self.assertEqual(svr.manager.role, "ROP")
+        self.assertEqual(StaffPerson.objects.get(territory="SR1 Tashkent").manager, svr)
+        self.assertTrue(StaffPerson.objects.get(territory="SR4 Tashkent").is_vacancy)
+        # qayta import: vakansiyaga odam keldi, bir xodim almashdi, merchendayzer ketdi
+        html = (ARTIFACT_HTML.replace('"Вакансия", "terr": "SR4', '"Yangi Odam", "terr": "SR4').replace('"role": "VAC"', '"role": "TP"')
+                .replace("Rashidova Shahnoza", "Boshqa Xodim")
+                .replace(', "direct": [{"n": 4, "name": "Galimov Timur", "terr": "MR Tashkent H1", "role": "MER", "city": "", "phone": "+998 99 051 71 39"}]', ', "direct": []'))
+        d = self.imp(text=html).json()["projects"][0]
+        self.assertTrue(d["project"]["exists"])
+        self.assertEqual((d["summary"]["replaced"], d["summary"]["removed"], d["summary"]["added"]), (2, 1, 0))
+        self.assertEqual({(x["from"], x["to"]) for x in d["replaced"]}, {("Rashidova Shahnoza", "Boshqa Xodim"), ("", "Yangi Odam")})
+        sr1_id = StaffPerson.objects.get(territory="SR1 Tashkent").id
+        self.imp(apply=True, text=html)
+        sr1 = StaffPerson.objects.get(territory="SR1 Tashkent")
+        self.assertEqual((sr1.id, sr1.name), (sr1_id, "Boshqa Xodim"))  # o'rin saqlanadi, odam almashadi
+        self.assertFalse(StaffPerson.objects.filter(territory="MR Tashkent H1").exists())
+        self.assertEqual(project.people.count(), 4)
+        self.login("viewer")
+        self.assertEqual(self.imp(apply=True, text=html).status_code, 403)
+        self.assertEqual(len(self.call("get", "staff/").json()["people"]), 4)
+
+    def test_excel_roundtrip_and_json_export(self):
+        import base64
+        from .models import StaffPerson
+        self.login("editor")
+        self.imp(apply=True, text=ARTIFACT_HTML)
+        xlsx = self.call("get", "staff/export.xlsx").content
+        wb = load_workbook(BytesIO(xlsx))
+        ws = wb["Xodimlar"]
+        header = [c.value for c in ws[1]]
+        # Excel'da odamni almashtiramiz va yangi qator qo'shamiz
+        for row in ws.iter_rows(min_row=2):
+            if row[header.index("Hudud kodi")].value == "SR1 Tashkent":
+                row[header.index("F.I.Sh.")].value = "Excel Odam"
+                row[header.index("Telefon")].value = 901112233
+        svr_no = next(r[0].value for r in ws.iter_rows(min_row=2) if r[header.index("Hudud kodi")].value == "SVR Tash 1")
+        ws.append([99, "Testbrand", "Ташкент", "TP", "", "Qo'shilgan Odam", "SR9 Tashkent", "", "", "", "", svr_no, "", "", ""])
+        buf = BytesIO()
+        wb.save(buf)
+        body = {"file_b64": base64.b64encode(buf.getvalue()).decode(), "filename": "t.xlsx"}
+        d = self.imp(**body).json()["projects"][0]
+        self.assertEqual((d["summary"]["added"], d["summary"]["replaced"], d["summary"]["removed"]), (1, 1, 0))
+        self.imp(apply=True, **body)
+        new = StaffPerson.objects.get(territory="SR9 Tashkent")
+        self.assertEqual(new.manager.territory, "SVR Tash 1")
+        self.assertEqual(StaffPerson.objects.get(territory="SR1 Tashkent").phone, "+998 90 111 22 33")
+        doc = self.call("get", "staff/export.json").json()
+        self.assertEqual(doc["format"], "zona-staff")
+        self.assertEqual(len(doc["people"]), 6)
+
+    def test_bad_sources(self):
+        self.login("editor")
+        r = self.imp(url="https://claude.ai/artifact/abc")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("brauzerda", r.json()["detail"])
+        self.assertEqual(self.imp(text="<html>bo'sh</html>").status_code, 400)
+        self.assertEqual(self.imp(url="ftp://x").status_code, 400)

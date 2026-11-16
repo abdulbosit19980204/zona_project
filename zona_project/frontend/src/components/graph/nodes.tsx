@@ -14,7 +14,7 @@ import type { OrgNode } from "./org-layout";
 
 const hidden = "!h-2 !w-2 !min-w-0 !border-0 !bg-transparent";
 
-function Shell({ data, className, children }: { data: OrgNode["data"]; className?: string; children: React.ReactNode }) {
+export function Shell({ data, className, children }: { data: Pick<OrgNode["data"], "selected" | "match" | "dim">; className?: string; children: React.ReactNode }) {
   return (
     <div
       className={cn(
