@@ -70,11 +70,26 @@ def profile(m, lang=None):
             "supervisor": m.manager.name if m.manager else ""}
 
 
-def answer_text(it):
-    """Telegram'ga tayyor javob matni (oddiy matn, Markdown'siz — har qanday botda xavfsiz)."""
+LABELS = {
+    "uz": {"q": "Savol", "zone": "Zona", "who": "Kim javob beradi", "time": "Taxminiy vaqt", "min": "daqiqa", "rule": "Qoida",
+           "next": "{n}-navbat", "none": "mas'ul belgilanmagan",
+           "notfound": "Bu savol bo'yicha aniq qoida topilmadi. Savolni batafsilroq yozing yoki supervayzeringizga murojaat qiling."},
+    "ru": {"q": "Вопрос", "zone": "Зона", "who": "Кто отвечает", "time": "Примерное время", "min": "мин", "rule": "Правило",
+           "next": "Очередь {n}", "none": "ответственный не назначен",
+           "notfound": "Точное правило по этому вопросу не найдено. Опишите вопрос подробнее или обратитесь к своему супервайзеру."},
+    "en": {"q": "Question", "zone": "Zone", "who": "Who answers", "time": "Estimated time", "min": "min", "rule": "Rule",
+           "next": "In line #{n}", "none": "no owner assigned",
+           "notfound": "No exact rule was found for this question. Describe it in more detail or contact your supervisor."},
+}
+
+
+def answer_text(it, lang=None):
+    """Telegram'ga tayyor javob matni (oddiy matn, Markdown'siz — har qanday botda xavfsiz), tanlangan tilda."""
+    L = LABELS.get(lang or "uz", LABELS["uz"])
+
     def who(c):
         if not c:
-            return "mas'ul belgilanmagan"
+            return L["none"]
         bits = [f"{c['name']} ({c['role']})"]
         if c.get("phone"):
             bits.append(c["phone"])
@@ -82,17 +97,17 @@ def answer_text(it):
             bits.append("@" + c["telegram"])
         return " · ".join(bits)
 
-    lines = [f"Savol: {it['question']}"]
+    lines = [f"{L['q']}: {it['question']}"]
     if it["zone"] or it["process"]:
-        lines.append("Zona: " + " → ".join(x for x in (it["zone"], it["process"]) if x))
-    lines.append(f"Kim javob beradi: {who(it['responsible'])}")
+        lines.append(f"{L['zone']}: " + " → ".join(x for x in (it["zone"], it["process"]) if x))
+    lines.append(f"{L['who']}: {who(it['responsible'])}")
     if it.get("minutes"):
-        lines.append(f"Taxminiy vaqt: ~{it['minutes']} daqiqa")
+        lines.append(f"{L['time']}: ~{it['minutes']} {L['min']}")
     if it["rule"]:
-        lines.append(f"Qoida: {it['rule']}")
+        lines.append(f"{L['rule']}: {it['rule']}")
     for n, e in enumerate(it["escalation"], start=2):
         cond = f" — {e['condition']}" if e.get("condition") else ""
-        lines.append(f"{n}-navbat: {who(e)}{cond}")
+        lines.append(f"{L['next'].format(n=n)}: {who(e)}{cond}")
     return "\n".join(lines)
 
 
@@ -116,8 +131,7 @@ def bot_ask(request):
         "question": question,
         "found": found,
         "confidence": confidence,
-        "answer_text": answer_text(best) if found else
-        "Bu savol bo'yicha aniq qoida topilmadi. Savolni batafsilroq yozing yoki supervayzeringizga murojaat qiling.",
+        "answer_text": answer_text(best, lang) if found else LABELS.get(lang or "uz", LABELS["uz"])["notfound"],
         "best": best,
         "alternatives": ranked[1:4],
         "people": [{**(_contact(members.get(p["member"]), lang) or {}), "confidence": p["confidence"]}
@@ -150,7 +164,7 @@ def knowledge_export(request, fmt):
                            "items": items}, ensure_ascii=False, indent=2)
         return _file(body, f"savollar-{stamp}.json", "application/json")
     if fmt == "jsonl":
-        body = "\n".join(json.dumps({**it, "answer": answer_text(it)}, ensure_ascii=False) for it in items) + "\n"
+        body = "\n".join(json.dumps({**it, "answer": answer_text(it, lang)}, ensure_ascii=False) for it in items) + "\n"
         return _file(body, f"savollar-{stamp}.jsonl", "application/x-ndjson")
     if fmt == "chat":
         system = (f"Siz {conf.get('COMPANY_NAME')} kompaniyasining yordamchi botisiz. Xodim savoliga qaysi zona ekanini, "
@@ -160,7 +174,7 @@ def knowledge_export(request, fmt):
             for q in [it["question"], *it["examples"]]:
                 lines.append(json.dumps({"messages": [{"role": "system", "content": system},
                                                       {"role": "user", "content": q},
-                                                      {"role": "assistant", "content": answer_text(it)}]},
+                                                      {"role": "assistant", "content": answer_text(it, lang)}]},
                                         ensure_ascii=False))
         return _file("\n".join(lines) + "\n", f"savollar-chat-{stamp}.jsonl", "application/x-ndjson")
     if fmt == "md":
@@ -188,7 +202,8 @@ def knowledge_export(request, fmt):
             out.append(f"**{it['question']}**" + (" · _doimiy_" if it["frequent"] else ""))
             if it["examples"]:
                 out.append("Qanday so'raladi: " + "; ".join(f"“{e}”" for e in it["examples"]))
-            out += [answer_text(it).split("\n", 1)[1] if "\n" in answer_text(it) else "", ""]
+            txt = answer_text(it, lang)
+            out += [txt.split("\n", 1)[1] if "\n" in txt else "", ""]
         return _file("\n".join(out), f"savollar-{stamp}.md", "text/markdown")
     return _bad("Format: json, jsonl, chat yoki md.")
 

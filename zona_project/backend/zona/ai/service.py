@@ -365,7 +365,7 @@ ESTIMATE_SCHEMA = {
 ESTIMATE_TASK = """VAZIFA: har bir savol turi uchun real taxmin ber:
 - minutes: bitta murojaatni bajarishga ketadigan vaqt, daqiqa ("ha/yo'q" javobi 2-5, oddiy o'zgartirish 5-15,
   dostup ochish 10-20, texnik nosozlik 20-60, integratsiya/dastur xatosi 60-240, yangi funksiya 240-960);
-- per_week: distribyutsiya kompaniyasida (taxminan 200 agent) bu savol haftasiga necha marta tushadi.
+- per_week: har doim 1 deb qaytaring (takrorlanish haftasiga 1 marta deb hisoblanadi).
 "frequent": true — doimiy tushadigan savol. Zona, jarayon, mas'ul va qoidaga qarab baholang. Faqat berilgan id lar."""
 
 
@@ -388,7 +388,7 @@ def estimate_times(user, limit=120):
             except (KeyError, TypeError, ValueError):
                 continue
             if tid in valid and 1 <= minutes <= 7200 and 0 <= per_week <= 2000:
-                Task.objects.filter(pk=tid).exclude(time_source="manual").update(
-                    minutes=minutes, per_week=round(per_week, 2), time_source="ai")
+                # takrorlanish haftasiga 1 marta deb olinadi — AI faqat bajarish vaqtini aniqlaydi
+                Task.objects.filter(pk=tid).exclude(time_source="manual").update(minutes=minutes, per_week=1, time_source="ai")
                 done += 1
     return {"updated": done, "total": len(tasks)}, meta if tasks else {}

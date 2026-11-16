@@ -298,9 +298,14 @@ function TranslateSection() {
   });
   const start = useMutation({
     mutationFn: adminApi.translate.start,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       qc.setQueryData(KEYS.translate, data);
-      toast.success(t("started"));
+      if (data.filled) {
+        toast.success(t("filled", { count: data.filled }));
+        await qc.invalidateQueries({ queryKey: queryKeys.state });
+      }
+      if (data.running) toast.success(t("started"));
+      else if (!data.filled) toast.info(data.pending ? t("needAi", { count: data.pending }) : t("allDone"));
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
@@ -320,15 +325,15 @@ function TranslateSection() {
           <div className="font-semibold">{t("title")}</div>
           <p className="text-sm text-muted-foreground">{t("hint")}</p>
         </div>
-        <Button disabled={!s?.enabled || s.running || start.isPending || !s.pending} onClick={() => start.mutate()}>
+        <Button disabled={!s || s.running || start.isPending || !s.pending} onClick={() => start.mutate()}>
           {s?.running || start.isPending ? <Loader2 className="size-4 animate-spin" /> : <Languages className="size-4" />}
           {s?.running ? t("running") : t("run")}
         </Button>
       </div>
       {s && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          {!s.enabled ? (
-            <span className="text-muted-foreground">{t("off")}</span>
+          {!s.enabled && s.pending ? (
+            <span className="text-muted-foreground">{t("pendingNoAi", { count: s.pending })}</span>
           ) : s.pending ? (
             <span>{t("pending", { count: s.pending })}</span>
           ) : (

@@ -219,12 +219,25 @@ export type ChangePayload =
   | { process: number; member: number; role: ProcessRoleKey }
   | { role_id: number };
 
+export type ChangeSource = "user" | "rule" | "ai";
+
+export interface ProposalItem {
+  task: number;
+  owner: number | null;
+  reason?: string;
+  hours?: number;
+}
+
 export interface ChangeRequest {
   id: number;
   kind: ChangeKind;
   payload: ChangePayload;
   title: string;
   reason: string;
+  /** Kim taklif qildi: xodim, qoida bo'yicha tavsiya yoki AI. */
+  source: ChangeSource;
+  /** Taklif qabul qilinsa bo'shaydigan vaqt (soat/hafta). */
+  hours: number | null;
   status: ChangeStatus;
   requested_by: number | null;
   requested_by_name: string;
@@ -417,6 +430,8 @@ export interface TranslateStatus {
   last_error: string;
   last_run: string | null;
   translated: number;
+  /** Tarjima xotirasidan darhol to'ldirilgan maydonlar (POST javobida). */
+  filled?: number;
 }
 
 /* ---------------------------------------------------------------- dala jamoalari (brendlar) */

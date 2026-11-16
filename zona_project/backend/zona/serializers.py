@@ -308,9 +308,10 @@ class ChangeRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChangeRequest
-        fields = ["id", "kind", "payload", "title", "reason", "status", "requested_by", "requested_by_name",
+        fields = ["id", "kind", "payload", "title", "reason", "source", "hours", "status", "requested_by", "requested_by_name",
                   "decided_by", "decided_by_name", "decision_note", "created_at", "decided_at"]
-        read_only_fields = ["title", "status", "requested_by", "decided_by", "decision_note", "created_at", "decided_at"]
+        read_only_fields = ["title", "source", "hours", "status", "requested_by", "decided_by", "decision_note", "created_at",
+                            "decided_at"]
 
     def get_requested_by_name(self, obj):
         return _user_name(obj.requested_by)

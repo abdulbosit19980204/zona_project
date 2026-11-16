@@ -345,10 +345,14 @@ class ChangeRequest(models.Model):
     PENDING, APPROVED, REJECTED, CANCELLED = "pending", "approved", "rejected", "cancelled"
     STATUSES = [(PENDING, "Kutilmoqda"), (APPROVED, "Tasdiqlandi"), (REJECTED, "Rad etildi"), (CANCELLED, "Bekor qilindi")]
 
+    SOURCES = [("user", "Xodim taklifi"), ("rule", "Qoida bo'yicha tavsiya"), ("ai", "AI tavsiyasi")]
+
     kind = models.CharField(max_length=20, choices=KINDS)
     payload = models.JSONField(default=dict)
     title = models.CharField(max_length=300)
     reason = models.TextField("Sabab", blank=True)
+    source = models.CharField("Manba", max_length=6, choices=SOURCES, default="user")
+    hours = models.FloatField("Bo'shaydigan vaqt (soat/hafta)", null=True, blank=True)
     status = models.CharField(max_length=10, choices=STATUSES, default=PENDING)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")

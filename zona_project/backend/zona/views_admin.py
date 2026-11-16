@@ -148,8 +148,9 @@ class AIUsageViewSet(AdminMixin, mixins.ListModelMixin, viewsets.GenericViewSet)
 def translate(request):
     """Tarjima holati (GET) yoki tarjimasi yo'q barcha matnlarni fonda tarjima qilishni boshlash (POST)."""
     if request.method == "POST":
-        if not translation.enabled():
-            return Response({"detail": "Avval 'Tarjima' AI vazifasini yoqing: provayder va model tanlang."},
-                            status=status.HTTP_400_BAD_REQUEST)
-        translation.start()
+        # avval tarjima xotirasidan (AI'siz, darhol); AI yoqilgan bo'lsa — qolganini fonda
+        filled = translation.translate_pending(request.user, use_ai=False)
+        if translation.enabled():
+            translation.start()
+        return Response({**translation.status(), "filled": filled})
     return Response(translation.status())

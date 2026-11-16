@@ -1,0 +1,2874 @@
+{
+ "\"Ruxsat yo'q\" yoki \"foydalanuvchi topilmadi\" xabari": {
+  "ru": "Сообщение «Нет доступа» или «Пользователь не найден»",
+  "en": "\"Access denied\" or \"User not found\" message"
+ },
+ "1) Agent supervayzeriga yozadi: klient nomi, STIR yoki kodi.\n2) Supervayzer klientni agentning tashrif marshrutiga (kerakli kunga) qo'shadi — odatda shu yetarli.\n3) Klient bazada umuman topilmasa — Operator yangi klient yaratadi.\n4) Marshrutda bor, lekin ilovada ko'rinmasa — IT administrator sinxronlashni tekshiradi.": {
+  "ru": "1) Агент пишет своему супервайзеру: название клиента, ИНН или код.\n2) Супервайзер добавляет клиента в маршрут визитов агента (на нужный день) — обычно этого достаточно.\n3) Если клиента вообще нет в базе — Оператор создаёт нового клиента.\n4) Если клиент есть в маршруте, но не виден в приложении — IT-администратор проверяет синхронизацию.",
+  "en": "1) The agent messages their supervisor: client name, TIN or code.\n2) The supervisor adds the client to the agent's visit route (on the right day) — usually that's enough.\n3) If the client isn't in the database at all — the Operator creates a new client.\n4) If it's in the route but not visible in the app — the IT administrator checks the sync."
+ },
+ "1) Agent telefonni qayta yoqadi va internetni tekshiradi.\n2) Hal bo'lmasa — IT administratorga ekran rasmi bilan yozadi.\n3) Telefonning o'zi nosoz bo'lsa — Texnik.": {
+  "ru": "1) Агент перезагружает телефон и проверяет интернет.\n2) Если не помогло — пишет IT-администратору со скриншотом.\n3) Если неисправен сам телефон — Техник.",
+  "en": "1) The agent restarts the phone and checks the internet.\n2) If that doesn't help — messages the IT administrator with a screenshot.\n3) If the phone itself is faulty — the Technician."
+ },
+ "1) Agent yangi klient ma'lumotlarini supervayzerga yuboradi (yoki 1C bot orqali kiritadi): nomi, STIR, manzil, telefon, nuqta rasmi.\n2) Supervayzer tekshirib tasdiqlaydi.\n3) Operator klientni yaratadi; supervayzer uni agent marshrutiga qo'shadi.": {
+  "ru": "1) Агент отправляет супервайзеру данные нового клиента (или вносит через 1С-бот): название, ИНН, адрес, телефон, фото точки.\n2) Супервайзер проверяет и согласует.\n3) Оператор создаёт клиента; супервайзер добавляет его в маршрут агента.",
+  "en": "1) The agent sends the new client's details to the supervisor (or enters them via the 1C bot): name, TIN, address, phone, outlet photo.\n2) The supervisor checks and approves.\n3) The operator creates the client; the supervisor adds it to the agent's route."
+ },
+ "1) IT operator muammo bitta xodimdami yoki hammadami — aniqlaydi.\n2) Bitta xodimda, login/parol — o'zi hal qiladi.\n3) Bitta xodimda, kompyuter muammosi — Jahongir.\n4) Hammada — Abdulbositga xabar beradi va foydalanuvchilarga holatni yetkazadi.": {
+  "ru": "1) IT-оператор выясняет, проблема у одного сотрудника или у всех.\n2) У одного, логин/пароль — решает сам.\n3) У одного, проблема с компьютером — Jahongir.\n4) У всех — сообщает Abdulbosit и держит пользователей в курсе.",
+  "en": "1) The IT operator checks whether it's one person or everyone.\n2) One person, login/password — fixes it.\n3) One person, computer problem — Jahongir.\n4) Everyone — notifies Abdulbosit and keeps users updated."
+ },
+ "1) Klient aksiyaga biriktirilmagan bo'lsa → Saidabror biriktiradi.\n2) Biriktirilgan, lekin ishlamayapti → Dasturchilar.\n3) Muammo ProTarget tomonda → Pro-target.": {
+  "ru": "1) Если клиент не привязан к акции → Saidabror привязывает.\n2) Привязан, но не работает → Разработчики.\n3) Проблема на стороне ProTarget → Pro-target.",
+  "en": "1) If the client isn't assigned to the promotion → Saidabror assigns it.\n2) Assigned but not working → Developers.\n3) The problem is on the ProTarget side → Pro-target."
+ },
+ "1) Operator aksiya klientga to'g'ri biriktirilganini va muddatini tekshiradi.\n2) To'g'ri bo'lsa — Dasturchilar hisoblash qoidasini tekshiradi.\n3) Xato ProTarget'ning o'zida bo'lsa — Pro-target support.": {
+  "ru": "1) Оператор проверяет, правильно ли акция привязана к клиенту и её срок.\n2) Если всё верно — Разработчики проверяют правило расчёта.\n3) Если ошибка в самом ProTarget — поддержка Pro-target.",
+  "en": "1) The Operator checks that the promotion is correctly assigned to the client and still valid.\n2) If it is — the Developers check the calculation rule.\n3) If the error is in ProTarget itself — Pro-target support."
+ },
+ "1) Xusniddin uzilish holatini tekshiradi (hammadami yoki bitta xodimda).\n2) Server ishlamasa — Abdulbosit.\n3) Bot ishlayapti, lekin noto'g'ri javob beradi — Dasturchilar.": {
+  "ru": "1) Xusniddin проверяет сбой (у всех или у одного сотрудника).\n2) Если не работает сервер — Abdulbosit.\n3) Бот работает, но отвечает неправильно — Разработчики.",
+  "en": "1) Xusniddin checks the outage (everyone or just one person).\n2) If the server is down — Abdulbosit.\n3) The bot works but answers incorrectly — Developers."
+ },
+ "1C": {
+  "ru": "1С",
+  "en": "1C"
+ },
+ "1C bilan almashinuvning ProTarget tomonini tekshiradi": {
+  "ru": "Проверяет сторону ProTarget в обмене с 1С",
+  "en": "Checks the ProTarget side of the exchange with 1C"
+ },
+ "1C bilan boshqa dastur o'rtasida almashinuv": {
+  "ru": "Обмен между 1С и другой программой",
+  "en": "Exchange between 1C and another program"
+ },
+ "1C bilan bot, elektron faktura (EDO) va bank almashinuvi.": {
+  "ru": "Обмен 1С с ботом, электронными счетами-фактурами (ЭДО) и банком.",
+  "en": "1C exchange with the bot, electronic invoicing (EDO) and the bank."
+ },
+ "1C bot": {
+  "ru": "1С-бот",
+  "en": "1C bot"
+ },
+ "1C bot ishlamayapti": {
+  "ru": "1С-бот не работает",
+  "en": "1C bot not working"
+ },
+ "1C bot orqali klient qo'shish": {
+  "ru": "Добавление клиента через 1С-бот",
+  "en": "Adding a client via the 1C bot"
+ },
+ "1C bot va hisobotlardagi xatolarni tuzatadi, yangi ko'rsatkich qo'shadi": {
+  "ru": "Исправляет ошибки 1С-бота и отчётов, добавляет новые показатели",
+  "en": "Fixes errors in the 1C bot and reports, adds new metrics"
+ },
+ "1C bot: kirish va huquq": {
+  "ru": "1С-бот: вход и права",
+  "en": "1C bot: login and permissions"
+ },
+ "1C da hammada xato oynasi chiqyapti": {
+  "ru": "В 1С у всех появляется окно ошибки",
+  "en": "An error window appears in 1C for everyone"
+ },
+ "1C da hujjat ochilmayapti, chop etish shakli yoki Excelga eksport xato": {
+  "ru": "В 1С не открывается документ, ошибка печатной формы или экспорта в Excel",
+  "en": "A document won't open in 1C, or the print form or Excel export fails"
+ },
+ "1C da hujjat va ma'lumotni kiritish, tuzatish, o'chirish.": {
+  "ru": "Ввод, исправление и удаление документов и данных в 1С.",
+  "en": "Entering, correcting and deleting documents and data in 1C."
+ },
+ "1C da ma'lumot kiritish yoki tahrirlash": {
+  "ru": "Ввод или редактирование данных в 1С",
+  "en": "Entering or editing data in 1C"
+ },
+ "1C da yangi filial yoki omborga huquq qo'shish": {
+  "ru": "Добавление прав на новый филиал или склад в 1С",
+  "en": "Adding rights to a new branch or warehouse in 1C"
+ },
+ "1C da yangi foydalanuvchi yaratish": {
+  "ru": "Создание нового пользователя в 1С",
+  "en": "Creating a new user in 1C"
+ },
+ "1C dagi biriktirish ro'yxati kerak bo'lsa": {
+  "ru": "Если нужен список привязок из 1С",
+  "en": "If the assignment list from 1C is needed"
+ },
+ "1C dagi biznes jarayonni o'zgartirish taklifi": {
+  "ru": "Предложение изменить бизнес-процесс в 1С",
+  "en": "Proposal to change a business process in 1C"
+ },
+ "1C dagi hujjat yoki ma'lumotni o'chirish": {
+  "ru": "Удаление документа или данных в 1С",
+  "en": "Deleting a document or data in 1C"
+ },
+ "1C dagi klient kartochkasi ProTarget bilan mos kelmayapti (avval ma'lumotni to'g'rilaydi)": {
+  "ru": "Карточка клиента в 1С не совпадает с ProTarget (сначала исправляются данные)",
+  "en": "The client card in 1C doesn't match ProTarget (the data is corrected first)"
+ },
+ "1C dagi o'zgarish ProTargetda yangilanmayapti": {
+  "ru": "Изменение в 1С не обновляется в ProTarget",
+  "en": "A change in 1C doesn't update in ProTarget"
+ },
+ "1C dasturi": {
+  "ru": "Программа 1С",
+  "en": "1C software"
+ },
+ "1C klient dasturi o'rnatilmagan bo'lsa": {
+  "ru": "Если не установлена программа-клиент 1С",
+  "en": "If the 1C client software isn't installed"
+ },
+ "1C litsenziyasi tugadi yoki yetmayapti": {
+  "ru": "Закончилась или не хватает лицензий 1С",
+  "en": "1C licences expired or insufficient"
+ },
+ "1C ochilmayapti": {
+  "ru": "1С не открывается",
+  "en": "1C won't open"
+ },
+ "1C parolini tiklash": {
+  "ru": "Сброс пароля 1С",
+  "en": "Resetting a 1C password"
+ },
+ "1C sekin ishlayapti": {
+  "ru": "1С работает медленно",
+  "en": "1C is slow"
+ },
+ "1C sekinligi, yangilanishdan keyingi xato, chop etish va eksport.": {
+  "ru": "Медленная работа 1С, ошибка после обновления, печать и экспорт.",
+  "en": "Slow 1C, errors after updates, printing and export."
+ },
+ "1C va PRBC": {
+  "ru": "1С и PRBC",
+  "en": "1C and PRBC"
+ },
+ "1C va PRBC dagi ma'lumotlar, ularga dostup, 1C bot va 1C dasturidagi muammolar.": {
+  "ru": "Данные в 1С и PRBC, доступ к ним, 1С-бот и проблемы программы 1С.",
+  "en": "Data in 1C and PRBC, access to them, the 1C bot and 1C software issues."
+ },
+ "1C va PRBC: dostup": {
+  "ru": "1С и PRBC: доступ",
+  "en": "1C and PRBC: access"
+ },
+ "1C va ProTarget'dagi savdo ma'lumotlarini yuritadi: supervayzer tasdiqlagan o'zgarishlarni bajaradi.": {
+  "ru": "Ведёт данные продаж в 1С и ProTarget: выполняет изменения, согласованные супервайзером.",
+  "en": "Maintains sales data in 1C and ProTarget: carries out changes approved by the supervisor."
+ },
+ "1C yangilanishidan keyin bog'lanish ishlamay qoldi": {
+  "ru": "После обновления 1С перестала работать связь",
+  "en": "The connection stopped working after a 1C update"
+ },
+ "1C yoki PRBC ga dostup ochish": {
+  "ru": "Открытие доступа к 1С или PRBC",
+  "en": "Granting access to 1C or PRBC"
+ },
+ "1C ↔ ProTarget almashinuvi": {
+  "ru": "Обмен 1С ↔ ProTarget",
+  "en": "1C ↔ ProTarget exchange"
+ },
+ "1C ↔ bot almashinuvi ishlamayapti": {
+  "ru": "Не работает обмен 1С ↔ бот",
+  "en": "1C ↔ bot exchange not working"
+ },
+ "1C, PRBC va Telegram bot bilan bog'liq ishlarda murojaat qilinmaydi.": {
+  "ru": "Не обращаться по вопросам, связанным с 1С, PRBC и Telegram-ботом.",
+  "en": "Don't contact them about anything related to 1C, PRBC or the Telegram bot."
+ },
+ "1C, ProTarget va PRBC o'rtasida ma'lumot o'tmasa, kechiksa yoki tizimlarda farq qilsa.": {
+  "ru": "Данные не передаются, задерживаются или различаются между 1С, ProTarget и PRBC.",
+  "en": "Data doesn't transfer, is delayed or differs between 1C, ProTarget and PRBC."
+ },
+ "1C, ProTarget va PRBC o'rtasidagi integratsiya xatolarini tuzatadi": {
+  "ru": "Исправляет ошибки интеграции между 1С, ProTarget и PRBC",
+  "en": "Fixes integration errors between 1C, ProTarget and PRBC"
+ },
+ "1C, ProTarget yoki PRBC serveriga hamma foydalanuvchida ulanish yo'q": {
+  "ru": "Ни у одного пользователя нет подключения к серверу 1С, ProTarget или PRBC",
+  "en": "No users can connect to the 1C, ProTarget or PRBC server"
+ },
+ "1C: ma'lumot kiritish va tuzatish": {
+  "ru": "1С: ввод и исправление данных",
+  "en": "1C: entering and correcting data"
+ },
+ "Administrator huquqini olish": {
+  "ru": "Получение прав администратора",
+  "en": "Getting administrator rights"
+ },
+ "Agent IT administratorga yozadi (o'z telefon raqamidan). IT administrator shaxsni tasdiqlab vaqtinchalik parol beradi; agent birinchi kirishda parolni almashtiradi.": {
+  "ru": "Агент пишет IT-администратору (со своего номера телефона). IT-администратор подтверждает личность и выдаёт временный пароль; при первом входе агент меняет пароль.",
+  "en": "The agent messages the IT administrator (from their own phone number). The IT administrator verifies their identity and issues a temporary password; the agent changes it at first login."
+ },
+ "Agent bo'yicha klientlar ro'yxatini chiqarib berish": {
+  "ru": "Выгрузить список клиентов по агенту",
+  "en": "Export the client list by agent"
+ },
+ "Agent boshqa hudud nuqtalarini ko'ryapti": {
+  "ru": "Агент видит точки чужой территории",
+  "en": "The agent sees outlets from another territory"
+ },
+ "Agent bot orqali klient qo'shadi va holatini kuzatadi.": {
+  "ru": "Агент добавляет клиента через бот и отслеживает его статус.",
+  "en": "The agent adds a client via the bot and tracks its status."
+ },
+ "Agent buyurtma raqami va o'zgarishni yozadi; Operator 1C ga o'tishidan oldin tuzatadi. 1C ga o'tib bo'lgan bo'lsa — 1C da tuzatadi.": {
+  "ru": "Агент пишет номер заказа и изменение; Оператор исправляет до передачи в 1С. Если заказ уже в 1С — исправляет в 1С.",
+  "en": "The agent sends the order number and the change; the Operator fixes it before it reaches 1C. If it's already in 1C — fixes it there."
+ },
+ "Agent buyurtma raqami va sababini supervayzerga yozadi; supervayzer tasdiqlaydi; Operator buyurtmani o'chiradi (1C ga o'tgan bo'lsa — 1C da ham).": {
+  "ru": "Агент пишет супервайзеру номер заказа и причину; супервайзер согласует; Оператор удаляет заказ (если он уже ушёл в 1С — и в 1С).",
+  "en": "The agent sends the order number and reason to the supervisor; the supervisor approves; the Operator deletes the order (also in 1C if it already went there)."
+ },
+ "Agent dostupini yopishni tasdiqlash": {
+  "ru": "Согласование закрытия доступа агента",
+  "en": "Approving revoking an agent's access"
+ },
+ "Agent eski va yangi telefon ma'lumotini yuboradi. IT administrator akkauntni yangi qurilmaga ko'chiradi va eski qurilmadan chiqaradi. Yuborilmagan buyurtmalar bo'lsa — avval eski telefondan sinxronlanadi.": {
+  "ru": "Агент отправляет данные старого и нового телефона. IT-администратор переносит аккаунт на новое устройство и выходит из него на старом. Если есть неотправленные заказы — сначала синхронизируется старый телефон.",
+  "en": "The agent sends the old and new phone details. The IT administrator moves the account to the new device and signs it out of the old one. If there are unsent orders — the old phone is synced first."
+ },
+ "Agent ikkala zakaz raqamini yuboradi; supervayzer tasdiqlaydi; Operator ortiqchasini o'chiradi. Zakaz o'z-o'zidan ikki marta ketayotgan bo'lsa — Dasturchilar.": {
+  "ru": "Агент отправляет номера обоих заказов; супервайзер согласует; Оператор удаляет лишний. Если заказ сам уходит дважды — Разработчики.",
+  "en": "The agent sends both order numbers; the supervisor approves; the Operator deletes the extra one. If orders keep going through twice on their own — Developers."
+ },
+ "Agent internetni tekshirib qayta sinxronlaydi. O'tmasa — IT administrator. Bir vaqtda ko'p agentda bo'lsa — Dasturchilar (tizim muammosi).": {
+  "ru": "Агент проверяет интернет и повторяет синхронизацию. Если не проходит — IT-администратор. Если одновременно у многих агентов — Разработчики (системная проблема).",
+  "en": "The agent checks the internet and syncs again. If it fails — the IT administrator. If it happens to many agents at once — Developers (system issue)."
+ },
+ "Agent ma'lumotlari, supervayzerga biriktirish, ishga kirish va ketish.": {
+  "ru": "Данные агента, привязка к супервайзеру, приём и увольнение.",
+  "en": "Agent details, assignment to a supervisor, hiring and leaving."
+ },
+ "Agent profili": {
+  "ru": "Профиль агента",
+  "en": "Agent profile"
+ },
+ "Agent profili va harakatlar tarixi": {
+  "ru": "Профиль агента и история действий",
+  "en": "Agent profile and activity history"
+ },
+ "Agent savolini supervayzer qabul qiladi, birlamchi tekshiradi va to'g'ri mutaxassisga yo'naltiradi.": {
+  "ru": "Супервайзер принимает вопрос агента, делает первичную проверку и направляет нужному специалисту.",
+  "en": "The supervisor takes the agent's question, does an initial check and routes it to the right specialist."
+ },
+ "Agent telefoni almashganda akkauntni yangi qurilmaga ko'chiradi": {
+  "ru": "При смене телефона агента переносит аккаунт на новое устройство",
+  "en": "Moves the account to the new device when an agent changes phones"
+ },
+ "Agent to'g'ri ma'lumotni (hujjat rasmi bilan) supervayzerga yuboradi; supervayzer tasdiqlaydi; Operator 1C va ProTarget'da bir xil qilib tuzatadi.": {
+  "ru": "Агент отправляет супервайзеру правильные данные (с фото документа); супервайзер согласует; Оператор одинаково исправляет их в 1С и ProTarget.",
+  "en": "The agent sends the correct details (with a photo of the document) to the supervisor; the supervisor approves; the Operator corrects them identically in 1C and ProTarget."
+ },
+ "Agent vozvrat sababi va tovarlarni yuboradi; supervayzer tasdiqlaydi; Operator vozvrat hujjatini 1C da kiritadi.": {
+  "ru": "Агент отправляет причину возврата и товары; супервайзер согласует; Оператор вносит документ возврата в 1С.",
+  "en": "The agent sends the return reason and items; the supervisor approves; the Operator enters the return document in 1C."
+ },
+ "Agent xato matni rasmini yuboradi. IT administrator sababini aniqlaydi: internet/qurilma — o'zi hal qiladi, dastur yoki integratsiya — Dasturchilarga beradi.": {
+  "ru": "Агент присылает скриншот текста ошибки. IT-администратор определяет причину: интернет/устройство — решает сам, программа или интеграция — передаёт Разработчикам.",
+  "en": "The agent sends a screenshot of the error. The IT administrator identifies the cause: internet/device — fixes it; software or integration — hands it to the Developers."
+ },
+ "Agentda aksiya ko'rinmayapti yoki chiqmayapti": {
+  "ru": "У агента не видна или не появляется акция",
+  "en": "Promotion not visible or not showing for the agent"
+ },
+ "Agentda ilova ishlamayapti": {
+  "ru": "У агента не работает приложение",
+  "en": "App not working for the agent"
+ },
+ "Agentda narx noto'g'ri chiqyapti": {
+  "ru": "У агента неверная цена",
+  "en": "Wrong price showing for the agent"
+ },
+ "Agentda zakaz ketmayapti": {
+  "ru": "У агента не уходит заказ",
+  "en": "Agent's order won't send"
+ },
+ "Agentda zakaz o'tmayapti yoki ketmayapti — birlamchi tekshiruv": {
+  "ru": "У агента не проходит или не уходит заказ — первичная проверка",
+  "en": "Agent's order won't go through — initial check"
+ },
+ "Agentga boshqa hudud yoki filial ma'lumotini ko'rish huquqi": {
+  "ru": "Право агента видеть данные другой территории или филиала",
+  "en": "Agent permission to see another territory's or branch's data"
+ },
+ "Agentlar ishini kuzatish va so'rovlarni tasdiqlash": {
+  "ru": "Контроль работы агентов и согласование запросов",
+  "en": "Monitoring agents' work and approving requests"
+ },
+ "Agentlar ishini nazorat qiladi va ma'lumotni o'zgartirish so'rovlarini tasdiqlaydi.": {
+  "ru": "Контролирует работу агентов и согласовывает запросы на изменение данных.",
+  "en": "Supervises agents and approves data change requests."
+ },
+ "Agentlar va supervayzerlar: savol shu yerdan keladi": {
+  "ru": "Агенты и супервайзеры: вопросы поступают отсюда",
+  "en": "Agents and supervisors: questions come from here"
+ },
+ "Agentlarga tushuntiradi": {
+  "ru": "Объясняет агентам",
+  "en": "Explains it to agents"
+ },
+ "Agentni boshqa supervayzerga biriktirish": {
+  "ru": "Закрепление агента за другим супервайзером",
+  "en": "Assigning an agent to another supervisor"
+ },
+ "Agentning birinchi murojaat nuqtasi: savolni qabul qiladi": {
+  "ru": "Первая точка обращения агента: принимает вопрос",
+  "en": "The agent's first point of contact: takes the question"
+ },
+ "Agentning birinchi murojaati": {
+  "ru": "Первое обращение агента",
+  "en": "The agent's first request"
+ },
+ "Agentning klienti, marshruti, plani yoki ma'lumotini o'zgartirish so'rovi": {
+  "ru": "Запрос на изменение клиента, маршрута, плана или данных агента",
+  "en": "Request to change an agent's client, route, plan or data"
+ },
+ "Agentning klientlarini boshqa agentga o'tkazadi": {
+  "ru": "Передаёт клиентов агента другому агенту",
+  "en": "Transfers the agent's clients to another agent"
+ },
+ "Agentning telefoni va jihozi": {
+  "ru": "Телефон и оборудование агента",
+  "en": "Agent's phone and equipment"
+ },
+ "Akkaunt bloklangan": {
+  "ru": "Аккаунт заблокирован",
+  "en": "Account locked"
+ },
+ "Akkaunt bor, lekin kerakli menyular ko'rinmayapti": {
+  "ru": "Аккаунт есть, но нужные меню не видны",
+  "en": "The account exists but the needed menus aren't visible"
+ },
+ "Akkaunt va dostupni bloklash": {
+  "ru": "Блокировка аккаунта и доступа",
+  "en": "Blocking accounts and access"
+ },
+ "Akkauntdan men yubormagan xabar ketgan": {
+  "ru": "С моего аккаунта ушло письмо, которое я не отправлял",
+  "en": "A message I didn't send went out from my account"
+ },
+ "Akkauntga noto'g'ri telefon raqami biriktirilgan": {
+  "ru": "К аккаунту привязан неверный номер телефона",
+  "en": "Wrong phone number linked to the account"
+ },
+ "Akkauntlar, huquqlar, ilova va pochta muammolari": {
+  "ru": "Аккаунты, права, проблемы с приложениями и почтой",
+  "en": "Accounts, permissions, app and email issues"
+ },
+ "Akkauntni yangi telefonga ko'chirish, yo'qolgan telefonni bloklash.": {
+  "ru": "Перенос аккаунта на новый телефон, блокировка утерянного телефона.",
+  "en": "Moving the account to a new phone, blocking a lost phone."
+ },
+ "Aksiya ProTarget tomonda ishlamadi": {
+  "ru": "Акция не сработала на стороне ProTarget",
+  "en": "Promotion didn't work on the ProTarget side"
+ },
+ "Aksiya biriktirilgan, lekin buyurtmada hisoblanmasa yoki narx o'zgarmasa.": {
+  "ru": "Акция привязана, но не считается в заказе или цена не меняется.",
+  "en": "The promotion is assigned but isn't applied in the order or the price doesn't change."
+ },
+ "Aksiya bo'yicha bonus noto'g'ri hisoblandi": {
+  "ru": "Бонус по акции рассчитан неверно",
+  "en": "Promotion bonus calculated incorrectly"
+ },
+ "Aksiya bo'yicha sotuv hajmini chiqarib berish": {
+  "ru": "Выгрузить объём продаж по акции",
+  "en": "Export sales volume for a promotion"
+ },
+ "Aksiya faqat ayrim mahsulotlarda ishlamayapti": {
+  "ru": "Акция не работает только на некоторых товарах",
+  "en": "Promotion doesn't work on some products only"
+ },
+ "Aksiya klientda ko'rinmayapti": {
+  "ru": "Акция не видна у клиента",
+  "en": "Promotion not visible on the client"
+ },
+ "Aksiya klientga qo'shilgan, lekin buyurtmada ishlamayapti": {
+  "ru": "Акция привязана к клиенту, но не работает в заказе",
+  "en": "Promotion assigned to the client but not working in the order"
+ },
+ "Aksiya ko'rinmayapti": {
+  "ru": "Акция не видна",
+  "en": "Promotion not visible"
+ },
+ "Aksiya natijalari (ProTarget hisobi bo'yicha)": {
+  "ru": "Результаты акции (по данным ProTarget)",
+  "en": "Promotion results (per ProTarget)"
+ },
+ "Aksiya qo'shilgan, lekin buyurtmada ishlamasa: dasturchilar": {
+  "ru": "Акция добавлена, но не работает в заказе: разработчики",
+  "en": "Promotion added but not working in the order: developers"
+ },
+ "Aksiya qoidalarini agentlarga tushuntirish": {
+  "ru": "Объяснить агентам правила акции",
+  "en": "Explaining promotion rules to agents"
+ },
+ "Aksiya shartlari qanday?": {
+  "ru": "Каковы условия акции?",
+  "en": "What are the promotion terms?"
+ },
+ "Aksiya shartlari, muddati va qoidalarini o'zgartirish": {
+  "ru": "Изменение условий, сроков и правил акции",
+  "en": "Changing promotion terms, dates and rules"
+ },
+ "Aksiya tanlash imkoniyati chiqmayapti": {
+  "ru": "Не появляется возможность выбрать акцию",
+  "en": "The option to choose a promotion doesn't appear"
+ },
+ "Aksiya va chegirma ishlamayapti": {
+  "ru": "Акция и скидка не работают",
+  "en": "Promotion and discount not working"
+ },
+ "Aksiya va chegirmani klientga qo'llash": {
+  "ru": "Применение акций и скидок к клиенту",
+  "en": "Applying promotions and discounts to clients"
+ },
+ "Aksiya va narx shartlari ProTarget bilan 1C da bir xil bo'lishi": {
+  "ru": "Одинаковые условия акций и цен в ProTarget и 1С",
+  "en": "Keeping promotion and price terms identical in ProTarget and 1C"
+ },
+ "Aksiyaga biriktirilgan klientlar ro'yxatini chiqarib berish": {
+  "ru": "Выгрузить список клиентов, привязанных к акции",
+  "en": "Export the list of clients assigned to a promotion"
+ },
+ "Aksiyalar va ularga bog'liq ma'lumotlarni ProTarget'da yuritadi": {
+  "ru": "Ведёт акции и связанные с ними данные в ProTarget",
+  "en": "Maintains promotions and related data in ProTarget"
+ },
+ "Aksiyalar, hisob-kitob, 1C va ProTarget integratsiyasi": {
+  "ru": "Акции, расчёты, интеграция 1С и ProTarget",
+  "en": "Promotions, calculations, 1C and ProTarget integration"
+ },
+ "Almashinuv to'xtab qolgan yoki kechikmoqda": {
+  "ru": "Обмен остановился или задерживается",
+  "en": "The exchange stopped or is delayed"
+ },
+ "Aloqa kanallari": {
+  "ru": "Каналы связи",
+  "en": "Communication channels"
+ },
+ "Android yangilanishidan keyingi qurilma muammosi": {
+  "ru": "Проблема устройства после обновления Android",
+  "en": "Device issue after an Android update"
+ },
+ "Asosiy kanal ishlamayapti — zaxira kanalga o'tkazish": {
+  "ru": "Основной канал не работает — переключение на резервный",
+  "en": "Main link down — switch to the backup link"
+ },
+ "Asosiy kartochkani tasdiqlaydi": {
+  "ru": "Подтверждает основную карточку",
+  "en": "Confirms the main card"
+ },
+ "Avval biriktirish to'g'riligini tekshiradi": {
+  "ru": "Сначала проверяет правильность привязки",
+  "en": "First checks that the assignment is correct"
+ },
+ "Avval dostup va ulanishni tekshiradi": {
+  "ru": "Сначала проверяет доступ и подключение",
+  "en": "First checks access and the connection"
+ },
+ "Avval ko'lamini aniqlaydi va xabar beradi": {
+  "ru": "Сначала определяет масштаб и сообщает",
+  "en": "First determines the scope and reports it"
+ },
+ "Avval ma'lumot to'g'ri kiritilganini tekshiradi": {
+  "ru": "Сначала проверяет, правильно ли введены данные",
+  "en": "First checks that the data was entered correctly"
+ },
+ "Axborot xavfsizligi": {
+  "ru": "Информационная безопасность",
+  "en": "Information security"
+ },
+ "Ayrim saytlar ochilmayapti": {
+  "ru": "Некоторые сайты не открываются",
+  "en": "Some websites won't open"
+ },
+ "Bank bilan almashinuv xatosi": {
+  "ru": "Ошибка обмена с банком",
+  "en": "Bank exchange error"
+ },
+ "Barcode skaner savdo jarayonida ishlamayapti": {
+  "ru": "Сканер штрихкодов не работает в процессе продаж",
+  "en": "Barcode scanner not working during sales"
+ },
+ "Bildirishnoma funksiyasi ishlamayapti": {
+  "ru": "Не работает функция уведомлений",
+  "en": "The notification function doesn't work"
+ },
+ "Bildirishnomalar kelmayapti": {
+  "ru": "Не приходят уведомления",
+  "en": "Notifications not arriving"
+ },
+ "Bir akkauntga ikki qurilmadan kirish": {
+  "ru": "Вход в один аккаунт с двух устройств",
+  "en": "Logging into one account from two devices"
+ },
+ "Bir buyurtmada bir nechta aksiya qoidasi": {
+  "ru": "Несколько правил акций в одном заказе",
+  "en": "Several promotion rules in one order"
+ },
+ "Bir tizimda tuzatilgan ma'lumot ikkinchisiga o'tmayapti": {
+  "ru": "Данные, исправленные в одной системе, не переходят в другую",
+  "en": "Data corrected in one system doesn't carry over to the other"
+ },
+ "Bir xil ismli ikki profil": {
+  "ru": "Два профиля с одинаковым именем",
+  "en": "Two profiles with the same name"
+ },
+ "Bir xil muammo takrorlanyapti": {
+  "ru": "Одна и та же проблема повторяется",
+  "en": "The same problem keeps recurring"
+ },
+ "Biriktirilgan, lekin ishlamayapti": {
+  "ru": "Привязан, но не работает",
+  "en": "Assigned but not working"
+ },
+ "Biriktirilmagan bo'lsa — Saidabror; biriktirilgan, lekin ishlamasa — Dasturchilar; ProTarget tomonda — Pro-target": {
+  "ru": "Не привязана — Saidabror; привязана, но не работает — Разработчики; на стороне ProTarget — Pro-target",
+  "en": "Not assigned — Saidabror; assigned but not working — Developers; on the ProTarget side — Pro-target"
+ },
+ "Biriktirish to'g'ri, lekin aksiya hisoblanmasa": {
+  "ru": "Привязка верная, но акция не считается",
+  "en": "Assignment is correct but the promotion isn't applied"
+ },
+ "Birinchi yordam (L1): dostuplar to'g'ri ishlashini va dasturlar uzilishsiz ishlashini ta'minlaydi, muammo bo'lsa kerakli xodimga xabar beradi.": {
+  "ru": "Первая линия (L1): обеспечивает корректную работу доступов и бесперебойную работу программ, при проблемах сообщает нужному сотруднику.",
+  "en": "First line (L1): keeps access working correctly and systems running without interruption, and alerts the right person when there's a problem."
+ },
+ "Bitta xodimda, kompyuter muammosi — Jahongir; hammada — Xusniddin xabar beradi, Abdulbosit tuzatadi": {
+  "ru": "У одного сотрудника, проблема с компьютером — Jahongir; у всех — Xusniddin сообщает, Abdulbosit устраняет",
+  "en": "One person, computer problem — Jahongir; everyone — Xusniddin reports it, Abdulbosit fixes it"
+ },
+ "Biznes savollari": {
+  "ru": "Бизнес-вопросы",
+  "en": "Business questions"
+ },
+ "Bonus yoki sovg'a qachon beriladi?": {
+  "ru": "Когда выдадут бонус или подарок?",
+  "en": "When will the bonus or gift be given?"
+ },
+ "Boshqa hududga o'tgan agentning eski hudud dostupini olib tashlash": {
+  "ru": "Снятие доступа к старой территории у агента, перешедшего на другую",
+  "en": "Removing old-territory access from an agent who moved"
+ },
+ "Boshqa integratsiyalar (bot, EDO, bank)": {
+  "ru": "Другие интеграции (бот, ЭДО, банк)",
+  "en": "Other integrations (bot, e-invoicing, bank)"
+ },
+ "Bot bildirishnomasi kelmayapti": {
+  "ru": "Не приходят уведомления бота",
+  "en": "Bot notifications not arriving"
+ },
+ "Bot ishlayapti, lekin noto'g'ri javob bersa": {
+  "ru": "Если бот работает, но отвечает неправильно",
+  "en": "If the bot works but answers incorrectly"
+ },
+ "Bot javob bermasa, funksiya ishlamasa, yangi funksiya kerak bo'lsa.": {
+  "ru": "Бот не отвечает, функция не работает или нужна новая функция.",
+  "en": "The bot doesn't respond, a function doesn't work or a new function is needed."
+ },
+ "Bot javob bermayapti": {
+  "ru": "Бот не отвечает",
+  "en": "The bot doesn't respond"
+ },
+ "Bot javob bermayapti yoki xabar yuborildi, natija qaytmadi": {
+  "ru": "Бот не отвечает или сообщение отправлено, а результата нет",
+  "en": "The bot doesn't respond, or a message was sent but nothing came back"
+ },
+ "Bot noto'g'ri ma'lumot ko'rsatyapti yoki buyruqqa xato javob beryapti": {
+  "ru": "Бот показывает неверные данные или неправильно отвечает на команды",
+  "en": "The bot shows wrong data or responds to commands incorrectly"
+ },
+ "Bot orqali klient qo'shish va uning holatini kuzatish": {
+  "ru": "Добавление клиента через бот и отслеживание статуса",
+  "en": "Adding a client via the bot and tracking its status"
+ },
+ "Bot orqali qo'shilgan klient ProTargetga kelmayapti": {
+  "ru": "Клиент, добавленный через бот, не приходит в ProTarget",
+  "en": "A client added via the bot doesn't reach ProTarget"
+ },
+ "Bot serveri ishlamasa": {
+  "ru": "Если не работает сервер бота",
+  "en": "If the bot server is down"
+ },
+ "Bot umuman javob bermasa — avval uzilishni tekshiradi": {
+  "ru": "Если бот вообще не отвечает — сначала проверяет сбой",
+  "en": "If the bot doesn't respond at all — first checks for an outage"
+ },
+ "Botda klient qo'shish funksiyasi ishlamayapti": {
+  "ru": "Не работает функция добавления клиента в боте",
+  "en": "The bot's add-client function doesn't work"
+ },
+ "Botda klient qo'shish tugmasi yoki menyusi chiqmayapti (huquq masalasi)": {
+  "ru": "В боте не появляется кнопка или меню добавления клиента (вопрос прав)",
+  "en": "The bot doesn't show the add-client button or menu (permissions issue)"
+ },
+ "Botda qo'shilgan klientni qo'lda tuzatish yoki tasdiqlash": {
+  "ru": "Ручное исправление или подтверждение клиента, добавленного через бот",
+  "en": "Manually correcting or approving a client added via the bot"
+ },
+ "Botga kirish": {
+  "ru": "Вход в бот",
+  "en": "Logging into the bot"
+ },
+ "Botga kirish, menyu yoki tugma chiqmasligi.": {
+  "ru": "Вход в бот, не появляется меню или кнопка.",
+  "en": "Logging into the bot, menu or button not showing."
+ },
+ "Botga yangi funksiya qo'shish": {
+  "ru": "Добавление новой функции в бот",
+  "en": "Adding a new function to the bot"
+ },
+ "Botni boshqa telefon raqamiga bog'lash": {
+  "ru": "Привязка бота к другому номеру телефона",
+  "en": "Linking the bot to another phone number"
+ },
+ "Bu huquq sozlamasi: IT administrator agent hududini va ko'rish huquqini to'g'rilaydi. Hudud kartochkada noto'g'ri bo'lsa — Operator tuzatadi.": {
+  "ru": "Это настройка прав: IT-администратор исправляет территорию агента и права просмотра. Если территория неверна в карточке — исправляет Оператор.",
+  "en": "This is a permissions setting: the IT administrator fixes the agent's territory and viewing rights. If the territory is wrong on the card — the Operator corrects it."
+ },
+ "Bunday hisobot tizimda umuman bo'lmasa — yangi hisobot": {
+  "ru": "Если такого отчёта в системе вообще нет — новый отчёт",
+  "en": "If no such report exists in the system — a new report"
+ },
+ "Butun ofis yoki filial aloqasiz qolsa": {
+  "ru": "Если весь офис или филиал без связи",
+  "en": "If the whole office or branch is offline"
+ },
+ "Butun ofis yoki filial internetsiz bo'lsa — Abdulbosit": {
+  "ru": "Если весь офис или филиал без интернета — Abdulbosit",
+  "en": "If the whole office or branch has no internet — Abdulbosit"
+ },
+ "Butun ofis yoki filial internetsiz qolsa": {
+  "ru": "Если весь офис или филиал без интернета",
+  "en": "If the whole office or branch has no internet"
+ },
+ "Buyurtma 1C da ko'rinmayapti": {
+  "ru": "Заказ не виден в 1С",
+  "en": "Order not visible in 1C"
+ },
+ "Buyurtma summasi 1C dagi summadan farq qiladi": {
+  "ru": "Сумма заказа отличается от суммы в 1С",
+  "en": "Order total differs from 1C"
+ },
+ "Buyurtma summasi tizimlar o'rtasida farq qiladi (tizim sababli)": {
+  "ru": "Сумма заказа различается между системами (по вине системы)",
+  "en": "Order total differs between systems (system fault)"
+ },
+ "Buyurtma tasdiqlangan, lekin 1C ga uzatilmasa: dasturchilar": {
+  "ru": "Заказ подтверждён, но не передан в 1С: разработчики",
+  "en": "Order confirmed but not passed to 1C: developers"
+ },
+ "Buyurtma va tovar": {
+  "ru": "Заказы и товары",
+  "en": "Orders and products"
+ },
+ "Buyurtma yuborilmayapti, xato chiqyapti": {
+  "ru": "Заказ не отправляется, появляется ошибка",
+  "en": "Order won't send, an error appears"
+ },
+ "Buyurtma yuborishda texnik xato chiqyapti (diagnostika)": {
+  "ru": "Техническая ошибка при отправке заказа (диагностика)",
+  "en": "Technical error when sending an order (diagnostics)"
+ },
+ "Buyurtma, klient yoki o'zgarish tizimlar o'rtasida o'tmasa yoki farq qilsa.": {
+  "ru": "Заказ, клиент или изменение не передаётся между системами или различается.",
+  "en": "An order, client or change doesn't transfer between systems or differs."
+ },
+ "Buyurtmaga tovar qo'shish, almashtirish yoki o'chirish": {
+  "ru": "Добавление, замена или удаление товара в заказе",
+  "en": "Adding, replacing or removing items in an order"
+ },
+ "Buyurtmani bekor qilish yoki qaytarish": {
+  "ru": "Отмена или возврат заказа",
+  "en": "Cancelling or returning an order"
+ },
+ "Buyurtmani o'chiradi, tovar va miqdorni o'zgartiradi": {
+  "ru": "Удаляет заказы, меняет товары и количество",
+  "en": "Deletes orders, changes items and quantities"
+ },
+ "Buyurtmani o'chirish": {
+  "ru": "Удаление заказа",
+  "en": "Deleting an order"
+ },
+ "Buyurtmani o'chirish, tovar qo'shish/almashtirish, miqdor, narx, summa farqi.": {
+  "ru": "Удаление заказа, добавление/замена товара, количество, цена, расхождение суммы.",
+  "en": "Deleting an order, adding/replacing items, quantity, price, amount mismatch."
+ },
+ "Chegirma foizi yoki limiti klientda noto'g'ri": {
+  "ru": "Неверный процент или лимит скидки у клиента",
+  "en": "Wrong discount percentage or limit for a client"
+ },
+ "Chegirma hisoblanmayapti yoki noto'g'ri hisoblanyapti": {
+  "ru": "Скидка не рассчитывается или рассчитывается неверно",
+  "en": "Discount not calculated or calculated wrongly"
+ },
+ "Chegirma yoki maxsus narxni tasdiqlash": {
+  "ru": "Согласование скидки или специальной цены",
+  "en": "Approving a discount or special price"
+ },
+ "Chek printer": {
+  "ru": "Чековый принтер",
+  "en": "Receipt printer"
+ },
+ "Dala nazorati": {
+  "ru": "Полевой контроль",
+  "en": "Field supervision"
+ },
+ "Darhol kompyuterni tarmoqdan uzing va hech narsani o'chirmang. Jahongir kompyuterni ajratadi; Abdulbosit serverlar va zaxira nusxalarni tekshiradi, kerak bo'lsa tiklaydi.": {
+  "ru": "Немедленно отключите компьютер от сети и ничего не удаляйте. Jahongir изолирует компьютер; Abdulbosit проверяет серверы и резервные копии, при необходимости восстанавливает.",
+  "en": "Disconnect the computer from the network immediately and don't delete anything. Jahongir isolates the computer; Abdulbosit checks the servers and backups and restores them if needed."
+ },
+ "Dastur ishlamasa — Xusniddin; aksiya hisoblanmasa yoki 1C ga o'tmasa — Dasturchilar jamoasi; ProTarget dasturining o'zida xato — Pro-target.": {
+  "ru": "Программа не работает — Xusniddin; акция не считается или не уходит в 1С — команда разработчиков; ошибка в самой программе ProTarget — Pro-target.",
+  "en": "System not working — Xusniddin; promotion not calculated or not reaching 1C — Developers team; error in ProTarget itself — Pro-target."
+ },
+ "Dastur ishlamay qolganda ko'lamini aniqlash, kerakli mutaxassisga yetkazish va holat haqida xabar berish.": {
+  "ru": "Определить масштаб, когда программа перестала работать, передать нужному специалисту и сообщить о статусе.",
+  "en": "When a system stops working: determine the scope, escalate to the right specialist and keep everyone updated."
+ },
+ "Dastur o'rnatish, litsenziya, antivirus va virus ogohlantirishi": {
+  "ru": "Установка программ, лицензии, антивирус и предупреждения о вирусах",
+  "en": "Software installation, licences, antivirus and virus warnings"
+ },
+ "Dastur yoki ilovaga yangi funksiya taklifi": {
+  "ru": "Предложение новой функции для программы или приложения",
+  "en": "New feature request for the software or app"
+ },
+ "Dasturchilar": {
+  "ru": "Разработчики",
+  "en": "Developers"
+ },
+ "Dasturchilar jamoasi": {
+  "ru": "Команда разработчиков",
+  "en": "Developers team"
+ },
+ "Dasturchilar uchun test baza kerak": {
+  "ru": "Нужна тестовая база для разработчиков",
+  "en": "Need a test database for developers"
+ },
+ "Dasturdagi bug, yangilanishdan keyingi xato, plan hisoblash, xarita va bildirishnomalar.": {
+  "ru": "Баг в программе, ошибка после обновления, расчёт плана, карта и уведомления.",
+  "en": "Bugs, errors after updates, plan calculation, maps and notifications."
+ },
+ "Dasturdagi ma'lumotni kiritish, o'zgartirish, o'chirish yoki chiqarib berish kerak": {
+  "ru": "Нужно внести, изменить, удалить или выгрузить данные в программе",
+  "en": "Data in the system needs to be entered, changed, deleted or exported"
+ },
+ "Dasturdagi xato (bug)": {
+  "ru": "Ошибка в программе (баг)",
+  "en": "Software bug"
+ },
+ "Dasturiy o'zgarish yoki integratsiya kodi kerak bo'lsa — Dasturchilar jamoasi.": {
+  "ru": "Если нужно изменение программы или кода интеграции — команда разработчиков.",
+  "en": "If a software change or integration code is needed — Developers team."
+ },
+ "Dasturiy o'zgarishlar va integratsiya": {
+  "ru": "Изменения в программах и интеграция",
+  "en": "Software changes and integration"
+ },
+ "Dasturlar (ProTarget, 1C, 1C bot, mobil ilova) to'g'ri ishlayotganini kuzatadi": {
+  "ru": "Следит за корректной работой программ (ProTarget, 1С, 1С-бот, мобильное приложение)",
+  "en": "Monitors that systems work correctly (ProTarget, 1C, 1C bot, mobile app)"
+ },
+ "Dasturlar, integratsiya va hisobotlarni ishlab chiqadi va tuzatadi.": {
+  "ru": "Разрабатывает и исправляет программы, интеграции и отчёты.",
+  "en": "Develops and fixes software, integrations and reports."
+ },
+ "Dasturlarga dostup — Xusniddin (supervayzer yoki rahbar tasdiqlagandan keyin)": {
+  "ru": "Доступы к программам — Xusniddin (после согласования супервайзера или руководителя)",
+  "en": "System access — Xusniddin (after the supervisor or manager approves)"
+ },
+ "Dasturlarga dostup — supervayzer yoki rahbar tasdiqlagandan keyin": {
+  "ru": "Доступы к программам — после согласования супервайзера или руководителя",
+  "en": "System access — after the supervisor or manager approves"
+ },
+ "Dasturlash": {
+  "ru": "Разработка",
+  "en": "Development"
+ },
+ "Debitorlik (qarzdorlik) ro'yxatini chiqarib berish": {
+  "ru": "Выгрузить список дебиторской задолженности",
+  "en": "Export the receivables (debt) list"
+ },
+ "DevOps": {
+  "ru": "DevOps",
+  "en": "DevOps"
+ },
+ "Disk to'lgan; xotirani oshirish": {
+  "ru": "Диск заполнен; увеличение памяти",
+  "en": "Disk full; increasing storage"
+ },
+ "Distributsiya": {
+  "ru": "Дистрибуция",
+  "en": "Distribution"
+ },
+ "Dostup ochadi, o'zgartiradi va yopadi: ProTarget, 1C, PRBC, pochta": {
+  "ru": "Открывает, изменяет и закрывает доступы: ProTarget, 1С, PRBC, почта",
+  "en": "Opens, changes and closes access: ProTarget, 1C, PRBC, email"
+ },
+ "Dostup ochish": {
+  "ru": "Открытие доступа",
+  "en": "Granting access"
+ },
+ "Dostup va ilovalar": {
+  "ru": "Доступы и приложения",
+  "en": "Access and applications"
+ },
+ "Dostup, parol va akkaunt (Xusniddin); dasturdagi ma'lumot (Operator); dastur xatosi (Dasturchilar).": {
+  "ru": "Доступ, пароль и аккаунт (Xusniddin); данные в программе (Оператор); ошибки программ (Разработчики).",
+  "en": "Access, password and account (Xusniddin); data in the system (Operator); software errors (Developers)."
+ },
+ "Dostup, qurilma, tarmoq va serverlar": {
+  "ru": "Доступы, устройства, сеть и серверы",
+  "en": "Access, devices, network and servers"
+ },
+ "Dostuplar ko'rinmayapti yoki menyular yo'qolgan": {
+  "ru": "Не видны доступы или пропали меню",
+  "en": "Access not visible or menus disappeared"
+ },
+ "Dostuplarini yopadi": {
+  "ru": "Закрывает его доступы",
+  "en": "Revokes their access"
+ },
+ "Dostupni o'zgartirish va yopish": {
+  "ru": "Изменение и закрытие доступа",
+  "en": "Changing and revoking access"
+ },
+ "Dostupni vaqtincha to'xtatish": {
+  "ru": "Временная приостановка доступа",
+  "en": "Temporarily suspending access"
+ },
+ "Dublikat integratsiya sababli paydo bo'lsa": {
+  "ru": "Если дубликат появился из-за интеграции",
+  "en": "If the duplicate appeared because of the integration"
+ },
+ "Dublikat integratsiya sababli qayta-qayta paydo bo'lsa": {
+  "ru": "Если дубликат появляется снова и снова из-за интеграции",
+  "en": "If the duplicate keeps reappearing because of the integration"
+ },
+ "Dublikat klient (\"bunday klient mavjud\", ikki marta yaratilgan)": {
+  "ru": "Дубликат клиента («такой клиент уже существует», создан дважды)",
+  "en": "Duplicate client (\"this client already exists\", created twice)"
+ },
+ "Dublikat klientdagi zakaz va qarzni asosiy kartochkaga o'tkazish": {
+  "ru": "Перенос заказов и долга с дубликата на основную карточку клиента",
+  "en": "Moving orders and debt from a duplicate to the main client card"
+ },
+ "Dublikat klientlar ro'yxatini chiqarib berish": {
+  "ru": "Выгрузить список дубликатов клиентов",
+  "en": "Export the list of duplicate clients"
+ },
+ "Dublikat klientlarni birlashtiradi, yopilgan nuqtalarni ro'yxatdan chiqaradi": {
+  "ru": "Объединяет дубликаты клиентов, убирает закрытые точки из списка",
+  "en": "Merges duplicate clients, removes closed outlets from the list"
+ },
+ "EDO yoki soliq (elektron faktura) integratsiyasi xatosi": {
+  "ru": "Ошибка интеграции ЭДО или налоговой (электронные счета-фактуры)",
+  "en": "E-invoicing (EDO) or tax integration error"
+ },
+ "Email spamga tushyapti": {
+  "ru": "Письма попадают в спам",
+  "en": "Email going to spam"
+ },
+ "Email yubormayapti yoki qabul qilmayapti": {
+  "ru": "Письма не отправляются или не приходят",
+  "en": "Email not sending or not receiving"
+ },
+ "Emailni telefonga sozlash": {
+  "ru": "Настройка почты на телефоне",
+  "en": "Setting up email on a phone"
+ },
+ "Eski telefondan yangisiga akkauntni ko'chirish": {
+  "ru": "Перенос аккаунта со старого телефона на новый",
+  "en": "Moving the account from an old phone to a new one"
+ },
+ "Excelga eksportda ustun yoki ma'lumot yo'qolmoqda": {
+  "ru": "При экспорте в Excel пропадают столбцы или данные",
+  "en": "Columns or data go missing when exporting to Excel"
+ },
+ "Face terminal va turniketning qurilma tomoni": {
+  "ru": "Face-терминал и турникет (аппаратная часть)",
+  "en": "Face terminal and turnstile (hardware side)"
+ },
+ "Faqat Wi-Fi da ishlaydi": {
+  "ru": "Работает только по Wi-Fi",
+  "en": "Works only on Wi-Fi"
+ },
+ "Faqat bitta kompyuterda va sabab kompyuterning o'zida bo'lsa": {
+  "ru": "Только на одном компьютере и причина в самом компьютере",
+  "en": "Only on one computer and the cause is the computer itself"
+ },
+ "Faqat bitta xodimda bo'lsa — ulanishni tekshiradi": {
+  "ru": "Если только у одного сотрудника — проверяет подключение",
+  "en": "If it's only one person — checks their connection"
+ },
+ "Faqat supervayzer tasdiqlagan so'rov bo'yicha": {
+  "ru": "Только по запросу, согласованному супервайзером",
+  "en": "Only on a supervisor-approved request"
+ },
+ "Fayllarni eski kompyuterdan yangisiga ko'chirish": {
+  "ru": "Перенос файлов со старого компьютера на новый",
+  "en": "Moving files from an old computer to a new one"
+ },
+ "Filial bilan aloqa yo'q (VPN uzildi)": {
+  "ru": "Нет связи с филиалом (VPN отключился)",
+  "en": "No connection to a branch (VPN dropped)"
+ },
+ "Filial bo'yicha klientlar ro'yxatini chiqarib berish": {
+  "ru": "Выгрузить список клиентов по филиалу",
+  "en": "Export the client list by branch"
+ },
+ "Filial interneti": {
+  "ru": "Интернет в филиале",
+  "en": "Branch internet"
+ },
+ "Filial yoki hudud bo'yicha hisobot olish imkoniyati": {
+  "ru": "Возможность получать отчёт по филиалу или территории",
+  "en": "Being able to get a report by branch or territory"
+ },
+ "Filialdagi qurilmani joyida tekshirish kerak bo'lsa": {
+  "ru": "Если нужно проверить оборудование в филиале на месте",
+  "en": "If equipment at the branch needs an on-site check"
+ },
+ "Filiallar bilan aloqa, provayder, zaxira kanal, router, tashqi IP va portlar.": {
+  "ru": "Связь с филиалами, провайдер, резервный канал, роутер, внешний IP и порты.",
+  "en": "Branch connectivity, ISP, backup link, router, external IP and ports."
+ },
+ "Foydalanuvchi rolini o'zgartirish (masalan, agent → supervayzer)": {
+  "ru": "Изменение роли пользователя (например, агент → супервайзер)",
+  "en": "Changing a user's role (e.g. agent → supervisor)"
+ },
+ "Foydalanuvchi yaratish, parol, huquq va menyular.": {
+  "ru": "Создание пользователя, пароль, права и меню.",
+  "en": "Creating users, passwords, permissions and menus."
+ },
+ "GPS qurilma yoki transport kuzatuvi": {
+  "ru": "GPS-устройство или отслеживание транспорта",
+  "en": "GPS device or vehicle tracking"
+ },
+ "Haftalik jadval noto'g'ri tuzilgan": {
+  "ru": "Недельный график составлен неверно",
+  "en": "Weekly schedule set up incorrectly"
+ },
+ "Hamkasbda bor dostup menda yo'q": {
+  "ru": "У коллеги есть доступ, а у меня нет",
+  "en": "A colleague has access but I don't"
+ },
+ "Hammada bo'lsa — tizimli uzilish": {
+  "ru": "Если у всех — системный сбой",
+  "en": "If it's everyone — system outage"
+ },
+ "Hammada ochilmasa — server muammosi": {
+  "ru": "Если не открывается у всех — проблема сервера",
+  "en": "If it won't open for anyone — a server problem"
+ },
+ "Havolani bosmang, xatni o'chirmang — Texnikka yuboring. Agar havola bosilgan yoki parol kiritilgan bo'lsa — darhol IT administratorga, parol almashtiriladi.": {
+  "ru": "Не переходите по ссылке и не удаляйте письмо — перешлите Технику. Если по ссылке перешли или ввели пароль — сразу к IT-администратору, пароль будет изменён.",
+  "en": "Don't click the link or delete the email — forward it to the Technician. If the link was clicked or a password entered — contact the IT administrator immediately; the password will be changed."
+ },
+ "Hisoblash formulasi noto'g'ri": {
+  "ru": "Неверная формула расчёта",
+  "en": "Wrong calculation formula"
+ },
+ "Hisobot": {
+  "ru": "Отчёты",
+  "en": "Reports"
+ },
+ "Hisobot juda sekin shakllanyapti": {
+  "ru": "Отчёт формируется очень медленно",
+  "en": "A report takes very long to generate"
+ },
+ "Hisobot ochilmasa, yangilanmasa, formula xato, yangi ko'rsatkich kerak.": {
+  "ru": "Отчёт не открывается или не обновляется, ошибка формулы, нужен новый показатель.",
+  "en": "A report won't open or update, a formula is wrong, a new metric is needed."
+ },
+ "Hisobot ochilmayapti yoki yuklanmayapti": {
+  "ru": "Отчёт не открывается или не загружается",
+  "en": "A report won't open or load"
+ },
+ "Hisobot va tahlil": {
+  "ru": "Отчёты и аналитика",
+  "en": "Reports and analytics"
+ },
+ "Hisobot yangilanmagan, eski sana turibdi": {
+  "ru": "Отчёт не обновился, стоит старая дата",
+  "en": "A report hasn't updated, shows an old date"
+ },
+ "Hisobotda summa noto'g'ri": {
+  "ru": "Неверная сумма в отчёте",
+  "en": "Wrong total in a report"
+ },
+ "Hisobotdagi raqam noto'g'ri": {
+  "ru": "Неверная цифра в отчёте",
+  "en": "Wrong figure in a report"
+ },
+ "Hisobotdagi son tizim xatosi sabab mos kelmayapti": {
+  "ru": "Цифры в отчёте не сходятся из-за системной ошибки",
+  "en": "Report figures don't match due to a system error"
+ },
+ "Hisobotga kirish huquqi kerak": {
+  "ru": "Нужен доступ к отчёту",
+  "en": "Need access to a report"
+ },
+ "Hisobotga yangi ustun yoki ko'rsatkich qo'shish": {
+  "ru": "Добавление нового столбца или показателя в отчёт",
+  "en": "Adding a new column or metric to a report"
+ },
+ "Hisobotlar": {
+  "ru": "Отчёты",
+  "en": "Reports"
+ },
+ "Hisobotlarga ruxsat": {
+  "ru": "Доступ к отчётам",
+  "en": "Report access"
+ },
+ "Hisobotlarga ruxsat, hisobot xatolari, yangi ko'rsatkichlar, o'zgarishlar tarixi va yangi funksiya takliflari.": {
+  "ru": "Доступ к отчётам, ошибки отчётов, новые показатели, история изменений и предложения новых функций.",
+  "en": "Report access, report errors, new metrics, change history and new feature requests."
+ },
+ "Hisobotni ko'rish huquqi.": {
+  "ru": "Право на просмотр отчётов.",
+  "en": "Permission to view reports."
+ },
+ "Hududni to'g'rilash": {
+  "ru": "Исправление территории",
+  "en": "Correcting the territory"
+ },
+ "Hududning o'zi agentga noto'g'ri biriktirilgan bo'lsa": {
+  "ru": "Если неверно привязана сама территория агента",
+  "en": "If the agent's territory itself is assigned incorrectly"
+ },
+ "Hujjat sanasini o'zgartirish": {
+  "ru": "Изменение даты документа",
+  "en": "Changing a document date"
+ },
+ "Hujjatlar: vozvrat, to'lov va tuzatish": {
+  "ru": "Документы: возврат, оплата и исправление",
+  "en": "Documents: returns, payments and corrections"
+ },
+ "Hujjatni boshqa agent nomiga o'tkazish": {
+  "ru": "Переоформить документ на другого агента",
+  "en": "Reassign a document to another agent"
+ },
+ "Hujjatni o'tkazilmagan holatga qaytarish (provodkani bekor qilish)": {
+  "ru": "Вернуть документ в непроведённое состояние (отменить проводку)",
+  "en": "Unpost a document (cancel the posting)"
+ },
+ "Huquq muddatini uzaytirish": {
+  "ru": "Продление срока прав",
+  "en": "Extending a permission"
+ },
+ "Huquqlarni tekshirish (audit) kerak bo'lsa": {
+  "ru": "Если нужна проверка прав (аудит)",
+  "en": "If a permissions audit is needed"
+ },
+ "IP manzil to'qnashuvi": {
+  "ru": "Конфликт IP-адресов",
+  "en": "IP address conflict"
+ },
+ "IP-telefon": {
+  "ru": "IP-телефон",
+  "en": "IP phone"
+ },
+ "IT administrator agent qurilmasida sinxronlashni va akkauntni tekshiradi. Muammo ko'p agentda bo'lsa — Dasturchilar.": {
+  "ru": "IT-администратор проверяет синхронизацию и аккаунт на устройстве агента. Если проблема у многих агентов — Разработчики.",
+  "en": "The IT administrator checks the sync and account on the agent's device. If many agents are affected — Developers."
+ },
+ "IT administrator bo'lmasa yoki tizim parol tiklashga ruxsat bermasa": {
+  "ru": "Если IT-администратора нет или система не позволяет сбросить пароль",
+  "en": "If the IT administrator is unavailable or the system won't allow a reset"
+ },
+ "IT administrator supervayzer huquqlariga jamoa agentlarini biriktiradi.": {
+  "ru": "IT-администратор добавляет агентов команды в права супервайзера.",
+  "en": "The IT administrator adds the team's agents to the supervisor's permissions."
+ },
+ "IT infratuzilma": {
+  "ru": "IT-инфраструктура",
+  "en": "IT infrastructure"
+ },
+ "IT ishlari bajarilishini nazorat qilish": {
+  "ru": "Контроль выполнения IT-работ",
+  "en": "Overseeing IT work"
+ },
+ "IT operator (L1)": {
+  "ru": "IT-оператор (L1)",
+  "en": "IT operator (L1)"
+ },
+ "IT operator agentga yangi versiya havolasini yuboradi yoki telefonda yangilab beradi; yangilangach qayta kiriladi.": {
+  "ru": "IT-оператор отправляет агенту ссылку на новую версию или обновляет на телефоне; после обновления нужно войти снова.",
+  "en": "The IT operator sends the agent the new version link or updates it on the phone; after updating, log in again."
+ },
+ "IT operator boshqa xodimlarda ham tekshiradi. Bitta xodimda bo'lsa — o'zi hal qiladi yoki Jahongir'ga beradi; hammada bo'lsa — Abdulbositga xabar beradi va guruhga uzilish haqida yozadi.": {
+  "ru": "IT-оператор проверяет у других сотрудников. Если у одного — решает сам или передаёт Jahongir; если у всех — сообщает Abdulbosit и пишет в группу о сбое.",
+  "en": "The IT operator checks with other colleagues. If it's just one person — fixes it or hands it to Jahongir; if it's everyone — notifies Abdulbosit and posts about the outage in the group."
+ },
+ "IT texnik yordam": {
+  "ru": "IT-техподдержка",
+  "en": "IT technical support"
+ },
+ "IT xizmati": {
+  "ru": "IT-служба",
+  "en": "IT service"
+ },
+ "Ichki sayt va portal ochilmayapti": {
+  "ru": "Не открывается внутренний сайт или портал",
+  "en": "Internal site or portal won't open"
+ },
+ "Ikkala filial supervayzerlari kelishadi": {
+  "ru": "Супервайзеры обоих филиалов договариваются",
+  "en": "The supervisors of both branches agree"
+ },
+ "Ikkinchi (ortiqcha) akkaunt ochilib qolgan": {
+  "ru": "Открыт второй (лишний) аккаунт",
+  "en": "A second (extra) account was created"
+ },
+ "Ilova crash yoki sinxronizatsiya xatosi": {
+  "ru": "Сбой приложения или ошибка синхронизации",
+  "en": "App crash or sync error"
+ },
+ "Ilova ochilmasa, sinxronlanmasa, buyurtma yuborilmasa, ruxsatlar o'chsa.": {
+  "ru": "Приложение не открывается, не синхронизируется, заказ не отправляется, отключились разрешения.",
+  "en": "The app won't open or sync, orders won't send, permissions got turned off."
+ },
+ "Ilova ochilmayapti": {
+  "ru": "Приложение не открывается",
+  "en": "App won't open"
+ },
+ "Ilova ochilmayapti, oq ekran, o'z-o'zidan yopilyapti": {
+  "ru": "Приложение не открывается, белый экран, само закрывается",
+  "en": "App won't open, white screen, closes by itself"
+ },
+ "Ilovani qayta ulash": {
+  "ru": "Переподключение приложения",
+  "en": "Reconnecting the app"
+ },
+ "Ilovani yangi versiyaga yangilash (\"eski versiya\" deb kirgizmayapti)": {
+  "ru": "Обновление приложения до новой версии (не пускает из-за «старой версии»)",
+  "en": "Updating the app to the new version (blocked as \"old version\")"
+ },
+ "Infratuzilma": {
+  "ru": "Инфраструктура",
+  "en": "Infrastructure"
+ },
+ "Infratuzilma uzluksiz ishlashi uchun javob beradi; Xusniddin va Jahongir ishlari bajarilishini nazorat qiladi, ish ko'p bo'lganda ularga yordam beradi.": {
+  "ru": "Отвечает за бесперебойную работу инфраструктуры; контролирует выполнение работ Xusniddin и Jahongir и помогает им при большой нагрузке.",
+  "en": "Responsible for uninterrupted infrastructure; oversees Xusniddin's and Jahongir's work and helps them when the load is high."
+ },
+ "Integratsiya": {
+  "ru": "Интеграция",
+  "en": "Integration"
+ },
+ "Integratsiya uchun tashqi IP yoki port ochish": {
+  "ru": "Открыть внешний IP или порт для интеграции",
+  "en": "Open an external IP or port for an integration"
+ },
+ "Integratsiya xatosi log va vaqtini tahlil qilish": {
+  "ru": "Анализ лога и времени ошибки интеграции",
+  "en": "Analysing the integration error log and timing"
+ },
+ "Internet bor, ilova ochilmasa: Xusniddin": {
+  "ru": "Интернет есть, приложение не открывается: Xusniddin",
+  "en": "Internet works but the app won't open: Xusniddin"
+ },
+ "Internet bor, lekin serverga ulanmayapti": {
+  "ru": "Интернет есть, но нет подключения к серверу",
+  "en": "Internet works but can't connect to the server"
+ },
+ "Internet uzilganda kiritilgan buyurtma keyin yuborilmayapti": {
+  "ru": "Заказ, введённый без интернета, потом не отправляется",
+  "en": "An order entered offline doesn't send later"
+ },
+ "Internet va tarmoq": {
+  "ru": "Интернет и сеть",
+  "en": "Internet and network"
+ },
+ "Internet yo'q": {
+  "ru": "Нет интернета",
+  "en": "No internet"
+ },
+ "Internet yo'q, ilova ishlamayapti": {
+  "ru": "Нет интернета, приложение не работает",
+  "en": "No internet, the app doesn't work"
+ },
+ "Internet yo'q, sekin yoki uzilib qolyapti": {
+  "ru": "Нет интернета, медленный или обрывается",
+  "en": "No internet, slow or dropping"
+ },
+ "Internet, VPN va filial tarmog'idagi muammolarni hal qiladi": {
+  "ru": "Решает проблемы с интернетом, VPN и сетью филиалов",
+  "en": "Resolves internet, VPN and branch network issues"
+ },
+ "Ish ko'p bo'lganda yoki murakkab holatda ularga yordam beradi": {
+  "ru": "Помогает им при большой нагрузке или в сложных случаях",
+  "en": "Helps them when the load is high or in complex cases"
+ },
+ "Ish ko'p — L1 xodimlarga yordam kerak": {
+  "ru": "Много работы — сотрудникам L1 нужна помощь",
+  "en": "Too much work — L1 staff need help"
+ },
+ "Ishdan ketgan agent dostupini yopish": {
+  "ru": "Закрытие доступа уволившегося агента",
+  "en": "Revoking access for an agent who left"
+ },
+ "Ishdan ketgan agent profilini nofaol qilish": {
+  "ru": "Деактивация профиля уволившегося агента",
+  "en": "Deactivating the profile of an agent who left"
+ },
+ "Ishdan ketgan xodimdan qurilmalarni qaytarib olish": {
+  "ru": "Возврат устройств от уволившегося сотрудника",
+  "en": "Collecting devices from a departed employee"
+ },
+ "Ishdan ketgan xodimning dostuplari to'liq yopilganini tekshirish": {
+  "ru": "Проверка, что все доступы уволившегося сотрудника полностью закрыты",
+  "en": "Checking that all access for a departed employee is fully revoked"
+ },
+ "Ishga kirgan sana va faol holatni to'g'rilash": {
+  "ru": "Исправление даты приёма и статуса активности",
+  "en": "Correcting the hire date and active status"
+ },
+ "Ism-familiya, telefon, lavozim, bo'lim, filial, savdo guruhini o'zgartirish": {
+  "ru": "Изменение ФИО, телефона, должности, отдела, филиала, торговой группы",
+  "en": "Changing full name, phone, position, department, branch or sales group"
+ },
+ "Jahongir ish joyi va qurilmani (kompyuter, telefon) tayyorlaydi. Xusniddin dasturlarga (1C, ProTarget, PRBC, pochta) dostup ochadi — supervayzer yoki rahbar tasdiqlagandan keyin.": {
+  "ru": "Jahongir готовит рабочее место и устройства (компьютер, телефон). Xusniddin открывает доступы к программам (1С, ProTarget, PRBC, почта) — после согласования супервайзера или руководителя.",
+  "en": "Jahongir prepares the workstation and devices (computer, phone). Xusniddin grants access to the systems (1C, ProTarget, PRBC, email) — after the supervisor or manager approves."
+ },
+ "KPI va bonus hisob-kitobi": {
+  "ru": "Расчёт KPI и бонусов",
+  "en": "KPI and bonus calculation"
+ },
+ "Kamera, geolokatsiya va boshqa ruxsatlar o'chib qolgan": {
+  "ru": "Отключились разрешения на камеру, геолокацию и другие",
+  "en": "Camera, location and other permissions got turned off"
+ },
+ "Kerakli aksiya tizimda umuman bo'lmasa — yangi aksiya": {
+  "ru": "Если нужной акции в системе вообще нет — новая акция",
+  "en": "If the needed promotion doesn't exist at all — a new promotion"
+ },
+ "Kerakli ma'lumotni dasturdan chiqarib beradi (ro'yxat, eksport)": {
+  "ru": "Выгружает нужные данные из программы (списки, экспорт)",
+  "en": "Exports required data from the system (lists, exports)"
+ },
+ "Kerakli tovar ro'yxatda chiqmayapti": {
+  "ru": "Нужный товар не отображается в списке",
+  "en": "The needed product isn't in the list"
+ },
+ "Kim nimani o'zgartirganini ko'rish, yangi funksiya taklifi.": {
+  "ru": "Посмотреть, кто что изменил, предложить новую функцию.",
+  "en": "See who changed what, request a new feature."
+ },
+ "Kira olmayapman, dostup kerak yoki dastur ishlamayapti": {
+  "ru": "Не могу войти, нужен доступ или программа не работает",
+  "en": "Can't log in, need access, or a system isn't working"
+ },
+ "Kirish muammolari": {
+  "ru": "Проблемы со входом",
+  "en": "Login problems"
+ },
+ "Kirish, parol, dostup va huquqlar, telefon almashtirish, mobil ilova va ProTarget dasturidagi xatolar.": {
+  "ru": "Вход, пароль, доступы и права, смена телефона, ошибки мобильного приложения и программы ProTarget.",
+  "en": "Login, password, access and permissions, phone change, errors in the mobile app and ProTarget."
+ },
+ "Klient aksiyaga biriktirilmagan": {
+  "ru": "Клиент не привязан к акции",
+  "en": "The client isn't assigned to the promotion"
+ },
+ "Klient bazada bor, lekin agentda ko'rinmayapti": {
+  "ru": "Клиент есть в базе, но не виден у агента",
+  "en": "The client is in the database but not visible to the agent"
+ },
+ "Klient bazada umuman topilmasa — yangi klient yaratadi": {
+  "ru": "Если клиента вообще нет в базе — создаёт нового клиента",
+  "en": "If the client isn't in the database at all — creates a new client"
+ },
+ "Klient bazasi: yaratish va ma'lumotlar": {
+  "ru": "База клиентов: создание и данные",
+  "en": "Client base: creation and data"
+ },
+ "Klient bilan akt sverka tayyorlash": {
+  "ru": "Подготовить акт сверки с клиентом",
+  "en": "Prepare a reconciliation statement with a client"
+ },
+ "Klient bilan nizoli holat": {
+  "ru": "Спорная ситуация с клиентом",
+  "en": "Dispute with a client"
+ },
+ "Klient bor, lekin ilova ochilmasa yoki sinxronlanmasa: Xusniddin": {
+  "ru": "Клиент есть, но приложение не открывается или не синхронизируется: Xusniddin",
+  "en": "Client exists but the app won't open or sync: Xusniddin"
+ },
+ "Klient hujjatlari yetishmayapti": {
+  "ru": "Не хватает документов клиента",
+  "en": "Client documents are missing"
+ },
+ "Klient integratsiya sababli dublikat bo'lib chiqyapti": {
+  "ru": "Клиент дублируется из-за интеграции",
+  "en": "Client gets duplicated because of the integration"
+ },
+ "Klient kanali yoki kategoriyasi noto'g'ri (do'kon, supermarket, HoReCa)": {
+  "ru": "Неверный канал или категория клиента (магазин, супермаркет, HoReCa)",
+  "en": "Wrong client channel or category (shop, supermarket, HoReCa)"
+ },
+ "Klient kartochkasidagi ma'lumot yangilanmagan": {
+  "ru": "Данные в карточке клиента не обновились",
+  "en": "Client card data not updated"
+ },
+ "Klient kartochkasiga hujjat yoki rasm biriktirish": {
+  "ru": "Прикрепить документ или фото к карточке клиента",
+  "en": "Attaching a document or photo to the client card"
+ },
+ "Klient ko'rinmayapti": {
+  "ru": "Клиент не виден",
+  "en": "Client not visible"
+ },
+ "Klient ma'lumotlari 1C da noto'g'ri bo'lsa": {
+  "ru": "Если данные клиента неверны в 1С",
+  "en": "If the client data is wrong in 1C"
+ },
+ "Klient ma'lumotlari ProTargetda noto'g'ri": {
+  "ru": "Неверные данные клиента в ProTarget",
+  "en": "Wrong client data in ProTarget"
+ },
+ "Klient narx turi yoki tovar narxi noto'g'ri": {
+  "ru": "Неверный тип цены клиента или цена товара",
+  "en": "Wrong client price type or item price"
+ },
+ "Klient nega rad etildi?": {
+  "ru": "Почему клиенту отказали?",
+  "en": "Why was the client rejected?"
+ },
+ "Klient nomi, manzili, STIR yoki identifikatsiya ma'lumoti noto'g'ri": {
+  "ru": "Неверное название, адрес, ИНН или идентификационные данные клиента",
+  "en": "Wrong client name, address, TIN or identification details"
+ },
+ "Klient tasdiqlanmayapti yoki tasdiqlash so'rovi kelmagan": {
+  "ru": "Клиент не подтверждается или запрос на подтверждение не пришёл",
+  "en": "Client not being approved or approval request didn't arrive"
+ },
+ "Klient uchun maxsus narx so'rovi (tasdiq bilan)": {
+  "ru": "Запрос специальной цены для клиента (с согласованием)",
+  "en": "Special price request for a client (with approval)"
+ },
+ "Klient yoki tovar ma'lumoti xato": {
+  "ru": "Ошибка в данных клиента или товара",
+  "en": "Wrong client or product data"
+ },
+ "Klient, buyurtma, aksiya va marshrut ma'lumotini o'zgartirish (Operator); kabel, printer va qurilma (Jahongir); dasturiy o'zgarish (Dasturchilar).": {
+  "ru": "Изменение данных клиентов, заказов, акций и маршрутов (Оператор); кабели, принтеры и устройства (Jahongir); изменения в программах (Разработчики).",
+  "en": "Changing client, order, promotion and route data (Operator); cables, printers and devices (Jahongir); software changes (Developers)."
+ },
+ "Klient, buyurtma, narx va marshrut ma'lumotlari": {
+  "ru": "Данные клиентов, заказов, цен и маршрутов",
+  "en": "Client, order, price and route data"
+ },
+ "Klient, savdo nuqtasi va agent profilidagi ma'lumotni kiritadi va tuzatadi (1C, ProTarget)": {
+  "ru": "Вносит и исправляет данные клиентов, торговых точек и профилей агентов (1С, ProTarget)",
+  "en": "Enters and corrects client, outlet and agent profile data (1C, ProTarget)"
+ },
+ "Klientga aksiya qo'shish yoki olib tashlash": {
+  "ru": "Добавить клиента в акцию или убрать из неё",
+  "en": "Adding a client to a promotion or removing it"
+ },
+ "Klientga noto'g'ri chegirma biriktirilgan": {
+  "ru": "Клиенту привязана неверная скидка",
+  "en": "Wrong discount assigned to a client"
+ },
+ "Klientga skidka yoqish": {
+  "ru": "Включить скидку клиенту",
+  "en": "Enabling a discount for a client"
+ },
+ "Klientga ulanish (podklyucheniya) qilish": {
+  "ru": "Подключение клиента",
+  "en": "Connecting a client"
+ },
+ "Klientlar ro'yxatini (Excel) aksiyaga ommaviy biriktirish": {
+  "ru": "Массовая привязка списка клиентов (Excel) к акции",
+  "en": "Bulk-assigning a client list (Excel) to a promotion"
+ },
+ "Klientlar, zakazlar, savdo, qarzdorlik va aksiya bo'yicha ro'yxatlarni Excelga chiqarib berish.": {
+  "ru": "Выгрузка в Excel списков по клиентам, заказам, продажам, задолженности и акциям.",
+  "en": "Exporting lists of clients, orders, sales, receivables and promotions to Excel."
+ },
+ "Klientlarni tasdiqlaydi": {
+  "ru": "Подтверждает клиентов",
+  "en": "Approves clients"
+ },
+ "Klientni agentga biriktirish": {
+  "ru": "Привязка клиента к агенту",
+  "en": "Assigning clients to agents"
+ },
+ "Klientni agentga ulash, agentda ko'rinmasligi, boshqa agentga o'tkazish.": {
+  "ru": "Подключение клиента к агенту, клиент не виден у агента, передача другому агенту.",
+  "en": "Connecting a client to an agent, client not visible to the agent, transfer to another agent."
+ },
+ "Klientni agentga ulaydi va tashrif marshrutiga qo'shadi": {
+  "ru": "Подключает клиента к агенту и добавляет в маршрут визитов",
+  "en": "Connects the client to the agent and adds it to the visit route"
+ },
+ "Klientni aksiyaga qo'shishni tasdiqlash": {
+  "ru": "Согласование добавления клиента в акцию",
+  "en": "Approving adding a client to a promotion"
+ },
+ "Klientni bir nechta agentga ko'rinadigan qilish": {
+  "ru": "Сделать клиента видимым для нескольких агентов",
+  "en": "Make a client visible to several agents"
+ },
+ "Klientni boshqa agentga o'tkazish yoki vaqtincha biriktirish": {
+  "ru": "Передача клиента другому агенту или временное закрепление",
+  "en": "Transferring a client to another agent or temporary assignment"
+ },
+ "Klientni boshqa agentga o'tkazishni tasdiqlash": {
+  "ru": "Согласование передачи клиента другому агенту",
+  "en": "Approving a client transfer to another agent"
+ },
+ "Klientni boshqa filialga o'tkazish": {
+  "ru": "Перевод клиента в другой филиал",
+  "en": "Moving a client to another branch"
+ },
+ "Klientni faollashtirish, yopish, ro'yxatdan chiqarish": {
+  "ru": "Активация, закрытие клиента, исключение из списка",
+  "en": "Activating, closing or delisting a client"
+ },
+ "Klientni tasdiqlash": {
+  "ru": "Подтверждение клиентов",
+  "en": "Approving clients"
+ },
+ "Klientning narx turini o'zgartirish": {
+  "ru": "Изменение типа цены клиента",
+  "en": "Changing a client's price type"
+ },
+ "Klientning telefon raqamini yoki kontakt shaxsini (egasi, sotuvchi) o'zgartirish": {
+  "ru": "Изменение телефона клиента или контактного лица (владелец, продавец)",
+  "en": "Changing the client's phone number or contact person (owner, seller)"
+ },
+ "Ko'p agentda bir vaqtda bo'lsa — tizim muammosi": {
+  "ru": "Если одновременно у многих агентов — системная проблема",
+  "en": "If many agents at once — a system problem"
+ },
+ "Ko'p agentda bir vaqtda takrorlansa — tizim xatosi": {
+  "ru": "Если повторяется одновременно у многих агентов — системная ошибка",
+  "en": "If it recurs for many agents at once — a system error"
+ },
+ "Kod yuborish xizmati butunlay ishlamasa": {
+  "ru": "Если служба отправки кодов полностью не работает",
+  "en": "If the code delivery service is down entirely"
+ },
+ "Kompyuter va ish joyi": {
+  "ru": "Компьютер и рабочее место",
+  "en": "Computer and workstation"
+ },
+ "Kompyuter yoqilmayapti, sekin, qizib ketmoqda yoki qayta yuklanmoqda": {
+  "ru": "Компьютер не включается, тормозит, перегревается или перезагружается",
+  "en": "Computer won't turn on, is slow, overheats or keeps restarting"
+ },
+ "Kompyuter, monitor, printer, skaner, IP-telefon va kameralarni sozlaydi va ta'mirlaydi": {
+  "ru": "Настраивает и ремонтирует компьютеры, мониторы, принтеры, сканеры, IP-телефоны и камеры",
+  "en": "Sets up and repairs computers, monitors, printers, scanners, IP phones and cameras"
+ },
+ "Kompyuter, printer, agent telefoni, internet, VPN, serverlar va ofis texnikasi.": {
+  "ru": "Компьютеры, принтеры, телефоны агентов, интернет, VPN, серверы и офисная техника.",
+  "en": "Computers, printers, agents' phones, internet, VPN, servers and office equipment."
+ },
+ "Kompyuter, printer, telefon, tarmoq": {
+  "ru": "Компьютер, принтер, телефон, сеть",
+  "en": "Computer, printer, phone, network"
+ },
+ "Kompyuterda ovoz yoki mikrofon ishlamayapti": {
+  "ru": "На компьютере не работает звук или микрофон",
+  "en": "Sound or microphone not working on the computer"
+ },
+ "Kompyuterga 1C ni (yorliq yoki baza) qo'shib berish": {
+  "ru": "Подключить 1С на компьютере (ярлык или база)",
+  "en": "Adding 1C to a computer (shortcut or database)"
+ },
+ "Kompyuterni tarmoqdan uzib tekshiradi": {
+  "ru": "Отключает компьютер от сети и проверяет",
+  "en": "Disconnects the computer from the network and checks it"
+ },
+ "Korporativ pochta": {
+  "ru": "Корпоративная почта",
+  "en": "Corporate email"
+ },
+ "Korporativ pochta, shubhali xatlar, parol oshkor bo'lishi, ruxsatsiz kirish va huquqlar.": {
+  "ru": "Корпоративная почта, подозрительные письма, утечка пароля, несанкционированный вход и права доступа.",
+  "en": "Corporate email, suspicious messages, leaked passwords, unauthorized access and permissions."
+ },
+ "Korporativ pochtaga kira olmayapman": {
+  "ru": "Не могу войти в корпоративную почту",
+  "en": "Can't log into corporate email"
+ },
+ "Kredit limiti yoki to'lov muddatini tasdiqlash": {
+  "ru": "Согласование кредитного лимита или срока оплаты",
+  "en": "Approving a credit limit or payment term"
+ },
+ "Kundalik ma'lumot kiritish (Operator) va oddiy parol tiklash — avval Xusniddin'ga.": {
+  "ru": "Ежедневный ввод данных (Оператор) и простой сброс пароля — сначала к Xusniddin.",
+  "en": "Daily data entry (Operator) and simple password resets — go to Xusniddin first."
+ },
+ "Kundalik ma'lumot kiritish (Operator); dostup va parol (Xusniddin); qurilma va tarmoq (Jahongir).": {
+  "ru": "Ежедневный ввод данных (Оператор); доступ и пароль (Xusniddin); устройства и сеть (Jahongir).",
+  "en": "Daily data entry (Operator); access and passwords (Xusniddin); devices and network (Jahongir)."
+ },
+ "L1 (Xusniddin yoki Jahongir) hal qila olmagan murojaat": {
+  "ru": "Обращение, которое не решила первая линия (Xusniddin или Jahongir)",
+  "en": "A request the first line (Xusniddin or Jahongir) couldn't solve"
+ },
+ "L1 hal qila olmagan murakkab muammolarni hal qiladi": {
+  "ru": "Решает сложные проблемы, которые не решила первая линия (L1)",
+  "en": "Solves complex problems the first line (L1) couldn't"
+ },
+ "L1 hal qila olmagan murojaatlar, SLA, takrorlanuvchi muammolar va ish taqsimoti.": {
+  "ru": "Обращения, которые не решила первая линия, SLA, повторяющиеся проблемы и распределение работы.",
+  "en": "Requests the first line couldn't solve, SLA, recurring problems and workload distribution."
+ },
+ "L1 xodim nima qilinganini yozib Abdulbositga beradi; Abdulbosit hal qiladi yoki Dasturchilarga yo'naltiradi.": {
+  "ru": "Сотрудник L1 описывает, что было сделано, и передаёт Abdulbosit; Abdulbosit решает или направляет Разработчикам.",
+  "en": "The L1 staff member writes down what was done and passes it to Abdulbosit; Abdulbosit solves it or routes it to the Developers."
+ },
+ "L1 xodimlar o'rtasida ishni taqsimlash": {
+  "ru": "Распределение работы между сотрудниками L1",
+  "en": "Distributing work among L1 staff"
+ },
+ "LAN kabel va rozetka": {
+  "ru": "LAN-кабель и розетка",
+  "en": "LAN cable and socket"
+ },
+ "Login yoki dostup muammosi": {
+  "ru": "Проблема с логином или доступом",
+  "en": "Login or access problem"
+ },
+ "Login yoki foydalanuvchi nomini o'zgartirish": {
+  "ru": "Изменение логина или имени пользователя",
+  "en": "Changing a login or username"
+ },
+ "Login — Xusniddin; klient/tovar ma'lumoti — Saidabror; crash yoki sinxronizatsiya — Dasturchilar; server yoki aloqa — Abdulbosit": {
+  "ru": "Логин — Xusniddin; данные клиента/товара — Saidabror; сбой или синхронизация — Разработчики; сервер или связь — Abdulbosit",
+  "en": "Login — Xusniddin; client/product data — Saidabror; crash or sync — Developers; server or connectivity — Abdulbosit"
+ },
+ "Login, parol va bloklangan akkaunt muammolarini hal qiladi": {
+  "ru": "Решает проблемы с логином, паролем и заблокированными аккаунтами",
+  "en": "Resolves login, password and locked account issues"
+ },
+ "Login, parol va dostup (Xusniddin); yangi aksiya yaratish, hisoblash va integratsiya xatosi (Dasturchilar); qurilma va tarmoq (Jahongir).": {
+  "ru": "Логин, пароль и доступ (Xusniddin); создание новой акции, ошибки расчёта и интеграции (Разработчики); устройства и сеть (Jahongir).",
+  "en": "Login, password and access (Xusniddin); creating new promotions, calculation and integration errors (Developers); devices and network (Jahongir)."
+ },
+ "Login, parol va huquqlarni berish": {
+  "ru": "Выдача логинов, паролей и прав",
+  "en": "Issuing logins, passwords and permissions"
+ },
+ "Lokatsiyasi yoki STIR raqami yo'q klientlar ro'yxatini chiqarib berish": {
+  "ru": "Выгрузить список клиентов без геолокации или ИНН",
+  "en": "Export the list of clients without a location or TIN"
+ },
+ "Ma'lumot chiqarib berish (vygruzka)": {
+  "ru": "Выгрузка данных",
+  "en": "Data exports"
+ },
+ "Ma'lumot noto'g'ri kiritilgan bo'lsa — Saidabror tuzatadi. Ma'lumot to'g'ri, hisob-kitob xato bo'lsa — Dasturchilar.": {
+  "ru": "Если данные введены неверно — исправляет Saidabror. Если данные верны, а расчёт ошибочен — Разработчики.",
+  "en": "If the data was entered incorrectly — Saidabror fixes it. If the data is correct but the calculation is wrong — Developers."
+ },
+ "Ma'lumot o'zgarishi — Saidabror; dastur ishlamasa — Xusniddin.": {
+  "ru": "Изменение данных — Saidabror; программа не работает — Xusniddin.",
+  "en": "Data changes — Saidabror; system not working — Xusniddin."
+ },
+ "Ma'lumot to'g'ri, hisob-kitob xato bo'lsa — Dasturchilar": {
+  "ru": "Данные верны, расчёт ошибочен — Разработчики",
+  "en": "Data is correct, calculation is wrong — Developers"
+ },
+ "Ma'lumot to'g'ri, hisoblash xato bo'lsa: dasturchilar": {
+  "ru": "Данные верны, расчёт ошибочен: разработчики",
+  "en": "Data is correct, calculation is wrong: developers"
+ },
+ "Ma'lumot to'g'ri, narx noto'g'ri hisoblanadi": {
+  "ru": "Данные верны, цена рассчитывается неправильно",
+  "en": "Data is correct, the price is calculated wrongly"
+ },
+ "Ma'lumotlar bazasiga ulanish xatosi (infratuzilma)": {
+  "ru": "Ошибка подключения к базе данных (инфраструктура)",
+  "en": "Database connection error (infrastructure)"
+ },
+ "Ma'lumotlar bir necha soatdan beri sinxronlanmayapti (ko'p agentda)": {
+  "ru": "Данные не синхронизируются несколько часов (у многих агентов)",
+  "en": "Data hasn't synced for several hours (many agents)"
+ },
+ "Ma'lumotlar kechikib ko'rinmoqda": {
+  "ru": "Данные появляются с задержкой",
+  "en": "Data shows up with a delay"
+ },
+ "Ma'lumotlar operatori": {
+  "ru": "Оператор данных",
+  "en": "Data operator"
+ },
+ "Ma'lumotlar operatorlari": {
+  "ru": "Операторы данных",
+  "en": "Data operators"
+ },
+ "Ma'lumotlar yangilanmayapti": {
+  "ru": "Данные не обновляются",
+  "en": "Data not updating"
+ },
+ "Ma'lumotni 1C da o'zi o'zgartirmaydi — tasdiqlangan so'rovni Operator bajaradi.": {
+  "ru": "Сам не меняет данные в 1С — согласованный запрос выполняет Оператор.",
+  "en": "Doesn't change data in 1C directly — the Operator carries out the approved request."
+ },
+ "Ma'lumotni o'zgartirish so'rovini tasdiqlab Operatorga beradi": {
+  "ru": "Согласует запрос на изменение данных и передаёт Оператору",
+  "en": "Approves the data change request and passes it to the Operator"
+ },
+ "Ma'lumotni o'zgartirish so'rovini tasdiqlash": {
+  "ru": "Согласование запросов на изменение данных",
+  "en": "Approving data change requests"
+ },
+ "Ma'lumotni o'zgartirish va o'chirish": {
+  "ru": "Изменение и удаление данных",
+  "en": "Changing and deleting data"
+ },
+ "Ma'lumotning o'zi 1C da xato bo'lsa": {
+  "ru": "Если ошибочны сами данные в 1С",
+  "en": "If the data itself is wrong in 1C"
+ },
+ "Majlis xonasini tayyorlash (proyektor, televizor, ovoz, internet)": {
+  "ru": "Подготовка переговорной (проектор, телевизор, звук, интернет)",
+  "en": "Preparing the meeting room (projector, TV, sound, internet)"
+ },
+ "Marshrut tasdiqlangan, ilovada ko'rinmayapti": {
+  "ru": "Маршрут утверждён, но не виден в приложении",
+  "en": "Route approved but not visible in the app"
+ },
+ "Marshrut, tashrif va plan": {
+  "ru": "Маршрут, визиты и план",
+  "en": "Route, visits and plan"
+ },
+ "Marshrutga nuqta qo'shish yoki olib tashlash": {
+  "ru": "Добавление или удаление точки в маршруте",
+  "en": "Adding or removing an outlet in a route"
+ },
+ "Marshrutga nuqta qo'shish, tashrif kunlari, haftalik jadval, plan ko'rsatkichi.": {
+  "ru": "Добавление точки в маршрут, дни визитов, недельный график, плановый показатель.",
+  "en": "Adding outlets to a route, visit days, weekly schedule, plan targets."
+ },
+ "Marshrutga qo'shilgan, lekin ilovada baribir ko'rinmasa — sinxronlashni tekshiradi": {
+  "ru": "Добавлен в маршрут, но всё равно не виден в приложении — проверяет синхронизацию",
+  "en": "Added to the route but still not visible in the app — checks the sync"
+ },
+ "Marshrutlar agentlar o'rtasida almashib qolgan": {
+  "ru": "Маршруты перепутались между агентами",
+  "en": "Routes got mixed up between agents"
+ },
+ "Marshrutni o'zgartirishni tasdiqlash": {
+  "ru": "Согласование изменения маршрута",
+  "en": "Approving a route change"
+ },
+ "Masofaviy xodimga VPN sozlash": {
+  "ru": "Настройка VPN для удалённого сотрудника",
+  "en": "Setting up VPN for a remote employee"
+ },
+ "Mavjud aksiya va chegirmani klientga biriktiradi yoki olib tashlaydi": {
+  "ru": "Привязывает к клиенту существующие акции и скидки или убирает их",
+  "en": "Assigns existing promotions and discounts to clients or removes them"
+ },
+ "Mavjud aksiya yoki skidkani klientga biriktirish, noto'g'ri chegirma, maxsus narx.": {
+  "ru": "Привязка существующей акции или скидки к клиенту, неправильная скидка, специальная цена.",
+  "en": "Assigning an existing promotion or discount to a client, wrong discount, special price."
+ },
+ "Mehmonlar uchun Wi-Fi": {
+  "ru": "Wi-Fi для гостей",
+  "en": "Guest Wi-Fi"
+ },
+ "Mobil ilova": {
+  "ru": "Мобильное приложение",
+  "en": "Mobile app"
+ },
+ "Mobil ilova va ProTarget dasturidagi xatolar bo'yicha yordam beradi": {
+  "ru": "Помогает с ошибками мобильного приложения и программы ProTarget",
+  "en": "Helps with errors in the mobile app and ProTarget"
+ },
+ "Mobil ilova xatolari": {
+  "ru": "Ошибки мобильного приложения",
+  "en": "Mobile app errors"
+ },
+ "Monitor, klaviatura, sichqoncha, USB ishlamayapti": {
+  "ru": "Не работает монитор, клавиатура, мышь или USB",
+  "en": "Monitor, keyboard, mouse or USB not working"
+ },
+ "Muammo 1C yoki integratsiya kodida bo'lsa — Dasturchilar jamoasi.": {
+  "ru": "Если проблема в 1С или в коде интеграции — команда разработчиков.",
+  "en": "If the problem is in 1C or the integration code — Developers team."
+ },
+ "Muammo ProTarget tomonda": {
+  "ru": "Проблема на стороне ProTarget",
+  "en": "The problem is on the ProTarget side"
+ },
+ "Muammo dasturiy bo'lsa": {
+  "ru": "Если проблема программная",
+  "en": "If the problem is in software"
+ },
+ "Muammo hammadami yoki faqat bir xodimdami — ko'lamini aniqlash": {
+  "ru": "Проблема у всех или только у одного сотрудника — определить масштаб",
+  "en": "Is it everyone or just one person — determine the scope"
+ },
+ "Muammo kimga yetkazildi va holati qanday": {
+  "ru": "Кому передана проблема и каков её статус",
+  "en": "Who the problem was escalated to and its status"
+ },
+ "Muddati tugagan aksiya klientda qolgan": {
+  "ru": "Акция с истёкшим сроком осталась у клиента",
+  "en": "An expired promotion is still on the client"
+ },
+ "Muhim uzilish bo'yicha rahbariyatga hisobot": {
+  "ru": "Отчёт руководству по важному сбою",
+  "en": "Report to management on a major outage"
+ },
+ "Murojaat muddati (SLA) o'tib ketdi": {
+  "ru": "Срок обращения (SLA) истёк",
+  "en": "Request deadline (SLA) has passed"
+ },
+ "Murojaatlar statistikasi yoki hisoboti": {
+  "ru": "Статистика или отчёт по обращениям",
+  "en": "Request statistics or report"
+ },
+ "Murojaatni birinchi qabul qiladi, hal qilmasa — to'g'ri odamga yo'naltiradi": {
+  "ru": "Первым принимает обращение, если не может решить — направляет нужному человеку",
+  "en": "Takes the request first and routes it to the right person if they can't solve it"
+ },
+ "Narx turi to'g'ri, lekin narx noto'g'ri hisoblansa": {
+  "ru": "Тип цены верный, но цена рассчитывается неправильно",
+  "en": "Price type is correct but the price is calculated wrongly"
+ },
+ "Nazorat va eskalatsiya": {
+  "ru": "Контроль и эскалация",
+  "en": "Oversight and escalation"
+ },
+ "Nofaol (zakaz bermayotgan) klientlar ro'yxatini chiqarib berish": {
+  "ru": "Выгрузить список неактивных клиентов (не делающих заказов)",
+  "en": "Export the list of inactive clients (not ordering)"
+ },
+ "Nomenklatura (tovar kartochkasi)": {
+  "ru": "Номенклатура (карточка товара)",
+  "en": "Product catalogue (item card)"
+ },
+ "Noto'g'ri kiritilgan ma'lumotni tuzatish": {
+  "ru": "Исправление неверно введённых данных",
+  "en": "Correcting incorrectly entered data"
+ },
+ "Noto'g'ri ma'lumotni kim o'zgartirganini ko'rish": {
+  "ru": "Посмотреть, кто изменил неверные данные",
+  "en": "See who changed the incorrect data"
+ },
+ "Noto'g'ri o'zgarishni qaytarish": {
+  "ru": "Отмена ошибочного изменения",
+  "en": "Reverting an incorrect change"
+ },
+ "Nuqta nomi yoki manzili noto'g'ri": {
+  "ru": "Неверное название или адрес точки",
+  "en": "Wrong outlet name or address"
+ },
+ "Nuqtani biriktirish, nomi/manzili, GPS, yangi hudud, hudud bo'yicha ko'rinish.": {
+  "ru": "Привязка точки, название/адрес, GPS, новая территория, видимость по территории.",
+  "en": "Assigning outlets, name/address, GPS, new territory, visibility by territory."
+ },
+ "Nusxa ko'chirish apparati": {
+  "ru": "Копировальный аппарат",
+  "en": "Copier"
+ },
+ "O'chirishni tasdiqlaydi": {
+  "ru": "Согласует удаление",
+  "en": "Approves the deletion"
+ },
+ "O'lchov birligi yoki karobkadagi dona soni noto'g'ri": {
+  "ru": "Неверная единица измерения или количество штук в коробке",
+  "en": "Wrong unit of measure or units per box"
+ },
+ "O'zgarish bajarilishidan oldin supervayzer tasdiqlaydigan so'rovlar.": {
+  "ru": "Запросы, которые супервайзер согласует до выполнения изменения.",
+  "en": "Requests the supervisor approves before a change is made."
+ },
+ "O'zgarishlar jurnali": {
+  "ru": "Журнал изменений",
+  "en": "Change log"
+ },
+ "O'zgarishni tasdiqlaydi": {
+  "ru": "Согласует изменение",
+  "en": "Approves the change"
+ },
+ "Ofis": {
+  "ru": "Офис",
+  "en": "Office"
+ },
+ "Ofis ichidagi tarmoqni tekshiradi": {
+  "ru": "Проверяет сеть внутри офиса",
+  "en": "Checks the network inside the office"
+ },
+ "Ofis va filial": {
+  "ru": "Офис и филиалы",
+  "en": "Office and branches"
+ },
+ "Ofisda bajariladigan barcha texnik ishlar uchun mas'ul: qurilmalar, tarmoq qurish va kabel tortish.": {
+  "ru": "Отвечает за все технические работы в офисе: устройства, построение сети и прокладку кабелей.",
+  "en": "Responsible for all technical work in the office: devices, building the network and laying cables."
+ },
+ "Ofisdagi texnik ish: qurilma, kabel, tarmoq, printer": {
+  "ru": "Техническая работа в офисе: устройства, кабели, сеть, принтеры",
+  "en": "Technical work in the office: devices, cables, network, printers"
+ },
+ "Operator buyurtma raqamini va vaqtini Dasturchilarga yuboradi; Dasturchilar almashinuv logini tekshiradi. ProTarget tomonda bo'lsa — Pro-target support.": {
+  "ru": "Оператор отправляет Разработчикам номер и время заказа; Разработчики проверяют лог обмена. Если проблема на стороне ProTarget — поддержка Pro-target.",
+  "en": "The Operator sends the order number and time to the Developers; they check the exchange log. If it's on the ProTarget side — Pro-target support."
+ },
+ "Operator faqat mavjud aksiyani klientga qo'shadi": {
+  "ru": "Оператор только добавляет клиенту существующую акцию",
+  "en": "The Operator only adds an existing promotion to the client"
+ },
+ "Operator faqat tasdiqlangan so'rovni bajaradi": {
+  "ru": "Оператор выполняет только согласованные запросы",
+  "en": "The Operator only carries out approved requests"
+ },
+ "Operator ikkala kartochkani solishtiradi, to'g'risini qoldiradi, ortiqchasini yopadi; buyurtmalar bo'lsa to'g'ri kartochkaga o'tkaziladi. Dublikat o'z-o'zidan qayta paydo bo'lsa — Dasturchilar (integratsiya).": {
+  "ru": "Оператор сравнивает обе карточки, оставляет правильную, закрывает лишнюю; если есть заказы — переносит на правильную карточку. Если дубликат появляется снова сам — Разработчики (интеграция).",
+  "en": "The Operator compares both cards, keeps the correct one and closes the extra one; any orders are moved to the correct card. If the duplicate keeps reappearing — Developers (integration)."
+ },
+ "Operator klient narx turi va tovar narxini tekshiradi, zakazni tuzatadi. Ma'lumot to'g'ri bo'lsa-yu narx xato chiqsa — Dasturchilar.": {
+  "ru": "Оператор проверяет тип цены клиента и цену товара, исправляет заказ. Если данные верны, а цена всё равно неправильная — Разработчики.",
+  "en": "The Operator checks the client's price type and the item price and fixes the order. If the data is correct but the price is still wrong — Developers."
+ },
+ "Operator to'lovni to'g'ri klientga o'tkazadi va ikkala klientning qarzdorligini tekshiradi.": {
+  "ru": "Оператор переносит оплату на правильного клиента и проверяет задолженность обоих клиентов.",
+  "en": "The Operator moves the payment to the right client and checks both clients' balances."
+ },
+ "Operator tovar 1C da faol ekanini va agent narx turida borligini tekshiradi. 1C da bor, ProTarget'da yo'q bo'lsa — Dasturchilar (integratsiya).": {
+  "ru": "Оператор проверяет, что товар активен в 1С и есть в типе цены агента. Если в 1С есть, а в ProTarget нет — Разработчики (интеграция).",
+  "en": "The Operator checks that the item is active in 1C and included in the agent's price type. If it's in 1C but not in ProTarget — Developers (integration)."
+ },
+ "Operator tovarni 1C da yaratadi: nomi, shtrix-kod, o'lchov birligi, karobkadagi soni, guruh/brend va narx turlari. Keyingi almashinuvda ProTarget'ga o'tadi.": {
+  "ru": "Оператор создаёт товар в 1С: название, штрихкод, единица измерения, количество в коробке, группа/бренд и типы цен. При следующем обмене он попадает в ProTarget.",
+  "en": "The Operator creates the item in 1C: name, barcode, unit of measure, units per box, group/brand and price types. It reaches ProTarget with the next exchange."
+ },
+ "Operator zakazni to'g'ri klientga o'tkazadi (yoki o'chirib qayta kiritadi), qarz va to'lovlarni tekshiradi.": {
+  "ru": "Оператор переносит заказ на правильного клиента (или удаляет и вводит заново), проверяет долг и оплаты.",
+  "en": "The Operator moves the order to the right client (or deletes and re-enters it) and checks debts and payments."
+ },
+ "Ortiqcha huquqlarni olib tashlash": {
+  "ru": "Удаление лишних прав",
+  "en": "Removing excessive permissions"
+ },
+ "Oylik savdoni Excelga chiqarib berish": {
+  "ru": "Выгрузить продажи за месяц в Excel",
+  "en": "Export monthly sales to Excel"
+ },
+ "PRBC almashinuvi": {
+  "ru": "Обмен с PRBC",
+  "en": "PRBC exchange"
+ },
+ "PRBC dagi ma'lumot ProTarget bilan mos kelmayapti": {
+  "ru": "Данные в PRBC не совпадают с ProTarget",
+  "en": "PRBC data doesn't match ProTarget"
+ },
+ "PRBC funksiyasi noto'g'ri ishlayapti": {
+  "ru": "Функция PRBC работает неправильно",
+  "en": "A PRBC function works incorrectly"
+ },
+ "PRBC ochilmayapti": {
+  "ru": "PRBC не открывается",
+  "en": "PRBC won't open"
+ },
+ "PRBC va ProTarget ma'lumotlari mos kelmasa.": {
+  "ru": "Данные PRBC и ProTarget не совпадают.",
+  "en": "PRBC and ProTarget data don't match."
+ },
+ "Parol boshqa odamga ma'lum bo'lgan": {
+  "ru": "Пароль стал известен другому человеку",
+  "en": "Someone else knows my password"
+ },
+ "Parol siyosatini o'zgartirish": {
+  "ru": "Изменение парольной политики",
+  "en": "Changing the password policy"
+ },
+ "Parol, bloklangan akkaunt, \"ruxsat yo'q\", menyular ko'rinmasligi.": {
+  "ru": "Пароль, заблокированный аккаунт, «нет доступа», не видны меню.",
+  "en": "Password, locked account, \"access denied\", menus not visible."
+ },
+ "Parolni tiklash": {
+  "ru": "Сброс пароля",
+  "en": "Password reset"
+ },
+ "Plan ko'rsatkichini kiritish yoki to'g'rilash": {
+  "ru": "Ввод или корректировка планового показателя",
+  "en": "Entering or correcting a plan target"
+ },
+ "Plan supervayzer tomonidan kiritiladi. Plan to'g'ri kiritilgan, lekin bajarilishi noto'g'ri hisoblansa — \"Plan, tashrif soni ... noto'g'ri hisoblanishi\" savoli (Dasturchilar).": {
+  "ru": "План вводит супервайзер. Если план введён верно, но выполнение считается неправильно — вопрос «Неверный расчёт плана, количества визитов…» (Разработчики).",
+  "en": "The plan is entered by the supervisor. If the plan is correct but progress is calculated wrongly — see \"Plan, visit count … calculated incorrectly\" (Developers)."
+ },
+ "Plan va bajarilish holati": {
+  "ru": "План и его выполнение",
+  "en": "Plan and its progress"
+ },
+ "Plan yoki hisoblashda xato bo'lsa: dasturchilar": {
+  "ru": "Если ошибка в плане или расчёте: разработчики",
+  "en": "If the error is in the plan or calculation: developers"
+ },
+ "Plan, KPI, bonus, aksiya qoidalari va klient bilan nizolar.": {
+  "ru": "План, KPI, бонусы, правила акций и споры с клиентами.",
+  "en": "Plan, KPIs, bonuses, promotion rules and disputes with clients."
+ },
+ "Plan, tashrif soni yoki plan bajarilishining noto'g'ri hisoblanishi": {
+  "ru": "Неверный расчёт плана, количества визитов или выполнения плана",
+  "en": "Plan, visit count or plan progress calculated incorrectly"
+ },
+ "Platforma va integratsiya": {
+  "ru": "Платформа и интеграция",
+  "en": "Platform and integration"
+ },
+ "Pochta": {
+  "ru": "Почта",
+  "en": "Email"
+ },
+ "Pochta qutisi to'lgan": {
+  "ru": "Почтовый ящик переполнен",
+  "en": "Mailbox is full"
+ },
+ "Pochta serverida uzilish": {
+  "ru": "Сбой почтового сервера",
+  "en": "Mail server outage"
+ },
+ "Pochta telefonda sozlanishi kerak bo'lsa": {
+  "ru": "Если почту нужно настроить на телефоне",
+  "en": "If email needs setting up on a phone"
+ },
+ "Pochta va xavfsizlik": {
+  "ru": "Почта и безопасность",
+  "en": "Email and security"
+ },
+ "Printer chiqarmayapti, qog'oz tiqilyapti, toner tugagan": {
+  "ru": "Принтер не печатает, заминает бумагу, закончился тонер",
+  "en": "Printer won't print, paper jams, toner ran out"
+ },
+ "Printer tarmoqda ko'rinmayapti; drayver": {
+  "ru": "Принтер не виден в сети; драйвер",
+  "en": "Printer not visible on the network; driver"
+ },
+ "Printer, skaner, ofis qurilmalari": {
+  "ru": "Принтеры, сканеры, офисная техника",
+  "en": "Printers, scanners, office equipment"
+ },
+ "Pro-target": {
+  "ru": "Pro-target",
+  "en": "Pro-target"
+ },
+ "Pro-target operatori klient holatini tekshirib, tasdiqlash muddatini aytadi yoki yetishmayotgan ma'lumotni so'raydi.": {
+  "ru": "Оператор Pro-target проверяет статус клиента и называет срок подтверждения или запрашивает недостающие данные.",
+  "en": "The Pro-target operator checks the client's status and gives the approval timeline or asks for missing information."
+ },
+ "ProTarget": {
+  "ru": "ProTarget",
+  "en": "ProTarget"
+ },
+ "ProTarget aksiyasi shartlari bo'yicha": {
+  "ru": "По условиям акций ProTarget",
+  "en": "On ProTarget promotion terms"
+ },
+ "ProTarget dasturidagi xatolar": {
+  "ru": "Ошибки в программе ProTarget",
+  "en": "ProTarget software errors"
+ },
+ "ProTarget ma'lumotlari yoki ProTarget dasturidagi muammo": {
+  "ru": "Проблема с данными или программой ProTarget",
+  "en": "An issue with ProTarget data or the ProTarget system"
+ },
+ "ProTarget operatori va support": {
+  "ru": "Оператор и поддержка ProTarget",
+  "en": "ProTarget operator and support"
+ },
+ "ProTarget tomonda klientni tasdiqlash, rad etish sabablari va hujjatlar.": {
+  "ru": "Подтверждение клиента на стороне ProTarget, причины отказа и документы.",
+  "en": "Client approval on the ProTarget side, rejection reasons and documents."
+ },
+ "ProTarget tomonidagi aksiya shartlari, qatnashchilar, bonus va natijalar.": {
+  "ru": "Условия акций на стороне ProTarget, участники, бонусы и результаты.",
+  "en": "Promotion terms on the ProTarget side, participants, bonuses and results."
+ },
+ "ProTarget tomonidan biriktirilgan alohida operator: dasturdagi ma'lumotlar bilan ishlaydi va dastur muammolari bo'yicha yordam beradi.": {
+  "ru": "Отдельный оператор, закреплённый со стороны ProTarget: работает с данными в программе и помогает с её проблемами.",
+  "en": "A dedicated operator assigned by ProTarget: works with the data in the system and helps with its issues."
+ },
+ "ProTarget va mobil ilova": {
+  "ru": "ProTarget и мобильное приложение",
+  "en": "ProTarget and mobile app"
+ },
+ "ProTarget, 1C, PRBC, email": {
+  "ru": "ProTarget, 1С, PRBC, почта",
+  "en": "ProTarget, 1C, PRBC, email"
+ },
+ "ProTarget: aksiyalar": {
+  "ru": "ProTarget: акции",
+  "en": "ProTarget: promotions"
+ },
+ "ProTarget: klient tasdiqlash": {
+  "ru": "ProTarget: подтверждение клиента",
+  "en": "ProTarget: client approval"
+ },
+ "ProTargetda aksiya bor, 1C da yo'q (yoki aksincha)": {
+  "ru": "Акция есть в ProTarget, но нет в 1С (или наоборот)",
+  "en": "Promotion exists in ProTarget but not in 1C (or vice versa)"
+ },
+ "ProTargetdagi buyurtma 1C ga o'tmayapti (yoki 1C dagi buyurtma ProTargetda yo'q)": {
+  "ru": "Заказ из ProTarget не уходит в 1С (или заказа из 1С нет в ProTarget)",
+  "en": "An order from ProTarget doesn't reach 1C (or a 1C order is missing in ProTarget)"
+ },
+ "Provayder internetni uzdi": {
+  "ru": "Провайдер отключил интернет",
+  "en": "The ISP cut off the internet"
+ },
+ "Qaysi kartochka to'g'riligini tasdiqlaydi": {
+  "ru": "Подтверждает, какая карточка верная",
+  "en": "Confirms which card is correct"
+ },
+ "Qaysi klientlar aksiyada qatnashadi?": {
+  "ru": "Какие клиенты участвуют в акции?",
+  "en": "Which clients take part in the promotion?"
+ },
+ "Qaysi to'lov qolishini tasdiqlaydi": {
+  "ru": "Согласует, какую оплату оставить",
+  "en": "Approves which payment to keep"
+ },
+ "Qaysi xodimga murojaat qilish kerak?": {
+  "ru": "К какому сотруднику обратиться?",
+  "en": "Who should I contact?"
+ },
+ "Qaysi zakaz qolishini tasdiqlaydi": {
+  "ru": "Согласует, какой заказ оставить",
+  "en": "Approves which order to keep"
+ },
+ "Qayta ishga qabul qilingan agent profilini tiklash": {
+  "ru": "Восстановление профиля повторно принятого агента",
+  "en": "Restoring the profile of a rehired agent"
+ },
+ "Qo'shildi, lekin ertasi kuni ham ilovada ko'rinmasa": {
+  "ru": "Добавлен, но и на следующий день не виден в приложении",
+  "en": "Added, but still not visible in the app the next day"
+ },
+ "Qurilma": {
+  "ru": "Устройства",
+  "en": "Devices"
+ },
+ "Qurilma berish va ish joyini tayyorlash": {
+  "ru": "Выдача устройств и подготовка рабочего места",
+  "en": "Issuing devices and preparing workstations"
+ },
+ "Qurilmalar, tarmoq, serverlar, ofis": {
+  "ru": "Устройства, сеть, серверы, офис",
+  "en": "Devices, network, servers, office"
+ },
+ "Qurilmani joyida qayta yoqish kerak bo'lsa": {
+  "ru": "Если нужно перезагрузить устройство на месте",
+  "en": "If the device needs restarting on site"
+ },
+ "Qurilmani ta'mirlash va almashtirish": {
+  "ru": "Ремонт и замена устройства",
+  "en": "Repairing and replacing devices"
+ },
+ "RDP orqali masofaviy kirish kerak": {
+  "ru": "Нужен удалённый доступ через RDP",
+  "en": "Need remote access via RDP"
+ },
+ "Rahbar muddat va huquqlarni tasdiqlaydi": {
+  "ru": "Руководитель согласует срок и права",
+  "en": "The manager approves the period and permissions"
+ },
+ "Rahbar o'rinbosar ismini, kerakli tizimlar va muddatni yozadi; IT operator vaqtincha dostup ochadi va muddat tugaganda yopadi.": {
+  "ru": "Руководитель пишет имя замещающего, нужные системы и срок; IT-оператор открывает временный доступ и закрывает его по окончании срока.",
+  "en": "The manager provides the stand-in's name, the systems needed and the period; the IT operator grants temporary access and revokes it when it ends."
+ },
+ "Rahbar tasdiqlaydi": {
+  "ru": "Руководитель согласует",
+  "en": "The manager approves"
+ },
+ "Rahbar xodim lavozimini va kerakli huquqlarni yozadi; IT administrator foydalanuvchini ochadi.": {
+  "ru": "Руководитель указывает должность сотрудника и нужные права; IT-администратор создаёт пользователя.",
+  "en": "The manager provides the employee's position and required permissions; the IT administrator creates the user."
+ },
+ "Rahbar yangi xodim ma'lumotini yuboradi; IT operator pochta qutisini ochadi va kirish ma'lumotini xodimga beradi.": {
+  "ru": "Руководитель отправляет данные нового сотрудника; IT-оператор создаёт почтовый ящик и передаёт сотруднику данные для входа.",
+  "en": "The manager sends the new employee's details; the IT operator creates the mailbox and gives the employee the login details."
+ },
+ "Rejalashtirilgan texnik ishlar": {
+  "ru": "Плановые технические работы",
+  "en": "Scheduled maintenance"
+ },
+ "Rekvizitlarni tuzatish kerak bo'lsa": {
+  "ru": "Если нужно исправить реквизиты",
+  "en": "If the details need correcting"
+ },
+ "Ro'yxatni tasdiqlaydi": {
+  "ru": "Согласует список",
+  "en": "Approves the list"
+ },
+ "Router yoki Mikrotik ishlamayapti": {
+  "ru": "Не работает роутер или Mikrotik",
+  "en": "Router or Mikrotik not working"
+ },
+ "Ruxsatsiz kirish urinishi": {
+  "ru": "Попытка несанкционированного входа",
+  "en": "Unauthorized login attempt"
+ },
+ "Ruxsatsiz ma'lumot chiqarilgan bo'lishi mumkin": {
+  "ru": "Возможна несанкционированная выгрузка данных",
+  "en": "Data may have been exported without authorization"
+ },
+ "SMS yoki 2FA kod kelmayapti": {
+  "ru": "Не приходит SMS или код 2FA",
+  "en": "SMS or 2FA code not arriving"
+ },
+ "SSL sertifikat": {
+  "ru": "SSL-сертификат",
+  "en": "SSL certificate"
+ },
+ "Sabab 1C yoki integratsiyada bo'lsa": {
+  "ru": "Если причина в 1С или интеграции",
+  "en": "If the cause is in 1C or the integration"
+ },
+ "Sabab dastur yoki integratsiyada bo'lsa: dasturchilar": {
+  "ru": "Если причина в программе или интеграции: разработчики",
+  "en": "If the cause is in the software or integration: developers"
+ },
+ "Sabab dasturda bo'lsa — doimiy tuzatish": {
+  "ru": "Если причина в программе — постоянное исправление",
+  "en": "If the cause is in the software — a permanent fix"
+ },
+ "Sana o'zgarishini tasdiqlaydi": {
+  "ru": "Согласует изменение даты",
+  "en": "Approves the date change"
+ },
+ "Savdo": {
+  "ru": "Продажи",
+  "en": "Sales"
+ },
+ "Savdo jarayoni: klient, savdo nuqtasi, marshrut va tashrif, plan, buyurtma, aksiya, agent profili. Asosan agent so'raydi; birinchi bo'lib supervayzer yoki operator javob beradi.": {
+  "ru": "Процесс продаж: клиент, торговая точка, маршрут и визит, план, заказ, акция, профиль агента. Обычно спрашивает агент; первым отвечает супервайзер или оператор.",
+  "en": "Sales process: client, outlet, route and visit, plan, order, promotion, agent profile. Usually asked by an agent; the supervisor or operator answers first."
+ },
+ "Savdo ma'lumotlarini yuritish": {
+  "ru": "Ведение данных продаж",
+  "en": "Maintaining sales data"
+ },
+ "Savdo nuqtalari va hudud": {
+  "ru": "Торговые точки и территория",
+  "en": "Outlets and territory"
+ },
+ "Savdo nuqtasi (torgoviy tochka) almashib qolgan yoki noto'g'ri biriktirilgan": {
+  "ru": "Торговая точка перепутана или привязана неверно",
+  "en": "Outlet mixed up or assigned incorrectly"
+ },
+ "Savdo operatsiyalari": {
+  "ru": "Операции продаж",
+  "en": "Sales operations"
+ },
+ "Savdo supervayzeri": {
+  "ru": "Супервайзер продаж",
+  "en": "Sales supervisor"
+ },
+ "Server": {
+  "ru": "Серверы",
+  "en": "Servers"
+ },
+ "Server disk va resurslari": {
+  "ru": "Диск и ресурсы сервера",
+  "en": "Server disk and resources"
+ },
+ "Server ishlamasa — Abdulbosit; bot ishlab, noto'g'ri javob bersa — Dasturchilar": {
+  "ru": "Сервер не работает — Abdulbosit; бот работает, но отвечает неправильно — Разработчики",
+  "en": "Server down — Abdulbosit; bot works but answers incorrectly — Developers"
+ },
+ "Server ishlamayapti yoki javob bermayapti": {
+  "ru": "Сервер не работает или не отвечает",
+  "en": "Server down or not responding"
+ },
+ "Server juda sekin — hamma qotib qoldi": {
+  "ru": "Сервер очень медленный — всё зависло",
+  "en": "Server is very slow — everything froze"
+ },
+ "Server qayta yuklandi, xizmatlar ko'tarilmadi": {
+  "ru": "Сервер перезагрузился, службы не запустились",
+  "en": "Server restarted, services didn't come up"
+ },
+ "Server resurslari yetmasa": {
+  "ru": "Если не хватает ресурсов сервера",
+  "en": "If server resources are insufficient"
+ },
+ "Server resurslari yoki infratuzilma kerak bo'lsa — Abdulbosit Tuychiev.": {
+  "ru": "Если нужны ресурсы сервера или инфраструктура — Abdulbosit Tuychiev.",
+  "en": "If server resources or infrastructure are needed — Abdulbosit Tuychiev."
+ },
+ "Server tomonda foydalanuvchi yaratish kerak bo'lsa": {
+  "ru": "Если нужно создать пользователя на стороне сервера",
+  "en": "If a user needs creating on the server side"
+ },
+ "Server va infratuzilmaga o'zgartirish kiritish": {
+  "ru": "Внесение изменений в серверы и инфраструктуру",
+  "en": "Making changes to servers and infrastructure"
+ },
+ "Server vaqti noto'g'ri": {
+  "ru": "Неверное время на сервере",
+  "en": "Wrong server time"
+ },
+ "Server yoki aloqa muammosi": {
+  "ru": "Проблема с сервером или связью",
+  "en": "Server or connectivity problem"
+ },
+ "Server yoki butun tarmoq ishlamasa — Abdulbosit Tuychiev.": {
+  "ru": "Если не работает сервер или вся сеть — Abdulbosit Tuychiev.",
+  "en": "If a server or the whole network is down — Abdulbosit Tuychiev."
+ },
+ "Server yoki tizimli uzilish — Abdulbosit Tuychiev; dastur xatosi — Dasturchilar jamoasi yoki Pro-target; qurilma va tarmoq — Jahongir.": {
+  "ru": "Сервер или системный сбой — Abdulbosit Tuychiev; ошибка программы — команда разработчиков или Pro-target; устройства и сеть — Jahongir.",
+  "en": "Server or system-wide outage — Abdulbosit Tuychiev; software error — Developers team or Pro-target; devices and network — Jahongir."
+ },
+ "Server, IP yoki port kerak bo'lsa": {
+  "ru": "Если нужен сервер, IP или порт",
+  "en": "If a server, IP or port is needed"
+ },
+ "Server, aloqa kanallari yoki dasturlarda tizimli uzilish; IT ishlari kechiksa": {
+  "ru": "Системный сбой серверов, каналов связи или программ; задержка IT-работ",
+  "en": "System-wide outage of servers, communication channels or systems; delayed IT work"
+ },
+ "Serverlar": {
+  "ru": "Серверы",
+  "en": "Servers"
+ },
+ "Serverlar, ma'lumotlar bazasi va aloqa kanallari uzluksiz ishlashini ta'minlaydi": {
+  "ru": "Обеспечивает бесперебойную работу серверов, баз данных и каналов связи",
+  "en": "Keeps servers, databases and communication channels running without interruption"
+ },
+ "Serverlar, tarmoq kanallari, zaxira": {
+  "ru": "Серверы, сетевые каналы, резервное копирование",
+  "en": "Servers, network links, backups"
+ },
+ "Shtrix-kod yoki etiketka printeri": {
+  "ru": "Принтер штрихкодов или этикеток",
+  "en": "Barcode or label printer"
+ },
+ "Shubhali xat yoki havola": {
+  "ru": "Подозрительное письмо или ссылка",
+  "en": "Suspicious email or link"
+ },
+ "Sinxronlash tugamayapti yoki xato beryapti": {
+  "ru": "Синхронизация не завершается или выдаёт ошибку",
+  "en": "Sync won't finish or gives an error"
+ },
+ "Skaner hujjat yubormayapti": {
+  "ru": "Сканер не отправляет документы",
+  "en": "Scanner won't send documents"
+ },
+ "So'rovni tasdiqlaydi": {
+  "ru": "Согласует запрос",
+  "en": "Approves the request"
+ },
+ "Supervayzer ProTarget'da agent marshrutiga nuqtani qo'shadi yoki olib tashlaydi va tashrif kunini belgilaydi. O'zgarish keyingi sinxronlashda agentda chiqadi.": {
+  "ru": "Супервайзер добавляет или удаляет точку в маршруте агента в ProTarget и назначает день визита. Изменение появится у агента после следующей синхронизации.",
+  "en": "The supervisor adds or removes the outlet in the agent's route in ProTarget and sets the visit day. The change appears for the agent after the next sync."
+ },
+ "Supervayzer ProTarget'da o'zgartira olmasa": {
+  "ru": "Если супервайзер не может изменить в ProTarget",
+  "en": "If the supervisor can't change it in ProTarget"
+ },
+ "Supervayzer agent ketganini xabar qiladi → IT administrator profilni nofaol qiladi va dostupni yopadi → supervayzer klientlarni boshqa agentga o'tkazadi.": {
+  "ru": "Супервайзер сообщает об уходе агента → IT-администратор деактивирует профиль и закрывает доступ → супервайзер передаёт клиентов другому агенту.",
+  "en": "The supervisor reports the agent has left → the IT administrator deactivates the profile and revokes access → the supervisor transfers the clients to another agent."
+ },
+ "Supervayzer jamoa hisobotini yoki barcha agent ma'lumotini ko'ra olmayapti": {
+  "ru": "Супервайзер не видит отчёт по команде или данные всех агентов",
+  "en": "The supervisor can't see the team report or all agents' data"
+ },
+ "Supervayzer klientlar ro'yxatini (Excel: kod yoki STIR) yuboradi; Operator ularni aksiyaga biriktiradi va natijani qaytaradi.": {
+  "ru": "Супервайзер отправляет список клиентов (Excel: код или ИНН); Оператор привязывает их к акции и сообщает результат.",
+  "en": "The supervisor sends the client list (Excel: code or TIN); the Operator assigns them to the promotion and reports back."
+ },
+ "Supervayzer klientni agentga ulaydi va marshrutiga qo'shadi. Keyingi sinxronlashdan so'ng agentda chiqadi.": {
+  "ru": "Супервайзер подключает клиента к агенту и добавляет в маршрут. После следующей синхронизации клиент появляется у агента.",
+  "en": "The supervisor connects the client to the agent and adds it to the route. It appears for the agent after the next sync."
+ },
+ "Supervayzer klientni yangi agentga o'tkazadi va eski agent marshrutidan olib tashlaydi. Vaqtincha bo'lsa — muddatini ko'rsatadi.": {
+  "ru": "Супервайзер передаёт клиента новому агенту и убирает из маршрута прежнего. Если временно — указывает срок.",
+  "en": "The supervisor transfers the client to the new agent and removes it from the previous agent's route. If temporary — sets the end date."
+ },
+ "Supervayzer marshrutda tashrif kunlarini o'zgartiradi. Bayram kunlari uchun jadvalni oldindan yangilaydi.": {
+  "ru": "Супервайзер меняет дни визитов в маршруте. График на праздники обновляет заранее.",
+  "en": "The supervisor changes visit days in the route and updates the schedule for holidays in advance."
+ },
+ "Supervayzer savolni \"Savol kimga?\" yoki Telegram bot orqali tekshiradi va agentga mas'ul xodim va uning kontaktini beradi.": {
+  "ru": "Супервайзер проверяет вопрос через «Кому вопрос?» или Telegram-бот и даёт агенту ответственного сотрудника и его контакт.",
+  "en": "The supervisor checks the question in \"Who to ask?\" or the Telegram bot and gives the agent the responsible person and their contact."
+ },
+ "Supervayzer so'rovni tasdiqlaydi; Operator mavjud aksiyani klientga biriktiradi yoki olib tashlaydi. Yangi aksiya kerak bo'lsa — Dasturchilar jamoasi (\"Yangi aksiya yaratish\").": {
+  "ru": "Супервайзер согласует запрос; Оператор привязывает существующую акцию к клиенту или убирает её. Если нужна новая акция — команда разработчиков («Создание новой акции»).",
+  "en": "The supervisor approves the request; the Operator assigns the existing promotion to the client or removes it. If a new promotion is needed — Developers team (\"Creating a new promotion\")."
+ },
+ "Supervayzer tasdiqlagach — 1C va ProTarget'da klientni yaratadi": {
+  "ru": "После согласования супервайзера — создаёт клиента в 1С и ProTarget",
+  "en": "After the supervisor approves — creates the client in 1C and ProTarget"
+ },
+ "Supervayzer tasdiqlagach — 1C va ProTarget'da tuzatadi": {
+  "ru": "После согласования супервайзера — исправляет в 1С и ProTarget",
+  "en": "After the supervisor approves — corrects it in 1C and ProTarget"
+ },
+ "Supervayzer tasdiqlagan so'rovlarni bajaradi": {
+  "ru": "Выполняет запросы, согласованные супервайзером",
+  "en": "Carries out requests approved by the supervisor"
+ },
+ "Supervayzer tasdiqlaydi; Operator 1C va ProTarget'da klient narx turini o'zgartiradi. Yangi narx keyingi zakazdan amal qiladi.": {
+  "ru": "Супервайзер согласует; Оператор меняет тип цены клиента в 1С и ProTarget. Новая цена действует со следующего заказа.",
+  "en": "The supervisor approves; the Operator changes the client's price type in 1C and ProTarget. The new price applies from the next order."
+ },
+ "Supervayzer xato matnini so'raydi va yo'naltiradi:\n- login/dostup → Xusniddin\n- klient yoki tovar ma'lumoti xato → Saidabror\n- ilova crash yoki sinxronizatsiya xatosi → Dasturchilar\n- server yoki aloqa → Abdulbosit": {
+  "ru": "Супервайзер запрашивает текст ошибки и направляет:\n- логин/доступ → Xusniddin\n- ошибка в данных клиента или товара → Saidabror\n- сбой приложения или ошибка синхронизации → Разработчики\n- сервер или связь → Abdulbosit",
+  "en": "The supervisor asks for the error message and routes it:\n- login/access → Xusniddin\n- wrong client or product data → Saidabror\n- app crash or sync error → Developers\n- server or connectivity → Abdulbosit"
+ },
+ "Supervayzer yangi agent ma'lumotini yuboradi: F.I.Sh., telefon, hudud, supervayzeri. IT administrator akkaunt va huquqlarni ochadi; Texnik telefonni tayyorlaydi; supervayzer klientlarni biriktiradi.": {
+  "ru": "Супервайзер отправляет данные нового агента: ФИО, телефон, территория, супервайзер. IT-администратор открывает аккаунт и права; Техник готовит телефон; супервайзер закрепляет клиентов.",
+  "en": "The supervisor sends the new agent's details: full name, phone, territory, supervisor. The IT administrator creates the account and permissions; the Technician prepares the phone; the supervisor assigns clients."
+ },
+ "Supervayzer yangi agentni ko'ra olmayapti": {
+  "ru": "Супервайзер не видит нового агента",
+  "en": "The supervisor can't see a new agent"
+ },
+ "Supervayzerda huquq bo'lmasa": {
+  "ru": "Если у супервайзера нет прав",
+  "en": "If the supervisor lacks the rights"
+ },
+ "Supervayzerda ulash huquqi bo'lmasa": {
+  "ru": "Если у супервайзера нет права подключения",
+  "en": "If the supervisor has no right to connect"
+ },
+ "Supervayzerlar": {
+  "ru": "Супервайзеры",
+  "en": "Supervisors"
+ },
+ "Switch yoki router o'chib qolgan (ofis ichida)": {
+  "ru": "Отключился коммутатор или роутер (в офисе)",
+  "en": "Switch or router went down (in the office)"
+ },
+ "Tarmoq": {
+  "ru": "Сеть",
+  "en": "Network"
+ },
+ "Tarmoq quradi, kabel tortadi, Wi-Fi va LAN rozetkalarini o'rnatadi": {
+  "ru": "Строит сеть, прокладывает кабели, устанавливает Wi-Fi и сетевые розетки",
+  "en": "Builds the network, lays cables, installs Wi-Fi and LAN sockets"
+ },
+ "Tasdiqlangan klientlar ro'yxati": {
+  "ru": "Список подтверждённых клиентов",
+  "en": "List of approved clients"
+ },
+ "Tasdiqlangan marshrut yoki jadval tizimdan ilovaga uzatilmayapti": {
+  "ru": "Утверждённый маршрут или график не передаётся из системы в приложение",
+  "en": "An approved route or schedule doesn't reach the app from the system"
+ },
+ "Tasdiqlangandan keyin bajaradi": {
+  "ru": "Выполняет после согласования",
+  "en": "Carries it out after approval"
+ },
+ "Tasdiqlash so'rovlari": {
+  "ru": "Запросы на согласование",
+  "en": "Approval requests"
+ },
+ "Tasdiqlaydi": {
+  "ru": "Согласует",
+  "en": "Approves"
+ },
+ "Tashrif kunini o'zgartirish, shanba yoki bayram kunini olib tashlash": {
+  "ru": "Изменение дня визита, исключение субботы или праздника",
+  "en": "Changing the visit day, removing a Saturday or holiday"
+ },
+ "Tashrif kunlari va planni kiritadi": {
+  "ru": "Вносит дни визитов и план",
+  "en": "Enters visit days and the plan"
+ },
+ "Telefon almashtirish va akkaunt": {
+  "ru": "Смена телефона и аккаунт",
+  "en": "Phone change and account"
+ },
+ "Telefon batareyasi, zaryad qurilmasi": {
+  "ru": "Батарея телефона, зарядное устройство",
+  "en": "Phone battery, charger"
+ },
+ "Telefon xotirasi to'lgan": {
+  "ru": "Память телефона заполнена",
+  "en": "Phone storage is full"
+ },
+ "Telefonda sana yoki vaqt noto'g'ri": {
+  "ru": "На телефоне неверная дата или время",
+  "en": "Wrong date or time on the phone"
+ },
+ "Telefonning o'zi nosoz bo'lsa": {
+  "ru": "Если неисправен сам телефон",
+  "en": "If the phone itself is faulty"
+ },
+ "Telefonning o'zi nosoz bo'lsa: Jahongir": {
+  "ru": "Если неисправен сам телефон: Jahongir",
+  "en": "If the phone itself is faulty: Jahongir"
+ },
+ "Telegram botga qayta ulanish": {
+  "ru": "Повторное подключение к Telegram-боту",
+  "en": "Reconnecting to the Telegram bot"
+ },
+ "Texnik muammo — IT operator": {
+  "ru": "Техническая проблема — IT-оператор",
+  "en": "Technical problem — IT operator"
+ },
+ "Texnik ofis tarmog'ini tekshiradi. Faqat bitta ilova ishlamasa (internet bor) — IT administrator.": {
+  "ru": "Техник проверяет офисную сеть. Если не работает только одно приложение (интернет есть) — IT-администратор.",
+  "en": "The Technician checks the office network. If only one app doesn't work (internet is fine) — the IT administrator."
+ },
+ "Texnik printerni tekshiradi, toner yoki qog'ozni almashtiradi.": {
+  "ru": "Техник проверяет принтер, меняет тонер или бумагу.",
+  "en": "The Technician checks the printer and replaces the toner or paper."
+ },
+ "Texnika inventari, yo'qolgan yoki shikastlangan texnika": {
+  "ru": "Инвентарь техники, утерянная или повреждённая техника",
+  "en": "Equipment inventory, lost or damaged equipment"
+ },
+ "Texnika inventarini yuritadi, yo'qolgan yoki buzilganini almashtiradi": {
+  "ru": "Ведёт инвентарь техники, заменяет утерянную или сломанную",
+  "en": "Keeps the equipment inventory and replaces lost or broken items"
+ },
+ "Texnikani boshqa xonaga yoki xodimga ko'chirish": {
+  "ru": "Перенос техники в другой кабинет или другому сотруднику",
+  "en": "Moving equipment to another room or employee"
+ },
+ "Tizimli uzilishlarni bartaraf etadi, zaxira nusxa va tiklashni yuritadi": {
+  "ru": "Устраняет системные сбои, ведёт резервное копирование и восстановление",
+  "en": "Resolves system outages, manages backups and restores"
+ },
+ "To'g'ri kanalni tasdiqlaydi": {
+  "ru": "Подтверждает правильный канал",
+  "en": "Confirms the correct channel"
+ },
+ "To'g'ri klientni tasdiqlaydi": {
+  "ru": "Подтверждает правильного клиента",
+  "en": "Confirms the correct client"
+ },
+ "To'g'ri summani tasdiqlaydi": {
+  "ru": "Подтверждает правильную сумму",
+  "en": "Confirms the correct amount"
+ },
+ "To'lov boshqa klientga tushib qolgan": {
+  "ru": "Оплата попала на другого клиента",
+  "en": "Payment posted to the wrong client"
+ },
+ "To'lov ikki marta tushgan": {
+  "ru": "Оплата прошла дважды",
+  "en": "Payment posted twice"
+ },
+ "To'lov summasi noto'g'ri kiritilgan": {
+  "ru": "Неверно внесена сумма оплаты",
+  "en": "Payment amount entered incorrectly"
+ },
+ "To'xtatish, ishdan ketganda yopish, hudud o'zgarganda eski huquqni olish.": {
+  "ru": "Приостановка, закрытие при увольнении, снятие старых прав при смене территории.",
+  "en": "Suspending, closing when someone leaves, removing old rights when the territory changes."
+ },
+ "Tovar (nomenklatura) dublikat bo'lib qolgan": {
+  "ru": "Дубликат товара (номенклатуры)",
+  "en": "Duplicate product (catalogue item)"
+ },
+ "Tovar 1C da bor, ProTarget'ga o'tmagan bo'lsa — integratsiya": {
+  "ru": "Товар есть в 1С, но не перешёл в ProTarget — интеграция",
+  "en": "Item is in 1C but hasn't reached ProTarget — integration"
+ },
+ "Tovar 1C da bor, ProTarget'ga o'tmasa — integratsiya": {
+  "ru": "Товар есть в 1С, но не перешёл в ProTarget — интеграция",
+  "en": "Item exists in 1C but didn't reach ProTarget — integration"
+ },
+ "Tovar miqdorini o'zgartirish": {
+  "ru": "Изменение количества товара",
+  "en": "Changing item quantity"
+ },
+ "Tovar narxi, nomi yoki rasmi noto'g'ri": {
+  "ru": "Неверная цена, название или фото товара",
+  "en": "Wrong product price, name or photo"
+ },
+ "Tovar shtrix-kodini qo'shish yoki o'zgartirish": {
+  "ru": "Добавление или изменение штрихкода товара",
+  "en": "Adding or changing a product barcode"
+ },
+ "Tovarga narx turi biriktirish": {
+  "ru": "Привязка типа цены к товару",
+  "en": "Assigning a price type to a product"
+ },
+ "Tovarni guruh yoki brendga biriktirish": {
+  "ru": "Привязка товара к группе или бренду",
+  "en": "Assigning a product to a group or brand"
+ },
+ "Tovarni nofaol qilish": {
+  "ru": "Деактивация товара",
+  "en": "Deactivating a product"
+ },
+ "Tuzatish muddatini aytadi": {
+  "ru": "Называет срок исправления",
+  "en": "Gives the fix timeline"
+ },
+ "Tuzatishni tasdiqlaydi": {
+  "ru": "Согласует исправление",
+  "en": "Approves the correction"
+ },
+ "UPS (uzluksiz quvvat manbai) ishlamayapti": {
+  "ru": "Не работает ИБП (источник бесперебойного питания)",
+  "en": "UPS (uninterruptible power supply) not working"
+ },
+ "Ulanishni bekor qilish yoki qayta ulash": {
+  "ru": "Отмена подключения или повторное подключение",
+  "en": "Cancelling or reconnecting a connection"
+ },
+ "Umumiy": {
+  "ru": "Общее",
+  "en": "General"
+ },
+ "Umumiy papka va fayl serverga kirish huquqi": {
+  "ru": "Доступ к общей папке и файловому серверу",
+  "en": "Access to a shared folder and file server"
+ },
+ "Uzilish bo'lsa birinchi bo'lib aniqlaydi va kerakli mutaxassisga xabar beradi": {
+  "ru": "При сбое первым его выявляет и сообщает нужному специалисту",
+  "en": "Detects outages first and notifies the right specialist"
+ },
+ "Uzilish qachon tuzaladi — holat haqida xabar berish": {
+  "ru": "Когда исправят сбой — сообщить о статусе",
+  "en": "When will the outage be fixed — status update"
+ },
+ "Uzilish tugagani haqida hammaga xabar berish": {
+  "ru": "Сообщить всем об окончании сбоя",
+  "en": "Notify everyone that the outage is over"
+ },
+ "Uzilishlar: kuzatish va xabar berish": {
+  "ru": "Сбои: мониторинг и оповещение",
+  "en": "Outages: monitoring and notification"
+ },
+ "VPN ulanadi, lekin ichki resurslar ochilmayapti": {
+  "ru": "VPN подключается, но внутренние ресурсы не открываются",
+  "en": "VPN connects but internal resources won't open"
+ },
+ "VPN ulanmayapti yoki xatolik kodi chiqyapti": {
+  "ru": "VPN не подключается или выдаёт код ошибки",
+  "en": "VPN won't connect or shows an error code"
+ },
+ "VPN va masofaviy kirish": {
+  "ru": "VPN и удалённый доступ",
+  "en": "VPN and remote access"
+ },
+ "VPN yoki tarmoq sozlamasi kerak bo'lsa": {
+  "ru": "Если нужна настройка VPN или сети",
+  "en": "If VPN or network settings are needed"
+ },
+ "Vaqtincha dostup berish (o'rinbosar uchun)": {
+  "ru": "Временный доступ (для замещающего сотрудника)",
+  "en": "Temporary access (for a stand-in)"
+ },
+ "Vaqtincha qo'shimcha nuqtalarni ko'rish huquqi": {
+  "ru": "Временное право видеть дополнительные точки",
+  "en": "Temporary permission to see extra outlets"
+ },
+ "Vaqtincha qurilma berish": {
+  "ru": "Временная выдача устройства",
+  "en": "Lending a device temporarily"
+ },
+ "Videokuzatuv kamerasi": {
+  "ru": "Камера видеонаблюдения",
+  "en": "CCTV camera"
+ },
+ "Virus yoki shifrlovchi (ransomware) gumoni": {
+  "ru": "Подозрение на вирус или шифровальщик (ransomware)",
+  "en": "Suspected virus or ransomware"
+ },
+ "Vozvrat (qaytarish) hujjatini kiritish": {
+  "ru": "Ввод документа возврата",
+  "en": "Entering a return document"
+ },
+ "Vozvrat noto'g'ri kiritilgan — tuzatish": {
+  "ru": "Возврат введён неверно — исправление",
+  "en": "Return entered incorrectly — correction"
+ },
+ "Vozvratlar ro'yxatini chiqarib berish": {
+  "ru": "Выгрузить список возвратов",
+  "en": "Export the list of returns"
+ },
+ "Vozvratni tasdiqlash": {
+  "ru": "Согласование возврата",
+  "en": "Approving a return"
+ },
+ "Vozvratni tasdiqlaydi": {
+  "ru": "Согласует возврат",
+  "en": "Approves the return"
+ },
+ "Wi-Fi ulanmayapti, signal past": {
+  "ru": "Wi-Fi не подключается, слабый сигнал",
+  "en": "Wi-Fi won't connect, weak signal"
+ },
+ "Windows xatosi": {
+  "ru": "Ошибка Windows",
+  "en": "Windows error"
+ },
+ "Xarita va GPS funksiyasidagi xato": {
+  "ru": "Ошибка функции карты и GPS",
+  "en": "Map and GPS function error"
+ },
+ "Xaritadagi joylashuv yoki GPS koordinatasi noto'g'ri kiritilgan": {
+  "ru": "Неверно указано местоположение на карте или GPS-координаты",
+  "en": "Wrong map location or GPS coordinates"
+ },
+ "Xat ochilgan yoki parol kiritilgan bo'lsa — akkauntni himoyalaydi": {
+  "ru": "Если письмо открыли или ввели пароль — защищает аккаунт",
+  "en": "If the email was opened or a password entered — secures the account"
+ },
+ "Xato 1C dan kelgan bo'lsa": {
+  "ru": "Если ошибка пришла из 1С",
+  "en": "If the error came from 1C"
+ },
+ "Xato ProTarget dasturining o'zida bo'lsa": {
+  "ru": "Если ошибка в самой программе ProTarget",
+  "en": "If the error is in ProTarget itself"
+ },
+ "Xato ProTarget tomonda bo'lsa": {
+  "ru": "Если ошибка на стороне ProTarget",
+  "en": "If the error is on the ProTarget side"
+ },
+ "Xato dastur yoki integratsiyada bo'lsa": {
+  "ru": "Если ошибка в программе или интеграции",
+  "en": "If the error is in the software or integration"
+ },
+ "Xavfsizlik": {
+  "ru": "Безопасность",
+  "en": "Security"
+ },
+ "Xusniddin va Jahongir ishlari o'z vaqtida bajarilishini nazorat qiladi": {
+  "ru": "Контролирует своевременное выполнение работ Xusniddin и Jahongir",
+  "en": "Makes sure Xusniddin's and Jahongir's work is done on time"
+ },
+ "Xusniddin, Jahongir": {
+  "ru": "Xusniddin, Jahongir",
+  "en": "Xusniddin, Jahongir"
+ },
+ "Yakuniy narx o'zgarmayapti": {
+  "ru": "Итоговая цена не меняется",
+  "en": "Final price doesn't change"
+ },
+ "Yangi LAN port": {
+  "ru": "Новый LAN-порт",
+  "en": "New LAN port"
+ },
+ "Yangi agent uchun telefon va dasturni tayyorlash": {
+  "ru": "Подготовка телефона и программы для нового агента",
+  "en": "Preparing a phone and software for a new agent"
+ },
+ "Yangi agent yoki supervayzerga ProTarget dostupi va huquqlari": {
+  "ru": "Доступ и права ProTarget для нового агента или супервайзера",
+  "en": "ProTarget access and permissions for a new agent or supervisor"
+ },
+ "Yangi agent yoki supervayzerga akkaunt va huquqlar.": {
+  "ru": "Аккаунт и права для нового агента или супервайзера.",
+  "en": "Account and permissions for a new agent or supervisor."
+ },
+ "Yangi agentga dostup ochishni tasdiqlash": {
+  "ru": "Согласование открытия доступа новому агенту",
+  "en": "Approving access for a new agent"
+ },
+ "Yangi agentga telefon tayyorlash kerak bo'lsa": {
+  "ru": "Если новому агенту нужно подготовить телефон",
+  "en": "If a phone needs preparing for the new agent"
+ },
+ "Yangi aksiya ProTargetga qachon tushishi": {
+  "ru": "Когда новая акция появится в ProTarget",
+  "en": "When a new promotion will appear in ProTarget"
+ },
+ "Yangi aksiya kerak": {
+  "ru": "Нужна новая акция",
+  "en": "A new promotion is needed"
+ },
+ "Yangi aksiya va uning qoidalarini yaratish": {
+  "ru": "Создание новых акций и их правил",
+  "en": "Creating new promotions and their rules"
+ },
+ "Yangi aksiya yaratadi va uning qoidalarini sozlaydi": {
+  "ru": "Создаёт новые акции и настраивает их правила",
+  "en": "Creates new promotions and configures their rules"
+ },
+ "Yangi aksiya yaratish": {
+  "ru": "Создание новой акции",
+  "en": "Creating a new promotion"
+ },
+ "Yangi aksiya yaratish va tizimga qo'shish": {
+  "ru": "Создание новой акции и добавление в систему",
+  "en": "Creating a new promotion and adding it to the system"
+ },
+ "Yangi aksiya, dastur o'zgarishi, hisoblash yoki integratsiya xatosi": {
+  "ru": "Новая акция, изменение программы, ошибка расчёта или интеграции",
+  "en": "New promotion, software change, calculation or integration error"
+ },
+ "Yangi aksiya, uning shartlari va muddati, ProTarget va 1C da bir xil bo'lishi.": {
+  "ru": "Новая акция, её условия и сроки, одинаковые настройки в ProTarget и 1С.",
+  "en": "A new promotion, its terms and dates, and keeping it identical in ProTarget and 1C."
+ },
+ "Yangi filial uchun IT tayyorgarligi": {
+  "ru": "IT-подготовка нового филиала",
+  "en": "IT setup for a new branch"
+ },
+ "Yangi filialni korporativ tarmoqqa ulash": {
+  "ru": "Подключение нового филиала к корпоративной сети",
+  "en": "Connecting a new branch to the corporate network"
+ },
+ "Yangi funksiya takliflarini baholaydi va ishlab chiqadi": {
+  "ru": "Оценивает и разрабатывает предложения новых функций",
+  "en": "Evaluates and develops new feature requests"
+ },
+ "Yangi funksiya va o'zgarishlar tarixi": {
+  "ru": "Новые функции и история изменений",
+  "en": "New features and change history"
+ },
+ "Yangi hisobot yaratish": {
+  "ru": "Создание нового отчёта",
+  "en": "Creating a new report"
+ },
+ "Yangi hudud qo'shish": {
+  "ru": "Добавление новой территории",
+  "en": "Adding a new territory"
+ },
+ "Yangi klient ochishni tasdiqlash": {
+  "ru": "Согласование открытия нового клиента",
+  "en": "Approving a new client"
+ },
+ "Yangi klient qachon tasdiqlanadi?": {
+  "ru": "Когда подтвердят нового клиента?",
+  "en": "When will the new client be approved?"
+ },
+ "Yangi klient qo'shish": {
+  "ru": "Добавление нового клиента",
+  "en": "Adding a new client"
+ },
+ "Yangi klient, rekvizitlar, dublikat, tasdiqlash, faollashtirish va yopish.": {
+  "ru": "Новый клиент, реквизиты, дубликаты, подтверждение, активация и закрытие.",
+  "en": "New clients, details, duplicates, approval, activation and closing."
+ },
+ "Yangi marshrut qo'shish": {
+  "ru": "Добавление нового маршрута",
+  "en": "Adding a new route"
+ },
+ "Yangi narx turini tasdiqlaydi": {
+  "ru": "Согласует новый тип цены",
+  "en": "Approves the new price type"
+ },
+ "Yangi nuqtani biriktirish yoki olib tashlash": {
+  "ru": "Привязать или убрать новую точку",
+  "en": "Assigning or removing a new outlet"
+ },
+ "Yangi ochilgan klientlar ro'yxatini chiqarib berish (davr bo'yicha)": {
+  "ru": "Выгрузить список новых клиентов (за период)",
+  "en": "Export the list of newly opened clients (by period)"
+ },
+ "Yangi server yoki virtual mashina kerak": {
+  "ru": "Нужен новый сервер или виртуальная машина",
+  "en": "Need a new server or virtual machine"
+ },
+ "Yangi telefonda ilovani qayta sozlash": {
+  "ru": "Повторная настройка приложения на новом телефоне",
+  "en": "Setting up the app again on a new phone"
+ },
+ "Yangi tizim bilan integratsiya qilish so'rovi": {
+  "ru": "Запрос на интеграцию с новой системой",
+  "en": "Request to integrate with a new system"
+ },
+ "Yangi tovar (SKU) qo'shish": {
+  "ru": "Добавление нового товара (SKU)",
+  "en": "Adding a new product (SKU)"
+ },
+ "Yangi tovar, nomi, shtrix-kod, o'lchov birligi, guruh va narx turi.": {
+  "ru": "Новый товар, название, штрихкод, единица измерения, группа и тип цены.",
+  "en": "New items, name, barcode, unit of measure, group and price type."
+ },
+ "Yangi xodim keldi": {
+  "ru": "Пришёл новый сотрудник",
+  "en": "A new employee has joined"
+ },
+ "Yangi xodim keldi — ish joyi, qurilma va dostuplar": {
+  "ru": "Пришёл новый сотрудник — рабочее место, устройства и доступы",
+  "en": "New employee — workstation, devices and access"
+ },
+ "Yangi xodimga ish joyi tayyorlash": {
+  "ru": "Подготовка рабочего места новому сотруднику",
+  "en": "Preparing a workstation for a new employee"
+ },
+ "Yangi xodimga ish joyi, yangi agentga telefon tayyorlaydi": {
+  "ru": "Готовит рабочее место новому сотруднику и телефон новому агенту",
+  "en": "Prepares a workstation for new staff and a phone for new agents"
+ },
+ "Yangi xodimga korporativ pochta ochish": {
+  "ru": "Создание корпоративной почты новому сотруднику",
+  "en": "Creating a corporate mailbox for a new employee"
+ },
+ "Yangilanishdan keyin chiqqan xatolarni tuzatadi": {
+  "ru": "Исправляет ошибки, появившиеся после обновления",
+  "en": "Fixes errors that appear after updates"
+ },
+ "Yangilanishdan keyin funksiya ishlamayapti": {
+  "ru": "После обновления не работает функция",
+  "en": "A function doesn't work after an update"
+ },
+ "Yangilanishdan keyin ishlamay qoldi": {
+  "ru": "Перестало работать после обновления",
+  "en": "Stopped working after an update"
+ },
+ "Yangilanishdan keyingi tizim xatosi": {
+  "ru": "Системная ошибка после обновления",
+  "en": "System error after an update"
+ },
+ "Yangilanishlardan keyin Stargroupda qilinadigan tekshirishlarda": {
+  "ru": "При проверках в Stargroup после обновлений",
+  "en": "During post-update checks at Stargroup"
+ },
+ "Yo'qolgan telefon, ishdan ketgan xodim": {
+  "ru": "Утерянный телефон, уволившийся сотрудник",
+  "en": "Lost phone, departed employee"
+ },
+ "Yo'qolgan telefondagi akkauntni bloklash": {
+  "ru": "Блокировка аккаунта на утерянном телефоне",
+  "en": "Blocking the account on a lost phone"
+ },
+ "Yopilgan nuqta hali ro'yxatda": {
+  "ru": "Закрытая точка всё ещё в списке",
+  "en": "A closed outlet is still in the list"
+ },
+ "Yopilmagan dostupni yopadi": {
+  "ru": "Закрывает незакрытый доступ",
+  "en": "Revokes any access still open"
+ },
+ "Zakaz boshqa klientga yozilib ketgan": {
+  "ru": "Заказ записан на другого клиента",
+  "en": "Order recorded under the wrong client"
+ },
+ "Zakaz ikki marta tushib qolgan (dublikat zakaz)": {
+  "ru": "Заказ прошёл дважды (дубликат заказа)",
+  "en": "Order came through twice (duplicate order)"
+ },
+ "Zakaz, vozvrat va to'lov hujjatlaridagi xatolarni tuzatish, sanasi va holatini o'zgartirish.": {
+  "ru": "Исправление ошибок в документах заказа, возврата и оплаты, изменение даты и статуса.",
+  "en": "Fixing errors in order, return and payment documents, changing their date and status."
+ },
+ "Zakazdagi narx noto'g'ri chiqqan": {
+  "ru": "В заказе неверная цена",
+  "en": "Wrong price in the order"
+ },
+ "Zakazlar ro'yxatini chiqarib berish (davr, agent yoki klient bo'yicha)": {
+  "ru": "Выгрузить список заказов (по периоду, агенту или клиенту)",
+  "en": "Export the order list (by period, agent or client)"
+ },
+ "Zakazni o'chirish yoki tahrirlashni tasdiqlash": {
+  "ru": "Согласование удаления или редактирования заказа",
+  "en": "Approving deleting or editing an order"
+ },
+ "Zaxira nusxa va tiklash": {
+  "ru": "Резервное копирование и восстановление",
+  "en": "Backup and restore"
+ }
+}

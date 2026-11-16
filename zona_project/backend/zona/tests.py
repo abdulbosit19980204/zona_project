@@ -408,7 +408,12 @@ def fake_translator(provider, model, system, user, **kwargs):
 
 @override_settings(ZONA_TRANSLATE_ASYNC=False)
 class TranslationTests(Base):
+    """AI orqali tarjima yo'li: repodagi tarjima xotirasi bu testlarda o'chirib qo'yiladi."""
+
     def setUp(self):
+        patcher = mock.patch.object(translation, "memory", return_value={})
+        patcher.start()
+        self.addCleanup(patcher.stop)
         provider = AIProvider.objects.create(name="T", kind="openai", api_key_enc=encrypt("sk-test-key"))
         AITaskConfig.objects.update_or_create(task="translate", defaults={"enabled": True, "provider": provider, "model": "m"})
 
@@ -825,3 +830,63 @@ class CatalogTests(Base):
         self.assertTrue(EdgeCase.objects.filter(situation="Aksiya ko'rinmayapti").exists())
         knowledge_seed.apply(log=lambda *_: None)
         self.assertEqual(Task.objects.count() - before, added)  # takrorlanmaydi
+
+
+class ProposalBulkTests(Base):
+    def test_propose_dedupe_and_bulk_decide(self):
+        from .models import ChangeRequest, Member, Task
+        tasks = list(Task.objects.filter(owner__isnull=False)[:3])
+        other = Member.objects.exclude(pk=tasks[0].owner_id).first()
+        items = [{"task": t.id, "owner": other.id if t.owner_id != other.id else None, "reason": "AI: ortiqcha yuklama", "hours": 2.5}
+                 for t in tasks]
+        self.login("viewer")
+        r = self.call("post", "approvals/propose/", {"source": "ai", "items": items})
+        self.assertEqual(r.status_code, 201, r.content)
+        ids = r.json()["created"]
+        self.assertEqual(len(ids), 3)
+        req = ChangeRequest.objects.get(pk=ids[0])
+        self.assertEqual((req.source, req.hours), ("ai", 2.5))
+        again = self.call("post", "approvals/propose/", {"source": "ai", "items": items}).json()
+        self.assertEqual((again["created"], len(again["skipped"])), ([], 3))  # takrorlanmaydi
+        self.assertEqual(self.call("post", "approvals/bulk/", {"ids": ids, "action": "approve"}).status_code, 403)
+        self.login("editor")
+        self.assertEqual(len(self.call("get", "approvals/?source=ai").json()), 3)
+        res = self.call("post", "approvals/bulk/", {"ids": ids[:2], "action": "approve", "note": "ok"}).json()
+        self.assertEqual(res["done"], 2)
+        tasks[0].refresh_from_db()
+        self.assertEqual(tasks[0].owner_id, items[0]["owner"])
+        res = self.call("post", "approvals/bulk/", {"ids": ids, "action": "reject"}).json()
+        self.assertEqual(res["done"], 1)  # ikkitasi allaqachon tasdiqlangan
+        self.assertEqual(ChangeRequest.objects.get(pk=ids[2]).status, "rejected")
+
+
+class TranslationMemoryTests(Base):
+    def test_memory_fills_without_ai_and_lists(self):
+        from . import translation
+        from .models import Member, Task
+        t = Task.objects.first()
+        m = Member.objects.first()
+        m.duties = ["Birinchi vazifa", "Ikkinchi vazifa"]
+        m.save()
+        mem = {t.title: {"ru": "RU " + t.title, "en": "EN " + t.title},
+               "Birinchi vazifa": {"ru": "Первая", "en": "First"}, "Ikkinchi vazifa": {"ru": "Вторая", "en": "Second"}}
+        from unittest import mock
+        with mock.patch.object(translation, "memory", return_value=mem):
+            self.login("admin")
+            r = self.call("post", "admin/ai/translate/")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertGreaterEqual(r.json()["filled"], 2)
+        t.refresh_from_db()
+        m.refresh_from_db()
+        self.assertEqual(translation.current(t, "title", "ru"), "RU " + t.title)
+        self.assertEqual(translation.current(m, "duties", "en"), ["First", "Second"])
+        self.assertEqual(translation.current(m, "duties", "uz"), ["Birinchi vazifa", "Ikkinchi vazifa"])
+        state = self.call("get", "state/", lang="en").json()
+        mm = next(x for x in state["members"] if x["id"] == m.id)
+        self.assertEqual(mm["i18n"]["en"]["duties"], "First\nSecond")
+
+    def test_repo_memory_covers_seed_titles(self):
+        from . import translation
+        mem = translation.memory()
+        self.assertGreater(len(mem), 500)
+        self.assertIn("Parolni tiklash", mem)

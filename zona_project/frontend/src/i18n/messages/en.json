@@ -325,7 +325,20 @@
       "rejected": "Rejected",
       "cancelled": "Withdrawn",
       "all": "All"
-    }
+    },
+    "source": {
+      "all": "All",
+      "user": "Staff proposal",
+      "rule": "Rule-based",
+      "ai": "AI recommendation"
+    },
+    "selected": "{count} selected",
+    "selectAll": "Select all ({count})",
+    "select": "Select",
+    "approveSelected": "Approve selected",
+    "rejectSelected": "Reject selected",
+    "approveAll": "Approve all ({count})",
+    "bulkDone": "Done: {done}, failed: {failed}"
   },
   "issues": {
     "no_owner": "No owner",
@@ -607,13 +620,16 @@
     },
     "translation": {
       "title": "Data translation",
-      "hint": "Tasks, processes, departments, positions and other texts can be entered in any language — AI translates them into the others. New records are translated automatically on save; this button translates what was entered earlier.",
-      "run": "Translate everything",
+      "hint": "Translates all entered data (questions, tasks, rules, responsibilities) into uz/ru/en with one button. Uses the built-in translation memory first, then AI for the rest; only untranslated items.",
+      "run": "Translate untranslated",
       "running": "Translating…",
       "pending": "{count, plural, one {# text is} other {# texts are}} waiting for translation",
       "allDone": "All texts are translated",
       "off": "To enable it, choose a provider and model in the “Translation” task above",
-      "started": "Translation started in the background"
+      "started": "Translation started in the background",
+      "filled": "{count} fields translated from the translation memory",
+      "needAi": "No ready translation for {count} fields — connect AI",
+      "pendingNoAi": "Untranslated: {count} (AI is needed for those without a ready translation)"
     },
     "free": {
       "title": "Free AI is almost ready — it only needs a key",
@@ -991,6 +1007,9 @@
     "byZoneHint": "Yellow — time of questions without a backup (single point of failure)",
     "noBackupShort": "No backup",
     "heavy": "Most time-consuming questions",
-    "heavyHint": "Time per occurrence × times per week"
+    "heavyHint": "Time per occurrence × times per week",
+    "sendToApproval": "Send for approval ({count})",
+    "proposed": "Sent for approval: {created}, duplicate/invalid: {skipped}",
+    "ruleReason": "{from} is overloaded: frees up ~{hours} h per week"
   }
 }

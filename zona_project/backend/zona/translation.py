@@ -9,6 +9,7 @@ Saqlangandan keyin tarjima fonda (alohida oqimda) bajariladi; tugagach mijozlarg
 WebSocket orqali {"type": "state"} yuboriladi — ular tuzilmani qayta yuklaydi.
 """
 import json
+from pathlib import Path
 import logging
 import re
 import threading
@@ -27,13 +28,16 @@ FIELDS = {
     System: ("name",),
     Zone: ("name", "description"),
     Team: ("name", "description"),
-    Member: ("role", "trigger", "does", "excludes", "escalation"),
+    Member: ("role", "trigger", "does", "excludes", "escalation", "duties"),
     Process: ("name", "description"),
     Task: ("title", "note", "rule"),
     TaskFallback: ("condition",),
     EdgeCase: ("situation", "then_text"),
     Authority: ("title", "scope"),
 }
+# Ro'yxat maydonlari: i18n da qatorlar "\n" bilan birlashtirilgan matn sifatida saqlanadi
+LIST_FIELDS = {"duties"}
+MEMORY_FILE = Path(__file__).resolve().parent / "data" / "translations.json"
 BATCH_CHARS = 3500
 BATCH_ITEMS = 40
 _CYRILLIC = re.compile(r"[Ѐ-ӿ]")
@@ -48,7 +52,10 @@ def fields_of(obj):
 
 
 def _text(obj, field):
-    return (getattr(obj, field) or "").strip()
+    value = getattr(obj, field)
+    if field in LIST_FIELDS:
+        return "\n".join(str(x).strip() for x in (value or []) if str(x).strip())
+    return (value or "").strip()
 
 
 def _valid(obj, field):
@@ -62,7 +69,7 @@ def current(obj, field, lang):
     if lang in LANGS and _valid(obj, field):
         value = ((obj.i18n or {}).get(lang) or {}).get(field)
         if value:
-            return value
+            return value.split("\n") if field in LIST_FIELDS else value
     return getattr(obj, field)
 
 
@@ -81,7 +88,7 @@ def public(obj):
 
 def variants(obj, field):
     """Qidiruv uchun: asl matn va barcha yaroqli tarjimalar bitta satrda."""
-    parts = [getattr(obj, field) or ""]
+    parts = [_text(obj, field)]
     if _valid(obj, field):
         data = obj.i18n or {}
         parts += [(data.get(lang) or {}).get(field) or "" for lang in LANGS]
@@ -123,6 +130,12 @@ def keep_source(obj, attrs, lang):
     if obj is None or not lang:
         return attrs
     for field in fields_of(obj):
+        if field in LIST_FIELDS and isinstance(attrs.get(field), list):
+            new = "\n".join(str(x).strip() for x in attrs[field] if str(x).strip())
+            cur = current(obj, field, lang)
+            if new != _text(obj, field) and isinstance(cur, list) and new == "\n".join(cur):
+                attrs[field] = getattr(obj, field)
+            continue
         if field in attrs and isinstance(attrs[field], str):
             new = attrs[field].strip()
             if new != _text(obj, field) and new == (current(obj, field, lang) or "").strip():
@@ -261,8 +274,54 @@ def _chunks(texts):
         yield chunk
 
 
-def translate_pending(user=None):
-    """Tarjimasi yo'q yoki eskirgan barcha maydonlarni tarjima qiladi. Nechta maydon yangilanganini qaytaradi."""
+_memory_cache = {"mtime": None, "data": {}}
+
+
+def memory():
+    """Tarjima xotirasi: {asl matn: {"ru": .., "en": .., "uz"?: ..}} — repoda saqlanadi, AI'siz ishlaydi."""
+    try:
+        mtime = MEMORY_FILE.stat().st_mtime
+    except OSError:
+        return {}
+    if _memory_cache["mtime"] != mtime:
+        try:
+            _memory_cache["data"] = json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
+        except ValueError:
+            log.exception("Tarjima xotirasi o'qilmadi")
+            _memory_cache["data"] = {}
+        _memory_cache["mtime"] = mtime
+    return _memory_cache["data"]
+
+
+def _known(texts):
+    """Ma'lum tarjimalar: xotira fayli + bazadagi boshqa yozuvlarning yaroqli tarjimalari (bir xil matn)."""
+    mem = memory()
+    want = set(texts)
+    out = {}
+    for t in want:
+        m = mem.get(t)
+        if m and m.get("ru") and m.get("en"):
+            out[t] = {"uz": m.get("uz") or t, "ru": m["ru"], "en": m["en"]}
+        elif "\n" in t:
+            # ko'p qatorli matn (masalan, vazifalar ro'yxati) — har bir qator xotirada bo'lsa, qatorma-qator yig'iladi
+            lines = t.split("\n")
+            parts = [mem.get(ln) for ln in lines]
+            if all(p and p.get("ru") and p.get("en") for p in parts):
+                out[t] = {"uz": t, "ru": "\n".join(p["ru"] for p in parts), "en": "\n".join(p["en"] for p in parts)}
+    missing = want - set(out)
+    if missing:
+        for model in FIELDS:
+            for obj in model.objects.all():
+                data = obj.i18n or {}
+                for field, src in (data.get("src") or {}).items():
+                    if src in missing and all((data.get(lang) or {}).get(field) for lang in LANGS):
+                        out[src] = {lang: data[lang][field] for lang in LANGS}
+    return out
+
+
+def translate_pending(user=None, use_ai=True):
+    """Tarjimasi yo'q yoki eskirgan barcha maydonlarni tarjima qiladi: avval tarjima xotirasidan,
+    qolganini AI bilan (yoqilgan bo'lsa). Nechta maydon yangilanganini qaytaradi."""
     from .realtime import broadcast
 
     work = []  # (model, pk, field, text)
@@ -274,7 +333,12 @@ def translate_pending(user=None):
         _state["last_error"] = ""
         return 0
     done = 0
-    translated, error = translate_texts([w[3] for w in work], user)
+    translated = _known([w[3] for w in work])
+    rest = [w[3] for w in work if w[3] not in translated]
+    error = ""
+    if rest and use_ai and enabled():
+        more, error = translate_texts(rest, user)
+        translated.update(more)
     _state["last_error"] = error
     by_obj = {}
     for model, pk, field, text in work:

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, ChevronDown, ChevronRight, Clock, Gauge, Lightbulb, Loader2, Sparkles, Target, Users, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronRight, Clock, Gauge, Lightbulb, Loader2, Send, Sparkles, Target, Users, Wand2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Bar, CartesianGrid, ComposedChart, Legend, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from "recharts";
@@ -20,8 +21,8 @@ import { Card } from "@/components/ui/card";
 import { LevelBadge } from "@/components/views/employees";
 import { queryKeys, useCan, useModel, useScope } from "@/hooks/use-org";
 import { errorMessage } from "@/lib/api/client";
-import { aiApi } from "@/lib/api/endpoints";
-import type { AIWorkload } from "@/lib/api/types";
+import { aiApi, approvalsApi } from "@/lib/api/endpoints";
+import type { AIWorkload, ProposalItem } from "@/lib/api/types";
 import { fmtHours, weekMinutes, type Model, type TimeLoad } from "@/lib/model";
 import { cn } from "@/lib/utils";
 
@@ -180,13 +181,42 @@ function MemberRow({ v, model }: { v: TimeLoad; model: Model }) {
 }
 
 /** Qoidaga asoslangan tavsiyalar (darhol, AI'siz). */
+/** Tavsiyalarni "Tasdiqlashlar"ga yuborish (qabul qilinsa — mas'ul avtomatik almashadi). */
+function useProposals() {
+  const t = useTranslations();
+  const qc = useQueryClient();
+  const router = useRouter();
+  return useMutation({
+    mutationFn: ({ source, items }: { source: "ai" | "rule"; items: ProposalItem[] }) => approvalsApi.propose(source, items),
+    onSuccess: async (r) => {
+      await qc.invalidateQueries({ queryKey: queryKeys.state });
+      await qc.invalidateQueries({ queryKey: ["approvals"] });
+      toast.success(t("time.proposed", { created: r.created.length, skipped: r.skipped.length }), {
+        action: { label: t("nav.approvals"), onClick: () => router.push("/approvals") },
+      });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+}
+
 function RuleRecommendations({ model }: { model: Model }) {
   const t = useTranslations();
   const recs = model.recommendations;
+  const propose = useProposals();
   const name = (id?: number) => (id ? model.member.get(id)?.name ?? "?" : "?");
+  const items: ProposalItem[] = recs.filter((r) => r.kind === "reassign" && r.task && r.to).map((r) => ({
+    task: r.task!.id, owner: r.to!, hours: r.hours,
+    reason: t("time.ruleReason", { from: name(r.from), hours: r.hours }),
+  }));
   return (
     <Card className="gap-3 p-4">
-      <div className="flex items-center gap-2 font-semibold"><Lightbulb className="size-4 text-warning" />{t("time.recsTitle")}</div>
+      <div className="flex items-center gap-2 font-semibold"><Lightbulb className="size-4 text-warning" />{t("time.recsTitle")}
+        {!!items.length && (
+          <Button size="sm" variant="outline" className="ml-auto" disabled={propose.isPending} onClick={() => propose.mutate({ source: "rule", items })}>
+            <Send className="size-3.5" />{t("time.sendToApproval", { count: items.length })}
+          </Button>
+        )}
+      </div>
       <p className="text-xs text-muted-foreground">{t("time.recsHint")}</p>
       {!recs.length && <p className="text-sm text-success">{t("time.noRecs")}</p>}
       <div className="space-y-2">
@@ -213,11 +243,25 @@ const PRIORITY = { high: "var(--destructive)", medium: "var(--warning)", low: "v
 
 function AiResult({ result, model }: { result: AIWorkload; model: Model }) {
   const t = useTranslations();
+  const propose = useProposals();
   const name = (id?: number | null) => (id ? model.member.get(id)?.name ?? "?" : "");
+  // AI tavsiyasidagi har bir savol — alohida taklif (kimga: to_id)
+  const items: ProposalItem[] = result.recommendations
+    .filter((r) => (r.kind === "reassign" || r.kind === "share") && r.to_id && r.task_ids?.length)
+    .flatMap((r) => r.task_ids!.map((task) => ({
+      task, owner: r.to_id!, reason: `${r.title}. ${r.detail}`.slice(0, 1900),
+      hours: r.hours_per_week ? Math.round((r.hours_per_week / r.task_ids!.length) * 10) / 10 : undefined,
+    })))
+    .filter((it) => model.task.get(it.task)?.owner !== it.owner);
   return (
     <Card className="mb-4 gap-4 border-primary/40 p-5">
-      <div className="flex items-center gap-2 font-semibold"><Sparkles className="size-4 text-primary" />{t("time.aiTitle")}
-        <span className="ml-auto text-xs font-normal text-muted-foreground">{result.meta.model} · {result.meta.latency_ms} ms</span>
+      <div className="flex flex-wrap items-center gap-2 font-semibold"><Sparkles className="size-4 text-primary" />{t("time.aiTitle")}
+        <span className="text-xs font-normal text-muted-foreground">{result.meta.model} · {result.meta.latency_ms} ms</span>
+        {!!items.length && (
+          <Button size="sm" className="ml-auto" disabled={propose.isPending} onClick={() => propose.mutate({ source: "ai", items })}>
+            <Send className="size-3.5" />{t("time.sendToApproval", { count: items.length })}
+          </Button>
+        )}
       </div>
       <p className="text-sm leading-relaxed">{result.summary}</p>
       {!!result.overloaded.length && (

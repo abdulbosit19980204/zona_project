@@ -325,7 +325,20 @@
       "rejected": "Rad etilgan",
       "cancelled": "Qaytarilgan",
       "all": "Hammasi"
-    }
+    },
+    "source": {
+      "all": "Hammasi",
+      "user": "Xodim taklifi",
+      "rule": "Qoida tavsiyasi",
+      "ai": "AI tavsiyasi"
+    },
+    "selected": "{count} ta tanlandi",
+    "selectAll": "Hammasini tanlash ({count})",
+    "select": "Tanlash",
+    "approveSelected": "Tanlanganlarni qabul qilish",
+    "rejectSelected": "Tanlanganlarni rad etish",
+    "approveAll": "Hammasini qabul qilish ({count})",
+    "bulkDone": "Bajarildi: {done}, bajarilmadi: {failed}"
   },
   "issues": {
     "no_owner": "Egasi yoʻq",
@@ -607,13 +620,16 @@
     },
     "translation": {
       "title": "Maʼlumotlar tarjimasi",
-      "hint": "Vazifa, jarayon, boʻlim, lavozim va boshqa matnlar istalgan tilda kiritiladi — AI qolgan tillarga oʻzi tarjima qiladi. Yangi yozuvlar saqlanganda avtomatik tarjima boʻladi; bu tugma avval kiritilganlarini tarjima qiladi.",
-      "run": "Hammasini tarjima qilish",
+      "hint": "Kiritilgan barcha ma'lumotni (savollar, vazifalar, qoidalar, mas'uliyatlar) uz/ru/en tillariga bitta tugma bilan tarjima qiladi. Avval tayyor tarjima xotirasidan, qolganini AI bilan; faqat tarjima qilinmaganlari.",
+      "run": "Tarjima qilinmaganlarni tarjima qilish",
       "running": "Tarjima qilinmoqda…",
       "pending": "{count} ta matn tarjima kutmoqda",
       "allDone": "Barcha matnlar tarjima qilingan",
       "off": "Yoqish uchun yuqoridagi “Tarjima” vazifasida provayder va modelni tanlang",
-      "started": "Tarjima fonda boshlandi"
+      "started": "Tarjima fonda boshlandi",
+      "filled": "{count} ta maydon tarjima xotirasidan tarjima qilindi",
+      "needAi": "{count} ta maydon uchun tayyor tarjima yo'q — AI'ni ulang",
+      "pendingNoAi": "Tarjima qilinmagan: {count} ta (tayyor tarjimasi bo'lmaganlari uchun AI kerak)"
     },
     "free": {
       "title": "Bepul AI deyarli tayyor — faqat kalit kerak",
@@ -991,6 +1007,9 @@
     "byZoneHint": "Sariq — shu zonadagi zaxirasiz savollar vaqti (bitta odamga bog'liq)",
     "noBackupShort": "Zaxirasiz",
     "heavy": "Eng ko'p vaqt oladigan savollar",
-    "heavyHint": "Bir martalik vaqt × haftasiga soni"
+    "heavyHint": "Bir martalik vaqt × haftasiga soni",
+    "sendToApproval": "Tasdiqlashga yuborish ({count})",
+    "proposed": "Tasdiqlashga yuborildi: {created} ta, takror/yaroqsiz: {skipped} ta",
+    "ruleReason": "{from} ortiqcha yuklangan: haftasiga ~{hours} soat bo'shaydi"
   }
 }

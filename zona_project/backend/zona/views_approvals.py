@@ -59,6 +59,8 @@ class ChangeRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mix
         status_ = self.request.query_params.get("status")
         if status_:
             qs = qs.filter(status=status_)
+        if self.request.query_params.get("source") in ("user", "rule", "ai"):
+            qs = qs.filter(source=self.request.query_params.get("source"))
         if self.request.query_params.get("mine") == "1":
             qs = qs.filter(requested_by=self.request.user)
         return qs
@@ -72,15 +74,59 @@ class ChangeRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mix
         req = serializer.save(requested_by=self.request.user)
         log(self.request, Event.APPROVAL, subject=req.title, text="Tasdiqlash uchun yuborildi")
 
-    def _decide(self, request, new_status):
-        req = self.get_object()
-        if req.status != ChangeRequest.PENDING:
-            raise ValidationError("So'rov allaqachon ko'rib chiqilgan.")
-        if new_status == ChangeRequest.CANCELLED:
-            if req.requested_by != request.user:
-                raise PermissionDenied("Faqat taklif muallifi bekor qila oladi.")
-        elif not has_role(request, "editor"):
+    @action(detail=False, methods=["post"])
+    def propose(self, request):
+        """Tavsiyalarni (qoida yoki AI) tasdiqlashga yuborish: {"source": "ai"|"rule", "items": [{task, owner, reason, hours}]}.
+        Bir xil kutilayotgan taklif takrorlanmaydi."""
+        if not request.user.is_authenticated:
+            raise PermissionDenied("Taklif berish uchun tizimga kiring.")
+        source = request.data.get("source") if request.data.get("source") in ("ai", "rule") else "user"
+        created, skipped = [], []
+        for item in (request.data.get("items") or [])[:100]:
+            payload = {"task": item.get("task"), "owner": item.get("owner")}
+            if ChangeRequest.objects.filter(kind=ChangeRequest.TASK_OWNER, status=ChangeRequest.PENDING, payload=payload).exists():
+                skipped.append({"task": item.get("task"), "reason": "duplicate"})
+                continue
+            s = ChangeRequestSerializer(data={"kind": ChangeRequest.TASK_OWNER, "payload": payload,
+                                              "reason": str(item.get("reason") or "")[:2000]})
+            if not s.is_valid():
+                skipped.append({"task": item.get("task"), "reason": "invalid", "errors": s.errors})
+                continue
+            try:
+                hours = round(float(item.get("hours")), 1) if item.get("hours") is not None else None
+            except (TypeError, ValueError):
+                hours = None
+            req = s.save(requested_by=request.user, source=source, hours=hours)
+            created.append(req.id)
+        if created:
+            log(request, Event.APPROVAL, subject=f"{len(created)} ta taklif",
+                text=("AI" if source == "ai" else "Qoida") + " tavsiyalari tasdiqlashga yuborildi")
+        return Response({"created": created, "skipped": skipped}, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"])
+    def bulk(self, request):
+        """Bir nechta taklifni birdan qabul qilish yoki rad etish: {"ids": [...], "action": "approve"|"reject", "note": ""}.
+        Har biri alohida qo'llanadi: biri xato bersa, boshqalari to'xtamaydi."""
+        if not has_role(request, "editor"):
             raise PermissionDenied("Tasdiqlash uchun muharrir yoki administrator bo'lish kerak.")
+        act = request.data.get("action")
+        if act not in ("approve", "reject"):
+            raise ValidationError("action: approve yoki reject.")
+        new_status = ChangeRequest.APPROVED if act == "approve" else ChangeRequest.REJECTED
+        results = []
+        for rid in (request.data.get("ids") or [])[:300]:
+            req = ChangeRequest.objects.filter(pk=rid).first()
+            if not req or req.status != ChangeRequest.PENDING:
+                results.append({"id": rid, "ok": False, "error": "Topilmadi yoki ko'rib chiqilgan"})
+                continue
+            try:
+                self._apply_decision(request, req, new_status)
+                results.append({"id": rid, "ok": True})
+            except ValidationError as e:
+                results.append({"id": rid, "ok": False, "error": str(e.detail[0] if isinstance(e.detail, list) else e.detail)})
+        return Response({"results": results, "done": sum(r["ok"] for r in results)})
+
+    def _apply_decision(self, request, req, new_status):
         with transaction.atomic():
             if new_status == ChangeRequest.APPROVED:
                 try:
@@ -93,6 +139,17 @@ class ChangeRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mix
             req.decision_note = str(request.data.get("note", ""))[:300]
             req.save()
             log(request, Event.APPROVAL, subject=req.title, text=req.get_status_display())
+
+    def _decide(self, request, new_status):
+        req = self.get_object()
+        if req.status != ChangeRequest.PENDING:
+            raise ValidationError("So'rov allaqachon ko'rib chiqilgan.")
+        if new_status == ChangeRequest.CANCELLED:
+            if req.requested_by != request.user:
+                raise PermissionDenied("Faqat taklif muallifi bekor qila oladi.")
+        elif not has_role(request, "editor"):
+            raise PermissionDenied("Tasdiqlash uchun muharrir yoki administrator bo'lish kerak.")
+        self._apply_decision(request, req, new_status)
         return Response(ChangeRequestSerializer(req).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"])

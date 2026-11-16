@@ -5,7 +5,7 @@ import type {
   AIUsageSummary, AuditEvent, Authority, ChangeKind, ChangePayload, ChangeRequest, ChangeStatus, Department,
   EdgeCase, LoginResponse, Me, Member, OrgState, Process, ProcessRole, SearchResult, Synonym, SystemItem, Task, Team,
   StaffAssignBody, StaffDiff, StaffImportBody, StaffPerson, StaffProject, StaffState, TokenPair, TranslateStatus,
-  AIWorkload, BotAnswer, KnowledgeFormat, Zone,
+  AIWorkload, BotAnswer, KnowledgeFormat, ProposalItem, Zone,
 } from "./types";
 
 const get = async <T>(url: string, params?: Record<string, string | number | boolean>) => (await api.get<T>(url, { params })).data;
@@ -85,6 +85,12 @@ export const approvalsApi = {
   approve: (id: number, note = "") => post<ChangeRequest>(`approvals/${id}/approve/`, { note }),
   reject: (id: number, note = "") => post<ChangeRequest>(`approvals/${id}/reject/`, { note }),
   cancel: (id: number) => post<ChangeRequest>(`approvals/${id}/cancel/`),
+  /** Tavsiyalarni (qoida yoki AI) tasdiqlashga yuborish; bir xil kutilayotgan taklif takrorlanmaydi. */
+  propose: (source: "ai" | "rule", items: ProposalItem[]) =>
+    post<{ created: number[]; skipped: { task: number; reason: string }[] }>("approvals/propose/", { source, items }),
+  /** Bir nechta taklifni birdan qabul qilish yoki rad etish. */
+  bulk: (ids: number[], action: "approve" | "reject", note = "") =>
+    post<{ done: number; results: { id: number; ok: boolean; error?: string }[] }>("approvals/bulk/", { ids, action, note }),
 };
 
 export const aiApi = {

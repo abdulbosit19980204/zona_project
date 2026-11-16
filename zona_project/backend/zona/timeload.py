@@ -50,14 +50,8 @@ def estimate(task):
     zone = task.process.zone.key if task.process_id and task.process.zone_id else ""
     if minutes is None:
         minutes = ZONE_DEFAULT.get(zone, 15)
-    if task.frequent:
-        per_week = 12 if zone == "distributsiya" else 8
-    elif minutes >= 240:
-        per_week = 0.25  # oyiga bir marta
-    elif minutes >= 60:
-        per_week = 0.5
-    else:
-        per_week = 1.5
+    # takrorlanish: har bir savol haftasiga 1 marta deb hisoblanadi (kerak bo'lsa savolda qo'lda o'zgartiriladi)
+    per_week = 1
     return minutes, per_week
 
 

@@ -13,7 +13,10 @@ function pick<T extends { i18n?: I18n }>(obj: T, locale: Locale): T {
   if (!tr) return obj;
   const out: Record<string, unknown> = { ...obj };
   for (const [key, value] of Object.entries(tr)) {
-    if (value && typeof out[key] === "string") out[key] = value;
+    if (!value) continue;
+    if (typeof out[key] === "string") out[key] = value;
+    // ro'yxat maydonlari (masalan, xodim vazifalari) i18n da qatorlar bilan birlashtirilgan matn sifatida keladi
+    else if (Array.isArray(out[key]) && typeof value === "string") out[key] = value.split("\n");
   }
   return out as T;
 }
