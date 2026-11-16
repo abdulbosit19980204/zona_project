@@ -23,11 +23,14 @@ class StaffPersonSerializer(serializers.ModelSerializer):
     class Meta:
         model = StaffPerson
         fields = ["id", "project", "unit", "manager", "name", "role", "position", "territory", "region", "city",
-                  "phone", "email", "note", "is_vacancy", "order"]
-        read_only_fields = ["order"]
+                  "phone", "email", "telegram", "since", "note", "is_vacancy", "history", "order"]
+        read_only_fields = ["order", "history"]
 
     def validate_phone(self, value):
         return staff_io.phone(value)
+
+    def validate_telegram(self, value):
+        return staff_io.telegram(value)
 
     def validate(self, attrs):
         project = attrs.get("project", self.instance.project if self.instance else None)
@@ -50,6 +53,26 @@ class StaffPersonSerializer(serializers.ModelSerializer):
         if vacancy:
             attrs["name"] = ""
         return attrs
+
+
+class AssignSerializer(serializers.Serializer):
+    """Bo'sh o'ringa xodim tayinlash yoki o'rindagi xodimni almashtirish."""
+    name = serializers.CharField(max_length=150)
+    phone = serializers.CharField(max_length=40, required=False, allow_blank=True, default="")
+    telegram = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
+    email = serializers.EmailField(required=False, allow_blank=True, default="")
+    since = serializers.DateField(required=False, allow_null=True, default=None)
+    reason = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+
+    def validate_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("F.I.Sh. kiriting.")
+        return value.strip()
+
+
+class VacateSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+    date = serializers.DateField(required=False, allow_null=True, default=None)
 
 
 class StaffUnitSerializer(serializers.ModelSerializer):
@@ -114,13 +137,57 @@ class StaffPersonViewSet(ZonaViewSet):
             text=f"Dala jamoasiga qo'shildi: {p.territory}")
 
     def perform_update(self, serializer):
-        old = serializer.instance.name
+        inst = serializer.instance
+        old = inst.name
+        new_name = serializer.validated_data.get("name", old)
+        new_vac = serializer.validated_data.get("is_vacancy", inst.is_vacancy)
+        if old and (new_vac or new_name.strip() != old.strip()):  # odam ketdi/almashdi — tarixga
+            inst.remember_holder("edit")
+            if new_vac:
+                serializer.validated_data.update(phone="", email="", telegram="", since=None)
+            elif "since" not in serializer.validated_data:
+                serializer.validated_data["since"] = timezone.localdate()
+        elif inst.is_vacancy and not new_vac and not serializer.validated_data.get("since"):
+            serializer.validated_data["since"] = timezone.localdate()  # vakansiya to'ldirildi
         p = serializer.save()
         if old != p.name:
             log(self.request, Event.MOVED, subject=f"{p.project.name}: {p.territory}", from_name=old or "Vakansiya",
                 to_name=p.name or "Vakansiya", text="Lavozimda xodim almashdi")
         else:
             log(self.request, Event.EDITED, subject=p.project.name, to_name=p.name or p.territory, text="Xodim ma'lumoti yangilandi")
+
+    @action(detail=True, methods=["post"])
+    def vacate(self, request, pk=None):
+        """Xodim ishdan bo'shadi: o'rin (hudud, rahbar, qo'l ostidagilar) qoladi, vakansiya bo'ladi."""
+        p = self.get_object()
+        if p.is_vacancy:
+            return Response({"detail": "O'rin allaqachon bo'sh."}, status=status.HTTP_400_BAD_REQUEST)
+        s = VacateSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        old = p.name
+        p.remember_holder(s.validated_data["reason"], s.validated_data["date"])
+        p.name = p.phone = p.email = p.telegram = ""
+        p.since, p.is_vacancy = None, True
+        p.save()
+        log(request, Event.MOVED, subject=f"{p.project.name}: {p.territory}", from_name=old, to_name="Vakansiya",
+            text=f"Ishdan bo'shadi{': ' + s.validated_data['reason'] if s.validated_data['reason'] else ''}")
+        return Response(StaffPersonSerializer(p).data)
+
+    @action(detail=True, methods=["post"])
+    def assign(self, request, pk=None):
+        """O'ringa xodim tayinlash (vakansiyaga yoki almashtirish — avvalgisi tarixga yoziladi)."""
+        p = self.get_object()
+        s = AssignSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        v = s.validated_data
+        old = p.name if not p.is_vacancy else ""
+        p.remember_holder(v["reason"] or "almashtirildi")
+        p.name, p.phone, p.email = v["name"], staff_io.phone(v["phone"]), v["email"]
+        p.telegram, p.since, p.is_vacancy = staff_io.telegram(v["telegram"]), v["since"] or timezone.localdate(), False
+        p.save()
+        log(request, Event.MOVED, subject=f"{p.project.name}: {p.territory}", from_name=old or "Vakansiya", to_name=p.name,
+            text="Lavozimga tayinlandi" if not old else "Lavozimda xodim almashdi")
+        return Response(StaffPersonSerializer(p).data)
 
     def perform_destroy(self, instance):
         StaffPerson.objects.filter(manager=instance).update(manager=instance.manager)  # qo'l ostidagilar yuqoriga

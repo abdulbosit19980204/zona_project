@@ -1,6 +1,8 @@
 "use client";
 
+import { Copy, MessageCircle, MessageSquareText, Phone, Send } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 
 import type { StaffPerson, StaffProject, StaffRole, StaffState } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -80,4 +82,119 @@ export function RoleChip({ role, vacancy, className }: { role: StaffRole; vacanc
 /** Rahbar nomi (vakansiya bo'lsa — hudud kodi bilan). */
 export function personLabel(p: StaffPerson, vacancy: string) {
   return p.is_vacancy ? `${vacancy} · ${p.territory}` : p.name;
+}
+
+/* ------------------------------------------------------------------ aloqa */
+/** Telefon raqami -> xalqaro raqamlar (998901234567); tanilmasa — bo'sh. */
+export function phoneDigits(phone: string) {
+  let d = (phone || "").replace(/\D/g, "");
+  if (d.length === 9) d = `998${d}`;
+  return d.length >= 11 ? d : "";
+}
+
+/** Telegram havolasi: @username bo'lsa — unga, bo'lmasa telefon raqami orqali (t.me/+998...). */
+export function telegramUrl(p: { phone: string; telegram?: string }) {
+  const user = (p.telegram || "").replace(/^@/, "");
+  if (user) return `https://t.me/${user}`;
+  const d = phoneDigits(p.phone);
+  return d ? `https://t.me/+${d}` : "";
+}
+
+export function contactLinks(p: { phone: string; telegram?: string }) {
+  const d = phoneDigits(p.phone);
+  return {
+    tel: d ? `tel:+${d}` : p.phone ? `tel:${p.phone.replace(/[^\d+]/g, "")}` : "",
+    telegram: telegramUrl(p),
+    whatsapp: d ? `https://wa.me/${d}` : "",
+    sms: d ? `sms:+${d}` : "",
+  };
+}
+
+/**
+ * Bir bosishda bog'lanish: qo'ng'iroq, Telegram, WhatsApp, SMS, raqamdan nusxa.
+ * compact — faqat ikonkalar (ro'yxat qatorlari uchun).
+ */
+export function StaffContacts({ person, compact, className }: { person: { phone: string; telegram?: string }; compact?: boolean; className?: string }) {
+  const t = useTranslations("staff.contact");
+  const links = contactLinks(person);
+  if (!links.tel && !links.telegram) return null;
+  const items = [
+    links.tel && { key: "tel", href: links.tel, icon: Phone, label: t("call"), tone: "hover:text-primary hover:border-primary/50" },
+    links.telegram && { key: "tg", href: links.telegram, icon: Send, label: t("telegram"), tone: "text-[#229ED9] hover:border-[#229ED9]/60" },
+    links.whatsapp && { key: "wa", href: links.whatsapp, icon: MessageCircle, label: t("whatsapp"), tone: "text-[#25D366] hover:border-[#25D366]/60" },
+    links.sms && !compact && { key: "sms", href: links.sms, icon: MessageSquareText, label: t("sms"), tone: "hover:text-primary hover:border-primary/50" },
+  ].filter(Boolean) as { key: string; href: string; icon: typeof Phone; label: string; tone: string }[];
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(person.phone);
+      toast.success(t("copied"));
+    } catch {
+      toast.error(person.phone);
+    }
+  };
+  const external = (href: string) => href.startsWith("http");
+  if (compact) {
+    return (
+      <span className={cn("inline-flex items-center gap-0.5", className)} onClick={(e) => e.stopPropagation()}>
+        {items.map(({ key, href, icon: Icon, label, tone }) => (
+          <a
+            key={key} href={href} title={label} aria-label={label}
+            target={external(href) ? "_blank" : undefined} rel={external(href) ? "noopener noreferrer" : undefined}
+            className={cn("grid size-7 place-items-center rounded-md border border-transparent text-muted-foreground hover:bg-muted", tone)}
+          >
+            <Icon className="size-3.5" />
+          </a>
+        ))}
+      </span>
+    );
+  }
+  return (
+    <div className={cn("flex flex-wrap gap-1.5", className)}>
+      {items.map(({ key, href, icon: Icon, label, tone }) => (
+        <a
+          key={key} href={href}
+          target={external(href) ? "_blank" : undefined} rel={external(href) ? "noopener noreferrer" : undefined}
+          className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium transition-colors", tone)}
+        >
+          <Icon className="size-3.5" />{label}
+        </a>
+      ))}
+      {person.phone && (
+        <button type="button" onClick={copy} title={t("copy")} className="inline-flex h-8 items-center gap-1.5 rounded-lg border bg-card px-2.5 font-mono text-xs hover:border-primary/50">
+          <Copy className="size-3.5" />{person.phone}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Necha vaqtdan beri shu o'rinda: "1 yil 3 oy" / "5 oy" / "12 kun". */
+export function tenure(since: string | null | undefined, t: (k: string, v: Record<string, number>) => string) {
+  if (!since) return "";
+  const start = new Date(since);
+  const now = new Date();
+  const months = (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth() - (now.getDate() < start.getDate() ? 1 : 0);
+  if (months < 1) return t("days", { count: Math.max(0, Math.floor((now.getTime() - start.getTime()) / 864e5)) });
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  return [y && t("years", { count: y }), m && t("months", { count: m })].filter(Boolean).join(" ");
+}
+
+/** "Ism Familiya +998 90 123 45 67 @user" -> alohida maydonlar (bitta qatorga joylashtirilsa). */
+export function splitContact(text: string) {
+  let rest = ` ${text} `;
+  let telegram = "";
+  let phone = "";
+  const tg = rest.match(/(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{3,})|@([A-Za-z0-9_]{3,})/);
+  if (tg) {
+    telegram = tg[1] || tg[2];
+    rest = rest.replace(tg[0], " ");
+  }
+  const ph = rest.match(/\+?\d[\d\s()-]{7,}\d/);
+  if (ph) {
+    phone = ph[0].trim();
+    rest = rest.replace(ph[0], " ");
+  }
+  return { name: rest.replace(/[,;|]+/g, " ").replace(/\s+/g, " ").trim(), phone, telegram };
 }

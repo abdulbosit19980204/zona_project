@@ -713,7 +713,9 @@
       "note": "Izoh",
       "projectName": "Jamoa nomi",
       "source": "Manba linki",
-      "description": "Tavsif"
+      "description": "Tavsif",
+      "telegram": "Telegram",
+      "since": "Ishga kirgan sana"
     },
     "roles": {
       "ROP": "Savdo boʻlimi rahbari",
@@ -741,7 +743,53 @@
       "leaders": "Rahbariyat",
       "openVacancies": "Boʻsh oʻrinlar",
       "noVacancies": "Boʻsh oʻrin yoʻq",
-      "legend": "Rollar"
+      "legend": "Rollar",
+      "contact": "Bogʻlanish",
+      "since": "Shu oʻrinda",
+      "history": "Oʻrin tarixi"
+    },
+    "contact": {
+      "call": "Qoʻngʻiroq",
+      "telegram": "Telegram",
+      "whatsapp": "WhatsApp",
+      "sms": "SMS",
+      "copy": "Raqamdan nusxa olish",
+      "copied": "Raqam nusxalandi"
+    },
+    "telegramHint": "@username yoki t.me havolasi. Boʻsh boʻlsa — Telegram telefon raqami orqali ochiladi",
+    "tenure": {
+      "days": "{count} kun",
+      "months": "{count} oy",
+      "years": "{count} yil"
+    },
+    "staffing": {
+      "assign": "Xodim tayinlash",
+      "assignShort": "Tayinlash",
+      "replace": "Almashtirish",
+      "vacate": "Ishdan boʻshadi",
+      "assignTitle": "{seat}: xodim tayinlash",
+      "assignHint": "Faqat ism va telefon yetarli — qolgani (hudud, rahbar, jamoa) oʻrindan olinadi.",
+      "replaceTitle": "{name} oʻrniga yangi xodim",
+      "replaceReason": "{name} nega ketdi",
+      "vacateTitle": "{name} ishdan boʻshadi",
+      "vacateHint": "Oʻrin, hudud kodi, rahbar va qoʻl ostidagilar saqlanadi — oʻrin vakansiya boʻladi. {name} oʻrin tarixiga yoziladi.",
+      "vacateBtn": "Vakansiya qilish",
+      "reason": "Sabab",
+      "reasonOther": "Boshqa sabab (ixtiyoriy)",
+      "date": "Sana",
+      "namePlaceholder": "Familiya Ism Sharif",
+      "telegramPlaceholder": "@username (ixtiyoriy)",
+      "pasteHint": "“Ism +998 90 123 45 67 @user” ni bitta qatorga joylasangiz — oʻzi ajratadi",
+      "assigned": "{name} tayinlandi",
+      "vacated": "Oʻrin vakansiya boʻldi",
+      "viaImport": "import orqali",
+      "reasons": {
+        "own": "Oʻz xohishi bilan",
+        "fired": "Boʻshatildi",
+        "moved": "Boshqa ishga oʻtdi",
+        "transfer": "Boshqa oʻringa oʻtdi",
+        "leave": "Dekret / uzoq taʼtil"
+      }
     }
   }
 }

@@ -470,10 +470,26 @@ class StaffPerson(models.Model):
     city = models.CharField("Shahar", max_length=80, blank=True)
     phone = models.CharField("Telefon", max_length=40, blank=True)
     email = models.EmailField("Email", blank=True)
+    telegram = models.CharField("Telegram", max_length=64, blank=True, help_text="@username; bo'sh bo'lsa telefon raqami orqali")
+    since = models.DateField("Shu o'rinda", null=True, blank=True)
     note = models.CharField("Izoh", max_length=255, blank=True)
     is_vacancy = models.BooleanField("Vakansiya", default=False)
+    history = models.JSONField("O'rin tarixi", default=list, blank=True)  # [{name, phone, telegram, since, until, reason}]
     order = models.PositiveIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
+
+    HISTORY_LIMIT = 30
+
+    def remember_holder(self, reason="", until=None):
+        """Hozirgi xodimni o'rin tarixiga yozish (ketganda yoki almashganda)."""
+        from django.utils import timezone
+
+        if self.is_vacancy or not self.name.strip():
+            return
+        entry = {"name": self.name, "phone": self.phone, "telegram": self.telegram,
+                 "since": self.since.isoformat() if self.since else "",
+                 "until": (until or timezone.localdate()).isoformat(), "reason": reason}
+        self.history = [entry, *(self.history or [])][: self.HISTORY_LIMIT]
 
     class Meta:
         ordering = ["project", "order", "id"]

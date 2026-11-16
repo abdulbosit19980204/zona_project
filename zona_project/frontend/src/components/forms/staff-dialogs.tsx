@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { splitContact, StaffContacts } from "@/components/views/staff-shared";
 import { queryKeys } from "@/hooks/use-org";
 import { errorMessage } from "@/lib/api/client";
 import { staffApi } from "@/lib/api/endpoints";
@@ -44,6 +45,8 @@ const personSchema = z.object({
   region: z.string().max(80),
   phone: z.string().max(40),
   email: z.union([z.literal(""), z.string().email()]),
+  telegram: z.string().max(80),
+  since: z.string(),
   unit: z.string(),
   manager: z.string(),
   note: z.string().max(255),
@@ -64,13 +67,13 @@ export function PersonDialog({ open, onOpenChange, state, projectId, person }: {
     form.reset({
       name: person?.name ?? "", is_vacancy: person?.is_vacancy ?? false, role: person?.role ?? "TP", position: person?.position ?? "",
       territory: person?.territory ?? "", city: person?.city ?? "", region: person?.region ?? "", phone: person?.phone ?? "",
-      email: person?.email ?? "", unit: fromId(person?.unit), manager: fromId(person?.manager), note: person?.note ?? "",
+      email: person?.email ?? "", telegram: person?.telegram ?? "", since: person?.since ?? "", unit: fromId(person?.unit), manager: fromId(person?.manager), note: person?.note ?? "",
     });
   }, [open, person, form]);
 
   const save = useMutation({
     mutationFn: (v: PersonValues) => {
-      const body = { ...v, role: v.role as StaffRole, unit: toId(v.unit), manager: toId(v.manager), project: projectId };
+      const body = { ...v, role: v.role as StaffRole, unit: toId(v.unit), manager: toId(v.manager), project: projectId, since: v.since || null };
       return person ? staffApi.people.update(person.id, body) : staffApi.people.create(body);
     },
     onSuccess: async () => { await refresh(); toast.success(t("saved")); onOpenChange(false); },
@@ -104,7 +107,11 @@ export function PersonDialog({ open, onOpenChange, state, projectId, person }: {
       </Row>
       <Row>
         <TextField control={form.control} name="phone" label={t("fields.phone")} placeholder="+998 90 123 45 67" />
+        <TextField control={form.control} name="telegram" label={t("fields.telegram")} placeholder="@username" description={t("telegramHint")} />
+      </Row>
+      <Row>
         <TextField control={form.control} name="email" label="Email" />
+        <TextField control={form.control} name="since" type="date" label={t("fields.since")} />
       </Row>
       <Row>
         <TextField control={form.control} name="city" label={t("fields.city")} />
@@ -122,6 +129,160 @@ export function PersonDialog({ open, onOpenChange, state, projectId, person }: {
       </Row>
       <TextareaField control={form.control} name="note" label={t("fields.note")} rows={2} />
     </FormDialog>
+  );
+}
+
+/* ------------------------------------------------------------------ tayinlash / almashtirish */
+const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD (mahalliy vaqt)
+const REASONS = ["own", "fired", "moved", "transfer", "leave"] as const;
+
+function ReasonChips({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useTranslations("staff.staffing");
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {REASONS.map((r) => {
+          const label = t(`reasons.${r}`);
+          return (
+            <button
+              key={r} type="button" onClick={() => onChange(value === label ? "" : label)}
+              className={cn("rounded-full border px-2.5 py-1 text-xs transition-colors", value === label ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary/50")}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={t("reasonOther")} maxLength={120} />
+    </div>
+  );
+}
+
+const EMPTY_ASSIGN = { name: "", phone: "", telegram: "", since: "", reason: "" };
+
+/**
+ * Bo'sh o'ringa xodim tayinlash yoki o'rindagini almashtirish — faqat kerakli maydonlar.
+ * Ism, telefon va @telegram bitta qatorga joylashtirilsa ham o'zi ajratadi.
+ */
+export function AssignDialog({ open, onOpenChange, person }: { open: boolean; onOpenChange: (o: boolean) => void; person: StaffPerson }) {
+  const t = useTranslations("staff");
+  const refresh = useStaffRefresh();
+  const replacing = !person.is_vacancy;
+  const [v, setV] = useState(EMPTY_ASSIGN);
+  const [lastOpen, setLastOpen] = useState(false);
+  if (open !== lastOpen) {
+    setLastOpen(open);
+    if (open) setV({ ...EMPTY_ASSIGN, since: today() });
+  }
+  const set = (patch: Partial<typeof v>) => setV((cur) => ({ ...cur, ...patch }));
+  // bitta qatorga joylangan "Ism +998... @user" ni maydonlarga ajratish
+  const smartName = (text: string) => {
+    const parts = splitContact(text);
+    if (parts.phone || parts.telegram) setV((cur) => ({ ...cur, name: parts.name, phone: cur.phone || parts.phone, telegram: cur.telegram || parts.telegram }));
+    else set({ name: text });
+  };
+  const save = useMutation({
+    mutationFn: () => staffApi.assign(person.id, { ...v, since: v.since || null }),
+    onSuccess: async (p) => { await refresh(); toast.success(t("staffing.assigned", { name: p.name })); onOpenChange(false); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const seat = [person.role, person.territory].filter(Boolean).join(" · ");
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{replacing ? t("staffing.replaceTitle", { name: person.name }) : t("staffing.assignTitle", { seat })}</DialogTitle>
+          <DialogDescription>{replacing ? seat : t("staffing.assignHint")}</DialogDescription>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (v.name.trim()) save.mutate(); }}>
+          <div className="space-y-1.5">
+            <Label htmlFor="as-name">{t("fields.name")}</Label>
+            <Input
+              id="as-name" autoFocus value={v.name} maxLength={200}
+              onChange={(e) => set({ name: e.target.value })}
+              onPaste={(e) => { e.preventDefault(); smartName(`${v.name} ${e.clipboardData.getData("text")}`.trim()); }}
+              onBlur={(e) => smartName(e.target.value)}
+              placeholder={t("staffing.namePlaceholder")}
+            />
+            <p className="text-xs text-muted-foreground">{t("staffing.pasteHint")}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="as-phone">{t("fields.phone")}</Label>
+              <Input id="as-phone" type="tel" inputMode="tel" value={v.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="+998 90 123 45 67" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="as-tg">{t("fields.telegram")}</Label>
+              <Input id="as-tg" value={v.telegram} onChange={(e) => set({ telegram: e.target.value })} placeholder={t("staffing.telegramPlaceholder")} />
+            </div>
+          </div>
+          {v.phone && <StaffContacts person={{ phone: v.phone, telegram: v.telegram }} compact />}
+          <div className="space-y-1.5">
+            <Label htmlFor="as-since">{t("fields.since")}</Label>
+            <Input id="as-since" type="date" value={v.since} onChange={(e) => set({ since: e.target.value })} className="w-44" />
+          </div>
+          {replacing && (
+            <div className="space-y-1.5">
+              <Label>{t("staffing.replaceReason", { name: person.name })}</Label>
+              <ReasonChips value={v.reason} onChange={(reason) => set({ reason })} />
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t("back")}</Button>
+            <Button type="submit" disabled={!v.name.trim() || save.isPending}>
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}{replacing ? t("staffing.replace") : t("staffing.assign")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Xodim ishdan bo'shadi: bir bosish — o'rin vakansiya bo'ladi, odam o'rin tarixiga yoziladi. */
+export function VacateDialog({ open, onOpenChange, person }: { open: boolean; onOpenChange: (o: boolean) => void; person: StaffPerson }) {
+  const t = useTranslations("staff");
+  const refresh = useStaffRefresh();
+  const [reason, setReason] = useState("");
+  const [date, setDate] = useState("");
+  const [lastOpen, setLastOpen] = useState(false);
+  if (open !== lastOpen) {
+    setLastOpen(open);
+    if (open) {
+      setReason("");
+      setDate(today());
+    }
+  }
+  const save = useMutation({
+    mutationFn: () => staffApi.vacate(person.id, { reason, date: date || null }),
+    onSuccess: async () => { await refresh(); toast.success(t("staffing.vacated")); onOpenChange(false); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("staffing.vacateTitle", { name: person.name })}</DialogTitle>
+          <DialogDescription>{t("staffing.vacateHint", { name: person.name })}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>{t("staffing.reason")}</Label>
+            <ReasonChips value={reason} onChange={setReason} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="va-date">{t("staffing.date")}</Label>
+            <Input id="va-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t("back")}</Button>
+          <Button type="button" variant="destructive" disabled={save.isPending} onClick={() => save.mutate()}>
+            {save.isPending && <Loader2 className="size-4 animate-spin" />}{t("staffing.vacateBtn")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

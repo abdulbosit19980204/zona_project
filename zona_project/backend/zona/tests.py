@@ -525,6 +525,38 @@ class StaffTests(Base):
         self.assertEqual(self.imp(apply=True, text=html).status_code, 403)
         self.assertEqual(len(self.call("get", "staff/").json()["people"]), 4)
 
+    def test_vacate_assign_and_seat_history(self):
+        from .models import StaffPerson
+        self.login("editor")
+        self.imp(apply=True, text=ARTIFACT_HTML)
+        sr1 = StaffPerson.objects.get(territory="SR1 Tashkent")
+        boss, reports = sr1.manager_id, list(sr1.reports.values_list("id", flat=True))
+        r = self.call("post", f"staff/people/{sr1.id}/vacate/", {"reason": "O'z xohishi bilan", "date": "2026-11-01"})
+        self.assertEqual(r.status_code, 200, r.content)
+        sr1.refresh_from_db()
+        self.assertTrue(sr1.is_vacancy)
+        self.assertEqual((sr1.name, sr1.phone, sr1.manager_id), ("", "", boss))  # o'rin va rahbar saqlanadi
+        self.assertEqual(list(sr1.reports.values_list("id", flat=True)), reports)
+        self.assertEqual(sr1.history[0]["name"], "Rashidova Shahnoza")
+        self.assertEqual((sr1.history[0]["until"], sr1.history[0]["reason"]), ("2026-11-01", "O'z xohishi bilan"))
+        self.assertEqual(self.call("post", f"staff/people/{sr1.id}/vacate/", {}).status_code, 400)
+        # tayinlash: telefon va telegram normallashadi
+        r = self.call("post", f"staff/people/{sr1.id}/assign/", {"name": "Yangi Xodim", "phone": "901234567", "telegram": "https://t.me/yangi_xodim"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual((r.json()["phone"], r.json()["telegram"], r.json()["is_vacancy"]), ("+998 90 123 45 67", "yangi_xodim", False))
+        self.assertTrue(r.json()["since"])
+        # almashtirish: avvalgisi tarixga
+        r = self.call("post", f"staff/people/{sr1.id}/assign/", {"name": "Uchinchi Xodim", "telegram": "@uchinchi"})
+        self.assertEqual([h["name"] for h in r.json()["history"]], ["Yangi Xodim", "Rashidova Shahnoza"])
+        self.assertEqual(r.json()["telegram"], "uchinchi")
+        self.assertEqual(self.call("post", f"staff/people/{sr1.id}/assign/", {"name": " "}).status_code, 400)
+        # oddiy tahrirda ism almashsa ham tarixga yoziladi
+        self.call("patch", f"staff/people/{sr1.id}/", {"name": "Tahrir Odam"})
+        sr1.refresh_from_db()
+        self.assertEqual(sr1.history[0]["name"], "Uchinchi Xodim")
+        self.login("viewer")
+        self.assertEqual(self.call("post", f"staff/people/{sr1.id}/vacate/", {}).status_code, 403)
+
     def test_excel_roundtrip_and_json_export(self):
         import base64
         from .models import StaffPerson
@@ -540,7 +572,7 @@ class StaffTests(Base):
                 row[header.index("F.I.Sh.")].value = "Excel Odam"
                 row[header.index("Telefon")].value = 901112233
         svr_no = next(r[0].value for r in ws.iter_rows(min_row=2) if r[header.index("Hudud kodi")].value == "SVR Tash 1")
-        ws.append([99, "Testbrand", "Ташкент", "TP", "", "Qo'shilgan Odam", "SR9 Tashkent", "", "", "", "", svr_no, "", "", ""])
+        ws.append([99, "Testbrand", "Ташкент", "TP", "", "Qo'shilgan Odam", "SR9 Tashkent", "", "", "", "t.me/qoshilgan_odam", "", svr_no, "", "", ""])
         buf = BytesIO()
         wb.save(buf)
         body = {"file_b64": base64.b64encode(buf.getvalue()).decode(), "filename": "t.xlsx"}
@@ -548,6 +580,8 @@ class StaffTests(Base):
         self.assertEqual((d["summary"]["added"], d["summary"]["replaced"], d["summary"]["removed"]), (1, 1, 0))
         self.imp(apply=True, **body)
         new = StaffPerson.objects.get(territory="SR9 Tashkent")
+        self.assertEqual(new.telegram, "qoshilgan_odam")
+        self.assertEqual(StaffPerson.objects.get(territory="SR1 Tashkent").history[0]["reason"], "import")
         self.assertEqual(new.manager.territory, "SVR Tash 1")
         self.assertEqual(StaffPerson.objects.get(territory="SR1 Tashkent").phone, "+998 90 111 22 33")
         doc = self.call("get", "staff/export.json").json()

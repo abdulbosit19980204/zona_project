@@ -4,7 +4,7 @@ import type {
   AdminUserInput, AIProvider, AIProviderKind, AIRouteResult, AITaskConfig, AITaskKey, AITestResult, AIText, AIUsage,
   AIUsageSummary, AuditEvent, Authority, ChangeKind, ChangePayload, ChangeRequest, ChangeStatus, Department,
   EdgeCase, LoginResponse, Me, Member, OrgState, Process, ProcessRole, SearchResult, Synonym, SystemItem, Task, Team,
-  StaffDiff, StaffImportBody, StaffPerson, StaffProject, StaffState, TokenPair, TranslateStatus,
+  StaffAssignBody, StaffDiff, StaffImportBody, StaffPerson, StaffProject, StaffState, TokenPair, TranslateStatus,
 } from "./types";
 
 const get = async <T>(url: string, params?: Record<string, string | number | boolean>) => (await api.get<T>(url, { params })).data;
@@ -66,6 +66,10 @@ export const staffApi = {
   sync: (project: number, apply = false) => post<{ projects: StaffDiff[]; applied?: boolean }>(`staff/projects/${project}/sync/`, { apply }),
   projects: resource<StaffProject>("staff/projects"),
   people: resource<StaffPerson>("staff/people"),
+  /** Xodim ishdan bo'shadi — o'rin vakansiya bo'ladi (hudud, rahbar, qo'l ostidagilar saqlanadi). */
+  vacate: (id: number, body: { reason?: string; date?: string | null }) => post<StaffPerson>(`staff/people/${id}/vacate/`, body),
+  /** O'ringa xodim tayinlash yoki almashtirish (avvalgisi o'rin tarixiga yoziladi). */
+  assign: (id: number, body: StaffAssignBody) => post<StaffPerson>(`staff/people/${id}/assign/`, body),
   export: async (fmt: "xlsx" | "json", project?: number) =>
     (await api.get<Blob>(`staff/export.${fmt}`, { params: project ? { project } : {}, responseType: "blob" })).data,
 };

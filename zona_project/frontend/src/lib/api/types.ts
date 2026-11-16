@@ -412,9 +412,33 @@ export interface StaffPerson {
   city: string;
   phone: string;
   email: string;
+  /** @username (bo'sh bo'lsa — telefon raqami orqali). */
+  telegram: string;
+  /** Shu o'rinda ishlay boshlagan sana (YYYY-MM-DD). */
+  since: string | null;
   note: string;
   is_vacancy: boolean;
+  /** Bu o'rinda avval ishlaganlar (yangisi birinchi). */
+  history: StaffHolder[];
   order: number;
+}
+
+export interface StaffHolder {
+  name: string;
+  phone: string;
+  telegram: string;
+  since: string;
+  until: string;
+  reason: string;
+}
+
+export interface StaffAssignBody {
+  name: string;
+  phone?: string;
+  telegram?: string;
+  email?: string;
+  since?: string | null;
+  reason?: string;
 }
 
 export interface StaffState {

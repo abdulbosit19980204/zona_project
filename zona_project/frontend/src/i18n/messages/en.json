@@ -713,7 +713,9 @@
       "note": "Note",
       "projectName": "Team name",
       "source": "Source link",
-      "description": "Description"
+      "description": "Description",
+      "telegram": "Telegram",
+      "since": "Start date"
     },
     "roles": {
       "ROP": "Head of sales",
@@ -741,7 +743,53 @@
       "leaders": "Leadership",
       "openVacancies": "Open positions",
       "noVacancies": "No open positions",
-      "legend": "Roles"
+      "legend": "Roles",
+      "contact": "Contact",
+      "since": "In this position",
+      "history": "Position history"
+    },
+    "contact": {
+      "call": "Call",
+      "telegram": "Telegram",
+      "whatsapp": "WhatsApp",
+      "sms": "SMS",
+      "copy": "Copy number",
+      "copied": "Number copied"
+    },
+    "telegramHint": "@username or a t.me link. If empty, Telegram opens by phone number",
+    "tenure": {
+      "days": "{count, plural, one {# day} other {# days}}",
+      "months": "{count, plural, one {# month} other {# months}}",
+      "years": "{count, plural, one {# year} other {# years}}"
+    },
+    "staffing": {
+      "assign": "Assign person",
+      "assignShort": "Assign",
+      "replace": "Replace",
+      "vacate": "Left the company",
+      "assignTitle": "{seat}: assign a person",
+      "assignHint": "Name and phone are enough — territory, manager and team come from the position.",
+      "replaceTitle": "New person instead of {name}",
+      "replaceReason": "Why {name} left",
+      "vacateTitle": "{name} is leaving",
+      "vacateHint": "The position, territory code, manager and reports stay — the position becomes a vacancy. {name} is kept in the position history.",
+      "vacateBtn": "Make it a vacancy",
+      "reason": "Reason",
+      "reasonOther": "Other reason (optional)",
+      "date": "Date",
+      "namePlaceholder": "Full name",
+      "telegramPlaceholder": "@username (optional)",
+      "pasteHint": "You can paste “Name +998 90 123 45 67 @user” in one line — it splits automatically",
+      "assigned": "{name} assigned",
+      "vacated": "The position is now a vacancy",
+      "viaImport": "via import",
+      "reasons": {
+        "own": "Own decision",
+        "fired": "Dismissed",
+        "moved": "Moved to another job",
+        "transfer": "Moved to another position",
+        "leave": "Maternity / long leave"
+      }
     }
   }
 }

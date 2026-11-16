@@ -28,7 +28,7 @@ from .models import StaffPerson, StaffProject, StaffUnit
 
 FORMAT = "zona-staff"
 ROLES = {r for r, _ in StaffPerson.ROLES}
-FIELDS = ["name", "role", "position", "territory", "region", "city", "phone", "email", "note", "vacancy", "unit", "manager"]
+FIELDS = ["name", "role", "position", "territory", "region", "city", "phone", "email", "telegram", "note", "vacancy", "unit", "manager"]
 MAX_BYTES = 5 * 1024 * 1024
 
 
@@ -48,6 +48,15 @@ def phone(value):
     if len(digits) == 12 and digits.startswith("998"):
         return f"+998 {digits[3:5]} {digits[5:8]} {digits[8:10]} {digits[10:12]}"
     return raw
+
+
+def telegram(value):
+    """Telegram: @username yoki t.me havolasidan username; telefon raqami bo'lsa — bo'sh (telefon orqali ochiladi)."""
+    raw = str(value or "").strip()
+    raw = re.sub(r"^(https?://)?(www\.)?(t|telegram)\.(me|dog)/", "", raw, flags=re.I).strip("/@ ")
+    if not raw or re.fullmatch(r"[+\d\s()-]+", raw):
+        return ""
+    return raw if re.fullmatch(r"[A-Za-z0-9_]{3,64}", raw) else ""
 
 
 def fold(value):
@@ -88,6 +97,7 @@ def _person(**kw):
     p["vacancy"] = False
     p.update(kw)
     p["phone"] = phone(p["phone"])
+    p["telegram"] = telegram(p["telegram"])
     for f in FIELDS:
         if f != "vacancy":
             p[f] = str(p[f] or "").strip()
@@ -192,7 +202,7 @@ def from_artifact(data, rop=None, branches_meta=None, name="", source_url=""):
 COLUMNS = [  # (maydon, sarlavha) — eksport tartibi
     ("key", "№"), ("project", "Loyiha"), ("unit", "Yo'nalish"), ("role", "Rol"), ("position", "Lavozim"),
     ("name", "F.I.Sh."), ("territory", "Hudud kodi"), ("region", "Region"), ("city", "Shahar"),
-    ("phone", "Telefon"), ("email", "Email"), ("manager", "Rahbar №"), ("manager_name", "Rahbar"),
+    ("phone", "Telefon"), ("telegram", "Telegram"), ("email", "Email"), ("manager", "Rahbar №"), ("manager_name", "Rahbar"),
     ("vacancy", "Vakansiya"), ("note", "Izoh"),
 ]
 HEADER_ALIASES = {
@@ -207,6 +217,7 @@ HEADER_ALIASES = {
     "city": ["shahar", "город", "city"],
     "phone": ["telefon", "телефон", "phone", "тел"],
     "email": ["email", "e-mail", "почта"],
+    "telegram": ["telegram", "телеграм", "tg"],
     "manager": ["rahbar №", "rahbar no", "руководитель №", "manager no", "manager #"],
     "manager_name": ["rahbar", "руководитель", "manager"],
     "vacancy": ["vakansiya", "вакансия", "vacancy"],
@@ -253,7 +264,7 @@ def from_rows(rows, name="", source_url=""):
         doc["people"].append(_person(
             key=key, name="" if vacancy else person_name, role=_role(val(r, "role")), position=val(r, "position"),
             territory=val(r, "territory"), region=val(r, "region"), city=val(r, "city"), phone=val(r, "phone"),
-            email=val(r, "email"), note=val(r, "note"), vacancy=vacancy, unit=ukey,
+            email=val(r, "email"), telegram=val(r, "telegram"), note=val(r, "note"), vacancy=vacancy, unit=ukey,
             manager=val(r, "manager").removesuffix(".0"), _manager_name=val(r, "manager_name")))
     for doc in projects.values():
         _resolve_manager_names(doc)
@@ -384,7 +395,7 @@ def snapshot(project):
     for p in project.people.all():
         doc["people"].append(_person(
             key=str(p.id), name=p.name, role=p.role, position=p.position, territory=p.territory, region=p.region,
-            city=p.city, phone=p.phone, email=p.email, note=p.note, vacancy=p.is_vacancy,
+            city=p.city, phone=p.phone, email=p.email, telegram=p.telegram, note=p.note, vacancy=p.is_vacancy,
             unit=units.get(p.unit_id, ""), manager=str(p.manager_id or "")))
     return doc
 
@@ -445,8 +456,8 @@ def diff(project, doc):
     for i, j in pairs:
         a, b = o[i], n[j]
         diffs = []
-        for f in ("role", "position", "territory", "region", "city", "phone", "email", "note"):
-            if (a[f] or "") != (b[f] or "") and not (f == "note" and not b[f]):
+        for f in ("role", "position", "territory", "region", "city", "phone", "email", "telegram", "note"):
+            if (a[f] or "") != (b[f] or "") and not (f in ("note", "telegram") and not b[f]):
                 diffs.append({"field": f, "from": a[f], "to": b[f]})
         if units_old.get(a["unit"], a["unit"]) != units_new.get(b["unit"], b["unit"]):
             diffs.append({"field": "unit", "from": units_old.get(a["unit"], ""), "to": units_new.get(b["unit"], "")})
@@ -504,8 +515,15 @@ def apply(doc, project=None):
         objs[doc["people"][j]["key"]] = existing[int(old["people"][i]["key"])]
     for j in added:
         objs[doc["people"][j]["key"]] = StaffPerson(project=project)
+    today = timezone.localdate()
     for order, p in enumerate(doc["people"]):
         obj = objs[p["key"]]
+        holder_changed = obj.pk is not None and (fold(obj.name) != fold(p["name"]) or obj.is_vacancy != p["vacancy"])
+        if holder_changed:
+            obj.remember_holder("import", today)
+            obj.telegram, obj.since = "", (None if p["vacancy"] else today)
+        if p["telegram"]:
+            obj.telegram = p["telegram"]
         obj.name, obj.role, obj.position, obj.territory = p["name"], p["role"], p["position"], p["territory"]
         obj.region, obj.city, obj.phone, obj.email = p["region"], p["city"], p["phone"], p["email"]
         if p["note"] or obj.pk is None:
@@ -547,9 +565,9 @@ def export_xlsx(projects):
         names = {p.id: p.name or f"Vakansiya ({p.territory})" for p in people}
         for p in people:
             ws.append([num[p.id], project.name, units.get(p.unit_id, ""), p.role, p.position, p.name, p.territory,
-                       p.region, p.city, p.phone, p.email, num.get(p.manager_id, ""), names.get(p.manager_id, ""),
+                       p.region, p.city, p.phone, p.telegram, p.email, num.get(p.manager_id, ""), names.get(p.manager_id, ""),
                        "ha" if p.is_vacancy else "", p.note])
-    widths = [6, 14, 24, 7, 12, 38, 22, 16, 18, 19, 22, 10, 34, 10, 30]
+    widths = [6, 14, 24, 7, 12, 38, 22, 16, 18, 19, 18, 22, 10, 34, 10, 30]
     for i, w in enumerate(widths):
         ws.column_dimensions[chr(65 + i)].width = w
     ws.freeze_panes = "A2"

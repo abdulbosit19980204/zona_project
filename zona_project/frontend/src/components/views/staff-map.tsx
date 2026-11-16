@@ -7,8 +7,8 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowRight, Building2, ChevronDown, ChevronRight, Download, ExternalLink, FileJson, FileSpreadsheet, List, Mail, PanelRightClose,
-  PanelRightOpen, Pencil, Phone, Plus, RefreshCw, Search, Upload, Users,
+  ArrowRight, Building2, ChevronDown, ChevronRight, Download, ExternalLink, FileJson, FileSpreadsheet, History, List, Mail, PanelRightClose,
+  PanelRightOpen, Pencil, Plus, RefreshCw, Repeat2, Search, Upload, UserMinus, UserPlus, Users,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import type { StaffPerson, StaffProject, StaffRole, StaffState } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-import { matchesTerms, ROLE_TONE, RoleChip, searchTerms, type Index } from "./staff-shared";
+import { matchesTerms, ROLE_TONE, RoleChip, searchTerms, StaffContacts, tenure, type Index } from "./staff-shared";
 
 /* ================================================================== joylashuv */
 type Kind = "company" | "project" | "unit" | "person";
@@ -291,6 +291,8 @@ export interface StaffMapProps {
   exporting: boolean;
   onList: () => void;
   onNewProject: () => void;
+  onAssign: (p: StaffPerson) => void;
+  onVacate: (p: StaffPerson) => void;
 }
 
 function MapCanvas(props: StaffMapProps) {
@@ -730,7 +732,7 @@ function UnitPanel({ unitId, index, tree, onSelect }: PanelProps & { unitId: num
   );
 }
 
-function PersonPanel({ personId, index, canEdit, onSelect, onOpen }: PanelProps & { personId: number }) {
+function PersonPanel({ personId, index, canEdit, onSelect, onOpen, onAssign, onVacate }: PanelProps & { personId: number }) {
   const t = useTranslations();
   const p = index.person.get(personId);
   if (!p) return null;
@@ -743,6 +745,7 @@ function PersonPanel({ personId, index, canEdit, onSelect, onOpen }: PanelProps 
   const reports = index.children.get(p.id) ?? [];
   const project = index.project.get(p.project);
   const rows: [string, ReactNode][] = ([
+    [t("staff.panel.since"), p.since && !p.is_vacancy ? `${new Date(p.since).toLocaleDateString()} · ${tenure(p.since, (k, v) => t(`staff.tenure.${k}`, v))}` : ""],
     [t("staff.fields.position"), p.position],
     [t("staff.fields.territory"), p.territory && <span className="font-mono">{p.territory}</span>],
     [t("staff.fields.region"), p.region],
@@ -761,14 +764,32 @@ function PersonPanel({ personId, index, canEdit, onSelect, onOpen }: PanelProps 
         )}
         title={<span className={cn(p.is_vacancy && "text-destructive")}>{p.is_vacancy ? t("staff.vacancy") : p.name}</span>}
         sub={t(`staff.roles.${p.role}`)}
-        actions={(
-          <>
-            {p.phone && <Button asChild variant="outline" size="sm"><a href={`tel:${p.phone.replace(/\s/g, "")}`}><Phone className="size-4" /><span className="font-mono">{p.phone}</span></a></Button>}
-            {p.email && <Button asChild variant="outline" size="sm"><a href={`mailto:${p.email}`}><Mail className="size-4" />{p.email}</a></Button>}
-            {canEdit && <Button variant="outline" size="sm" onClick={() => onOpen(p)}><Pencil className="size-4" />{t("common.edit")}</Button>}
-          </>
+        actions={canEdit && (
+          p.is_vacancy ? (
+            <>
+              <Button size="sm" onClick={() => onAssign(p)}><UserPlus className="size-4" />{t("staff.staffing.assign")}</Button>
+              <Button variant="ghost" size="sm" onClick={() => onOpen(p)}><Pencil className="size-4" />{t("common.edit")}</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={() => onAssign(p)}><Repeat2 className="size-4" />{t("staff.staffing.replace")}</Button>
+              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => onVacate(p)}>
+                <UserMinus className="size-4" />{t("staff.staffing.vacate")}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onOpen(p)}><Pencil className="size-4" />{t("common.edit")}</Button>
+            </>
+          )
         )}
       />
+      {(p.phone || p.telegram || p.email) && (
+        <PanelSection title={t("staff.panel.contact")}>
+          <StaffContacts person={p} />
+          {p.telegram && <p className="mt-2 font-mono text-xs text-muted-foreground">@{p.telegram}</p>}
+          {p.email && (
+            <a href={`mailto:${p.email}`} className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"><Mail className="size-3.5" />{p.email}</a>
+          )}
+        </PanelSection>
+      )}
       <PanelSection title={t("staff.panel.details")}>
         <dl className="grid gap-1.5 text-[13px]">
           {rows.map(([label, value]) => (
@@ -783,10 +804,28 @@ function PersonPanel({ personId, index, canEdit, onSelect, onOpen }: PanelProps 
           {chain.map((m) => <PersonRow key={m.id} person={m} onSelect={onSelect} />)}
         </PanelSection>
       )}
-      <PanelSection title={t("staff.panel.reports")} count={reports.length} className="border-b-0">
+      <PanelSection title={t("staff.panel.reports")} count={reports.length} className={cn(!p.history?.length && "border-b-0")}>
         {reports.map((m) => <PersonRow key={m.id} person={m} onSelect={onSelect} />)}
         {!reports.length && <p className="text-sm text-muted-foreground">{t("staff.panel.noReports")}</p>}
       </PanelSection>
+      {!!p.history?.length && (
+        <PanelSection title={t("staff.panel.history")} count={p.history.length} className="border-b-0">
+          <ol className="relative ml-1.5 space-y-3 border-l pl-4">
+            {p.history.map((h, i) => (
+              <li key={i} className="relative text-[13px]">
+                <span className="absolute -left-[21px] top-1.5 size-2 rounded-full border-2 border-background bg-muted-foreground" />
+                <div className="flex items-center gap-1.5 font-medium"><History className="size-3.5 text-muted-foreground" />{h.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {[h.since && new Date(h.since).toLocaleDateString(), new Date(h.until).toLocaleDateString()].filter(Boolean).join(" — ")}
+                  {h.reason && h.reason !== "edit" && h.reason !== "import" && ` · ${h.reason}`}
+                  {h.reason === "import" && ` · ${t("staff.staffing.viaImport")}`}
+                </div>
+                {h.phone && <StaffContacts person={h} compact className="-ml-1.5 mt-0.5" />}
+              </li>
+            ))}
+          </ol>
+        </PanelSection>
+      )}
     </>
   );
 }

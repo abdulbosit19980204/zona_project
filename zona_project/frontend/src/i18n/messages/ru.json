@@ -713,7 +713,9 @@
       "note": "Примечание",
       "projectName": "Название команды",
       "source": "Ссылка-источник",
-      "description": "Описание"
+      "description": "Описание",
+      "telegram": "Telegram",
+      "since": "Дата начала работы"
     },
     "roles": {
       "ROP": "Руководитель отдела продаж",
@@ -741,7 +743,53 @@
       "leaders": "Руководство",
       "openVacancies": "Открытые вакансии",
       "noVacancies": "Вакансий нет",
-      "legend": "Роли"
+      "legend": "Роли",
+      "contact": "Связаться",
+      "since": "На позиции",
+      "history": "История позиции"
+    },
+    "contact": {
+      "call": "Позвонить",
+      "telegram": "Telegram",
+      "whatsapp": "WhatsApp",
+      "sms": "SMS",
+      "copy": "Скопировать номер",
+      "copied": "Номер скопирован"
+    },
+    "telegramHint": "@username или ссылка t.me. Если пусто — Telegram откроется по номеру телефона",
+    "tenure": {
+      "days": "{count, plural, one {# день} few {# дня} many {# дней} other {# дня}}",
+      "months": "{count, plural, one {# месяц} few {# месяца} many {# месяцев} other {# месяца}}",
+      "years": "{count, plural, one {# год} few {# года} many {# лет} other {# года}}"
+    },
+    "staffing": {
+      "assign": "Назначить сотрудника",
+      "assignShort": "Назначить",
+      "replace": "Заменить",
+      "vacate": "Уволился",
+      "assignTitle": "{seat}: назначение сотрудника",
+      "assignHint": "Достаточно ФИО и телефона — остальное (территория, руководитель, команда) берётся из позиции.",
+      "replaceTitle": "Новый сотрудник вместо {name}",
+      "replaceReason": "Почему ушёл(ла) {name}",
+      "vacateTitle": "{name} увольняется",
+      "vacateHint": "Позиция, код территории, руководитель и подчинённые сохраняются — позиция станет вакансией. {name} попадёт в историю позиции.",
+      "vacateBtn": "Сделать вакансией",
+      "reason": "Причина",
+      "reasonOther": "Другая причина (необязательно)",
+      "date": "Дата",
+      "namePlaceholder": "Фамилия Имя Отчество",
+      "telegramPlaceholder": "@username (необязательно)",
+      "pasteHint": "Можно вставить «ФИО +998 90 123 45 67 @user» одной строкой — разберётся само",
+      "assigned": "{name} назначен(а)",
+      "vacated": "Позиция стала вакансией",
+      "viaImport": "через импорт",
+      "reasons": {
+        "own": "По собственному желанию",
+        "fired": "Уволен(а)",
+        "moved": "Перешёл(ла) на другую работу",
+        "transfer": "Переведён(а) на другую позицию",
+        "leave": "Декрет / длительный отпуск"
+      }
     }
   }
 }

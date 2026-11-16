@@ -2,14 +2,14 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Download, ExternalLink, FileJson, FileSpreadsheet, Network, Pencil, Phone, Plus, RefreshCw, Search, Upload, UserRound, Users } from "lucide-react";
+import { Download, ExternalLink, FileJson, FileSpreadsheet, Network, Pencil, Phone, Plus, RefreshCw, Search, Upload, UserPlus, UserRound, Users } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DATE_LOCALES } from "@/components/common/activity";
 import { EmptyState, Page, PageHeader, StatCard } from "@/components/common/page";
-import { ImportDialog, PersonDialog, ProjectDialog, type ImportPreset } from "@/components/forms/staff-dialogs";
+import { AssignDialog, ImportDialog, PersonDialog, ProjectDialog, VacateDialog, type ImportPreset } from "@/components/forms/staff-dialogs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,7 +24,7 @@ import type { StaffPerson, StaffProject } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 import { StaffMap } from "./staff-map";
-import { buildIndex, matchesTerms, personLabel, RoleChip, searchTerms, STAFF_KEY, type Index } from "./staff-shared";
+import { buildIndex, matchesTerms, personLabel, RoleChip, searchTerms, STAFF_KEY, StaffContacts, type Index } from "./staff-shared";
 
 export { STAFF_KEY };
 
@@ -38,6 +38,7 @@ export function Staff() {
   const [edit, setEdit] = useState<{ person?: StaffPerson; project: number } | null>(null);
   const [projectEdit, setProjectEdit] = useState<StaffProject | null | undefined>(undefined);
   const [importing, setImporting] = useState<ImportPreset | null>(null);
+  const [staffing, setStaffing] = useState<{ kind: "assign" | "vacate"; id: number } | null>(null);
 
   const data = query.data;
   const index = useMemo(() => buildIndex(data), [data]);
@@ -69,6 +70,8 @@ export function Staff() {
     projects: current ? 1 : projects.length,
   };
 
+  const staffingPerson = staffing ? index.person.get(staffing.id) : undefined;
+  const assign = can.edit ? (p: StaffPerson) => setStaffing({ kind: "assign", id: p.id }) : undefined;
   const dialogs = (
     <>
       {edit && data && (
@@ -76,6 +79,8 @@ export function Staff() {
       )}
       <ProjectDialog open={projectEdit !== undefined} onOpenChange={(o) => !o && setProjectEdit(undefined)} project={projectEdit ?? undefined} />
       {importing && <ImportDialog open onOpenChange={(o) => !o && setImporting(null)} preset={importing} projects={projects} />}
+      {staffingPerson && staffing?.kind === "assign" && <AssignDialog open onOpenChange={(o) => !o && setStaffing(null)} person={staffingPerson} />}
+      {staffingPerson && staffing?.kind === "vacate" && <VacateDialog open onOpenChange={(o) => !o && setStaffing(null)} person={staffingPerson} />}
     </>
   );
 
@@ -93,6 +98,8 @@ export function Staff() {
           exporting={exporter.isPending}
           onList={() => setView("list")}
           onNewProject={() => setProjectEdit(null)}
+          onAssign={(p) => setStaffing({ kind: "assign", id: p.id })}
+          onVacate={(p) => setStaffing({ kind: "vacate", id: p.id })}
         />
         {dialogs}
       </>
@@ -162,6 +169,7 @@ export function Staff() {
                 <ProjectView
                   key={project.id} project={project} index={index} canEdit={can.edit}
                   onOpen={(p) => setEdit({ person: p, project: project.id })}
+                  onAssign={assign}
                   onAdd={() => setEdit({ project: project.id })}
                   onEditProject={() => setProjectEdit(project)}
                   onSync={() => setImporting({ project: project.id, sync: true })}
@@ -190,7 +198,9 @@ function ProjectChip({ active, onClick, label, count }: { active: boolean; onCli
   );
 }
 
-function PersonLine({ person: p, onOpen, compact }: { person: StaffPerson; onOpen?: (p: StaffPerson) => void; compact?: boolean }) {
+function PersonLine({ person: p, onOpen, onAssign, compact }: {
+  person: StaffPerson; onOpen?: (p: StaffPerson) => void; onAssign?: (p: StaffPerson) => void; compact?: boolean;
+}) {
   const t = useTranslations("staff");
   return (
     <div
@@ -208,14 +218,23 @@ function PersonLine({ person: p, onOpen, compact }: { person: StaffPerson; onOpe
           )}
         </div>
       </div>
-      {onOpen && <Pencil className="mt-0.5 size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />}
+      <div className="flex items-center gap-0.5">
+        {p.is_vacancy && onAssign ? (
+          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={(e) => { e.stopPropagation(); onAssign(p); }}>
+            <UserPlus className="size-3.5" />{t("staffing.assignShort")}
+          </Button>
+        ) : (
+          <StaffContacts person={p} compact className="opacity-60 group-hover:opacity-100" />
+        )}
+        {onOpen && <Pencil className="ml-1 size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100" />}
+      </div>
     </div>
   );
 }
 
 /** Bitta jamoa: yuqori rahbar → yo'nalishlar → supervayzer guruhlari (rahbarlik zanjiri bo'yicha). */
-function ProjectView({ project, index, canEdit, onOpen, onAdd, onEditProject, onSync }: {
-  project: StaffProject; index: Index; canEdit: boolean;
+function ProjectView({ project, index, canEdit, onOpen, onAssign, onAdd, onEditProject, onSync }: {
+  project: StaffProject; index: Index; canEdit: boolean; onAssign?: (p: StaffPerson) => void;
   onOpen: (p: StaffPerson) => void; onAdd: () => void; onEditProject: () => void; onSync: () => void;
 }) {
   const t = useTranslations("staff");
@@ -256,18 +275,20 @@ function ProjectView({ project, index, canEdit, onOpen, onAdd, onEditProject, on
           {roots.map((r) => (
             <Card key={r.id} className="min-w-72 gap-0 border-2 border-foreground/80 p-0">
               <div className="px-3.5 pt-2.5 text-center text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">{t(`roles.${r.role}`)}</div>
-              <PersonLine person={r} onOpen={open} />
+              <PersonLine person={r} onOpen={open} onAssign={onAssign} />
             </Card>
           ))}
         </div>
       )}
 
-      {sections.map((s) => <UnitBlock key={String(s.id)} title={s.title} people={s.people} index={index} onOpen={open} />)}
+      {sections.map((s) => <UnitBlock key={String(s.id)} title={s.title} people={s.people} index={index} onOpen={open} onAssign={onAssign} />)}
     </section>
   );
 }
 
-function UnitBlock({ title, people, index, onOpen }: { title: string; people: StaffPerson[]; index: Index; onOpen?: (p: StaffPerson) => void }) {
+function UnitBlock({ title, people, index, onOpen, onAssign }: {
+  title: string; people: StaffPerson[]; index: Index; onOpen?: (p: StaffPerson) => void; onAssign?: (p: StaffPerson) => void;
+}) {
   const t = useTranslations("staff");
   const inUnit = new Set(people.map((p) => p.id));
   // guruh boshlig'i: shu yo'nalishda qo'l ostidagilari bor xodim (RSM, SVR...)
@@ -288,8 +309,8 @@ function UnitBlock({ title, people, index, onOpen }: { title: string; people: St
           const members = (index.children.get(h.id) ?? []).filter((c) => inUnit.has(c.id) && !headIds.has(c.id));
           return (
             <Card key={h.id} className="gap-0 overflow-hidden p-0">
-              <div className={cn("border-b bg-muted/40", h.is_vacancy && "bg-destructive/5")}><PersonLine person={h} onOpen={onOpen} /></div>
-              <div className="divide-y">{members.map((m) => <PersonLine key={m.id} person={m} onOpen={onOpen} compact />)}</div>
+              <div className={cn("border-b bg-muted/40", h.is_vacancy && "bg-destructive/5")}><PersonLine person={h} onOpen={onOpen} onAssign={onAssign} /></div>
+              <div className="divide-y">{members.map((m) => <PersonLine key={m.id} person={m} onOpen={onOpen} onAssign={onAssign} compact />)}</div>
               {!members.length && <div className="px-3.5 py-2 text-xs text-muted-foreground">{t("subTeams", { count: (index.children.get(h.id) ?? []).length })}</div>}
             </Card>
           );
@@ -301,7 +322,7 @@ function UnitBlock({ title, people, index, onOpen }: { title: string; people: St
               <div className="border-b bg-muted/40 px-3.5 py-2 text-xs text-muted-foreground">
                 {boss ? t("directTo", { name: personLabel(boss, t("vacancy")) }) : t("noManager")}
               </div>
-              <div className="divide-y">{list.map((m) => <PersonLine key={m.id} person={m} onOpen={onOpen} compact />)}</div>
+              <div className="divide-y">{list.map((m) => <PersonLine key={m.id} person={m} onOpen={onOpen} onAssign={onAssign} compact />)}</div>
             </Card>
           );
         })}
@@ -338,9 +359,12 @@ function Results({ people, index, showProject, onOpen }: { people: StaffPerson[]
                 <TableCell className="text-sm">{p.city}{p.unit && <span className="block text-xs text-muted-foreground">{index.unit.get(p.unit)}</span>}</TableCell>
                 <TableCell>
                   {p.phone && (
-                    <a href={`tel:${p.phone.replace(/\s/g, "")}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 font-mono text-xs hover:text-primary">
-                      <Phone className="size-3" />{p.phone}
-                    </a>
+                    <div className="flex items-center gap-1">
+                      <a href={`tel:${p.phone.replace(/\s/g, "")}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 font-mono text-xs hover:text-primary">
+                        <Phone className="size-3" />{p.phone}
+                      </a>
+                      <StaffContacts person={p} compact />
+                    </div>
                   )}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{boss ? personLabel(boss, t("vacancy")) : "—"}</TableCell>
