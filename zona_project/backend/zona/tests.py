@@ -806,3 +806,22 @@ class TimeLoadTests(Base):
         d = r.json()
         self.assertEqual(d["overloaded"], [])
         self.assertEqual((d["recommendations"][0]["task_ids"], d["recommendations"][0]["from_id"]), ([], None))
+
+
+class CatalogTests(Base):
+    def test_catalog_adds_new_and_examples_idempotent(self):
+        from . import knowledge_seed
+        from .models import EdgeCase, Process, Task
+        before = Task.objects.count()
+        knowledge_seed.apply(log=lambda *_: None)
+        added = Task.objects.count() - before
+        self.assertGreater(added, 50)
+        t = Task.objects.get(title="Zakaz boshqa klientga yozilib ketgan")
+        self.assertEqual(t.process.name, "Hujjatlar: vozvrat, to'lov va tuzatish")
+        self.assertTrue(t.minutes > 0 and t.time_source == "auto")
+        agent = Task.objects.get(title="Agentda zakaz o'tmayapti yoki ketmayapti — birlamchi tekshiruv")
+        self.assertGreaterEqual(agent.fallbacks.count(), 3)
+        self.assertTrue(Process.objects.get(name="Nazorat va eskalatsiya").zone)
+        self.assertTrue(EdgeCase.objects.filter(situation="Aksiya ko'rinmayapti").exists())
+        knowledge_seed.apply(log=lambda *_: None)
+        self.assertEqual(Task.objects.count() - before, added)  # takrorlanmaydi

@@ -520,12 +520,17 @@ def apply(dry_run=False, log=print):
         if not t:
             stats["missing"].append(f"savol: {old}")
             continue
-        t.title, t.rule, t.examples = new, q["rule"], q["examples"]
-        t.asker, t.frequent = q.get("asker", ""), q.get("frequent", False)
-        if q.get("owner") in members:
-            t.owner = members[q["owner"]]
+        # birinchi marta (qoida hali yozilmagan) — to'liq qo'yiladi; keyin xodimlar o'zgartirgan qoida, mas'ul va navbat saqlanadi
+        first = not t.rule.strip()
+        t.title = new
+        t.examples = list(dict.fromkeys([*(t.examples or []), *q["examples"]]))[:30]  # misollar qo'shib boriladi
+        if first:
+            t.rule = q["rule"]
+            t.asker, t.frequent = q.get("asker", ""), q.get("frequent", False)
+            if q.get("owner") in members:
+                t.owner = members[q["owner"]]
         t.save()
-        if "fallbacks" in q:
+        if first and "fallbacks" in q:
             chain = [(members[n], cond) for n, cond in q["fallbacks"] if n in members and members[n] != t.owner]
             t.fallbacks.all().delete()
             for order, (m, cond) in enumerate(chain):
@@ -537,7 +542,8 @@ def apply(dry_run=False, log=print):
         if zone in ASKER:
             Task.objects.filter(pk=t.pk).update(asker=ASKER[zone])
     stats["members"] = apply_members(log)
-    from . import timeload
+    from . import catalog_seed, timeload
+    stats["catalog"] = catalog_seed.apply(log)
     stats["estimated"] = timeload.apply_estimates()
     log(f"Vaqt taxmini qo'yildi: {stats['estimated']} ta savol (qo'lda kiritilganlarga tegilmadi)")
     log(f"Zonalar: {stats['zones']}, jarayonlar: {stats['processes']}, qoidali savollar: {stats['questions']}")

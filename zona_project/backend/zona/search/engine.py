@@ -136,6 +136,8 @@ class Index:
                 mass += idf
         mass = mass or 1.0
         base_set = set(base)
+        # so'rovga mos keladigan barcha o'zaklar: sarlavhaning qancha qismi so'rovda borligini baholash uchun
+        query_stems = set().union(*[set(m) for _, _, _, m in prepared]) if prepared else set()
 
         results = []
         for doc in self.docs:
@@ -155,6 +157,10 @@ class Index:
                 # asl so'zlarning ko'pini qamragan hujjat ustun: "Yangi klient qo'shish" > "Yangi aksiya ... qo'shish"
                 frac = len(matched & base_set) / len(base_set)
                 score *= 0.35 + 0.65 * frac
+                # sarlavhasi so'rovga to'liqroq mos kelgan hujjat biroz ustun: "1C ochilmayapti" > "1C da hujjat ochilmayapti, ..."
+                title = doc["fields"][0][0] if doc["fields"] else set()
+                if title:
+                    score *= 0.8 + 0.2 * (len(title & query_stems) / len(title))
                 results.append((score, score / mass, doc, matched))
         results.sort(key=lambda r: -r[0])
         return self._shape(query, base, expanded, results, prepared, limit, lang)

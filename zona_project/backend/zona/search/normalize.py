@@ -44,7 +44,7 @@ SUFFIXES = sorted({
     "imizni", "ingizni", "imizga", "ingizga", "imiz", "ingiz", "ning", "dagi", "dan", "ga", "ka", "qa", "da",
     "ni", "im", "ing", "si", "mayapti", "mayapman", "yapti", "yapman", "moqda", "madi", "maydi", "magan",
     "ilmagan", "ilgan", "gan", "kan", "qan", "ib", "ish", "moq", "adi", "aydi", "di", "dim", "ilsin", "sin",
-    "lmayapti", "lmadi", "ladi", "lash", "lashtirish", "tirish", "dirish",
+    "ladi", "lash", "lashtirish", "tirish", "dirish",
     # rus
     "iyami", "yami", "ami", "iyah", "yah", "ah", "ov", "ev", "ey", "om", "em", "oy", "uyu", "yuyu", "aya", "yaya",
     "oe", "ee", "ie", "ye", "yy", "iy", "ih", "yh", "ogo", "ego", "omu", "emu", "imi", "ymi", "at", "yat", "it",
