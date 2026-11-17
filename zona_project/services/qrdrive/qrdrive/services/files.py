@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .. import settings_store
 from ..core.config import config
 from ..core.crypto import decrypt, encrypt, hash_password, token
-from ..core.errors import NotSupported, human
+from ..core.errors import NotSupported, classify, human
 from ..db.models import FileEvent, FileRecord, Storage, SystemLink
 from ..storage import registry
 from ..storage.base import RemoteFile
@@ -147,6 +147,41 @@ async def refresh_link(session: AsyncSession, rec: FileRecord, settings: dict[st
         return await create_link(session, rec, rec.storage, provider, settings)
     finally:
         await provider.close()
+
+
+async def relink(session: AsyncSession, recs: list[FileRecord], settings: dict[str, Any]) -> dict[str, Any]:
+    """Tayyor fayllarning havolasini saqlash joyining joriy sozlamasi bo'yicha qayta yaratadi
+    (masalan, tizim havolasidan Synology Drive havolasiga). Takroriy nusxalar asl faylning yangi havolasini oladi."""
+    done, failed = 0, []
+    for rec in sorted(recs, key=lambda r: (r.duplicate_of is not None, r.id)):
+        if rec.status != "delivered" or rec.deleted_at is not None or not rec.remote_path:
+            continue
+        if rec.duplicate_of:
+            orig = await session.get(FileRecord, rec.duplicate_of)
+            seen = {rec.id}
+            while orig is not None and orig.duplicate_of and orig.id not in seen:  # zanjir: nusxaning nusxasi -> asl fayl
+                seen.add(orig.id)
+                orig = await session.get(FileRecord, orig.duplicate_of)
+            if orig and orig.link_url:
+                rec.link_url, rec.link_id, rec.link_kind = orig.link_url, orig.link_id, orig.link_kind
+                rec.link_expires_at, rec.link_has_password = orig.link_expires_at, orig.link_has_password
+                rec.link_visibility = orig.link_visibility
+                done += 1
+            continue
+        if rec.link_visibility and not rec.options.get("visibility"):
+            rec.options = {**(rec.options or {}), "visibility": rec.link_visibility}
+        if rec.storage is None:
+            continue
+        provider = registry.build(rec.storage)
+        try:
+            # eski tizim havolasi bekor qilinmaydi — allaqachon yuborilgan/chop etilgan QR kodlar ishlashda davom etadi
+            await create_link(session, rec, rec.storage, provider, settings)
+            done += 1
+        except Exception as exc:  # noqa: BLE001
+            failed.append({"id": rec.id, "name": rec.original_name, **human(classify(exc).kind)})
+        finally:
+            await provider.close()
+    return {"done": done, "failed": failed}
 
 
 STATUS_LABEL = {"awaiting": "Tanlov kutilmoqda", "queued": "Navbatda", "processing": "Ishlanmoqda", "retrying": "Qayta urinilmoqda",

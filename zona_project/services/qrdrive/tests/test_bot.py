@@ -68,17 +68,92 @@ async def feed(service: BotService, upd: Update) -> FakeSession:
     return session
 
 
-async def test_unknown_user_gets_request(session):
+def contact_update(user_id: int, phone: str, owner: int | None = None) -> Update:
+    global _uid
+    _uid += 1
+    return Update.model_validate({"update_id": _uid, "message": {
+        "message_id": _uid, "date": int(datetime.now().timestamp()), "chat": {"id": user_id, "type": "private"},
+        "from": {"id": user_id, "is_bot": False, "first_name": "Ali", "language_code": "uz", "is_premium": True},
+        "contact": {"phone_number": phone, "first_name": "Ali", "user_id": owner if owner is not None else user_id}}})
+
+
+def callback(user_id: int, data: str) -> Update:
+    global _uid
+    _uid += 1
+    return Update.model_validate({"update_id": _uid, "callback_query": {
+        "id": f"cb{_uid}", "chat_instance": "x", "data": data,
+        "from": {"id": user_id, "is_bot": False, "first_name": "Ali"},
+        "message": {"message_id": 7, "date": 0, "chat": {"id": user_id, "type": "private"}, "text": "?"}}})
+
+
+async def test_registration_required_before_request(session):
+    from qrdrive.db.models import Employee
+    session.add(Employee(full_name="Bor xodim", department="Kadrlar"))
+    await session.commit()
     service = BotService()
     s = await feed(service, update(501, "yangi", "/start"))
-    assert "administratorga yuborildi" in s.texts()[0]
-    s = await feed(service, update(501, "yangi", "salom"))
-    assert "ko'rib chiqilmoqda" in s.texts()[0]
+    assert "ro'yxatdan o'ting" in s.texts()[0] and "F.I.Sh." in s.texts()[1]
     async with session_scope() as db:
         acc = (await db.execute(select(TgAccount).where(TgAccount.telegram_id == 501))).scalar_one()
-        assert acc.status == "pending"
-        kinds = [n.kind for n in (await db.execute(select(Notification))).scalars()]
-        assert kinds == ["access_request"]
+        assert acc.status == "registering" and acc.reg_state == "name"
+        assert (await db.execute(select(Notification))).first() is None  # hali so'rov yo'q
+    s = await feed(service, update(501, "yangi", document={"file_id": "F", "file_unique_id": "U", "file_name": "a.pdf"}))
+    assert "Avval ro'yxatdan o'ting" in s.texts()[0]  # fayl qabul qilinmaydi
+    s = await feed(service, update(501, "yangi", "Ali"))  # bitta so'z — rad
+    assert "kamida 2 so'z" in s.texts()[0]
+    s = await feed(service, update(501, "yangi", "Aliyev Ali Valiyevich"))
+    assert "Telefon" in s.texts()[0]
+    s = await feed(service, update(501, "yangi", document={"file_id": "F", "file_unique_id": "U", "file_name": "a.pdf"}))
+    assert "o'z raqamingizni" in s.texts()[0]  # telefon qadamida ham fayl qabul qilinmaydi
+    s = await feed(service, contact_update(501, "998901234567", owner=777))  # boshqa odamning raqami
+    assert "o'z raqamingizni" in s.texts()[0]
+    s = await feed(service, contact_update(501, "998901234567"))
+    assert "Bo'limingizni" in s.texts()[0]
+    kb = next(d for n, d in s.sent if n == "SendMessage" and "Bo'limingizni" in d["text"])["reply_markup"]["keyboard"]
+    assert kb[0][0]["text"] == "Kadrlar"  # mavjud bo'limlar tugma sifatida
+    await feed(service, update(501, "yangi", "Kadrlar"))
+    s = await feed(service, update(501, "yangi", "⏭ O'tkazib yuborish"))
+    summary = next(d for n, d in s.sent if n == "SendMessage" and "To'g'rimi" in d.get("text", ""))
+    assert "Aliyev Ali Valiyevich" in summary["text"] and "+998901234567" in summary["text"] and "Kadrlar" in summary["text"]
+    s = await feed(service, callback(501, "reg:ok"))
+    assert any(n == "EditMessageText" and "Ro'yxatdan o'tdingiz" in d["text"] for n, d in s.sent)
+    async with session_scope() as db:
+        acc = (await db.execute(select(TgAccount).where(TgAccount.telegram_id == 501))).scalar_one()
+        assert acc.status == "pending" and acc.phone == "+998901234567" and acc.registered_at
+        assert acc.reg_data == {"full_name": "Aliyev Ali Valiyevich", "department": "Kadrlar", "position": ""}
+        assert acc.profile["telegram"]["id"] == 501 and acc.profile["telegram"]["username"] == "yangi"
+        n = (await db.execute(select(Notification))).scalar_one()
+        assert n.kind == "access_request" and "Aliyev Ali Valiyevich" in n.title and "+998901234567" in n.body
+    s = await feed(service, update(501, "yangi", "salom"))
+    assert "ko'rib chiqilmoqda" in s.texts()[0]
+
+
+async def test_registration_restart(session):
+    service = BotService()
+    await feed(service, update(502, "b", "/start"))
+    await feed(service, update(502, "b", "Karimov Bobur"))
+    await feed(service, contact_update(502, "+998 90 111 22 33"))
+    await feed(service, update(502, "b", "IT"))
+    await feed(service, update(502, "b", "Dasturchi"))
+    await feed(service, callback(502, "reg:edit"))
+    async with session_scope() as db:
+        acc = (await db.execute(select(TgAccount).where(TgAccount.telegram_id == 502))).scalar_one()
+        assert acc.status == "registering" and acc.reg_state == "name" and acc.reg_data == {}
+
+
+async def test_approve_uses_registration_data(client, session):
+    from qrdrive.db.models import Employee
+    from .conftest import auth
+    acc = TgAccount(telegram_id=900, first_name="X", status="pending", phone="+998900000000",
+                    reg_data={"full_name": "Olimov Olim", "department": "Moliya", "position": "Hisobchi"})
+    session.add(acc)
+    await session.commit()
+    rows = (await client.get("/qrdrive/api/admin/requests", headers=auth("viewer"))).json()
+    assert rows[0]["reg"]["full_name"] == "Olimov Olim" and rows[0]["phone"] == "+998900000000"
+    r = await client.post(f"/qrdrive/api/admin/requests/{acc.id}/approve", headers=auth("admin"), json={})
+    async with session_scope() as db:
+        emp = await db.get(Employee, r.json()["employee_id"])
+        assert (emp.full_name, emp.department, emp.position, emp.phone) == ("Olimov Olim", "Moliya", "Hisobchi", "+998900000000")
 
 
 async def test_invite_then_file_upload(session, employee, local_storage):

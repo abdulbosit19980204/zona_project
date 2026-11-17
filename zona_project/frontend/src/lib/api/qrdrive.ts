@@ -68,7 +68,11 @@ export interface Paged<T> { items: T[]; total: number }
 
 export interface TgAccount {
   id: number; telegram_id: number; username: string; first_name: string; last_name: string; display: string; lang: string;
-  status: "pending" | "active" | "blocked" | "rejected" | "detached"; employee_id: number | null; first_seen: string; last_seen: string;
+  status: "registering" | "pending" | "active" | "blocked" | "rejected" | "detached"; employee_id: number | null; first_seen: string; last_seen: string;
+  phone: string; is_premium: boolean; has_photo: boolean; reg_state: string; registered_at: string | null;
+  reg: { full_name?: string; department?: string; position?: string };
+  telegram: { language_code?: string | null; bio?: string | null; birthdate?: { day: number; month: number; year?: number } | null;
+    personal_chat?: string | null };
 }
 
 export interface QrEmployee {
@@ -108,7 +112,7 @@ export interface QrStyle { size: number; fg: string; bg: string; logo: boolean; 
 export interface QrSettings {
   setup_done: boolean; company_name: string; public_base_url: string; bot_username: string; bot_api_url: string; bot_api_local: boolean;
   max_file_mb: number; allowed_types: string; folder_template: string; filename_template: string; link_expire_days: number;
-  visibility_mode: "ask" | "public" | "private"; default_visibility: "public" | "private"; visibility_timeout_min: number;
+  registration_required: boolean; visibility_mode: "ask" | "public" | "private"; default_visibility: "public" | "private"; visibility_timeout_min: number;
   duplicate_policy: "reuse" | "upload"; auto_fallback: boolean; qr_style: QrStyle; bot_texts: Record<string, Record<string, string>>;
   default_lang: string; timezone: string; notify_chat_ids: string; notify: Record<string, boolean>; daily_report_time: string;
   saved_minutes_per_file: number; retention_days: number; trash_days: number; backup_keep_days: number;

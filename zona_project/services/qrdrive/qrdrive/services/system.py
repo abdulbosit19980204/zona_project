@@ -89,6 +89,7 @@ async def seed_default_storage(session: AsyncSession) -> None:
     if not config.seed_default_storage or (await session.execute(select(func.count()).select_from(Storage))).scalar_one():
         return
     st = Storage(name=DEFAULT_STORAGE["name"], kind=DEFAULT_STORAGE["kind"], base_folder="/", is_primary=True, status="unknown",
+                 link_mode="provider",
                  last_error="not_configured")
     registry.set_config(st, DEFAULT_STORAGE["config"])
     session.add(st)

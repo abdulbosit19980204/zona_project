@@ -126,5 +126,11 @@ SDK va aiogram plagini: [sdk/python/README.md](sdk/python/README.md).
     Google Drive havolasiga parol qo'yib bo'lmaydi — parol so'ralsa tizim havolasi.
 13. **Havola turi (Public/Private)** botda tugmalar bilan tanlanadi; tanlov kutilayotgan fayl `awaiting` holatida turadi va navbatga
     tushmaydi (N daqiqadan keyin standart tur). Private havola Synology Drive (`/d/f/`) va Google Drive'da; boshqalarida tizim havolasi.
-14. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
+14. **Telegram'da ro'yxatdan o'tish majburiy** (panelda o'chirsa bo'ladi): F.I.Sh. → telefon (faqat «Raqamni yuborish» kontakt
+    tugmasi, boshqa odamning raqami qabul qilinmaydi) → bo'lim (mavjud bo'limlar tugma sifatida) → lavozim → tasdiqlash.
+    Shundan keyingina «Kirish so'rovlari»ga tushadi va adminga bildirishnoma ketadi. Telegram ma'lumotlari to'liq saqlanadi:
+    ID, username, ism, til, premium, getChat (bio, tug'ilgan sana, shaxsiy kanal), profil rasmi. Tasdiqlashda xodim kartasi shu ma'lumotlardan to'ldiriladi.
+15. **Havolalarni qayta yaratish** (Saqlash joylari → «Havolalarni yangilash» yoki fayllarda ommaviy amal) — eski tizim havolalari
+    bekor qilinmaydi, allaqachon tarqatilgan QR kodlar ishlashda davom etadi.
+16. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
     oqim testlari va jonli QA (Next.js proksi orqali) ishlatildi.

@@ -85,10 +85,19 @@ class TgAccount(Base):
     last_name: Mapped[str] = mapped_column(String(128), default="")
     lang: Mapped[str] = mapped_column(String(4), default="uz")
     employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
-    # pending (kirish so'rovi) | active | blocked | rejected | detached (yangi akkauntga almashtirilgan)
+    # registering (botda ro'yxatdan o'tmoqda) | pending (kirish so'rovi) | active | blocked | rejected | detached
     status: Mapped[str] = mapped_column(String(16), default="pending")
     first_seen: Mapped[datetime] = mapped_column(default=now)
     last_seen: Mapped[datetime] = mapped_column(default=now)
+    # Telegram ma'lumotlari (to'liq): telefon (kontakt orqali tasdiqlangan), premium, profil rasmi, getChat natijasi
+    phone: Mapped[str] = mapped_column(String(32), default="")
+    is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
+    photo: Mapped[str] = mapped_column(String(200), default="")  # data/assets/avatars/<fayl>
+    profile: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=True)
+    # Ro'yxatdan o'tish: joriy qadam va kiritilgan ma'lumotlar (F.I.Sh., bo'lim, lavozim)
+    reg_state: Mapped[str] = mapped_column(String(16), default="")
+    reg_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=True)
+    registered_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     employee: Mapped[Employee | None] = relationship(back_populates="accounts", lazy="selectin")
 

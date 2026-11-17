@@ -13,13 +13,14 @@ from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, TelegramObject
+from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
+                           ReplyKeyboardMarkup, ReplyKeyboardRemove, TelegramObject)
 from sqlalchemy import select
 
 from .. import settings_store
 from ..core.config import config
 from ..core.logging import setup_logging
-from ..db.models import FileRecord, TgAccount
+from ..db.models import Employee, FileRecord, TgAccount
 from ..db.session import session_scope
 from ..services import accounts, qr, system
 from ..services.audit import add_audit
@@ -78,8 +79,8 @@ class AccountMiddleware(BaseMiddleware):
         if user is None or user.is_bot:
             return await handler(event, data)
         async with session_scope() as s:
-            acc, created = await accounts.touch(s, user.model_dump())
             settings = await settings_store.load(s)
+            acc, created = await accounts.touch(s, user.model_dump(), registration=bool(settings.get("registration_required", True)))
             await s.commit()
             data.update(session=s, acc=acc, created=created, settings=settings)
             return await handler(event, data)
@@ -94,6 +95,10 @@ async def gate(msg: Message, s, acc: TgAccount, created: bool, settings: dict[st
     state = await accounts.access_state(s, acc)
     if state == "ok":
         return True
+    if state == "registering":
+        await msg.answer(t(settings, acc, "reg_welcome" if created else "reg_need"))
+        await reg_prompt(msg, s, acc, settings)
+        return False
     if state == "pending":
         if created:
             accounts.request_notification(s, acc)
@@ -148,6 +153,126 @@ async def cb_lang(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str
     await cb.answer()
     if cb.message:
         await cb.message.edit_text(t(settings, acc, "lang_set"))
+
+
+# ---------------- ro'yxatdan o'tish ----------------
+REG_STEPS = ("name", "phone", "department", "position", "confirm")
+
+
+async def registering(message: Message, acc: TgAccount | None = None) -> bool:
+    """Filtr: foydalanuvchi ro'yxatdan o'tmoqda va bu buyruq emas."""
+    return bool(acc and acc.status == "registering" and not (message.text or "").startswith("/"))
+
+
+def _kb(rows: list[list[KeyboardButton]]) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, one_time_keyboard=True)
+
+
+async def reg_prompt(msg: Message, session, acc: TgAccount, settings: dict[str, Any]) -> None:
+    """Joriy qadam savolini (kerakli tugmalar bilan) yuboradi."""
+    step = acc.reg_state or "name"
+    reg = acc.reg_data or {}
+    skip = t(settings, acc, "reg_skip")
+    if step == "name":
+        suggestion = f"{acc.first_name} {acc.last_name}".strip()
+        markup = _kb([[KeyboardButton(text=suggestion)]]) if len(suggestion.split()) >= 2 else ReplyKeyboardRemove()
+        await msg.answer(t(settings, acc, "reg_name"), reply_markup=markup)
+    elif step == "phone":
+        await msg.answer(t(settings, acc, "reg_phone"),
+                         reply_markup=_kb([[KeyboardButton(text=t(settings, acc, "reg_phone_btn"), request_contact=True)]]))
+    elif step == "department":
+        depts = sorted({d for d in (await session.execute(select(Employee.department).where(Employee.department != ""))).scalars() if d})[:12]
+        rows = [[KeyboardButton(text=d) for d in depts[i:i + 2]] for i in range(0, len(depts), 2)] + [[KeyboardButton(text=skip)]]
+        await msg.answer(t(settings, acc, "reg_department"), reply_markup=_kb(rows))
+    elif step == "position":
+        await msg.answer(t(settings, acc, "reg_position"), reply_markup=_kb([[KeyboardButton(text=skip)]]))
+    else:
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=t(settings, acc, "reg_yes"), callback_data="reg:ok"),
+                                                    InlineKeyboardButton(text=t(settings, acc, "reg_edit"), callback_data="reg:edit")]])
+        await msg.answer(t(settings, acc, "reg_confirm", name=reg.get("full_name", "—"), phone=acc.phone or "—",
+                           department=reg.get("department") or "—", position=reg.get("position") or "—"), reply_markup=kb)
+
+
+def _phone(raw: str) -> str:
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    return "+" + digits if digits else ""
+
+
+@on("message", registering)
+async def reg_input(msg: Message, session, acc: TgAccount, settings: dict[str, Any]):
+    step = acc.reg_state or "name"
+    data = dict(acc.reg_data or {})
+    text = (msg.text or "").strip()
+    skip = t(settings, acc, "reg_skip")
+    if step == "phone":
+        contact = msg.contact
+        if contact is None or (contact.user_id and contact.user_id != msg.from_user.id):
+            await msg.answer(t(settings, acc, "reg_phone_wrong"))
+            return await reg_prompt(msg, session, acc, settings)
+        acc.phone = _phone(contact.phone_number)
+        nxt = "department"
+    elif not text:  # fayl, stiker va h.k. — avval ro'yxatdan o'tish
+        await msg.answer(t(settings, acc, "reg_need"))
+        return await reg_prompt(msg, session, acc, settings)
+    elif step == "name":
+        if len(text.split()) < 2 or len(text) > 150:
+            await msg.answer(t(settings, acc, "reg_name_short"))
+            return
+        data["full_name"] = " ".join(text.split())
+        nxt = "phone"
+    elif step in ("department", "position"):
+        data[step] = "" if text == skip else text[:200]
+        nxt = "position" if step == "department" else "confirm"
+    else:  # confirm — tugmani bosish kutilmoqda
+        return await reg_prompt(msg, session, acc, settings)
+    acc.reg_data, acc.reg_state = data, nxt
+    await session.commit()
+    if nxt == "confirm":
+        await msg.answer("👍", reply_markup=ReplyKeyboardRemove())
+    await reg_prompt(msg, session, acc, settings)
+
+
+async def collect_profile(bot: Bot, acc: TgAccount) -> None:
+    """Telegram profilini to'liq saqlash: getChat (bio, tug'ilgan sana, shaxsiy kanal...) va profil rasmi."""
+    profile = dict(acc.profile or {})
+    try:
+        chat = await bot.get_chat(acc.telegram_id)
+        data = chat.model_dump(mode="json", exclude_none=True)
+        data.pop("photo", None)
+        profile["chat"] = data
+    except Exception:  # noqa: BLE001 — majburiy emas
+        pass
+    try:
+        photos = await bot.get_user_profile_photos(acc.telegram_id, limit=1)
+        if photos.total_count and photos.photos:
+            folder = config.assets_dir / "avatars"
+            folder.mkdir(parents=True, exist_ok=True)
+            await bot.download(photos.photos[0][-1].file_id, destination=folder / f"{acc.telegram_id}.jpg")
+            acc.photo = f"{acc.telegram_id}.jpg"
+    except Exception:  # noqa: BLE001
+        pass
+    acc.profile = profile
+
+
+@on("callback_query", F.data.startswith("reg:"))
+async def reg_callback(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str, Any], bot: Bot):
+    await cb.answer()
+    if acc.status != "registering" or not cb.message:
+        return
+    if cb.data == "reg:edit":
+        acc.reg_state, acc.reg_data = "name", {}
+        await session.commit()
+        await cb.message.edit_reply_markup(reply_markup=None)
+        return await reg_prompt(cb.message, session, acc, settings)
+    if cb.data != "reg:ok" or acc.reg_state != "confirm":
+        return
+    await collect_profile(bot, acc)
+    acc.status, acc.reg_state, acc.registered_at = "pending", "", datetime.now(timezone.utc)
+    accounts.request_notification(session, acc)
+    add_audit(session, "request.new", actor=str(acc.telegram_id), actor_kind="bot", target=(acc.reg_data or {}).get("full_name") or acc.display,
+              details={"phone": acc.phone, **{k: v for k, v in (acc.reg_data or {}).items() if k != "full_name"}})
+    await session.commit()
+    await cb.message.edit_text(t(settings, acc, "reg_sent"))
 
 
 @on("message", Command("myfiles"))

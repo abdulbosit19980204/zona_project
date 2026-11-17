@@ -209,6 +209,31 @@ async def bulk(body: Ids, session: AsyncSession = Depends(get_session), user: Pr
     return {"done": done}
 
 
+class RelinkBody(BaseModel):
+    ids: list[int] | None = None
+    storage_id: int | None = None
+    only_system: bool = True  # faqat tizim havolasi berilgan fayllar
+
+
+@router.post("/relink")
+async def relink(body: RelinkBody, session: AsyncSession = Depends(get_session), user: Principal = Depends(admin)):
+    """Havolalarni qayta yaratish (masalan, saqlash joyi «o'z havolasi» rejimiga o'tkazilgach)."""
+    q = select(FileRecord).where(FileRecord.status == "delivered", FileRecord.deleted_at.is_(None))
+    if body.ids:
+        q = q.where(FileRecord.id.in_(body.ids))
+    if body.storage_id:
+        q = q.where(FileRecord.storage_id == body.storage_id)
+    if body.only_system and not body.ids:
+        q = q.where(FileRecord.link_kind == "system")
+    recs = list((await session.execute(q.order_by(FileRecord.id).limit(500))).scalars())
+    settings = await settings_store.load(session)
+    from ...services.files import relink as do_relink
+    result = await do_relink(session, recs, settings)
+    add_audit(session, "file.relink", actor=user.username, details={"done": result["done"], "failed": len(result["failed"])})
+    await session.commit()
+    return result
+
+
 @router.post("/{file_id}/retry")
 async def retry(file_id: int, session: AsyncSession = Depends(get_session), user: Principal = Depends(admin)):
     rec = await _get(session, file_id)

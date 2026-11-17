@@ -29,7 +29,7 @@ import { useQt, type QKey } from "./i18n";
 
 const EMP_TONE: Record<string, string> = {
   active: "bg-success/15 text-success", blocked: "bg-destructive/15 text-destructive", archived: "bg-muted text-muted-foreground",
-  pending: "bg-warning/15 text-warning", rejected: "bg-muted text-muted-foreground", detached: "bg-muted text-muted-foreground",
+  pending: "bg-warning/15 text-warning", registering: "bg-violet/15 text-violet", rejected: "bg-muted text-muted-foreground", detached: "bg-muted text-muted-foreground",
 };
 
 export function EmpBadge({ status }: { status: string }) {

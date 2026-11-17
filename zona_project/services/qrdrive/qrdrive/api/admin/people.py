@@ -7,13 +7,14 @@ import io
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from openpyxl import Workbook, load_workbook
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ... import settings_store
+from ...core.config import config
 from ...core.security import Principal
 from ...db.models import Employee, FileRecord, Storage, TgAccount, TgAccountHistory
 from ...db.session import get_session
@@ -27,9 +28,16 @@ router = APIRouter(tags=["admin: employees"])
 
 
 def account_out(a: TgAccount) -> dict[str, Any]:
+    profile = a.profile or {}
+    chat = profile.get("chat") or {}
     return {"id": a.id, "telegram_id": a.telegram_id, "username": a.username, "first_name": a.first_name,
             "last_name": a.last_name, "display": a.display, "lang": a.lang, "status": a.status,
-            "employee_id": a.employee_id, "first_seen": a.first_seen, "last_seen": a.last_seen}
+            "employee_id": a.employee_id, "first_seen": a.first_seen, "last_seen": a.last_seen,
+            "phone": a.phone, "is_premium": a.is_premium, "has_photo": bool(a.photo), "reg_state": a.reg_state,
+            "reg": a.reg_data or {}, "registered_at": a.registered_at,
+            "telegram": {"language_code": (profile.get("telegram") or {}).get("language_code"), "bio": chat.get("bio"),
+                         "birthdate": chat.get("birthdate"), "has_private_forwards": chat.get("has_private_forwards"),
+                         "personal_chat": (chat.get("personal_chat") or {}).get("title")}}
 
 
 def employee_out(e: Employee, stats: tuple[int, int, Any] | None = None) -> dict[str, Any]:
@@ -275,6 +283,15 @@ async def list_requests(status: str = "pending", session: AsyncSession = Depends
     rows = (await session.execute(select(TgAccount).where(TgAccount.status.in_(status.split(",")))
                                   .order_by(TgAccount.first_seen.desc()))).scalars()
     return [account_out(a) for a in rows]
+
+
+@router.get("/accounts/{acc_id}/photo")
+async def account_photo(acc_id: int, session: AsyncSession = Depends(get_session), _: Principal = Depends(viewer)):
+    acc = await session.get(TgAccount, acc_id)
+    path = config.assets_dir / "avatars" / (acc.photo if acc else "")
+    if acc is None or not acc.photo or not path.is_file():
+        raise HTTPException(404, "Rasm yo'q")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
 
 
 async def _acc(session: AsyncSession, acc_id: int) -> TgAccount:

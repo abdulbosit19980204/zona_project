@@ -20,8 +20,13 @@ async def _accounts_of(session: AsyncSession, emp_id: int) -> list[TgAccount]:
     return list((await session.execute(select(TgAccount).where(TgAccount.employee_id == emp_id))).scalars())
 
 
-async def touch(session: AsyncSession, user: dict[str, Any]) -> tuple[TgAccount, bool]:
-    """Har bir xabarda: akkauntni topadi yoki yaratadi (pending), username/ism o'zgarsa tarixga yozadi.
+TELEGRAM_FIELDS = ("id", "is_bot", "first_name", "last_name", "username", "language_code", "is_premium",
+                   "added_to_attachment_menu", "can_join_groups", "can_read_all_group_messages", "supports_inline_queries")
+
+
+async def touch(session: AsyncSession, user: dict[str, Any], registration: bool = False) -> tuple[TgAccount, bool]:
+    """Har bir xabarda: akkauntni topadi yoki yaratadi, Telegram ma'lumotlarini to'liq saqlaydi,
+    username/ism o'zgarsa tarixga yozadi. registration=True — yangi foydalanuvchi avval ro'yxatdan o'tadi.
     Qaytaradi: (akkaunt, yangi_yaratildimi)."""
     tid = int(user["id"])
     acc = (await session.execute(select(TgAccount).where(TgAccount.telegram_id == tid))).scalar_one_or_none()
@@ -31,10 +36,13 @@ async def touch(session: AsyncSession, user: dict[str, Any]) -> tuple[TgAccount,
     if acc is None:
         lang = "ru" if (user.get("language_code") or "").startswith("ru") else "uz"
         acc = TgAccount(telegram_id=tid, username=username, first_name=first, last_name=last, lang=lang,
-                        status="pending", first_seen=now, last_seen=now)
+                        status="registering" if registration else "pending", first_seen=now, last_seen=now,
+                        reg_state="name" if registration else "", reg_data={}, profile={})
+        _store_telegram(acc, user)
         session.add(acc)
         await session.flush()
         return acc, True
+    _store_telegram(acc, user)
     for field, new in (("username", username), ("first_name", first), ("last_name", last)):
         old = getattr(acc, field) or ""
         if old != new:
@@ -47,8 +55,21 @@ async def touch(session: AsyncSession, user: dict[str, Any]) -> tuple[TgAccount,
     return acc, False
 
 
+def _store_telegram(acc: TgAccount, user: dict[str, Any]) -> None:
+    profile = dict(acc.profile or {})
+    # birlashtiriladi: ba'zi update turlarida (callback va h.k.) maydonlar kelmasligi mumkin
+    tg = {**(profile.get("telegram") or {}), **{k: user.get(k) for k in TELEGRAM_FIELDS if user.get(k) is not None}}
+    tg["is_premium"] = bool(user.get("is_premium"))
+    acc.is_premium = tg["is_premium"]
+    if profile.get("telegram") != tg:
+        profile["telegram"] = tg
+        acc.profile = profile
+
+
 async def access_state(session: AsyncSession, acc: TgAccount) -> str:
-    """ok | pending | blocked"""
+    """ok | registering | pending | blocked"""
+    if acc.status == "registering":
+        return "registering"
     emp = await session.get(Employee, acc.employee_id) if acc.employee_id else None
     if acc.status == "active" and emp and emp.status == "active":
         return "ok"
@@ -58,9 +79,14 @@ async def access_state(session: AsyncSession, acc: TgAccount) -> str:
 
 
 def request_notification(session: AsyncSession, acc: TgAccount) -> None:
-    notify(session, "access_request", f"Yangi kirish so'rovi: {acc.display}",
-           f"Telegram ID: {acc.telegram_id}" + (f", @{acc.username}" if acc.username else ""),
-           level="info", link="/qr/requests")
+    reg = acc.reg_data or {}
+    who = reg.get("full_name") or acc.display
+    details = [f"Telegram ID: {acc.telegram_id}" + (f", @{acc.username}" if acc.username else "")]
+    if acc.phone:
+        details.append(f"Tel: {acc.phone}")
+    if reg.get("department") or reg.get("position"):
+        details.append(" · ".join(x for x in (reg.get("department"), reg.get("position")) if x))
+    notify(session, "access_request", f"Yangi kirish so'rovi: {who}", "\n".join(details), level="info", link="/qr/requests")
 
 
 def employee_folder(emp: Employee, acc: TgAccount | None) -> str:
@@ -119,9 +145,10 @@ async def redeem_invite(session: AsyncSession, acc: TgAccount, code: str) -> Emp
 
 
 async def approve_as_new(session: AsyncSession, acc: TgAccount, actor: str, data: dict[str, Any]) -> Employee:
-    full_name = (data.get("full_name") or "").strip() or acc.display
-    emp = Employee(full_name=full_name, department=data.get("department") or "", position=data.get("position") or "",
-                   phone=data.get("phone") or "")
+    reg = acc.reg_data or {}  # botdagi ro'yxatdan o'tish ma'lumotlari — admin o'zgartirmasa shular olinadi
+    full_name = (data.get("full_name") or "").strip() or reg.get("full_name") or acc.display
+    emp = Employee(full_name=full_name, department=data.get("department") or reg.get("department") or "",
+                   position=data.get("position") or reg.get("position") or "", phone=data.get("phone") or acc.phone or "")
     session.add(emp)
     await session.flush()
     emp.folder = await unique_folder(session, data.get("folder") or employee_folder(emp, acc), emp.id)

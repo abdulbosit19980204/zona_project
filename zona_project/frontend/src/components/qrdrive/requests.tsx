@@ -15,9 +15,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQr, useQrAction } from "@/hooks/use-qrdrive";
 import { qrApi, type QrEmployee, type TgAccount } from "@/lib/api/qrdrive";
 
-import { FormRow, QrGuard, fmtDate } from "./common";
+import { AuthImage, FormRow, QrGuard, fmtDate } from "./common";
 import { EmpBadge } from "./employees";
-import { useQt } from "./i18n";
+import { useQt, type QKey } from "./i18n";
 
 export function QrRequests() {
   const t = useQt();
@@ -40,6 +40,7 @@ export function QrRequests() {
       <Tabs value={tab} onValueChange={setTab} className="mb-4">
         <TabsList>
           <TabsTrigger value="pending">{t("st_pending")}</TabsTrigger>
+          <TabsTrigger value="registering">{t("st_registering")}</TabsTrigger>
           <TabsTrigger value="rejected,blocked">{t("showRejected")}</TabsTrigger>
         </TabsList>
       </Tabs>
@@ -49,19 +50,38 @@ export function QrRequests() {
             {q.data.map((a) => (
               <Card key={a.id} className="gap-3 p-4">
                 <div className="flex items-start gap-3">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 font-semibold text-primary">
-                    {(a.first_name || a.username || "?").slice(0, 1).toUpperCase()}
-                  </div>
+                  {a.has_photo ? (
+                    <AuthImage path={`accounts/${a.id}/photo`} alt="" className="size-12 shrink-0 rounded-full object-cover" />
+                  ) : (
+                    <div className="grid size-12 shrink-0 place-items-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                      {(a.reg.full_name || a.first_name || a.username || "?").slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{a.display}</div>
+                    <div className="truncate font-medium">{a.reg.full_name || a.display}</div>
                     <div className="text-xs text-muted-foreground">{a.username ? `@${a.username} · ` : ""}{t("tgId")}: {a.telegram_id}</div>
-                    <div className="text-xs text-muted-foreground">{t("firstSeen")}: {fmtDate(a.first_seen)}</div>
+                    {a.is_premium && <span className="text-[11px] text-violet">★ {t("premium")}</span>}
                   </div>
                   {tab !== "pending" && <EmpBadge status={a.status} />}
                 </div>
-                {tab === "pending" ? (
+                <dl className="grid grid-cols-[110px_1fr] gap-x-2 gap-y-0.5 text-xs">
+                  {a.phone && <><dt className="text-muted-foreground">{t("phone")}</dt><dd className="font-mono">{a.phone}</dd></>}
+                  {a.reg.department && <><dt className="text-muted-foreground">{t("department")}</dt><dd>{a.reg.department}</dd></>}
+                  {a.reg.position && <><dt className="text-muted-foreground">{t("position")}</dt><dd>{a.reg.position}</dd></>}
+                  {a.reg.full_name && a.display !== a.reg.full_name && <><dt className="text-muted-foreground">{t("tgName")}</dt><dd>{a.display}</dd></>}
+                  {a.telegram.language_code && <><dt className="text-muted-foreground">{t("tgLang")}</dt><dd>{a.telegram.language_code}</dd></>}
+                  {a.telegram.bio && <><dt className="text-muted-foreground">{t("bio")}</dt><dd className="break-words">{a.telegram.bio}</dd></>}
+                  {a.telegram.birthdate && <><dt className="text-muted-foreground">{t("birthdate")}</dt>
+                    <dd>{[a.telegram.birthdate.day, a.telegram.birthdate.month, a.telegram.birthdate.year].filter(Boolean).join(".")}</dd></>}
+                  {a.status === "registering" && <><dt className="text-muted-foreground">{t("st_registering")}</dt>
+                    <dd>{t("regStep", { step: t(`step_${a.reg_state || "name"}` as QKey) })}</dd></>}
+                  <dt className="text-muted-foreground">{a.registered_at ? t("registeredAt") : t("firstSeen")}</dt>
+                  <dd>{fmtDate(a.registered_at || a.first_seen)}</dd>
+                </dl>
+                {tab === "registering" ? null : tab === "pending" ? (
                   <div className="flex flex-wrap gap-1.5">
-                    <Button size="sm" onClick={() => { setForm({ full_name: `${a.first_name} ${a.last_name}`.trim(), department: "", position: "", phone: "" }); setApprove(a); }}>
+                    <Button size="sm" onClick={() => { setForm({ full_name: a.reg.full_name || `${a.first_name} ${a.last_name}`.trim(), department: a.reg.department || "",
+                      position: a.reg.position || "", phone: a.phone || "" }); setApprove(a); }}>
                       <Check className="size-4" />{t("approveNew")}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => { setEmpId(""); setAttach(a); }}><Link2 className="size-4" />{t("attachExisting")}</Button>

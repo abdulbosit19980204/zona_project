@@ -137,6 +137,10 @@ export function QrSettingsPage() {
                 <FormRow label={t("apiUrl")} hint={t("apiUrlHint")}>
                   <Input value={cur.bot_api_url ?? ""} onChange={(e) => set("bot_api_url", e.target.value)} placeholder="http://127.0.0.1:8081" />
                 </FormRow>
+                <label className="flex items-center justify-between gap-3 text-sm">
+                  <span>{t("regRequired")}<span className="block text-xs text-muted-foreground">{t("regRequiredHint")}</span></span>
+                  <Switch checked={cur.registration_required ?? true} onCheckedChange={(x) => set("registration_required", x)} />
+                </label>
                 <label className="flex items-center justify-between gap-3 text-sm">{t("apiLocal")}
                   <Switch checked={!!cur.bot_api_local} onCheckedChange={(x) => set("bot_api_local", x)} /></label>
                 <div className="flex items-center gap-3 border-t pt-3">

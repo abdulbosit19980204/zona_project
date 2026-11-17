@@ -109,3 +109,18 @@ async def test_web_upload_visibility_param(client, local_storage, employee):
     async with session_scope() as s:
         rec = (await s.execute(select(FileRecord).where(FileRecord.id == r.json()[0]["id"]))).scalar_one()
         assert rec.options["visibility"] == "private" and rec.status == "queued"
+
+
+async def test_relink_keeps_old_qr_working(client, local_storage, employee):
+    h = auth("admin")
+    r = await client.post("/qrdrive/api/admin/files/upload", headers=h, data={"employee_id": str(employee.id)},
+                          files={"files": ("a.txt", b"eski qr", "text/plain")})
+    fid = r.json()[0]["id"]
+    await run(fid)
+    old_url = (await client.get(f"/qrdrive/api/admin/files/{fid}", headers=h)).json()["url"]
+    res = (await client.post("/qrdrive/api/admin/files/relink", headers=h, json={"ids": [fid]})).json()
+    assert res == {"done": 1, "failed": []}
+    new_url = (await client.get(f"/qrdrive/api/admin/files/{fid}", headers=h)).json()["url"]
+    assert new_url != old_url
+    assert (await client.get(old_url.replace("http://testserver", ""))).content == b"eski qr"  # eski QR ishlaydi
+    assert (await client.get(new_url.replace("http://testserver", ""))).content == b"eski qr"

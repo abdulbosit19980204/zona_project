@@ -265,7 +265,7 @@ async def process(session: AsyncSession, file_id: int, tg: TelegramClient | None
             await _fetch(ctx)
         dup = await _find_duplicate(session, rec) if settings.get("duplicate_policy", "reuse") == "reuse" else None
         if dup:
-            rec.duplicate_of, rec.storage_id, rec.storage = dup.id, dup.storage_id, dup.storage
+            rec.duplicate_of, rec.storage_id, rec.storage = dup.duplicate_of or dup.id, dup.storage_id, dup.storage
             rec.remote_path, rec.remote_id, rec.stored_name = dup.remote_path, dup.remote_id, dup.stored_name
             rec.link_url, rec.link_id, rec.link_kind = dup.link_url, dup.link_id, dup.link_kind
             rec.link_expires_at, rec.link_has_password = dup.link_expires_at, dup.link_has_password

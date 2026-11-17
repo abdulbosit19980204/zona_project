@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, CheckCircle2, HardDrive, Loader2, MinusCircle, Pencil, Plug, Plus, Server, Star, Stethoscope, Trash2, XCircle } from "lucide-react";
+import { BookOpen, CheckCircle2, HardDrive, Link2, Loader2, MinusCircle, Pencil, Plug, Plus, Server, Star, Stethoscope, Trash2, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -41,6 +41,8 @@ export function QrStorages() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [del, setDel] = useState<QrStorage | null>(null);
   const [diagFor, setDiagFor] = useState<QrStorage | null>(null);
+  const relink = useQrAction(async (id: number) => (await qrApi.post<{ done: number; failed: unknown[] }>("files/relink", { storage_id: id })).data,
+    (r) => t("relinkDone", { done: r.done, failed: r.failed.length }));
   const diagnose = useQrAction(async (id: number) => (await qrApi.post<DiagResult>(`storages/${id}/diagnose`)).data);
   const test = useQrAction(async (id: number) => (await qrApi.post<QrStorage>(`storages/${id}/test`)).data,
     (r) => (r.check?.ok ? t("connOk", { ms: r.check.latency_ms ?? 0 }) : undefined));
@@ -103,6 +105,9 @@ export function QrStorages() {
                         onClick={() => google.mutate(s.id, { onSuccess: (r) => { window.location.href = r.url; } })}>{t("googleConnect")}</Button>
                     </div>
                   )}
+                  {s.kind === "synology" && s.link_mode === "system" && !!s.config.drive_folder && (
+                    <p className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">{t("linkModeWarn")}</p>
+                  )}
                   {s.last_error === "not_configured" && (
                     <Button size="sm" className="w-fit" onClick={() => setDraft({ id: s.id, name: s.name, kind: s.kind, base_folder: s.base_folder,
                       link_mode: s.link_mode, is_fallback: s.is_fallback, enabled: s.enabled, is_primary: s.is_primary, config: { ...s.config } })}>
@@ -118,6 +123,11 @@ export function QrStorages() {
                       link_mode: s.link_mode, is_fallback: s.is_fallback, enabled: s.enabled, is_primary: s.is_primary, config: { ...s.config } })}>
                       <Pencil className="size-4" />{t("edit")}
                     </Button>
+                    {s.link_mode === "provider" && s.files > 0 && (
+                      <Button size="sm" variant="outline" disabled={relink.isPending} title={t("relinkHint")} onClick={() => relink.mutate(s.id)}>
+                        <Link2 className="size-4" />{t("relink")}
+                      </Button>
+                    )}
                     {!s.is_primary && <Button size="sm" variant="outline" onClick={() => primary.mutate(s.id)}><Star className="size-4" />{t("makePrimary")}</Button>}
                     {!s.files && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDel(s)}><Trash2 className="size-4" />{t("delete")}</Button>}
                   </div>
@@ -294,7 +304,8 @@ export function StorageDialog({ draft, setDraft, onSaved }: { draft: Draft | nul
           ))}
           <FormRow label={t("baseFolder")} help={t("baseFolderHint")}><Input value={draft.base_folder} onChange={(e) => setDraft({ ...draft, base_folder: e.target.value })} /></FormRow>
           {kind?.links && (
-            <FormRow label={t("linkMode")} help={t("linkModeHint")}>
+            <FormRow label={t("linkMode")} help={t("linkModeHint")}
+              hint={draft.kind === "synology" && draft.link_mode === "system" && draft.config.drive_folder ? t("linkModeWarn") : undefined}>
               <Select value={draft.link_mode} onValueChange={(v) => setDraft({ ...draft, link_mode: v as Draft["link_mode"] })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ChevronLeft, ChevronRight, Download, FileIcon, Folder, FolderOpen, RefreshCw, RotateCcw, Search, Table2, Trash2, Upload,
+  ChevronLeft, ChevronRight, Download, FileIcon, Folder, FolderOpen, Link2, RefreshCw, RotateCcw, Search, Table2, Trash2, Upload,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
@@ -76,6 +76,8 @@ function FileTable({ trash, onOpen }: { trash: boolean; onOpen: (id: number) => 
   const settings = useQr<QrSettings>(["settings"], "settings");
   const bulk = useQrAction(async (action: string) => (await qrApi.post<{ done: number }>("files/bulk", { ids: selected, action })).data,
     (r) => `${t("done")}: ${r.done}`);
+  const relinkSel = useQrAction(async () => (await qrApi.post<{ done: number; failed: unknown[] }>("files/relink", { ids: selected })).data,
+    (r) => t("relinkDone", { done: r.done, failed: r.failed.length }));
   const items = query.data?.items ?? [];
   const pages = Math.max(1, Math.ceil((query.data?.total ?? 0) / PAGE));
   const allChecked = items.length > 0 && items.every((f) => selected.includes(f.id));
@@ -116,6 +118,10 @@ function FileTable({ trash, onOpen }: { trash: boolean; onOpen: (id: number) => 
           ) : (
             <>
               <Button size="sm" variant="outline" onClick={() => doBulk("retry")}><RefreshCw className="size-4" />{t("bulkRetry")}</Button>
+              <Button size="sm" variant="outline" title={t("relinkHint")} disabled={relinkSel.isPending}
+                onClick={() => relinkSel.mutate(undefined, { onSuccess: () => setSelected([]) })}>
+                <Link2 className="size-4" />{t("relinkOne")}
+              </Button>
               <Button size="sm" variant="outline" onClick={() => doBulk("delete")}><Trash2 className="size-4" />{t("bulkDelete")}</Button>
             </>
           )}
