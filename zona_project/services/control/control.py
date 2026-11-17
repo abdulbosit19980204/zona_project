@@ -99,6 +99,8 @@ class Service:
     health: str = ""
     open: str = ""
     unit: str = ""
+    # systemd rejimida unit o'rniga boshqaruv skripti (masalan pm2'dagi frontend): <ctl> status|start|stop|restart|logs N
+    ctl: list[str] = field(default_factory=list)
     autostart: bool = True
     autorestart: bool = True
     # holat
@@ -184,11 +186,32 @@ class Supervisor:
     def _sudo() -> list[str]:
         return [] if (not hasattr(os, "geteuid") or os.geteuid() == 0) else ["sudo", "-n"]
 
-    def _systemctl(self, action: str, unit: str) -> tuple[bool, str]:
-        r = subprocess.run([*self._sudo(), "systemctl", action, unit], capture_output=True, text=True, timeout=60)
+    def _systemctl(self, action: str, unit: str | Service) -> tuple[bool, str]:
+        if isinstance(unit, Service) and unit.ctl:
+            r = subprocess.run([*self._sudo(), *unit.ctl, action], capture_output=True, text=True, timeout=120)
+        else:
+            unit = unit.unit if isinstance(unit, Service) else unit
+            r = subprocess.run([*self._sudo(), "systemctl", action, unit], capture_output=True, text=True, timeout=60)
         return r.returncode == 0, (r.stderr or r.stdout).strip()
 
+    def _ctl_status(self, s: Service) -> None:
+        """Boshqaruv skripti JSON qaytaradi: {"state": running|stopped|crashed, "pid", "restarts", "uptime"}"""
+        r = subprocess.run([*self._sudo(), *s.ctl, "status"], capture_output=True, text=True, timeout=20)
+        try:
+            data = json.loads(r.stdout or "{}")
+        except ValueError:
+            data = {"state": "unknown"}
+        s.state = data.get("state") or "unknown"
+        s.ext_pid = data.get("pid") or None
+        s.total_restarts = int(data.get("restarts") or 0)
+        up = data.get("uptime")
+        s.started_at = now() - float(up) if up and s.state == "running" else None
+        s.desired = "running" if s.state in ("running", "starting") else "stopped"
+        s.last_error = "" if r.returncode == 0 else (r.stderr or r.stdout).strip()[:300]
+
     def _systemd_status(self, s: Service) -> None:
+        if s.ctl:
+            return self._ctl_status(s)
         r = subprocess.run(["systemctl", "show", s.unit, "--property=ActiveState,SubState,MainPID,NRestarts,ActiveEnterTimestampMonotonic"],
                            capture_output=True, text=True, timeout=10)
         props = dict(line.split("=", 1) for line in r.stdout.splitlines() if "=" in line)
@@ -206,7 +229,7 @@ class Supervisor:
         with s.lock:
             s.desired = "running"
             if self.mode == "systemd":
-                ok, msg = self._systemctl("start", s.unit)
+                ok, msg = self._systemctl("start", s)
                 self.event(f"{s.label}: ishga tushirildi" if ok else f"{s.label}: xato — {msg}")
                 return "ok" if ok else msg
             if s.proc and s.proc.poll() is None:
@@ -225,7 +248,7 @@ class Supervisor:
         with s.lock:
             s.desired = "stopped"
             if self.mode == "systemd":
-                ok, msg = self._systemctl("stop", s.unit)
+                ok, msg = self._systemctl("stop", s)
                 self.event(f"{s.label}: to'xtatildi" if ok else f"{s.label}: xato — {msg}")
                 return "ok" if ok else msg
             if s.proc:
@@ -240,7 +263,7 @@ class Supervisor:
         if self.mode == "systemd":
             with s.lock:
                 s.desired = "running"
-                ok, msg = self._systemctl("restart", s.unit)
+                ok, msg = self._systemctl("restart", s)
                 self.event(f"{s.label}: qayta ishga tushirildi" if ok else f"{s.label}: xato — {msg}")
                 return "ok" if ok else msg
         self.stop(s)
@@ -256,8 +279,8 @@ class Supervisor:
 
     def logs(self, s: Service, n: int = 300) -> list[str]:
         if self.mode == "systemd":
-            r = subprocess.run([*self._sudo(), "journalctl", "-u", s.unit, "-n", str(n), "--no-pager", "-o", "short-iso"],
-                               capture_output=True, text=True, timeout=15)
+            cmd = [*s.ctl, "logs", str(n)] if s.ctl else ["journalctl", "-u", s.unit, "-n", str(n), "--no-pager", "-o", "short-iso"]
+            r = subprocess.run([*self._sudo(), *cmd], capture_output=True, text=True, timeout=15)
             return (r.stdout or r.stderr).splitlines()
         return list(s.logs)[-n:]
 

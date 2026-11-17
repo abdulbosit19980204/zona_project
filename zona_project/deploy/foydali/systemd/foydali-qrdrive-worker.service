@@ -1,0 +1,19 @@
+[Unit]
+Description=Foydali — QR Drive worker (fayllar navbati, saqlash joyiga yuklash)
+After=network.target
+
+[Service]
+User=foydali
+Group=foydali
+WorkingDirectory=__SRC__/services/qrdrive
+EnvironmentFile=/etc/foydali/foydali-qrdrive.env
+ExecStart=__SRC__/services/qrdrive/.venv/bin/python -m qrdrive.worker.main
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/foydali
+
+[Install]
+WantedBy=multi-user.target

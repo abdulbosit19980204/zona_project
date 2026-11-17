@@ -1,0 +1,22 @@
+[Unit]
+Description=Foydali (foydali.xisobchim.uz) — Zona backend: Django + Channels, gunicorn/uvicorn, 127.0.0.1:8020
+After=network.target
+
+[Service]
+User=foydali
+Group=foydali
+WorkingDirectory=__SRC__/backend
+EnvironmentFile=/etc/foydali/foydali.env
+ExecStart=__SRC__/.venv/bin/gunicorn -c /etc/foydali/foydali-gunicorn.conf.py config.asgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/foydali
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+[Unit]
+Description=Foydali — bazalarning kunlik zaxira nusxasi (/var/lib/foydali/backups)
+
+[Service]
+Type=oneshot
+User=foydali
+Group=foydali
+ExecStart=/usr/bin/python3 __SRC__/deploy/foydali/foydali-backup.py

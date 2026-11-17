@@ -1,0 +1,17 @@
+[Unit]
+Description=Foydali — servislar boshqaruv markazi (127.0.0.1:8920, https://foydali.xisobchim.uz/control/)
+After=network.target
+
+[Service]
+User=foydali
+Group=foydali
+WorkingDirectory=__SRC__
+EnvironmentFile=/etc/foydali/foydali-control.env
+Environment=CONTROL_MODE=systemd
+ExecStart=/usr/bin/python3 __SRC__/services/control/control.py --no-autostart
+Restart=always
+RestartSec=3
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

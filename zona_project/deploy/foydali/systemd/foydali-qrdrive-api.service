@@ -1,0 +1,20 @@
+[Unit]
+Description=Foydali — QR Drive API (FastAPI, 127.0.0.1:8120)
+After=network.target
+# Mustaqil servis: Zona backend yoki bot to'xtasa ham ishlayveradi
+
+[Service]
+User=foydali
+Group=foydali
+WorkingDirectory=__SRC__/services/qrdrive
+EnvironmentFile=/etc/foydali/foydali-qrdrive.env
+ExecStart=__SRC__/services/qrdrive/.venv/bin/python -m qrdrive.main
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/foydali
+
+[Install]
+WantedBy=multi-user.target
