@@ -158,6 +158,12 @@ DEFAULTS: dict[str, Any] = {
     # Havola turi: ask — botda tugmalar (Public / Private); public / private — har doim shu
     # Telegram'da ro'yxatdan o'tish majburiy: F.I.Sh., telefon (kontakt), bo'lim, lavozim -> keyin kirish so'rovi
     "registration_required": True,
+    # Yangi foydalanuvchini tasdiqlash: manual — admin tasdiqlaydi (panel yoki botdagi tugma) | auto — ro'yxatdan o'tgach darhol
+    "approval_mode": "manual",
+    # Bot adminlari: @username yoki Telegram ID (vergul bilan). Ular botda hamma ma'lumotni oladi va so'rovlarni tasdiqlaydi
+    "bot_admins": "@abdulbosit_tatu",
+    "admin_notify": {"request": True, "approved": True, "files": True, "failed": True, "storage": True,
+                     "quota": True, "expiring": True, "daily": True},
     # Shu nomdagi fayl qayta yuborilsa: ask — so'rash | replace — eskisini yangilash (QR o'zgarmaydi) | new — yangi fayl
     "replace_mode": "ask",
     # Arxiv (zip, tar) yuborilsa: ask — so'rash | archive — arxiv holida | folder — ochib papka qilib (bitta QR)
@@ -206,7 +212,7 @@ async def load(session: AsyncSession, fresh: bool = False) -> dict[str, Any]:
     for row in (await session.execute(select(Setting))).scalars():
         if row.key in SECRET_KEYS:
             data[row.key] = decrypt(row.secret_enc)
-        elif row.key in ("qr_style", "notify") and isinstance(row.value, dict):
+        elif row.key in ("qr_style", "notify", "admin_notify") and isinstance(row.value, dict):
             data[row.key] = {**DEFAULTS[row.key], **row.value}
         elif row.key == "filename_template" and row.value == OLD_FILENAME_TEMPLATE:
             data[row.key] = DEFAULTS["filename_template"]  # eski standart -> asl nom boshida

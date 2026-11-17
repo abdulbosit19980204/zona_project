@@ -52,6 +52,7 @@ function renderTpl(tpl: string, original = "Ariza.pdf") {
 }
 
 const NOTIFY_KEYS = ["failed", "storage", "quota", "request", "expiring", "daily"] as const;
+const ADMIN_NOTIFY_KEYS = ["request", "approved", "files", "failed", "storage", "quota", "expiring", "daily"] as const;
 
 export function QrSettingsPage() {
   const t = useQt();
@@ -141,6 +142,15 @@ export function QrSettingsPage() {
                   <span>{t("regRequired")}<span className="block text-xs text-muted-foreground">{t("regRequiredHint")}</span></span>
                   <Switch checked={cur.registration_required ?? true} onCheckedChange={(x) => set("registration_required", x)} />
                 </label>
+                <FormRow label={t("approvalMode")} hint={t("approvalModeHint")}>
+                  <Select value={cur.approval_mode ?? "manual"} onValueChange={(x) => set("approval_mode", x as QrSettings["approval_mode"])}>
+                    <SelectTrigger className="w-full sm:w-80"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">{t("ap_manual")}</SelectItem>
+                      <SelectItem value="auto">{t("ap_auto")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormRow>
                 <label className="flex items-center justify-between gap-3 text-sm">{t("apiLocal")}
                   <Switch checked={!!cur.bot_api_local} onCheckedChange={(x) => set("bot_api_local", x)} /></label>
                 <div className="flex items-center gap-3 border-t pt-3">
@@ -315,7 +325,20 @@ export function QrSettingsPage() {
             </TabsContent>
 
             <TabsContent value="notify">
+              <Card className="mb-4 grid max-w-2xl gap-4 p-5">
+                <FormRow label={t("botAdmins")} hint={t("botAdminsHint")}>
+                  <Input value={cur.bot_admins ?? ""} onChange={(e) => set("bot_admins", e.target.value)} placeholder="@abdulbosit_tatu, 123456789" />
+                </FormRow>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("adminNotifyTitle")}</div>
+                {ADMIN_NOTIFY_KEYS.map((k) => (
+                  <label key={k} className="flex items-center justify-between gap-3 text-sm">
+                    {t((k === "approved" || k === "files" ? `an_${k}` : `n_${k}`) as QKey)}
+                    <Switch checked={cur.admin_notify?.[k] ?? true} onCheckedChange={(x) => set("admin_notify", { ...cur.admin_notify, [k]: x })} />
+                  </label>
+                ))}
+              </Card>
               <Card className="grid max-w-2xl gap-4 p-5">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("watchChatsTitle")}</div>
                 <FormRow label={t("notifyChats")} hint={t("notifyChatsHint")}>
                   <Input value={cur.notify_chat_ids} onChange={(e) => set("notify_chat_ids", e.target.value)} placeholder="123456789, 987654321" />
                 </FormRow>

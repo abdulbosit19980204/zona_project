@@ -19,7 +19,7 @@ from ...core.security import Principal
 from ...db.models import Employee, FileRecord, Storage, TgAccount, TgAccountHistory
 from ...db.session import get_session
 from ...services import accounts, qr
-from ...services.audit import add_audit
+from ...services.audit import add_audit, notify
 from ...services.files import serialize
 from ...services.telegram import TelegramClient
 from ..deps import admin, viewer
@@ -325,6 +325,8 @@ class ApproveBody(BaseModel):
 async def approve(acc_id: int, body: ApproveBody, session: AsyncSession = Depends(get_session), user: Principal = Depends(admin)):
     acc = await _acc(session, acc_id)
     emp = await accounts.approve_as_new(session, acc, user.username, body.model_dump())
+    notify(session, "access_approved", f"Tasdiqlandi: {emp.full_name}", f"Panel: {user.username} · papka: {emp.folder}",
+           level="success", audience="bot", link="/qr/employees")
     await session.commit()
     await _tell(session, acc, "approved")
     return {"employee_id": emp.id}
@@ -340,6 +342,8 @@ async def attach(acc_id: int, body: AttachBody, session: AsyncSession = Depends(
     acc = await _acc(session, acc_id)
     emp = await _emp(session, body.employee_id)
     await accounts.attach_existing(session, acc, emp, user.username, body.replace)
+    notify(session, "access_approved", f"Biriktirildi: {acc.display} → {emp.full_name}", f"Panel: {user.username}",
+           level="success", audience="bot", link="/qr/employees")
     await session.commit()
     await _tell(session, acc, "approved")
     return {"ok": True}
@@ -354,6 +358,8 @@ async def reject(acc_id: int, body: RejectBody, session: AsyncSession = Depends(
     acc = await _acc(session, acc_id)
     acc.status = "blocked" if body.block else "rejected"
     add_audit(session, "request.blocked" if body.block else "request.rejected", actor=user.username, target=acc.display)
+    notify(session, "access_rejected", f"{'Bloklandi' if body.block else 'Rad etildi'}: {acc.display}", f"Panel: {user.username}",
+           level="warning", audience="bot", link="/qr/requests")
     await session.commit()
     return {"ok": True}
 

@@ -24,7 +24,7 @@ from ..core.logging import trace_id
 from ..db.models import ApiKey, FileEvent, FileRecord, Storage, SystemLink, TgAccount, WebhookDelivery
 from ..storage import registry
 from ..storage.base import RemoteFile, join
-from . import archive, qr
+from . import admins, archive, qr
 from .accounts import employee_folder, unique_folder
 from .audit import notify
 from .files import create_link, serialize, sha256_of, spool_path
@@ -400,6 +400,37 @@ async def _deliver(ctx: Ctx, duplicate: bool = False) -> None:
                 await ctx.tg.delete_message(rec.tg_chat_id, rec.tg_status_msg_id)
 
 
+def _size(n: int | None) -> str:
+    n = n or 0
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return ""
+
+
+async def _admin_notice(ctx: Ctx, duplicate: bool) -> None:
+    """Bot adminlariga: kim, qaysi fayl, qayerga saqlandi va havolasi (adminning o'z fayli bundan mustasno)."""
+    rec = ctx.rec
+    if rec.account_id:
+        acc = await ctx.session.get(TgAccount, rec.account_id)
+        if admins.is_admin(acc, ctx.settings):
+            return
+    who = rec.employee.full_name if rec.employee else (rec.external_user or rec.actor or rec.source)
+    label = {"replaced": "♻️ Fayl yangilandi", "unchanged": "ℹ️ O'zgarmagan fayl qayta yuborildi",
+             "folder": "📂 Yangi papka"}.get(ctx.mode, "ℹ️ Takroriy fayl" if duplicate else "📄 Yangi fayl")
+    lines = [f"👤 {who}" + (f" · {rec.source}" if rec.source != "telegram" else "")]
+    if ctx.mode == "folder":
+        lines.append(f"{len(rec.items or [])} ta fayl · {_size(rec.size or sum(int(i.get('size') or 0) for i in rec.items or []))}")
+    else:
+        lines.append(_size(rec.size) + (f" · v{rec.version}" if ctx.mode == "replaced" else ""))
+    lines += [f"📁 {rec.remote_path}", ("🔒 " if rec.link_visibility == "private" else "🌐 ") + (rec.link_url or "")]
+    if rec.caption:
+        lines.append(f"💬 {rec.caption[:200]}")
+    notify(ctx.session, "file_replaced" if ctx.mode == "replaced" else "file_delivered", f"{label}: {rec.original_name}",
+           "\n".join(lines), level="success", link=f"/qr/files?file={rec.id}", audience="bot", data={"file_id": rec.id})
+
+
 async def enqueue_webhook(session: AsyncSession, rec: FileRecord, event: str) -> None:
     if not rec.api_key_id:
         return
@@ -480,6 +511,7 @@ async def process(session: AsyncSession, file_id: int, tg: TelegramClient | None
                                                            FileRecord.status == "merged"))
         rec.status, rec.error_kind, rec.error_text = "delivered", "", ""
         rec.finished_at, rec.locked_until, rec.next_attempt_at = _now(), None, None
+        await _admin_notice(ctx, duplicate=dup is not None)
         if rec.temp_path:
             ctx.cleanup.append(Path(rec.temp_path))
             rec.temp_path = ""

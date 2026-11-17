@@ -153,3 +153,16 @@ SDK va aiogram plagini: [sdk/python/README.md](sdk/python/README.md).
     oldindan yuklab olinadi. Papka rejimida bitta Drive kutishi (~6 s) — fayllar soniga bog'liq emas.
 21. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
     oqim testlari va jonli QA (Next.js proksi orqali) ishlatildi.
+22. **Bot adminlari** (Sozlamalar → Bildirishnomalar → «Bot adminlari», standart: `@abdulbosit_tatu`). Admin
+    ro'yxatdan o'tish va tasdiqlashni kutmaydi. Botga quyidagilar keladi:
+    - kirish so'rovlari to'liq ma'lumot bilan (F.I.Sh., telefon, bo'lim, lavozim, Telegram ID/username) va
+      **✅ Tasdiqlash / ❌ Rad etish / ⛔ Bloklash** tugmalari bilan;
+    - har bir saqlangan fayl: kim, hajmi, qayerga saqlangani va havolasi;
+    - xatolar, saqlash joyi holati, kunlik hisobot.
+
+    Buyruqlar: `/stats`, `/pending`, `/mode`. Har bir turni alohida o'chirish mumkin. Adminga xabar borishi uchun u
+    botda kamida bir marta `/start` bosgan bo'lishi kerak (Telegram qoidasi). Faylma-fayl xabarlar panel
+    qo'ng'iroqchasiga tushmaydi (`audience=bot`).
+23. **Tasdiqlash rejimi** (`approval_mode`): `manual` — admin tasdiqlaydi (panel yoki botdagi tugma); `auto` —
+    ro'yxatdan o'tgan foydalanuvchi darhol faollashadi va adminlarga «Avtomatik tasdiqlandi» xabari boradi.
+    Rejimni almashtirish eski so'rovlarni tasdiqlamaydi — ular `/pending`da qoladi.

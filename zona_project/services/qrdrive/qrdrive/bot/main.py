@@ -14,17 +14,17 @@ from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import (BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
+from aiogram.types import (BotCommand, BotCommandScopeChat, BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
                            ReplyKeyboardMarkup, ReplyKeyboardRemove, TelegramObject)
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from .. import settings_store
 from ..core.config import config
 from ..core.logging import setup_logging
 from ..db.models import Employee, FileRecord, TgAccount
 from ..db.session import session_scope
-from ..services import accounts, qr, system
-from ..services.audit import add_audit
+from ..services import accounts, admins, qr, system
+from ..services.audit import add_audit, notify
 from ..services.archive import is_archive
 from ..services.files import enqueue, find_previous, refresh_link
 from ..services.naming import safe_name
@@ -84,6 +84,7 @@ class AccountMiddleware(BaseMiddleware):
         async with session_scope() as s:
             settings = await settings_store.load(s)
             acc, created = await accounts.touch(s, user.model_dump(), registration=bool(settings.get("registration_required", True)))
+            await admins.ensure_admin_access(s, acc, settings)  # admin ro'yxatdan o'tish va tasdiqlashni kutmaydi
             await s.commit()
             data.update(session=s, acc=acc, created=created, settings=settings)
             return await handler(event, data)
@@ -104,8 +105,12 @@ async def gate(msg: Message, s, acc: TgAccount, created: bool, settings: dict[st
         return False
     if state == "pending":
         if created:
-            accounts.request_notification(s, acc)
             add_audit(s, "request.new", actor=str(acc.telegram_id), actor_kind="bot", target=acc.display)
+            if await admins.auto_approve(s, acc, settings):
+                await s.commit()
+                await msg.answer(t(settings, acc, "approved"))
+                return True
+            accounts.request_notification(s, acc)
             await s.commit()
             await msg.answer(t(settings, acc, "request_sent", id=acc.telegram_id))
         else:
@@ -129,7 +134,12 @@ async def cmd_start(msg: Message, command: CommandObject, session, acc: TgAccoun
             return
     if not await gate(msg, session, acc, created, settings):
         return
-    await msg.answer(t(settings, acc, "start", name=acc.first_name or acc.display, max_mb=settings.get("max_file_mb", 100)))
+    text = t(settings, acc, "start", name=acc.first_name or acc.display, max_mb=settings.get("max_file_mb", 100))
+    if admins.is_admin(acc, settings):
+        text += "\n\n" + ADMIN_HELP
+        with suppress(Exception):  # admin buyruqlari shu chat menyusida ko'rinadi
+            await msg.bot.set_my_commands(BASE_COMMANDS + ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=msg.chat.id))
+    await msg.answer(text)
 
 
 @on("message", Command("id"))
@@ -139,7 +149,10 @@ async def cmd_id(msg: Message, acc: TgAccount, settings: dict[str, Any]):
 
 @on("message", Command("help"))
 async def cmd_help(msg: Message, acc: TgAccount, settings: dict[str, Any]):
-    await msg.answer(t(settings, acc, "help"))
+    text = t(settings, acc, "help")
+    if admins.is_admin(acc, settings):
+        text += "\n\n" + ADMIN_HELP
+    await msg.answer(text)
 
 
 @on("message", Command("lang"))
@@ -271,9 +284,13 @@ async def reg_callback(cb: CallbackQuery, session, acc: TgAccount, settings: dic
         return
     await collect_profile(bot, acc)
     acc.status, acc.reg_state, acc.registered_at = "pending", "", datetime.now(timezone.utc)
-    accounts.request_notification(session, acc)
     add_audit(session, "request.new", actor=str(acc.telegram_id), actor_kind="bot", target=(acc.reg_data or {}).get("full_name") or acc.display,
               details={"phone": acc.phone, **{k: v for k, v in (acc.reg_data or {}).items() if k != "full_name"}})
+    if await admins.auto_approve(session, acc, settings):
+        await session.commit()
+        await cb.message.edit_text(t(settings, acc, "approved"))
+        return
+    accounts.request_notification(session, acc)
     await session.commit()
     await cb.message.edit_text(t(settings, acc, "reg_sent"))
 
@@ -576,6 +593,125 @@ async def cb_visibility(cb: CallbackQuery, session, acc: TgAccount, settings: di
     await apply_choice(cb, session, acc, settings, parts[1], "file", parts[2])
 
 
+# ---------------- bot adminlari ----------------
+ADMIN_HELP = ("👑 Admin buyruqlari:\n/stats — tizim holati\n/pending — kutilayotgan so'rovlar (tasdiqlash tugmalari bilan)\n"
+              "/mode — tasdiqlash rejimi (avtomatik / qo'lda)\n\nYangi so'rovlar, saqlangan fayllar, xatolar va "
+              "saqlash joyi holati shu chatga avtomatik keladi.")
+BASE_COMMANDS = [BotCommand(command="start", description="Boshlash"), BotCommand(command="myfiles", description="Oxirgi fayllarim"),
+                 BotCommand(command="id", description="Telegram ID"), BotCommand(command="lang", description="Til / Язык"),
+                 BotCommand(command="help", description="Yordam")]
+ADMIN_COMMANDS = [BotCommand(command="stats", description="Tizim holati"),
+                  BotCommand(command="pending", description="Kutilayotgan so'rovlar"),
+                  BotCommand(command="mode", description="Tasdiqlash rejimi")]
+MODE_LABEL = {"auto": "🤖 Avtomatik — ro'yxatdan o'tgan foydalanuvchi darhol faollashadi",
+              "manual": "👤 Qo'lda — har bir so'rovni admin tasdiqlaydi"}
+
+
+def _decision_kb(acc_id: int) -> InlineKeyboardMarkup:
+    return _ikb([[("✅ Tasdiqlash", f"adm:ok:{acc_id}"), ("❌ Rad etish", f"adm:no:{acc_id}")],
+                 [("⛔ Bloklash", f"adm:block:{acc_id}")]])
+
+
+async def admin_only(event: Message | CallbackQuery, acc: TgAccount | None = None, settings: dict[str, Any] | None = None) -> bool:
+    return admins.is_admin(acc, settings or {})
+
+
+@on("message", Command("admin"), admin_only)
+async def cmd_admin(msg: Message):
+    await msg.answer(ADMIN_HELP)
+
+
+@on("message", Command("stats"), admin_only)
+async def cmd_stats(msg: Message, session):
+    await msg.answer(await admins.stats_text(session))
+
+
+@on("message", Command("pending"), admin_only)
+async def cmd_pending(msg: Message, session):
+    rows = (await session.execute(select(TgAccount).where(TgAccount.status == "pending")
+                                  .order_by(TgAccount.id.desc()).limit(10))).scalars().all()
+    if not rows:
+        return await msg.answer("✅ Kutilayotgan so'rov yo'q.")
+    await msg.answer(f"⏳ Kutilayotgan so'rovlar: {len(rows)}" + (" (oxirgi 10 tasi)" if len(rows) == 10 else ""))
+    for a in rows:
+        await msg.answer(accounts.describe(a), reply_markup=_decision_kb(a.id))
+
+
+def _mode_kb(current: str) -> InlineKeyboardMarkup:
+    return _ikb([[(("● " if current == m else "") + MODE_LABEL[m].split(" — ")[0], f"mode:{m}")] for m in admins.MODES])
+
+
+@on("message", Command("mode"), admin_only)
+async def cmd_mode(msg: Message, settings: dict[str, Any]):
+    current = settings.get("approval_mode") or "manual"
+    await msg.answer(f"Tasdiqlash rejimi:\n{MODE_LABEL.get(current, current)}", reply_markup=_mode_kb(current))
+
+
+@on("callback_query", F.data.startswith("mode:"), admin_only)
+async def cb_mode(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str, Any]):
+    mode = cb.data.split(":", 1)[1]
+    if mode not in admins.MODES:
+        return await cb.answer()
+    changes = await settings_store.save(session, {"approval_mode": mode})
+    if changes:
+        add_audit(session, "settings.update", actor=f"@{acc.username or acc.telegram_id}", actor_kind="bot",
+                  target="approval_mode", details={"approval_mode": list(changes["approval_mode"])})
+        await session.commit()
+    await cb.answer("Saqlandi")
+    pending = (await session.execute(select(func.count()).select_from(TgAccount).where(TgAccount.status == "pending"))).scalar_one()
+    note = f"\n\nℹ️ {pending} ta eski so'rov kutmoqda — /pending" if mode == "auto" and pending else ""
+    if cb.message:
+        with suppress(Exception):
+            await cb.message.edit_text(f"Tasdiqlash rejimi:\n{MODE_LABEL[mode]}{note}", reply_markup=_mode_kb(mode))
+
+
+@on("callback_query", F.data.startswith("adm:"), admin_only)
+async def cb_decision(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str, Any], bot: Bot):
+    parts = cb.data.split(":")
+    target = await session.get(TgAccount, int(parts[2])) if len(parts) == 3 and parts[2].isdigit() else None
+    if target is None or parts[1] not in ("ok", "no", "block"):
+        return await cb.answer()
+    if target.status != "pending":
+        await cb.answer("Bu so'rov allaqachon ko'rib chiqilgan", show_alert=True)
+        if cb.message:
+            with suppress(Exception):
+                await cb.message.edit_reply_markup(reply_markup=None)
+        return
+    actor = f"@{acc.username}" if acc.username else str(acc.telegram_id)
+    if parts[1] == "ok":
+        emp = await accounts.approve_as_new(session, target, actor, {})
+        short, result = "✅ Tasdiqlandi", f"✅ Tasdiqlandi ({actor}) · papka: {emp.folder}"
+        notify(session, "access_approved", f"Tasdiqlandi: {emp.full_name}", f"Admin: {actor}", level="success",
+               audience="bot", link="/qr/employees")
+    else:
+        block = parts[1] == "block"
+        target.status = "blocked" if block else "rejected"
+        add_audit(session, "request.blocked" if block else "request.rejected", actor=actor, actor_kind="bot", target=target.display)
+        short = "⛔ Bloklandi" if block else "❌ Rad etildi"
+        result = f"{short} ({actor})"
+        notify(session, "access_rejected", f"{short}: {target.display}", f"Admin: {actor}", level="warning",
+               audience="bot", link="/qr/requests")
+    await session.commit()
+    await cb.answer(short)
+    if parts[1] == "ok":
+        with suppress(Exception):
+            await bot.send_message(target.telegram_id, t(settings, target, "approved"))
+    if cb.message:
+        with suppress(Exception):
+            await cb.message.edit_text(f"{cb.message.text or ''}\n\n{result}", reply_markup=None)
+
+
+async def set_commands(bot: Bot) -> None:
+    """Buyruqlar menyusi: hamma uchun oddiy, adminlar chatida — admin buyruqlari ham."""
+    with suppress(Exception):
+        await bot.set_my_commands(BASE_COMMANDS)
+    async with session_scope() as s:
+        chats = await admins.chat_ids(s, await settings_store.load(s))
+    for chat in chats:
+        with suppress(Exception):
+            await bot.set_my_commands(BASE_COMMANDS + ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=chat))
+
+
 @on("message")
 async def other(msg: Message, session, acc: TgAccount, created: bool, settings: dict[str, Any]):
     if not await gate(msg, session, acc, created, settings):
@@ -600,6 +736,7 @@ class BotService:
         self.dp.callback_query.outer_middleware(AccountMiddleware())
         self.dp.include_router(build_router())
         self.state: dict[str, Any] = {"status": "starting"}
+        self.bg: set[asyncio.Task] = set()
 
     async def _settings(self) -> dict[str, Any]:
         async with session_scope() as s:
@@ -641,6 +778,7 @@ class BotService:
             try:
                 me = await bot.get_me()
                 self.state = {"status": "polling", "username": me.username}
+                self.bg.add(asyncio.create_task(set_commands(bot)))  # fonda — pollingni kechiktirmaydi
                 log.info("bot ulandi: @%s", me.username)
                 await self.dp.start_polling(bot, handle_signals=False, allowed_updates=["message", "callback_query"])
             except Exception as e:  # noqa: BLE001

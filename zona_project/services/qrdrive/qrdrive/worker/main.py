@@ -22,9 +22,9 @@ from ..core.crypto import decrypt, sign_webhook
 from ..core.errors import human
 from ..core.logging import setup_logging
 from ..db.models import (ApiKey, ApiRequest, AuditLog, FileEvent, FileRecord, Heartbeat, IdempotencyKey, Notification,
-                         Storage, WebhookDelivery)
+                         Storage, TgAccount, WebhookDelivery)
 from ..db.session import session_scope
-from ..services import pipeline, system
+from ..services import admins, pipeline, system
 from ..services.audit import NOTIFY_GROUP, add_audit, notify
 from ..services.telegram import TelegramClient
 from ..storage import registry
@@ -135,15 +135,17 @@ class Worker:
 
     # ---------------- bildirishnomalar (Telegram) ----------------
     async def notifications(self) -> None:
+        """Yangi bildirishnomalar Telegram'ga: kuzatuv chatlariga (notify) va bot adminlariga (admin_notify, to'liq)."""
         async with session_scope() as s:
-            settings = await settings_store.load(s)
             pending = (await s.execute(select(Notification).where(Notification.sent.is_(False))
-                                       .order_by(Notification.id).limit(20))).scalars().all()
+                                       .order_by(Notification.id).limit(50))).scalars().all()
             if not pending:
                 return
-            chats = settings_store.parse_ids(settings.get("notify_chat_ids", ""))
-            groups = settings.get("notify") or {}
-            if not chats or not settings.get("bot_token"):
+            settings = await settings_store.load(s)
+            watch = settings_store.parse_ids(settings.get("notify_chat_ids", ""))
+            admin_chats = await admins.chat_ids(s, settings)
+            groups, admin_groups = settings.get("notify") or {}, settings.get("admin_notify") or {}
+            if not settings.get("bot_token") or not (watch or admin_chats):
                 for n in pending:
                     n.sent = True  # yuboriladigan joy yo'q — faqat panelda qoladi
                 await s.commit()
@@ -151,12 +153,32 @@ class Worker:
             icon = {"error": "🔴", "warning": "🟠", "success": "🟢"}
             async with TelegramClient.from_settings(settings) as tg:
                 for n in pending:
-                    if groups.get(NOTIFY_GROUP.get(n.kind, ""), True):
-                        for chat in chats:
-                            with suppress(Exception):
-                                await tg.send_message(chat, f"{icon.get(n.level, '🔵')} {n.title}\n{n.body}".strip())
                     n.sent = True
+                    group = NOTIFY_GROUP.get(n.kind, "")
+                    text = f"{icon.get(n.level, '🔵')} {n.title}\n{n.body}".strip()
+                    targets: dict[int, dict | None] = {}
+                    if n.audience != "bot" and groups.get(group, True):
+                        targets.update({c: None for c in watch})
+                    if admin_groups.get(group, True):
+                        markup = await self._admin_markup(s, n)
+                        targets.update({c: markup for c in admin_chats})
+                    for chat, markup in targets.items():
+                        with suppress(Exception):
+                            await tg.send_message(chat, text[:4000], reply_markup=markup)
             await s.commit()
+
+    @staticmethod
+    async def _admin_markup(s, n: Notification) -> dict | None:
+        """Kirish so'rovi — adminga tasdiqlash tugmalari (so'rov hali ochiq bo'lsa)."""
+        acc_id = (n.data or {}).get("account_id")
+        if n.kind != "access_request" or not acc_id:
+            return None
+        acc = await s.get(TgAccount, int(acc_id))
+        if acc is None or acc.status != "pending":
+            return None
+        return {"inline_keyboard": [[{"text": "✅ Tasdiqlash", "callback_data": f"adm:ok:{acc.id}"},
+                                     {"text": "❌ Rad etish", "callback_data": f"adm:no:{acc.id}"}],
+                                    [{"text": "⛔ Bloklash", "callback_data": f"adm:block:{acc.id}"}]]}
 
     # ---------------- saqlash joylari ----------------
     async def storages(self) -> None:

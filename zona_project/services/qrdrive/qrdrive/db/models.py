@@ -230,6 +230,9 @@ class Notification(Base):
     link: Mapped[str] = mapped_column(String(300), default="")
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     sent: Mapped[bool] = mapped_column(Boolean, default=False)  # Telegram'ga yuborildimi
+    # all — panel + Telegram; bot — faqat bot adminlariga (masalan har bir yangi fayl), panelda ko'rinmaydi
+    audience: Mapped[str] = mapped_column(String(8), default="all")
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=True)  # masalan {"account_id": 5}
 
 
 class ApiKey(Base):

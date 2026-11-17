@@ -187,8 +187,10 @@ async def audit_export(q: str = "", actor_kind: str = "", action: str = "", date
 # ---------------- bildirishnomalar ----------------
 @router.get("/notifications")
 async def notifications(session: AsyncSession = Depends(get_session), _: Principal = Depends(viewer)):
-    rows = (await session.execute(select(Notification).order_by(Notification.id.desc()).limit(50))).scalars()
-    unread = (await session.execute(select(func.count()).select_from(Notification).where(Notification.read.is_(False)))).scalar_one()
+    panel = Notification.audience != "bot"  # «bot» — faqat bot adminlari uchun (masalan har bir yangi fayl)
+    rows = (await session.execute(select(Notification).where(panel).order_by(Notification.id.desc()).limit(50))).scalars()
+    unread = (await session.execute(select(func.count()).select_from(Notification).where(
+        Notification.read.is_(False), panel))).scalar_one()
     pending = (await session.execute(select(func.count()).select_from(TgAccount).where(TgAccount.status == "pending"))).scalar_one()
     failed = (await session.execute(select(func.count()).select_from(FileRecord).where(
         FileRecord.status == "failed", FileRecord.deleted_at.is_(None)))).scalar_one()

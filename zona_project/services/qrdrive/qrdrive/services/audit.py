@@ -21,9 +21,12 @@ def add_audit(session: AsyncSession, action: str, *, actor: str = "", actor_kind
 NOTIFY_GROUP = {
     "file_failed": "failed", "storage_down": "storage", "storage_up": "storage", "quota": "quota",
     "access_request": "request", "link_expiring": "expiring", "daily_report": "daily",
+    "access_approved": "approved", "access_auto": "approved", "access_rejected": "approved",
+    "file_delivered": "files", "file_replaced": "files",
 }
 
 
-def notify(session: AsyncSession, kind: str, title: str, body: str = "", *, level: str = "info", link: str = "") -> None:
-    """Panelga yoziladi; Telegram'ga worker yuboradi (sozlamada yoqilgan bo'lsa)."""
-    session.add(Notification(kind=kind, title=title, body=body, level=level, link=link))
+def notify(session: AsyncSession, kind: str, title: str, body: str = "", *, level: str = "info", link: str = "",
+           audience: str = "all", data: dict[str, Any] | None = None) -> None:
+    """Panelga yoziladi (audience="bot" bo'lsa — yo'q); Telegram'ga worker yuboradi: kuzatuv chatlariga va bot adminlariga."""
+    session.add(Notification(kind=kind, title=title[:300], body=body, level=level, link=link, audience=audience, data=data or {}))

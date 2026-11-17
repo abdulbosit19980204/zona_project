@@ -114,7 +114,7 @@ export interface QrStyle { size: number; fg: string; bg: string; logo: boolean; 
 export interface QrSettings {
   setup_done: boolean; company_name: string; public_base_url: string; bot_username: string; bot_api_url: string; bot_api_local: boolean;
   max_file_mb: number; allowed_types: string; folder_template: string; filename_template: string; link_expire_days: number;
-  registration_required: boolean; visibility_mode: "ask" | "public" | "private";
+  registration_required: boolean; approval_mode: "manual" | "auto"; bot_admins: string; admin_notify: Record<string, boolean>; visibility_mode: "ask" | "public" | "private";
   multi_mode: "ask" | "folder" | "separate"; replace_mode: "ask" | "replace" | "new"; archive_mode: "ask" | "archive" | "folder"; archive_max_files: number; archive_max_mb: number; default_visibility: "public" | "private"; visibility_timeout_min: number;
   duplicate_policy: "reuse" | "upload"; auto_fallback: boolean; qr_style: QrStyle; bot_texts: Record<string, Record<string, string>>;
   default_lang: string; timezone: string; notify_chat_ids: string; notify: Record<string, boolean>; daily_report_time: string;

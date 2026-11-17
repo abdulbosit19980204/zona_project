@@ -22,7 +22,7 @@ from ...core.errors import TelegramError
 from ...core.security import Principal
 from ...db.models import ApiKey, Employee, FileRecord, Storage, WebhookDelivery
 from ...db.session import get_session
-from ...services import qr
+from ...services import admins, qr
 from ...services.audit import add_audit
 from ...services.naming import validate_template
 from ...services.telegram import TelegramClient
@@ -260,6 +260,11 @@ async def patch_settings(body: dict[str, Any], session: AsyncSession = Depends(g
             raise HTTPException(400, "Shablonda noma'lum o'zgaruvchi bor. Ruxsat etilganlar: {xodim} {bo'lim} {yyyy} {mm} {dd} {sana} {vaqt} {asl_nom}")
     if "max_file_mb" in values:
         values["max_file_mb"] = max(1, min(int(values["max_file_mb"]), 2000))
+    if "approval_mode" in values and values["approval_mode"] not in ("manual", "auto"):
+        raise HTTPException(400, "Tasdiqlash rejimi: manual yoki auto")
+    if "bot_admins" in values:  # «@ali, 123» ko'rinishiga keltiriladi
+        ids, names = admins.parse(str(values["bot_admins"]))
+        values["bot_admins"] = ", ".join([f"@{n}" for n in sorted(names)] + [str(i) for i in sorted(ids)])
     if "bot_token" in values and values["bot_token"]:
         try:
             current = await settings_store.load(session)

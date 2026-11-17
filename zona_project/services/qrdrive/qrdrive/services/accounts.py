@@ -78,15 +78,35 @@ async def access_state(session: AsyncSession, acc: TgAccount) -> str:
     return "blocked"
 
 
+def describe(acc: TgAccount) -> str:
+    """Admin uchun foydalanuvchi haqida to'liq ma'lumot (bildirishnoma matni)."""
+    reg = acc.reg_data or {}
+    tg = (acc.profile or {}).get("telegram") or {}
+    lines = [f"👤 {reg.get('full_name') or acc.display}",
+             f"🆔 {acc.telegram_id}" + (f" · @{acc.username}" if acc.username else "")]
+    tg_name = f"{acc.first_name} {acc.last_name}".strip()
+    if tg_name and tg_name != reg.get("full_name"):
+        lines.append(f"Telegram ismi: {tg_name}")
+    if acc.phone:
+        lines.append(f"📱 {acc.phone}")
+    if reg.get("department"):
+        lines.append(f"🏢 {reg['department']}")
+    if reg.get("position"):
+        lines.append(f"💼 {reg['position']}")
+    extra = [x for x in (f"til: {tg['language_code']}" if tg.get("language_code") else "", "⭐ Premium" if acc.is_premium else "") if x]
+    if extra:
+        lines.append(" · ".join(extra))
+    bio = ((acc.profile or {}).get("chat") or {}).get("bio")
+    if bio:
+        lines.append(f"Bio: {bio}")
+    return "\n".join(lines)
+
+
 def request_notification(session: AsyncSession, acc: TgAccount) -> None:
     reg = acc.reg_data or {}
     who = reg.get("full_name") or acc.display
-    details = [f"Telegram ID: {acc.telegram_id}" + (f", @{acc.username}" if acc.username else "")]
-    if acc.phone:
-        details.append(f"Tel: {acc.phone}")
-    if reg.get("department") or reg.get("position"):
-        details.append(" · ".join(x for x in (reg.get("department"), reg.get("position")) if x))
-    notify(session, "access_request", f"Yangi kirish so'rovi: {who}", "\n".join(details), level="info", link="/qr/requests")
+    notify(session, "access_request", f"Yangi kirish so'rovi: {who}", describe(acc), level="info", link="/qr/requests",
+           data={"account_id": acc.id})
 
 
 def employee_folder(emp: Employee, acc: TgAccount | None) -> str:
