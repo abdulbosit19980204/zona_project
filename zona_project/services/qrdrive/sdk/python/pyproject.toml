@@ -1,0 +1,16 @@
+[project]
+name = "qrdrive-sdk"
+version = "0.1.0"
+description = "QR Drive Python SDK: fayl yuklash, havola va QR olish; aiogram 3 plagini."
+requires-python = ">=3.10"
+dependencies = ["httpx>=0.27"]
+
+[project.optional-dependencies]
+aiogram = ["aiogram>=3.0"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["qrdrive_sdk*"]

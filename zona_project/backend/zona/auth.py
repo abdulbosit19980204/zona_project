@@ -8,8 +8,16 @@ from rest_framework_simplejwt.tokens import RefreshToken
 AUTHENTICATION = [JWTAuthentication, SessionAuthentication]
 
 
+def sso_claims(user):
+    """Tokenga qo'shiladigan ma'lumot: boshqa servislar (QR Drive) foydalanuvchi va rolni shundan biladi."""
+    from .permissions import role_of
+    return {"username": user.username, "name": user.get_full_name() or user.username, "zrole": role_of(user) or "viewer"}
+
+
 def issue_tokens(user):
     refresh = RefreshToken.for_user(user)
+    for key, value in sso_claims(user).items():
+        refresh[key] = value
     return {"access": str(refresh.access_token), "refresh": str(refresh)}
 
 

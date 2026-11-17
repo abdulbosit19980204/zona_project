@@ -23,9 +23,31 @@
       "main": "Asosiy",
       "management": "Boshqaruv",
       "analytics": "Tahlil",
-      "system": "Tizim"
+      "system": "Tizim",
+      "qrMain": "Fayllar va xodimlar",
+      "qrReliability": "Nazorat",
+      "qrConfig": "Sozlash"
     },
-    "staff": "Kontaktlar"
+    "staff": "Kontaktlar",
+    "qrOverview": "Bosh sahifa",
+    "qrFiles": "Fayllar",
+    "qrEmployees": "Xodimlar",
+    "qrRequests": "Kirish soʻrovlari",
+    "qrErrors": "Xatolar markazi",
+    "qrAudit": "Jurnal",
+    "qrSystem": "Tizim holati",
+    "qrStorages": "Saqlash joylari",
+    "qrSettings": "Bot sozlamalari",
+    "qrApi": "API va integratsiyalar",
+    "qrSetup": "Sozlash ustasi",
+    "modules": {
+      "zona": "Masʼuliyat platformasi",
+      "qrdrive": "QR Drive"
+    },
+    "serviceDown": "Servis ishlamayapti",
+    "qrAnalytics": "Analitika",
+    "controlCenter": "Servislar markazi",
+    "controlCenterHint": "Barcha servislarni ishga tushirish va nazorat qilish"
   },
   "top": {
     "search": "Qidirish…",

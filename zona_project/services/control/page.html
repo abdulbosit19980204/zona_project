@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Servislar markazi</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f6f9;--card:#fff;--fg:#14161a;--mut:#667085;--bd:#e4e7ec;--acc:#2563eb;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--chip:#eef2f7;--code:#0f172a;--codefg:#e2e8f0}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0b0d10;--card:#15181d;--fg:#e8eaed;--mut:#98a2b3;--bd:#262a31;--acc:#60a5fa;--ok:#22c55e;--warn:#f59e0b;--bad:#f87171;--chip:#1e232b;--code:#05070a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 20px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--bd)}
+h1{font-size:17px;margin:0}
+.sub{color:var(--mut);font-size:12px}
+.sp{flex:1}
+button{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--fg);padding:7px 12px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+button:hover{border-color:var(--acc)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button.dan{color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+main{max-width:1200px;margin:0 auto;padding:20px}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px}
+.stat b{display:block;font-size:22px;font-family:ui-monospace,monospace}
+.stat span{color:var(--mut);font-size:12px}
+.grp{margin:22px 0 8px;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.top{display:flex;align-items:center;gap:10px}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--mut)}
+.dot.running{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+.dot.starting{background:var(--warn);animation:p 1s infinite}
+.dot.crashed,.dot.failed{background:var(--bad)}
+.dot.external{background:var(--acc)}
+@keyframes p{50%{opacity:.35}}
+.name{font-weight:600}
+.state{margin-left:auto;font-size:12px;padding:2px 9px;border-radius:99px;background:var(--chip)}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--mut);font-size:12px}
+.meta code{font-family:ui-monospace,monospace;color:var(--fg)}
+.err{color:var(--bad);font-size:12px}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+.acts a{color:var(--acc);text-decoration:none;font-size:13px;align-self:center;margin-left:auto}
+.events{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 16px;margin-top:22px;max-height:240px;overflow:auto;font-size:13px}
+.events div{padding:3px 0;border-bottom:1px dashed var(--bd)}
+.events time{color:var(--mut);font-family:ui-monospace,monospace;font-size:12px;margin-right:8px}
+dialog{width:min(1000px,96vw);height:min(80vh,800px);border:1px solid var(--bd);border-radius:14px;padding:0;background:var(--card);color:var(--fg)}
+dialog::backdrop{background:#0008}
+.dh{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--bd)}
+pre{margin:0;height:calc(100% - 58px);overflow:auto;padding:12px 16px;background:var(--code);color:var(--codefg);font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}
+.toast{position:fixed;bottom:16px;right:16px;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;box-shadow:0 6px 24px #0003;display:none}
+@media (max-width:420px){.grid{grid-template-columns:1fr}header{padding:12px 16px}main{padding:16px}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Servislar boshqaruv markazi</h1>
+    <div class="sub" id="sub">Yuklanmoqda…</div>
+  </div>
+  <div class="sp"></div>
+  <button class="pri" onclick="all_('start')">▶ Hammasini ishga tushirish</button>
+  <button onclick="all_('restart')">⟳ Hammasini qayta ishga tushirish</button>
+  <button class="dan" onclick="confirm('Barcha servislar to\'xtatilsinmi?') && all_('stop')">■ Hammasini to'xtatish</button>
+  <form method="post" action="logout" style="margin:0"><button type="submit">Chiqish</button></form>
+</header>
+<main>
+  <div class="sum" id="sum"></div>
+  <div id="groups"></div>
+  <div class="grp">So'nggi hodisalar</div>
+  <div class="events" id="events"></div>
+</main>
+<dialog id="dlg">
+  <div class="dh"><b id="dlgTitle"></b><span class="sp"></span>
+    <label class="sub"><input type="checkbox" id="follow" checked> oxiriga kuzatish</label>
+    <button onclick="loadLogs()">Yangilash</button><button onclick="dlg.close()">Yopish</button></div>
+  <pre id="logs"></pre>
+</dialog>
+<div class="toast" id="toast"></div>
+<script>
+const STATE = {running:"Ishlayapti", starting:"Ishga tushmoqda", stopped:"To'xtatilgan", stopping:"To'xtamoqda",
+  crashed:"Yiqilgan", failed:"Ishga tushmadi", external:"Tashqi jarayon", unknown:"Noma'lum"};
+let current = null, logTimer = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function dur(sec){ if(sec==null) return "—"; const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60);
+  return d? `${d} kun ${h} soat` : h? `${h} soat ${m} daq` : m? `${m} daq` : `${sec} s`; }
+function toast(t){ const el=$("toast"); el.textContent=t; el.style.display="block"; clearTimeout(el._t); el._t=setTimeout(()=>el.style.display="none",3500); }
+async function api(path, method="GET"){
+  const r = await fetch(path, {method, headers: method==="POST" ? {"X-Control":"1"} : {}, credentials:"same-origin"});
+  if (r.status === 401) { location.href = "login"; throw new Error("auth"); }
+  return r.json();
+}
+function render(d){
+  $("sub").textContent = `${d.host} · rejim: ${d.mode === "systemd" ? "systemd (server)" : "jarayonlar"} · ${new Date(d.time).toLocaleTimeString()}`;
+  const crashed = d.services.filter(s => ["crashed","failed"].includes(s.state)).length;
+  const unhealthy = d.services.filter(s => s.health && s.health.ok === false && s.state === "running").length;
+  $("sum").innerHTML = `
+    <div class="stat"><b>${d.summary.running} / ${d.summary.total}</b><span>Ishlayotgan servislar</span></div>
+    <div class="stat"><b style="color:${crashed?'var(--bad)':'inherit'}">${crashed}</b><span>Yiqilgan</span></div>
+    <div class="stat"><b style="color:${unhealthy?'var(--warn)':'inherit'}">${unhealthy}</b><span>Javob bermayotgan</span></div>
+    <div class="stat"><b>${d.services.reduce((n,s)=>n+s.restarts,0)}</b><span>Avtomatik qayta ishga tushirishlar</span></div>`;
+  const groups = {};
+  d.services.forEach(s => (groups[s.group || "Servislar"] ??= []).push(s));
+  $("groups").innerHTML = Object.entries(groups).map(([g, list]) => `<div class="grp">${esc(g)}</div><div class="grid">${list.map(card).join("")}</div>`).join("");
+  $("events").innerHTML = d.events.length ? d.events.map(e => `<div><time>${new Date(e.at).toLocaleTimeString()}</time>${esc(e.text)}</div>`).join("") : '<span class="sub">Hodisa yo\'q</span>';
+}
+function card(s){
+  const h = s.health ? (s.health.ok ? `javob: ${s.health.ms} ms` : (s.health.ok === false ? '<span style="color:var(--bad)">javob bermayapti</span>' : "tekshirilmoqda")) : "";
+  const on = ["running","starting","external"].includes(s.state);
+  return `<div class="card">
+    <div class="top"><span class="dot ${s.state}"></span><span class="name">${esc(s.label)}</span><span class="state">${STATE[s.state] || s.state}</span></div>
+    <div class="meta"><span><code>${esc(s.name)}</code></span>${s.port?`<span>port <code>${s.port}</code></span>`:""}${s.pid?`<span>pid <code>${s.pid}</code></span>`:""}
+      <span>ishlash vaqti: ${dur(s.uptime)}</span>${s.restarts?`<span>qayta: ${s.restarts}</span>`:""}${h?`<span>${h}</span>`:""}
+      ${s.last_exit!=null && !on?`<span>chiqish kodi: ${s.last_exit}</span>`:""}</div>
+    ${s.error?`<div class="err">${esc(s.error)}</div>`:""}
+    <div class="acts">
+      <button ${on?"disabled":""} onclick="act('${s.name}','start')">▶ Ishga tushirish</button>
+      <button ${s.state==="external"?"disabled":""} onclick="act('${s.name}','restart')">⟳ Qayta</button>
+      <button class="dan" ${!on||s.state==="external"?"disabled":""} onclick="act('${s.name}','stop')">■ To'xtatish</button>
+      <button onclick="openLogs('${s.name}','${esc(s.label).replace(/'/g,"")}')">Loglar</button>
+      ${s.open?`<a href="${esc(s.open)}" target="_blank" rel="noreferrer">Ochish ↗</a>`:""}
+    </div></div>`;
+}
+async function refresh(){ try { render(await api("api/status")); } catch(e){ if(e.message!=="auth") $("sub").textContent = "Nazoratchi bilan aloqa yo'q"; } }
+async function act(name, action){ const r = await api(`api/services/${name}/${action}`, "POST"); if (r.result && r.result!=="ok") toast(r.result); render(r); }
+async function all_(action){ toast("Bajarilmoqda…"); render(await api(`api/all/${action}`, "POST")); toast("Tayyor"); }
+async function loadLogs(){ if(!current) return; const r = await api(`api/services/${current}/logs?n=800`); const pre=$("logs");
+  pre.textContent = r.lines.join("\n") || "Log hali yo'q"; if ($("follow").checked) pre.scrollTop = pre.scrollHeight; }
+function openLogs(name, label){ current = name; $("dlgTitle").textContent = `${label} — loglar`; $("dlg").showModal(); loadLogs();
+  clearInterval(logTimer); logTimer = setInterval(() => $("dlg").open ? loadLogs() : clearInterval(logTimer), 2000); }
+refresh(); setInterval(refresh, 3000);
+</script>
+</body>
+</html>

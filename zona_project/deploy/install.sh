@@ -51,6 +51,7 @@ if [[ ! -f "$ENVFILE" ]]; then
   sed -e "s|__DOMAIN__|$DOMAIN|g" \
       -e "s|DJANGO_SECRET_KEY=__GENERATE__|DJANGO_SECRET_KEY=$(gen)|" \
       -e "s|ZONA_ENCRYPTION_KEY=__GENERATE__|ZONA_ENCRYPTION_KEY=$(gen)|" \
+      -e "s|ZONA_JWT_SECRET=__GENERATE__|ZONA_JWT_SECRET=$(gen)|" \
       deploy/env.example > "$ENVFILE"
   # HTTPS hali yo'q — avval http orqali ishlashi uchun; certbot'dan keyin 1 qiling
   sed -i "s|^DJANGO_SECURE_COOKIES=1|DJANGO_SECURE_COOKIES=0|" "$ENVFILE"
@@ -87,9 +88,15 @@ run_manage collectstatic --noinput
 step "Frontend (npm ci + build)"
 sudo -u zona -H bash -c "cd $APP/frontend && npm ci && BACKEND_URL=http://127.0.0.1:8000 npm run build"
 
+step "QR Drive mikroservisi (api, worker, bot)"
+DOMAIN="$DOMAIN" bash "$APP/deploy/qrdrive-setup.sh"
+
+step "Servislar boshqaruv markazi"
+bash "$APP/deploy/control-setup.sh"
+
 step "systemd servislari"
 cp deploy/systemd/zona-*.service deploy/systemd/zona-backup.timer /etc/systemd/system/
-chmod +x deploy/backup.sh deploy/update.sh
+chmod +x deploy/backup.sh deploy/update.sh deploy/qrdrive-setup.sh deploy/control-setup.sh
 systemctl daemon-reload
 systemctl enable --now zona-backend zona-frontend zona-backup.timer
 systemctl restart zona-backend zona-frontend
@@ -105,6 +112,7 @@ step "Tekshiruv"
 sleep 3
 curl -fsS -o /dev/null -w "  backend: HTTP %{http_code}\n" http://127.0.0.1:8000/api/ || echo "  backend javob bermadi: journalctl -u zona-backend -n 50"
 curl -fsS -o /dev/null -w "  frontend: HTTP %{http_code}\n" http://127.0.0.1:3000/login || echo "  frontend javob bermadi: journalctl -u zona-frontend -n 50"
+curl -fsS -o /dev/null -w "  qrdrive:  HTTP %{http_code}\n" http://127.0.0.1:8100/qrdrive/health || echo "  qrdrive javob bermadi: journalctl -u qrdrive-api -n 50"
 
 cat <<EOF
 
@@ -113,5 +121,7 @@ Tayyor: http://$DOMAIN
   HTTPS (domen bo'lsa):  sudo apt install -y certbot python3-certbot-nginx && sudo certbot --nginx -d $DOMAIN
                          keyin $ENVFILE da DJANGO_SECURE_COOKIES=1 qiling va: sudo systemctl restart zona-backend
   Yangilash:             sudo bash $APP/deploy/update.sh
-  Jurnal:                journalctl -u zona-backend -f
+  Servislar markazi:     http://$DOMAIN/control/  (parol: sudo grep CONTROL_PASSWORD /etc/zona/control.env)
+  QR Drive:              http://$DOMAIN/qr  (chap menyu: «QR Drive» → «Sozlash ustasi»)
+  Jurnal:                journalctl -u zona-backend -f   |   journalctl -u qrdrive-api -u qrdrive-worker -u qrdrive-bot -f
 EOF

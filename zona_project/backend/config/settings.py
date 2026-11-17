@@ -43,6 +43,8 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": False,
+    # Mikroservislar (QR Drive) access tokenni shu kalit bilan o'zi tekshiradi — Zona'ga so'rov yubormasdan
+    "SIGNING_KEY": os.environ.get("ZONA_JWT_SECRET") or SECRET_KEY,
 }
 
 MIDDLEWARE = [

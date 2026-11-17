@@ -23,6 +23,12 @@ run_manage collectstatic --noinput
 # Yangi qo'shilgan matnlar tarjima xotirasida bo'lsa — darhol tarjima qilinadi (AI'siz)
 run_manage shell -c "\"from zona import translation; print('tarjima:', translation.translate_pending(use_ai=False))\"" || true
 
+echo "==> QR Drive mikroservisi"
+bash "$APP/deploy/qrdrive-setup.sh"
+
+echo "==> Servislar boshqaruv markazi"
+bash "$APP/deploy/control-setup.sh"
+
 echo "==> Frontend build"
 sudo -u zona -H bash -c "cd $APP/frontend && npm ci && BACKEND_URL=http://127.0.0.1:8000 npm run build"
 
@@ -31,5 +37,5 @@ cp deploy/systemd/zona-*.service deploy/systemd/zona-backup.timer /etc/systemd/s
 systemctl daemon-reload
 systemctl restart zona-backend zona-frontend
 sleep 3
-systemctl --no-pager --lines=0 status zona-backend zona-frontend | grep -E "Active:|●"
+systemctl --no-pager --lines=0 status zona-backend zona-frontend qrdrive-api qrdrive-worker qrdrive-bot | grep -E "Active:|●"
 echo "Tayyor."

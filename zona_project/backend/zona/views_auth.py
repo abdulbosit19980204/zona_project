@@ -8,7 +8,6 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .api import zona_api
@@ -41,13 +40,18 @@ def login(request):
 
 @zona_api(["POST"], [AllowAny])
 def refresh(request):
-    """{refresh} -> {access, refresh}. Eski refresh token bekor qilinadi (rotatsiya)."""
-    ser = TokenRefreshSerializer(data={"refresh": str(request.data.get("refresh", ""))})
+    """{refresh} -> {access, refresh}. Eski refresh token bekor qilinadi (rotatsiya).
+    Yangi tokenlar foydalanuvchining joriy roli bilan qayta chiqariladi (rol o'zgarsa, darhol kuchga kiradi)."""
+    from django.contrib.auth import get_user_model
     try:
-        ser.is_valid(raise_exception=True)
+        old = RefreshToken(str(request.data.get("refresh", "")))
+        user = get_user_model().objects.filter(pk=old.get("user_id"), is_active=True).first()
+        if user is None:
+            raise TokenError("user")
+        old.blacklist()
     except (TokenError, InvalidToken):
         return Response({"detail": "Seans tugagan, qayta kiring."}, status=status.HTTP_401_UNAUTHORIZED)
-    return Response(ser.validated_data)
+    return Response(issue_tokens(user))
 
 
 @zona_api(["POST"], [AllowAny])

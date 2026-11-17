@@ -1,17 +1,18 @@
 "use client";
 
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { use, useEffect, type ReactNode } from "react";
 import { browser } from "react-dom";
 
 import { Sidebar } from "@/components/layout/sidebar";
-import { Topbar } from "@/components/layout/topbar";
+import { MiniTopbar, Topbar } from "@/components/layout/topbar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOrg } from "@/hooks/use-org";
 import { useRealtime } from "@/hooks/use-realtime";
 import { I18nProvider } from "@/i18n/provider";
+import { moduleOf } from "@/lib/nav";
 import { errorMessage } from "@/lib/api/client";
 import { useAuth } from "@/stores/auth";
 
@@ -33,30 +34,38 @@ export function ShellSkeleton() {
   );
 }
 
+function ZonaDown({ error, retry }: { error: unknown; retry: () => void }) {
+  return (
+    <div className="grid h-full place-items-center p-8">
+      <div className="max-w-md text-center">
+        <AlertTriangle className="mx-auto mb-3 size-8 text-warning" />
+        <div className="font-medium">Masʼuliyat platformasi backendi bilan aloqa yoʻq</div>
+        <p className="mt-1 text-sm text-muted-foreground">{errorMessage(error)}</p>
+        <p className="mt-1 text-sm text-muted-foreground">Boshqa servislar (masalan, QR Drive) ishlashda davom etadi — chap menyudan oching.</p>
+        <Button className="mt-4" variant="outline" onClick={retry}><RefreshCw className="size-4" />Qayta urinish</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Har bir servis mustaqil: Zona backendi ishlamasa ham menyu va QR Drive sahifalari ochiladi. */
 function Shell({ children }: { children: ReactNode }) {
   const org = useOrg();
+  const pathname = usePathname();
   const me = org.data?.me;
   const live = useRealtime(me && !me.anonymous ? me.username : undefined);
+  const qrPage = moduleOf(pathname).key === "qrdrive";
 
-  if (org.isPending) return <ShellSkeleton />;
-  if (org.isError || !org.model) {
-    return (
-      <div className="grid h-full place-items-center p-8">
-        <div className="max-w-md text-center">
-          <AlertTriangle className="mx-auto mb-3 size-8 text-warning" />
-          <div className="font-medium">Backend bilan aloqa yo&apos;q</div>
-          <p className="mt-1 text-sm text-muted-foreground">{errorMessage(org.error)}</p>
-          <Button className="mt-4" variant="outline" onClick={() => org.refetch()}><RefreshCw className="size-4" />Qayta urinish</Button>
-        </div>
-      </div>
-    );
-  }
+  if (org.isPending && !qrPage) return <ShellSkeleton />;
+  const zonaOk = !!org.model;
   return (
     <div className="flex h-full">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar live={live} />
-        <main className="relative min-h-0 flex-1">{children}</main>
+        {zonaOk ? <Topbar live={live} /> : <MiniTopbar />}
+        <main className="relative min-h-0 flex-1">
+          {zonaOk || qrPage ? children : <ZonaDown error={org.error} retry={() => org.refetch()} />}
+        </main>
       </div>
     </div>
   );

@@ -25,39 +25,41 @@ api.interceptors.request.use((config) => {
    Bir vaqtda kelgan 401 javoblar bitta yangilash so'rovini kutadi. */
 let refreshing: Promise<string | null> | null = null;
 
-async function refreshAccess(): Promise<string | null> {
+export async function refreshAccess(): Promise<string | null> {
   const refresh = useAuth.getState().refresh;
   if (!refresh) return null;
   try {
     const { data } = await axios.post<TokenPair>(`${API_BASE}/auth/refresh/`, { refresh });
     useAuth.getState().setTokens(data);
     return data.access;
-  } catch {
-    useAuth.getState().logout();
+  } catch (error) {
+    // Seans haqiqatan tugagan bo'lsa chiqaramiz; Zona vaqtincha ishlamasa (tarmoq/5xx) — seans saqlanadi
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    if (status && status < 500) useAuth.getState().logout();
     return null;
   }
 }
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const config = error.config as RetriableConfig | undefined;
-    if (error.response?.status === 401 && config && !config._retry && !config.url?.startsWith("auth/")) {
-      config._retry = true;
-      refreshing ??= refreshAccess().finally(() => {
-        refreshing = null;
-      });
-      const token = await refreshing;
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-        return api(config);
-      }
+/** 401 bo'lsa tokenni bir marta yangilab, so'rovni qaytaradi (QR Drive klienti ham shundan foydalanadi). */
+export async function retryWithRefresh(error: AxiosError, instance: typeof api) {
+  const config = error.config as RetriableConfig | undefined;
+  if (error.response?.status === 401 && config && !config._retry && !config.url?.startsWith("auth/")) {
+    config._retry = true;
+    refreshing ??= refreshAccess().finally(() => {
+      refreshing = null;
+    });
+    const token = await refreshing;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      return instance(config);
     }
-    return Promise.reject(error);
-  },
-);
+  }
+  return Promise.reject(error);
+}
+
+api.interceptors.response.use((response) => response, (error: AxiosError) => retryWithRefresh(error, api));
 
 function flatten(value: unknown): string {
   if (typeof value === "string") return value;

@@ -1,0 +1,14 @@
+{
+  "mode": "systemd",
+  "services": [
+    {"name": "zona-backend", "label": "Masʼuliyat platformasi — backend", "group": "Masʼuliyat platformasi",
+     "unit": "zona-backend", "port": 8000, "health": "http://127.0.0.1:8000/api/auth/login/"},
+    {"name": "qrdrive-api", "label": "QR Drive — API", "group": "QR Drive", "unit": "qrdrive-api",
+     "port": 8100, "health": "http://127.0.0.1:8100/qrdrive/health", "open": "/qrdrive/api/docs"},
+    {"name": "qrdrive-worker", "label": "QR Drive — worker (navbat)", "group": "QR Drive", "unit": "qrdrive-worker"},
+    {"name": "qrdrive-bot", "label": "QR Drive — Telegram bot", "group": "QR Drive", "unit": "qrdrive-bot"},
+    {"name": "zona-frontend", "label": "Panel (Next.js)", "group": "Interfeys", "unit": "zona-frontend",
+     "port": 3000, "health": "http://127.0.0.1:3000/login", "open": "/"},
+    {"name": "nginx", "label": "nginx (veb-server)", "group": "Tizim", "unit": "nginx", "health": "http://127.0.0.1/"}
+  ]
+}

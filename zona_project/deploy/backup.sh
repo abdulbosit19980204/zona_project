@@ -22,5 +22,19 @@ if ok != "ok":
 PY
 
 gzip -f "$OUT"
-find "$DIR" -name 'db-*.sqlite3.gz' -mtime +"$KEEP_DAYS" -delete
+
+# QR Drive bazasi (alohida servis — alohida baza)
+QR_DB="${QRDRIVE_DB_PATH:-/var/lib/zona/qrdrive/qrdrive.sqlite3}"
+if [[ -f "$QR_DB" ]]; then
+  QR_OUT="$DIR/qrdrive-$(date +%Y%m%d-%H%M%S).sqlite3"
+  /opt/zona/.venv/bin/python - "$QR_DB" "$QR_OUT" <<'PY'
+import sqlite3, sys
+src, dst = sqlite3.connect(sys.argv[1]), sqlite3.connect(sys.argv[2])
+with dst:
+    src.backup(dst)
+src.close(); dst.close()
+PY
+  gzip -f "$QR_OUT"
+fi
+find "$DIR" \( -name 'db-*.sqlite3.gz' -o -name 'qrdrive-*.sqlite3.gz' \) -mtime +"$KEEP_DAYS" -delete
 echo "Zaxira: $OUT.gz"

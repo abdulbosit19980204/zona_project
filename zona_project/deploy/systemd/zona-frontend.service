@@ -8,6 +8,7 @@ Group=zona
 WorkingDirectory=/opt/zona/frontend
 Environment=NODE_ENV=production
 Environment=BACKEND_URL=http://127.0.0.1:8000
+Environment=QRDRIVE_URL=http://127.0.0.1:8100
 ExecStart=/opt/zona/frontend/node_modules/.bin/next start -H 127.0.0.1 -p 3000
 Restart=always
 RestartSec=3

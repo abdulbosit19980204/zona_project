@@ -117,6 +117,22 @@ til (o'zbek / rus / ingliz), profil menyusi. Rollar rang bilan emas, **chiziq us
 
 AI yoqilmagan bo'lsa ham "Savol kimga?" mahalliy ko'p tilli qidiruv bilan ishlaydi.
 
+## QR Drive (ikkinchi loyiha — mikroservis)
+
+Panelning chap menyusida ikki loyiha: **Masʼuliyat platformasi** va **QR Drive** (har biri ichki menyular bilan).
+QR Drive — alohida servis (FastAPI + o'z bazasi + worker + Telegram bot): xodim botga fayl yuboradi → saqlash joyiga
+tushadi → havola QR kod bilan qaytadi. Boshqa loyihalar uchun REST API, webhook, Python SDK va aiogram plagini bor.
+Batafsil: **[services/qrdrive/README.md](services/qrdrive/README.md)**.
+
+## Hammasini bitta buyruq bilan ishga tushirish
+
+```bash
+start-all.cmd      # Windows        |   ./start-all.sh   # Linux/macOS
+```
+
+Barcha servislar (Zona backend, QR Drive API/worker/bot, panel) ishga tushadi; nazorat sahifasi http://127.0.0.1:8900 —
+holat, start/stop/restart, loglar, yiqilganda avtomatik qayta ishga tushirish. Batafsil: [services/control/README.md](services/control/README.md).
+
 ## Ishlab chiqarish
 
 Ubuntu server (gunicorn + nginx + systemd) uchun tayyor skriptlar va to'liq qo'llanma: **[deploy/README.md](deploy/README.md)**.

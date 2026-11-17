@@ -1,0 +1,20 @@
+[Unit]
+Description=QR Drive Telegram bot (aiogram)
+After=network.target
+# Mustaqil servis: Zona yoki boshqa QR Drive servislari to'xtasa ham ishlayveradi
+
+[Service]
+User=zona
+Group=zona
+WorkingDirectory=/opt/zona/services/qrdrive
+EnvironmentFile=/etc/zona/qrdrive.env
+ExecStart=/opt/zona/services/qrdrive/.venv/bin/qrdrive-bot
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/zona
+
+[Install]
+WantedBy=multi-user.target

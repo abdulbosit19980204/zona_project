@@ -1,6 +1,7 @@
 import {
-  BadgeCheck, Building2, ChartColumn, FileChartColumn, Gauge, Grid3x3, History, LayoutDashboard, ListChecks,
-  MessageCircleQuestion, Network, Orbit, Settings, ShieldAlert, Signpost, Users, UsersRound, Workflow, type LucideIcon,
+  Activity, BadgeCheck, Bot, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
+  LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert,
+  Signpost, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -15,7 +16,7 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-/** Chap menyu: MAIN · MANAGEMENT · ANALYTICS · SYSTEM. */
+/** Masʼuliyat platformasi (Zona) menyusi: MAIN · MANAGEMENT · ANALYTICS · SYSTEM. */
 export const NAV: NavGroup[] = [
   {
     key: "main",
@@ -57,9 +58,65 @@ export const NAV: NavGroup[] = [
   },
 ];
 
-export const ALL_NAV = NAV.flatMap((g) => g.items);
+/** QR Drive mikroservisi menyusi (alohida servis — ishlamasa ham Zona menyusi ishlaydi). */
+export const QR_NAV: NavGroup[] = [
+  {
+    key: "qrMain",
+    items: [
+      { href: "/qr", key: "qrOverview", icon: QrCode },
+      { href: "/qr/files", key: "qrFiles", icon: FolderOpen },
+      { href: "/qr/employees", key: "qrEmployees", icon: Users },
+      { href: "/qr/requests", key: "qrRequests", icon: UserPlus },
+    ],
+  },
+  {
+    key: "qrReliability",
+    items: [
+      { href: "/qr/analytics", key: "qrAnalytics", icon: ChartPie },
+      { href: "/qr/errors", key: "qrErrors", icon: TriangleAlert },
+      { href: "/qr/audit", key: "qrAudit", icon: ScrollText },
+      { href: "/qr/system", key: "qrSystem", icon: Activity },
+    ],
+  },
+  {
+    key: "qrConfig",
+    items: [
+      { href: "/qr/storages", key: "qrStorages", icon: HardDrive },
+      { href: "/qr/settings", key: "qrSettings", icon: Bot },
+      { href: "/qr/api", key: "qrApi", icon: PlugZap },
+      { href: "/qr/setup", key: "qrSetup", icon: Wand2 },
+    ],
+  },
+];
+
+export interface NavModule {
+  key: "zona" | "qrdrive"; // nav.modules.<key>
+  icon: LucideIcon;
+  groups: NavGroup[];
+}
+
+/** Chap menyu: har bir loyiha (vazifa) — alohida ochiladigan menyu, ichida o'z bo'limlari. */
+export const MODULES: NavModule[] = [
+  { key: "zona", icon: Orbit, groups: NAV },
+  { key: "qrdrive", icon: QrCode, groups: QR_NAV },
+];
+
+export const ALL_NAV = MODULES.flatMap((m) => m.groups.flatMap((g) => g.items));
 
 export function activeNav(pathname: string): NavItem | undefined {
   if (pathname === "/") return ALL_NAV[0];
-  return ALL_NAV.filter((i) => i.href !== "/" && pathname.startsWith(i.href)).sort((a, b) => b.href.length - a.href.length)[0];
+  return ALL_NAV.filter((i) => i.href !== "/" && (pathname === i.href || pathname.startsWith(i.href + "/")))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+}
+
+export function moduleOf(pathname: string): NavModule {
+  return pathname === "/qr" || pathname.startsWith("/qr/") ? MODULES[1] : MODULES[0];
+}
+
+export function groupOf(item: NavItem | undefined): { module: NavModule; group: NavGroup } | undefined {
+  for (const mod of MODULES) {
+    const group = mod.groups.find((g) => item && g.items.includes(item));
+    if (group) return { module: mod, group };
+  }
+  return undefined;
 }

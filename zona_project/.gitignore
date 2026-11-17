@@ -17,3 +17,9 @@ node_modules/
 .env
 .env.local
 frontend/.next/
+
+# QR Drive mikroservisi: ishchi ma'lumotlar va muhit
+services/qrdrive/data/
+services/qrdrive/.env
+.pytest_cache/
+services/control/data/

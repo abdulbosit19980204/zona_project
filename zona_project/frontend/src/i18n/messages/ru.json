@@ -23,9 +23,31 @@
       "main": "Главное",
       "management": "Управление",
       "analytics": "Аналитика",
-      "system": "Система"
+      "system": "Система",
+      "qrMain": "Файлы и сотрудники",
+      "qrReliability": "Контроль",
+      "qrConfig": "Настройка"
     },
-    "staff": "Контакты"
+    "staff": "Контакты",
+    "qrOverview": "Главная",
+    "qrFiles": "Файлы",
+    "qrEmployees": "Сотрудники",
+    "qrRequests": "Запросы доступа",
+    "qrErrors": "Центр ошибок",
+    "qrAudit": "Журнал",
+    "qrSystem": "Состояние системы",
+    "qrStorages": "Хранилища",
+    "qrSettings": "Настройки бота",
+    "qrApi": "API и интеграции",
+    "qrSetup": "Мастер настройки",
+    "modules": {
+      "zona": "Платформа ответственности",
+      "qrdrive": "QR Drive"
+    },
+    "serviceDown": "Сервис недоступен",
+    "qrAnalytics": "Аналитика",
+    "controlCenter": "Центр сервисов",
+    "controlCenterHint": "Запуск и контроль всех сервисов"
   },
   "top": {
     "search": "Поиск…",

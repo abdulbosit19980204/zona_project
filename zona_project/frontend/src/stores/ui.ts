@@ -12,6 +12,8 @@ export type MapDir = "LR" | "TB";
 /** Interfeys holati (brauzerda saqlanadi): menyu, til, bo'lim doirasi, xarita sozlamalari. */
 interface UIState {
   sidebarCollapsed: boolean;
+  closedModules: string[]; // chap menyuda yopilgan loyihalar (modullar)
+  toggleModule: (key: string) => void;
   locale: Locale;
   scope: number | null; // tanlangan bo'lim (company selector); null = butun kompaniya
   hiddenRoles: RoleKey[];
@@ -31,6 +33,9 @@ export const useUI = create<UIState>()(
   persist(
     (set) => ({
       sidebarCollapsed: false,
+      closedModules: [],
+      toggleModule: (key) =>
+        set((s) => ({ closedModules: s.closedModules.includes(key) ? s.closedModules.filter((k) => k !== key) : [...s.closedModules, key] })),
       locale: "uz",
       scope: null,
       hiddenRoles: [],

@@ -1,6 +1,21 @@
 # Serverga o'rnatish (Ubuntu + gunicorn + nginx)
 
-Bitta Ubuntu 22.04/24.04 server: **nginx** (80/443) → **Next.js** (127.0.0.1:3000) va **Django/Channels** (gunicorn + uvicorn worker, 127.0.0.1:8000). Baza — SQLite, `/var/lib/zona/db.sqlite3`.
+Bitta Ubuntu 22.04/24.04 server, har bir servis — alohida systemd jarayon (bittasi to'xtasa, qolganlari ishlayveradi):
+
+| Servis | Manzil | Baza |
+|---|---|---|
+| `zona-frontend` — Next.js panel | 127.0.0.1:3000 | — |
+| `zona-backend` — Django/Channels (gunicorn + uvicorn) | 127.0.0.1:8000 | `/var/lib/zona/db.sqlite3` |
+| `qrdrive-api` — QR Drive API (FastAPI) | 127.0.0.1:8100 | `/var/lib/zona/qrdrive/qrdrive.sqlite3` |
+| `qrdrive-worker`, `qrdrive-bot` | — | o'sha QR Drive bazasi |
+
+| `zona-control` — servislar boshqaruv markazi | 127.0.0.1:8900 | — |
+
+**nginx** (80/443): `/` → frontend, `/api/` `/ws/` → Zona, `/qrdrive/` → QR Drive, `/control/` → boshqaruv markazi.
+Batafsil: [services/qrdrive/README.md](../services/qrdrive/README.md), [services/control/README.md](../services/control/README.md).
+
+**Servislar markazi** (`https://<domen>/control/`): hamma servisni bitta tugma bilan ishga tushirish/to'xtatish,
+holati, loglari. Parol: `sudo grep CONTROL_PASSWORD /etc/zona/control.env`.
 
 ## 0. Bazani tayyorlash (lokal kompyuterda)
 
@@ -50,11 +65,14 @@ Avval zaxira → `git pull` → pip → migrate → collectstatic → frontend b
 | Yo'l | Nima |
 |---|---|
 | `/etc/zona/zona.env` | Sozlamalar va kalitlar (namuna: `deploy/env.example`) |
+| `/etc/zona/qrdrive.env` | QR Drive kalitlari (namuna: `deploy/qrdrive.env.example`) |
+| `/var/lib/zona/qrdrive/` | QR Drive bazasi, vaqtinchalik fayllar, logo, o'z zaxiralari |
 | `/var/lib/zona/db.sqlite3` | Ishchi baza |
 | `/var/lib/zona/backups/` | Kunlik zaxira (02:30, 14 kun saqlanadi) |
 | `/opt/zona` | Loyiha papkasiga symlink |
 
-**`ZONA_ENCRYPTION_KEY` ni alohida saqlab qo'ying.** AI kalitlari shu bilan shifrlanadi — yo'qolsa, admin panelda AI kalitlarini qaytadan kiritish kerak bo'ladi.
+**`ZONA_ENCRYPTION_KEY` va `QRDRIVE_MASTER_KEY` ni alohida saqlab qo'ying.** AI kalitlari, bot tokeni va NAS parollari shular bilan shifrlanadi — yo'qolsa, ularni panelda qaytadan kiritish kerak bo'ladi.
+`ZONA_JWT_SECRET` (zona.env) va `QRDRIVE_SSO_SECRET` (qrdrive.env) bir xil bo'lishi shart — `qrdrive-setup.sh` buni o'zi ta'minlaydi.
 
 ## Boshqaruv
 
@@ -62,6 +80,7 @@ Avval zaxira → `git pull` → pip → migrate → collectstatic → frontend b
 systemctl status zona-backend zona-frontend
 journalctl -u zona-backend -f            # backend jurnali
 journalctl -u zona-frontend -f
+journalctl -u qrdrive-api -u qrdrive-worker -u qrdrive-bot -f   # QR Drive (JSON loglar)
 sudo -u zona bash /opt/zona/deploy/backup.sh     # qo'lda zaxira
 systemctl list-timers zona-backup.timer
 ```
@@ -74,6 +93,14 @@ gunzip -c /var/lib/zona/backups/db-YYYYmmdd-HHMMSS.sqlite3.gz | sudo -u zona tee
 sudo rm -f /var/lib/zona/db.sqlite3-wal /var/lib/zona/db.sqlite3-shm
 sudo systemctl start zona-backend
 ```
+
+## QR Drive
+
+O'rnatilgach: panel → chap menyu **QR Drive → Sozlash ustasi** (bot tokeni → StarGroup NAS login/paroli → xodimlar → sinov QR).
+Barcha sozlamalar panelda. Eski kadrlar-bot `.env` fayli: QR Drive → Tizim holati → «Eski bot sozlamalarini import qilish».
+
+20 MB dan katta fayllar uchun lokal Telegram Bot API server kerak (`telegram-bot-api --local`, 127.0.0.1:8081).
+Uni o'rnatgach: panel → Bot sozlamalari → «Botni rasmiy serverdan chiqarish», keyin server manzili va «Lokal rejim».
 
 ## Eslatmalar
 

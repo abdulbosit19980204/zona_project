@@ -13,6 +13,7 @@ import { useTheme } from "next-themes";
 import { useState } from "react";
 
 import { MemberAvatar } from "@/components/common/member-avatar";
+import { QrBell } from "@/components/qrdrive/bell";
 import { TaskDialog } from "@/components/forms/task-dialog";
 import { CommandPalette } from "@/components/layout/command-palette";
 import {
@@ -27,7 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useEvents, useModel } from "@/hooks/use-org";
 import { LOCALES } from "@/i18n/provider";
 import { authApi } from "@/lib/api/endpoints";
-import { activeNav, NAV } from "@/lib/nav";
+import { activeNav, groupOf, moduleOf } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/stores/auth";
 import { useUI, type Locale } from "@/stores/ui";
@@ -75,32 +76,43 @@ function CompanySelector() {
   );
 }
 
-function Crumbs() {
+function Crumbs({ withModel = true }: { withModel?: boolean }) {
   const t = useTranslations("nav");
   const pathname = usePathname();
-  const model = useModel();
   const item = activeNav(pathname);
-  const group = NAV.find((g) => g.items.includes(item ?? g.items[0]));
-  const employeeId = pathname.match(/^\/employees\/(\d+)/)?.[1];
-  const employee = employeeId ? model.member.get(Number(employeeId)) : undefined;
+  const found = groupOf(item);
+  const mod = found?.module ?? moduleOf(pathname);
   return (
     <Breadcrumb className="hidden min-w-0 xl:block">
       <BreadcrumbList className="flex-nowrap whitespace-nowrap">
-        {group && <BreadcrumbItem className="text-muted-foreground">{t(`groups.${group.key}`)}</BreadcrumbItem>}
+        <BreadcrumbItem className="font-medium text-foreground/80">{t(`modules.${mod.key}`)}</BreadcrumbItem>
+        {found && <><BreadcrumbSeparator /><BreadcrumbItem className="text-muted-foreground">{t(`groups.${found.group.key}`)}</BreadcrumbItem></>}
         {item && (
           <>
             <BreadcrumbSeparator />
-            <BreadcrumbItem>{employee ? <Link href={item.href}>{t(item.key)}</Link> : <BreadcrumbPage>{t(item.key)}</BreadcrumbPage>}</BreadcrumbItem>
-          </>
-        )}
-        {employee && (
-          <>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem><BreadcrumbPage>{employee.name}</BreadcrumbPage></BreadcrumbItem>
+            {withModel ? <EmployeeCrumb href={item.href} label={t(item.key)} /> : <BreadcrumbItem><BreadcrumbPage>{t(item.key)}</BreadcrumbPage></BreadcrumbItem>}
           </>
         )}
       </BreadcrumbList>
     </Breadcrumb>
+  );
+}
+
+function EmployeeCrumb({ href, label }: { href: string; label: string }) {
+  const pathname = usePathname();
+  const model = useModel();
+  const employeeId = pathname.match(/^\/employees\/(\d+)/)?.[1];
+  const employee = employeeId ? model.member.get(Number(employeeId)) : undefined;
+  return (
+    <>
+      <BreadcrumbItem>{employee ? <Link href={href}>{label}</Link> : <BreadcrumbPage>{label}</BreadcrumbPage>}</BreadcrumbItem>
+      {employee && (
+        <>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem><BreadcrumbPage>{employee.name}</BreadcrumbPage></BreadcrumbItem>
+        </>
+      )}
+    </>
   );
 }
 
@@ -162,7 +174,7 @@ function Notifications() {
   );
 }
 
-function ThemeSwitcher() {
+export function ThemeSwitcher() {
   const t = useTranslations("top");
   const { theme, setTheme } = useTheme();
   return (
@@ -184,7 +196,7 @@ function ThemeSwitcher() {
   );
 }
 
-function LanguageSwitcher() {
+export function LanguageSwitcher() {
   const t = useTranslations("top");
   const locale = useUI((s) => s.locale);
   const setLocale = useUI((s) => s.setLocale);
@@ -250,6 +262,7 @@ function UserMenu() {
 export function Topbar({ live }: { live: "live" | "connecting" | "offline" }) {
   const t = useTranslations("top");
   const model = useModel();
+  const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   return (
@@ -275,6 +288,7 @@ export function Topbar({ live }: { live: "live" | "connecting" | "offline" }) {
         <span className={cn("size-1.5 rounded-full", live === "live" ? "bg-success shadow-[0_0_8px_var(--success)]" : live === "connecting" ? "bg-muted-foreground" : "bg-warning")} />
         {t(`status.${live}`)}
       </span>
+      {moduleOf(pathname).key === "qrdrive" && <QrBell />}
       <Notifications />
       <ThemeSwitcher />
       <LanguageSwitcher />
@@ -284,6 +298,28 @@ export function Topbar({ live }: { live: "live" | "connecting" | "offline" }) {
       <UserMenu />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <TaskDialog open={taskOpen} onOpenChange={setTaskOpen} />
+    </header>
+  );
+}
+
+/** Zona backendi javob bermaganda: QR Drive sahifalari uchun soddalashtirilgan yuqori panel. */
+export function MiniTopbar() {
+  const t = useTranslations();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const logout = () => {
+    useAuth.getState().logout();
+    qc.clear();
+    router.replace("/login");
+  };
+  return (
+    <header className="glass relative z-30 flex h-16 shrink-0 items-center gap-2.5 border-b px-4 lg:px-5">
+      <Crumbs withModel={false} />
+      <div className="flex-1" />
+      <QrBell />
+      <ThemeSwitcher />
+      <LanguageSwitcher />
+      <Button variant="ghost" size="sm" onClick={logout}><LogOut className="size-4" />{t("top.logout")}</Button>
     </header>
   );
 }

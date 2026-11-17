@@ -23,9 +23,31 @@
       "main": "Main",
       "management": "Management",
       "analytics": "Analytics",
-      "system": "System"
+      "system": "System",
+      "qrMain": "Files & people",
+      "qrReliability": "Monitoring",
+      "qrConfig": "Configuration"
     },
-    "staff": "Contacts"
+    "staff": "Contacts",
+    "qrOverview": "Overview",
+    "qrFiles": "Files",
+    "qrEmployees": "Employees",
+    "qrRequests": "Access requests",
+    "qrErrors": "Error center",
+    "qrAudit": "Audit log",
+    "qrSystem": "System status",
+    "qrStorages": "Storages",
+    "qrSettings": "Bot settings",
+    "qrApi": "API & integrations",
+    "qrSetup": "Setup wizard",
+    "modules": {
+      "zona": "Responsibility platform",
+      "qrdrive": "QR Drive"
+    },
+    "serviceDown": "Service unavailable",
+    "qrAnalytics": "Analytics",
+    "controlCenter": "Service center",
+    "controlCenterHint": "Start and monitor all services"
   },
   "top": {
     "search": "Search…",

@@ -1,0 +1,18 @@
+[Unit]
+Description=Zona: servislar boshqaruv markazi (veb-sahifa, 127.0.0.1:8900)
+After=network.target
+# Boshqa servislarga bog'liq emas: ular to'xtasa ham sahifa ochiladi va ularni qayta ishga tushira oladi
+
+[Service]
+User=zona
+Group=zona
+WorkingDirectory=/opt/zona
+EnvironmentFile=/etc/zona/control.env
+Environment=CONTROL_MODE=systemd
+ExecStart=/usr/bin/python3 /opt/zona/services/control/control.py --no-autostart
+Restart=always
+RestartSec=3
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
