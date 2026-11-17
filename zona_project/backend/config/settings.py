@@ -4,10 +4,14 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+if not DEBUG and SECRET_KEY == "dev-only-change-me":
+    raise ImproperlyConfigured("Ishlab chiqarishda DJANGO_SECRET_KEY ni o'rnating (deploy/env.example ga qarang).")
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "*" if DEBUG else "").split(",") if h]
 CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o]
 
@@ -74,6 +78,9 @@ TEMPLATES = [{
 DATABASES = {"default": {
     "ENGINE": "django.db.backends.sqlite3",
     "NAME": os.environ.get("ZONA_DB_PATH", BASE_DIR / "db.sqlite3"),
+    # WAL: o'qish va yozish bir-birini to'smaydi; IMMEDIATE: parallel yozishda "database is locked" bo'lmaydi
+    "OPTIONS": {"init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
+                "transaction_mode": "IMMEDIATE", "timeout": 20},
 }}
 
 LANGUAGE_CODE = "uz"
@@ -88,3 +95,22 @@ STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Ishlab chiqarish: nginx ortida HTTPS
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    _secure = os.environ.get("DJANGO_SECURE_COOKIES", "1") == "1"  # HTTPS bo'lmasa (faqat IP orqali) — 0
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = _secure
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+
+# Jurnal: systemd/journald orqali ko'rinadi (journalctl -u zona-backend)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"plain": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
+    "root": {"handlers": ["console"], "level": os.environ.get("DJANGO_LOG_LEVEL", "INFO")},
+    "loggers": {"django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False}},
+}

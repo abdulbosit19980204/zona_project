@@ -1,0 +1,9 @@
+[Unit]
+Description=Zona: har kuni 02:30 da baza zaxirasi
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

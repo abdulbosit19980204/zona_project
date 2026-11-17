@@ -9,10 +9,15 @@ import { useAuth } from "@/stores/auth";
 
 import { queryKeys } from "./use-org";
 
-/** WebSocket manzili: NEXT_PUBLIC_WS_URL yoki shu xost, 8000-port (Django/Daphne). */
+/**
+ * WebSocket manzili: NEXT_PUBLIC_WS_URL; bo'lmasa — ishlab chiqishda (next dev, 3000-port) Django'ning 8000-porti,
+ * serverda esa shu domen (nginx /ws/ ni backendga uzatadi).
+ */
 function socketUrl(token: string) {
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  const dev = window.location.port === "3000";
   const base = process.env.NEXT_PUBLIC_WS_URL
-    ?? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:8000/ws/events/`;
+    ?? (dev ? `${proto}://${window.location.hostname}:8000/ws/events/` : `${proto}://${window.location.host}/ws/events/`);
   return `${base}?token=${encodeURIComponent(token)}`;
 }
 

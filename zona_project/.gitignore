@@ -8,3 +8,12 @@ venv/
 backend/db.sqlite3
 backend/staticfiles/
 node_modules/
+
+# Ishchi bazalar va zaxiralar hech qachon git'ga tushmasin (deploy uchun faqat deploy/data/zona.sqlite3)
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+!deploy/data/zona.sqlite3
+.env
+.env.local
+frontend/.next/

@@ -119,17 +119,16 @@ AI yoqilmagan bo'lsa ham "Savol kimga?" mahalliy ko'p tilli qidiruv bilan ishlay
 
 ## Ishlab chiqarish
 
-Backend muhit o'zgaruvchilari: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS`,
-`DJANGO_CSRF_TRUSTED_ORIGINS`, `ZONA_DB_PATH`, `ZONA_ENCRYPTION_KEY`, `ZONA_FRONTEND_URL`, `ZONA_CORS_ORIGINS`.
+Ubuntu server (gunicorn + nginx + systemd) uchun tayyor skriptlar va to'liq qo'llanma: **[deploy/README.md](deploy/README.md)**.
 
 ```bash
-cd backend && daphne -b 0.0.0.0 -p 8000 config.asgi:application
-cd frontend && npm run build && npm start      # BACKEND_URL=http://<backend>:8000
+python backend/manage.py zona_snapshot                                 # joriy bazani deploy/data/ ga (repo private bo'lsin!)
+sudo bash /opt/zona-src/zona_project/deploy/install.sh <domen>         # serverda birinchi marta
+sudo bash /opt/zona/deploy/update.sh                                   # keyingi yangilashlar
 ```
 
-Bir nechta backend jarayoni ishlatilsa, `CHANNEL_LAYERS` ni Redis'ga o'tkazing (`channels-redis`) —
-standart xotiradagi qatlam faqat bitta jarayon uchun. Nginx ortida `/ws/` uchun WebSocket upgrade'ni yoqing
-va frontendga `NEXT_PUBLIC_WS_URL=wss://<domen>/ws/events/` bering.
+Backend bitta jarayonda ishlaydi (xotiradagi channel layer). Bir nechta jarayon kerak bo'lsa, `CHANNEL_LAYERS` ni
+Redis'ga o'tkazing (`channels-redis`).
 
 ## Boshqa Django loyihaga ulash
 

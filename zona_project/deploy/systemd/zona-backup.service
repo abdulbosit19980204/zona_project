@@ -1,0 +1,8 @@
+[Unit]
+Description=Zona: bazaning kunlik zaxira nusxasi
+
+[Service]
+Type=oneshot
+User=zona
+Group=zona
+ExecStart=/bin/bash /opt/zona/deploy/backup.sh

@@ -1,0 +1,21 @@
+[Unit]
+Description=Zona backend (Django + Channels, gunicorn/uvicorn)
+After=network.target
+
+[Service]
+User=zona
+Group=zona
+WorkingDirectory=/opt/zona/backend
+EnvironmentFile=/etc/zona/zona.env
+ExecStart=/opt/zona/.venv/bin/gunicorn -c /opt/zona/deploy/gunicorn.conf.py config.asgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=3
+# xavfsizlik: faqat kerakli joylarga yozish
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/zona
+
+[Install]
+WantedBy=multi-user.target
