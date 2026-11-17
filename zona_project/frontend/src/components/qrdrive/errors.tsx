@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, Lightbulb, RefreshCw, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Lightbulb, RefreshCw, Stethoscope, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -44,6 +45,9 @@ export function QrErrors() {
                       <div className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground"><Lightbulb className="mt-0.5 size-3.5 shrink-0 text-warning" />
                         <span><b className="font-medium text-foreground">{t("whatToDo")}:</b> {text.hint}</span></div>
                     </div>
+                    {(g.kind.startsWith("storage") || g.kind === "not_configured" || g.kind === "no_storage") && (
+                      <Button size="sm" variant="outline" asChild><Link href="/qr/storages"><Stethoscope className="size-4" />{t("diagnose")}</Link></Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => retry.mutate({ kind: g.kind })}><RefreshCw className="size-4" />{t("retryAll")}</Button>
                   </div>
                   <div className="divide-y">

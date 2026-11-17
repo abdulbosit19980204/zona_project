@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, HardDrive, Pencil, Plug, Plus, Server, Star, Trash2, XCircle } from "lucide-react";
+import { BookOpen, CheckCircle2, HardDrive, Loader2, MinusCircle, Pencil, Plug, Plus, Server, Star, Stethoscope, Trash2, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useQr, useQrAction } from "@/hooks/use-qrdrive";
-import { formatBytes, qrApi, qrError, type QrStorage, type StorageKind } from "@/lib/api/qrdrive";
+import { formatBytes, qrApi, qrError, type DiagResult, type QrStorage, type StorageKind } from "@/lib/api/qrdrive";
 import { cn } from "@/lib/utils";
 
 import { ConfirmDialog, Dot, FormRow, QrGuard, fmtDate } from "./common";
@@ -40,6 +40,8 @@ export function QrStorages() {
   const google = useQrAction(async (id: number) => (await qrApi.post<{ url: string }>(`storages/${id}/google/start`)).data);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [del, setDel] = useState<QrStorage | null>(null);
+  const [diagFor, setDiagFor] = useState<QrStorage | null>(null);
+  const diagnose = useQrAction(async (id: number) => (await qrApi.post<DiagResult>(`storages/${id}/diagnose`)).data);
   const test = useQrAction(async (id: number) => (await qrApi.post<QrStorage>(`storages/${id}/test`)).data,
     (r) => (r.check?.ok ? t("connOk", { ms: r.check.latency_ms ?? 0 }) : undefined));
   const primary = useQrAction(async (id: number) => qrApi.post(`storages/${id}/primary`), t("saved"));
@@ -109,6 +111,9 @@ export function QrStorages() {
                   )}
                   <div className="flex flex-wrap gap-1.5">
                     <Button size="sm" variant="outline" disabled={test.isPending} onClick={() => test.mutate(s.id)}><Plug className="size-4" />{t("testConn")}</Button>
+                    <Button size="sm" variant="outline" onClick={() => { setDiagFor(s); diagnose.reset(); diagnose.mutate(s.id); }}>
+                      <Stethoscope className="size-4" />{t("diagnose")}
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => setDraft({ id: s.id, name: s.name, kind: s.kind, base_folder: s.base_folder,
                       link_mode: s.link_mode, is_fallback: s.is_fallback, enabled: s.enabled, is_primary: s.is_primary, config: { ...s.config } })}>
                       <Pencil className="size-4" />{t("edit")}
@@ -123,9 +128,73 @@ export function QrStorages() {
         )}
       </QrGuard>
       <StorageDialog draft={draft} setDraft={setDraft} />
+      <Dialog open={!!diagFor} onOpenChange={(v) => !v && setDiagFor(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("diagTitle")}: {diagFor?.name}</DialogTitle>
+            <DialogDescription>{t("diagDesc")}</DialogDescription>
+          </DialogHeader>
+          <DiagnoseView result={diagnose.data ?? null} pending={diagnose.isPending} />
+          {diagnose.data && !diagnose.data.ok && diagFor && (
+            <Button variant="outline" className="w-fit" onClick={() => { const s = diagFor; setDiagFor(null); setDraft({ id: s.id, name: s.name, kind: s.kind,
+              base_folder: s.base_folder, link_mode: s.link_mode, is_fallback: s.is_fallback, enabled: s.enabled, is_primary: s.is_primary, config: { ...s.config } }); }}>
+              <Pencil className="size-4" />{t("edit")}
+            </Button>
+          )}
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog open={!!del} onOpenChange={(v) => !v && setDel(null)} title={`${t("delete")}: ${del?.name}`} description={t("areYouSure")}
         destructive onConfirm={() => del && remove.mutate(del.id, { onSuccess: () => setDel(null) })} />
     </Page>
+  );
+}
+
+/** Diagnostika natijasi: bosqichlar, xato bo'lsa — sabab, yechim va texnik tafsilot. */
+export function DiagnoseView({ result, pending }: { result: DiagResult | null; pending?: boolean }) {
+  const t = useQt();
+  if (pending) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t("running")}</p>;
+  if (!result) return null;
+  return (
+    <div className="grid gap-2">
+      <div className={cn("rounded-lg border px-3 py-2 text-sm font-medium", result.ok ? "border-success/30 bg-success/5 text-success" : "border-destructive/30 bg-destructive/5 text-destructive")}>
+        {result.ok ? t("diagOk") : t("diagFail")}
+      </div>
+      <ol className="grid gap-1.5">
+        {result.steps.map((s) => {
+          const err = s.error ? errorText(t, s.error) : null;
+          return (
+            <li key={s.key} className={cn("rounded-lg border px-3 py-2 text-sm", s.ok === false && "border-destructive/40")}>
+              <div className="flex items-center gap-2">
+                {s.ok === true ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : s.ok === false
+                  ? <XCircle className="size-4 shrink-0 text-destructive" /> : <MinusCircle className="size-4 shrink-0 text-muted-foreground" />}
+                <span className="font-medium">{t(`diag_${s.key}` as QKey)}</span>
+                <span className="ml-auto truncate text-xs text-muted-foreground" title={s.detail}>{s.ok === null ? t("skipped") : s.detail}</span>
+              </div>
+              {err && (
+                <div className="mt-1.5 grid gap-1 pl-6">
+                  <div className="text-destructive">{err.title}</div>
+                  <div className="text-xs"><b>{t("whatToDo")}:</b> {err.hint}</div>
+                  {s.technical && <details className="text-[11px] text-muted-foreground"><summary className="cursor-pointer">{t("techDetails")}</summary>{s.technical}</details>}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function Guide({ steps }: { steps: string[] }) {
+  const t = useQt();
+  if (!steps.length) return null;
+  return (
+    <details className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+      <summary className="flex cursor-pointer items-center gap-2 font-medium"><BookOpen className="size-4" />{t("guide")}</summary>
+      <ol className="mt-2 grid list-decimal gap-1.5 pl-5 text-[13px] text-muted-foreground">
+        {steps.map((s, i) => <li key={i}>{s}</li>)}
+      </ol>
+    </details>
   );
 }
 
@@ -134,6 +203,8 @@ export function StorageDialog({ draft, setDraft, onSaved }: { draft: Draft | nul
   const kinds = useQr<StorageKind[]>(["storage-kinds"], "storages/kinds");
   const [check, setCheck] = useState<Check>(null);
   const [testing, setTesting] = useState(false);
+  const [diag, setDiag] = useState<DiagResult | null>(null);
+  const [diagPending, setDiagPending] = useState(false);
   const save = useQrAction(async (d: Draft) => {
     const body = { name: d.name, kind: d.kind, base_folder: d.base_folder, link_mode: d.link_mode, is_fallback: d.is_fallback,
       enabled: d.enabled, is_primary: d.is_primary || undefined, config: d.config };
@@ -154,6 +225,24 @@ export function StorageDialog({ draft, setDraft, onSaved }: { draft: Draft | nul
       setTesting(false);
     }
   };
+  const runDiag = async () => {
+    setDiagPending(true);
+    setCheck(null);
+    try {
+      const body = { name: draft.name, kind: draft.kind, base_folder: draft.base_folder, link_mode: draft.link_mode, config: draft.config };
+      if (draft.id) {
+        await qrApi.patch(`storages/${draft.id}`, body);
+        setDiag((await qrApi.post<DiagResult>(`storages/${draft.id}/diagnose`)).data);
+      } else {
+        setDiag((await qrApi.post<DiagResult>("storages/diagnose", body)).data);
+      }
+    } catch (e) {
+      setDiag(null);
+      setCheck({ ok: false, title: qrError(e) });
+    } finally {
+      setDiagPending(false);
+    }
+  };
   const checkText = check && !check.ok ? (check.kind ? errorText(t, { kind: check.kind, title: check.title ?? "", hint: check.hint ?? "" }) : { title: check.title, hint: check.hint }) : null;
 
   return (
@@ -164,11 +253,12 @@ export function StorageDialog({ draft, setDraft, onSaved }: { draft: Draft | nul
           <DialogDescription>{t("stoDesc")}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
+          <Guide steps={kind?.guide ?? []} />
           {!draft.id && (
             <FormRow label={t("stoKind")}>
               <div className="grid grid-cols-2 gap-2">
                 {kinds.data?.map((k) => (
-                  <button key={k.kind} type="button" onClick={() => { setDraft({ ...draft, kind: k.kind, config: {}, link_mode: k.links ? "provider" : "system" }); setCheck(null); }}
+                  <button key={k.kind} type="button" onClick={() => { setDraft({ ...draft, kind: k.kind, config: {}, link_mode: k.links ? "provider" : "system" }); setCheck(null); setDiag(null); }}
                     className={cn("flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm", draft.kind === k.kind && "border-primary bg-primary/5")}>
                     {k.kind === "synology" ? <Server className="size-4" /> : <HardDrive className="size-4" />}{k.label}
                   </button>
@@ -218,6 +308,7 @@ export function StorageDialog({ draft, setDraft, onSaved }: { draft: Draft | nul
             <Switch checked={draft.is_fallback} onCheckedChange={(v) => setDraft({ ...draft, is_fallback: v })} /></label>
           {draft.id && <label className="flex items-center justify-between gap-3 text-sm">{t("enabled")}
             <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} /></label>}
+          <DiagnoseView result={diag} pending={diagPending} />
           {check && (
             <div className={cn("rounded-lg border px-3 py-2 text-sm", check.ok ? "border-success/30 bg-success/5" : "border-destructive/30 bg-destructive/5")}>
               {check.ok ? <span className="flex items-center gap-2 text-success"><CheckCircle2 className="size-4" />{t("connOk", { ms: check.latency_ms ?? 0 })}</span> : (
@@ -228,7 +319,8 @@ export function StorageDialog({ draft, setDraft, onSaved }: { draft: Draft | nul
           )}
         </div>
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={runTest} disabled={testing}><Plug className="size-4" />{t("testConn")}</Button>
+          <Button variant="outline" onClick={runTest} disabled={testing || diagPending}><Plug className="size-4" />{t("testConn")}</Button>
+          <Button variant="outline" onClick={runDiag} disabled={diagPending}><Stethoscope className="size-4" />{t("diagnose")}</Button>
           <Button disabled={save.isPending} onClick={() => save.mutate(draft, { onSuccess: (r) => {
             if (r.check && !r.check.ok) { setCheck({ ...r.check, kind: r.last_error }); return; }
             setDraft(null); setCheck(null); onSaved?.();

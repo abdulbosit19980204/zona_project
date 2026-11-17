@@ -135,9 +135,39 @@ FIELDS: dict[str, list[dict[str, Any]]] = {
 }
 
 KINDS = {
-    "synology": {"label": "Synology NAS / Drive", "links": True},
-    "gdrive": {"label": "Google Drive", "links": True},
-    "s3": {"label": "S3 (AWS, MinIO, Wasabi, B2, R2)", "links": True},
-    "webdav": {"label": "WebDAV / Nextcloud", "links": True},
-    "local": {"label": "Lokal disk / tarmoq papkasi", "links": False},
+    "synology": {"label": "Synology NAS / Drive", "links": True, "guide": [
+        "DSM'ga administrator bilan kiring → Boshqaruv paneli → Foydalanuvchi va guruh → bot uchun foydalanuvchi oching (yoki mavjudini ishlating).",
+        "Shu foydalanuvchida «Ilovalar» bo'limida Synology Drive (yoki File Station) ruxsat etilgan bo'lsin. Bittasi yetarli — tizim o'zi mosini tanlaydi.",
+        "Fayllar tushadigan umumiy papka (jamoa papkasi)ga «O'qish/Yozish» huquqini bering.",
+        "2 bosqichli tekshiruv (2FA) shu foydalanuvchida o'chiq bo'lsin.",
+        "Synology Drive'da papkani brauzerda oching va manzil satridagi havolani (…/#file_id=…) «Synology Drive papkasi» maydoniga qo'ying — asosiy papka avtomatik aniqlanadi.",
+        "«Diagnostika» tugmasini bosing: login → papka → yozish → havola bosqichlari yashil bo'lishi kerak.",
+    ]},
+    "gdrive": {"label": "Google Drive", "links": True, "guide": [
+        "Service Account usuli: console.cloud.google.com → yangi loyiha → «Google Drive API»ni yoqing.",
+        "IAM → Service Accounts → «Create» → Keys → «Add key» → JSON. Fayl matnini «Service Account JSON» maydoniga qo'ying.",
+        "Google Drive'da Shared Drive (umumiy disk) oching → «Manage members» → service account email'ini «Content manager» qilib qo'shing.",
+        "Shared Drive manzilidagi /folders/<ID> qismini «Shared Drive ID» maydoniga yozing.",
+        "OAuth usuli: Credentials → OAuth client (Web) yarating, Redirect URI: <sayt manzili>/qrdrive/api/admin/storages/google/callback. Client ID/secret'ni kiriting, saqlang va «Google bilan ulash»ni bosing.",
+        "«Diagnostika» tugmasini bosing.",
+    ]},
+    "s3": {"label": "S3 (AWS, MinIO, Wasabi, B2, R2)", "links": True, "guide": [
+        "Bucket yarating (ommaviy bo'lishi shart emas).",
+        "Faqat shu bucket'ga s3:PutObject, s3:GetObject, s3:DeleteObject, s3:ListBucket ruxsatli kalit (Access key / Secret key) yarating.",
+        "AWS uchun Endpoint bo'sh, Region — bucket regioni. MinIO/Wasabi/B2/R2 — provayder bergan endpoint; MinIO uchun «Path-style»ni yoqing.",
+        "S3 havolasi 7 kundan ortiq yashamaydi — muddatsiz yoki parolli havolalar uchun «Havola turi»da «Tizim havolasi»ni tanlang.",
+        "«Diagnostika» tugmasini bosing.",
+    ]},
+    "webdav": {"label": "WebDAV / Nextcloud", "links": True, "guide": [
+        "Nextcloud'da bot uchun foydalanuvchi oching yoki mavjudini ishlating.",
+        "Shaxsiy sozlamalar → Xavfsizlik → «Yangi ilova paroli» yarating (asosiy parol emas).",
+        "Fayllar → pastki chapdagi «Sozlamalar» → WebDAV manzilini nusxalang (…/remote.php/dav/files/<foydalanuvchi>).",
+        "Ommaviy havola uchun Nextcloud'da «Share via link» (Sozlamalar → Ulashish) yoqilgan bo'lsin.",
+        "«Diagnostika» tugmasini bosing.",
+    ]},
+    "local": {"label": "Lokal disk / tarmoq papkasi", "links": False, "guide": [
+        "Serverda papka yarating va unga xizmat foydalanuvchisi (zona) yozish huquqini bering: sudo chown -R zona:zona <papka>.",
+        "Tarmoq papkasi (SMB) bo'lsa, avval serverga ulang (/etc/fstab orqali mount), keyin shu yo'lni kiriting.",
+        "Havolalar tizim orqali beriladi (/qrdrive/s/...). «Diagnostika» tugmasini bosing.",
+    ]},
 }

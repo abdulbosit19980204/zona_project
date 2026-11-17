@@ -82,3 +82,41 @@ async def test_disk_full(tmp_path: Path):
     with pytest.raises(StorageQuota):
         await p.upload(f, "/K", "x")
     await p.close()
+
+
+@respx.mock
+async def test_filestation_app_denied_falls_back_to_drive_session():
+    """file.stargroup.uz holati: «FileStation» sessiyasi 405, «SynologyDrive» sessiyasi ishlaydi."""
+    sessions = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if request.method == "POST":
+            params.update(dict(httpx.QueryParams(request.content.decode())))
+        if params.get("api") == "SYNO.API.Auth":
+            assert request.method == "POST" and "passwd" not in str(request.url)  # parol URL'da emas
+            sessions.append(params.get("session"))
+            if params.get("session") == "FileStation":
+                return httpx.Response(200, json={"success": False, "error": {"code": 405}})
+            return httpx.Response(200, json={"success": True, "data": {"sid": "S1"}})
+        return httpx.Response(200, json={"success": True, "data": {"shares": []}})
+
+    respx.route(url__startswith=ENTRY).mock(side_effect=handler)
+    p = SynologyProvider(URL, "caspar", "x")
+    p.SESSIONS = ("FileStation", "SynologyDrive", "")
+    assert (await p.test_connection()).ok
+    assert sessions == ["FileStation", "SynologyDrive"] and p.session == "SynologyDrive"
+    await p.close()
+
+
+@pytest.mark.parametrize("code,kind", [(400, "storage_auth"), (401, "storage_disabled"), (403, "storage_2fa"),
+                                       (405, "storage_app_denied"), (407, "storage_ip_blocked"), (409, "storage_password_expired")])
+@respx.mock
+async def test_dsm_login_errors_are_explained(code, kind):
+    respx.route(url__startswith=ENTRY).mock(return_value=httpx.Response(200, json={"success": False, "error": {"code": code}}))
+    p = SynologyProvider(URL, "u", "p")
+    from qrdrive.core.errors import QRDriveError, human
+    with pytest.raises(QRDriveError) as e:
+        await p.test_connection()
+    assert e.value.kind == kind and human(kind)["hint"]
+    await p.close()

@@ -13,7 +13,8 @@ from typing import Any
 
 import httpx
 
-from ..core.errors import (StorageAuthError, StorageError, StorageNotFound, StoragePermission, StorageQuota,
+from ..core.errors import (QRDriveError, Storage2FA, StorageAccountDisabled, StorageAppDenied, StorageAuthError, StorageError,
+                           StorageIPBlocked, StorageNotFound, StoragePasswordExpired, StoragePermission, StorageQuota,
                            StorageUnavailable)
 from .base import HealthResult, PublicLink, Quota, RemoteEntry, RemoteFile, join
 
@@ -40,11 +41,25 @@ RELOGIN_CODES = {105, 106, 107, 119}
 AUTH_CODES = {400, 401, 402, 403, 404, 406, 407}
 
 
+def _auth_error(code: int | None) -> QRDriveError:
+    if code == 400:
+        return StorageAuthError(f"DSM: login yoki parol noto'g'ri (kod {code})")
+    if code == 401:
+        return StorageAccountDisabled(f"DSM: akkaunt o'chirilgan (kod {code})")
+    if code in (402, 405):
+        return StorageAppDenied(f"DSM: ilovaga ruxsat yo'q (kod {code})")
+    if code in (403, 404, 406):
+        return Storage2FA(f"DSM: 2 bosqichli tekshiruv talab qilinadi (kod {code})")
+    if code == 407:
+        return StorageIPBlocked(f"DSM: IP manzil bloklangan (kod {code})")
+    if code in (408, 409, 410):
+        return StoragePasswordExpired(f"DSM: parol muddati tugagan (kod {code})")
+    return StorageAuthError(f"DSM login xato kodi {code}")
+
+
 def _raise(api: str, code: int | None) -> None:
     if api == "SYNO.API.Auth":
-        if code in (403, 404, 406):
-            raise StorageAuthError(f"2FA talab qilinadi (kod {code})")
-        raise StorageAuthError(f"login xato kodi {code}")
+        raise _auth_error(code)
     if code in (105, 407):
         raise StoragePermission(f"{api}: ruxsat yo'q (kod {code})")
     if code == 408:
@@ -65,15 +80,31 @@ class SynologyProvider:
         self.username, self.password = username, password
         self.base_folder = base_folder or "/"
         self.sid: str | None = None
+        self.session: str | None = None  # birinchi muvaffaqiyatli sessiya nomi eslab qolinadi
         self._client = httpx.AsyncClient(verify=verify_ssl, timeout=httpx.Timeout(900, connect=15), transport=transport)
 
     async def close(self) -> None:
         await self._client.aclose()
 
+    # Sessiya nomlari navbat bilan: foydalanuvchiga File Station ilovasi yopiq, lekin Synology Drive ochiq bo'lishi mumkin
+    # (bunda "FileStation" sessiyasi 405 bilan rad etiladi, Drive sessiyasi esa File Station API'larini ham ochadi).
+    SESSIONS = ("SynologyDrive", "FileStation", "")
+
     async def login(self) -> None:
-        data = await self._call({"api": "SYNO.API.Auth", "version": "6", "method": "login", "account": self.username,
-                                 "passwd": self.password, "session": "FileStation", "format": "sid"}, auth=False)
-        self.sid = data["sid"]
+        last: QRDriveError | None = None
+        for session in ([self.session] if self.session is not None else self.SESSIONS):
+            params = {"api": "SYNO.API.Auth", "version": "6", "method": "login", "account": self.username,
+                      "passwd": self.password, "format": "sid"}
+            if session:
+                params["session"] = session
+            try:
+                data = await self._call(params, auth=False, method="POST")  # parol URL'da ko'rinmasin
+            except StorageAppDenied as e:
+                last = e
+                continue
+            self.sid, self.session = data["sid"], session
+            return
+        raise last or StorageAuthError("DSM login muvaffaqiyatsiz")
 
     async def _call(self, params: dict[str, Any], auth: bool = True, retry: bool = True, method: str = "GET") -> dict:
         if auth and not self.sid:

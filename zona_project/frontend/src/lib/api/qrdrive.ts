@@ -90,7 +90,10 @@ export interface FieldDef {
   key: string; label: string; help?: string; placeholder?: string; secret?: boolean;
   type?: "bool" | "select" | "textarea"; default?: unknown; options?: [string, string][]; when?: string;
 }
-export interface StorageKind { kind: string; label: string; links: boolean; fields: FieldDef[] }
+export interface StorageKind { kind: string; label: string; links: boolean; fields: FieldDef[]; guide: string[] }
+
+export interface DiagStep { key: string; ok: boolean | null; detail: string; ms: number | null; error?: HumanError; technical?: string }
+export interface DiagResult { ok: boolean; steps: DiagStep[]; storage?: QrStorage }
 
 export interface QrStorage {
   id: number; name: string; kind: string; kind_label: string; base_folder: string; link_mode: "provider" | "system";

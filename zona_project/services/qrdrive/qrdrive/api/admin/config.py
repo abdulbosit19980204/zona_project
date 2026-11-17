@@ -26,7 +26,7 @@ from ...services import qr
 from ...services.audit import add_audit
 from ...services.naming import validate_template
 from ...services.telegram import TelegramClient
-from ...storage import gdrive, registry
+from ...storage import diagnose, gdrive, registry
 from ...storage.base import FIELDS, KINDS
 from ..deps import SCOPES, admin, superadmin, viewer
 
@@ -201,6 +201,25 @@ async def google_callback(state: str = "", code: str = "", error: str = "", sess
     add_audit(session, "storage.google_connected", actor="google-oauth", target=s.name)
     await session.commit()
     return RedirectResponse(f"{back}?google=ok")
+
+
+@router.post("/storages/{sid}/diagnose")
+async def diagnose_storage(sid: int, session: AsyncSession = Depends(get_session), user: Principal = Depends(admin)):
+    """Bosqichma-bosqich tekshiruv: sozlama → ulanish → papka → yozish → havola → kvota (sinov fayli o'chiriladi)."""
+    s = await _storage(session, sid)
+    result = await diagnose.diagnose(s)
+    add_audit(session, "storage.diagnose", actor=user.username, target=s.name, details={"ok": result["ok"]})
+    await session.commit()
+    return {**result, "storage": storage_out(s)}
+
+
+@router.post("/storages/diagnose")
+async def diagnose_unsaved(body: StorageIn, _: Principal = Depends(superadmin)):
+    if body.kind not in KINDS:
+        raise HTTPException(400, "Saqlash joyi turini tanlang")
+    s = Storage(name="test", kind=body.kind, base_folder="/", link_mode="provider")
+    _apply(s, body)
+    return await diagnose.diagnose(s)
 
 
 @router.post("/storages/{sid}/primary")

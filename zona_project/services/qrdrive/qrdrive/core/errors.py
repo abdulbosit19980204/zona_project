@@ -17,6 +17,26 @@ class StorageAuthError(QRDriveError):
     kind, retry = "storage_auth", False
 
 
+class StorageAppDenied(QRDriveError):
+    kind, retry = "storage_app_denied", False
+
+
+class Storage2FA(QRDriveError):
+    kind, retry = "storage_2fa", False
+
+
+class StorageAccountDisabled(QRDriveError):
+    kind, retry = "storage_disabled", False
+
+
+class StorageIPBlocked(QRDriveError):
+    kind, retry = "storage_ip_blocked", False
+
+
+class StoragePasswordExpired(QRDriveError):
+    kind, retry = "storage_password_expired", False
+
+
 class StorageUnavailable(QRDriveError):
     kind = "storage_down"
 
@@ -61,6 +81,26 @@ MESSAGES: dict[str, dict[str, str]] = {
     "storage_auth": {
         "title": "Saqlash joyiga kirib bo'lmadi: login yoki parol noto'g'ri",
         "hint": "«Saqlash joylari» bo'limida ulanish ma'lumotlarini yangilang, keyin «Qayta urinish» bosing.",
+    },
+    "storage_app_denied": {
+        "title": "NAS foydalanuvchisiga fayl ilovalariga ruxsat berilmagan",
+        "hint": "DSM → Boshqaruv paneli → Foydalanuvchi → shu foydalanuvchi → «Ilovalar»: Synology Drive (yoki File Station) ga ruxsat bering.",
+    },
+    "storage_2fa": {
+        "title": "NAS foydalanuvchisida 2 bosqichli tekshiruv yoqilgan",
+        "hint": "Bot uchun alohida foydalanuvchi oching (2 bosqichli tekshiruvsiz) yoki shu foydalanuvchida 2FA'ni o'chiring.",
+    },
+    "storage_disabled": {
+        "title": "NAS foydalanuvchisi o'chirilgan (disabled)",
+        "hint": "DSM → Boshqaruv paneli → Foydalanuvchi: akkauntni yoqing yoki boshqa foydalanuvchi kiriting.",
+    },
+    "storage_ip_blocked": {
+        "title": "Server IP manzili NAS'da bloklangan",
+        "hint": "DSM → Boshqaruv paneli → Xavfsizlik → Hisob → «Avtomatik bloklash» ro'yxatidan server IP'sini olib tashlang.",
+    },
+    "storage_password_expired": {
+        "title": "NAS foydalanuvchisining paroli muddati tugagan",
+        "hint": "DSM'ga shu foydalanuvchi bilan kirib parolni yangilang, keyin yangi parolni «Saqlash joylari»da kiriting.",
     },
     "storage_down": {
         "title": "Saqlash joyi javob bermayapti",

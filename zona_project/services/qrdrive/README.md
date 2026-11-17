@@ -39,7 +39,7 @@ services/qrdrive/
   qrdrive/worker/         navbat, retry, webhook, bildirishnoma, saqlash joyi tekshiruvi, savat, zaxira
   qrdrive/bot/            Telegram bot
   sdk/python/             qrdrive-sdk (klient + aiogram plagini)
-  tests/                  pytest (46 ta)
+  tests/                  pytest (56 ta)
 ```
 
 ## Saqlash joylari
@@ -51,6 +51,8 @@ services/qrdrive/
 | S3 (AWS, MinIO, Wasabi, B2, R2) | endpoint, region, bucket, kalitlar | presigned URL (≤ 7 kun), aks holda tizim havolasi |
 | WebDAV / Nextcloud | WebDAV manzili + ilova paroli | Nextcloud OCS havolasi |
 | Lokal disk / SMB | serverdagi papka | tizim havolasi |
+
+To'liq qo'llanma, diagnostika va barcha xato kodlari: **[docs/saqlash-joylari.md](docs/saqlash-joylari.md)**.
 
 **Standart:** bo'sh bazada **StarGroup NAS** (`https://file.stargroup.uz`, Synology Drive papkasi
 `#file_id=984701843502314054`) avtomatik yaratiladi va asosiy qilinadi. Admin faqat login/parolni kiritadi

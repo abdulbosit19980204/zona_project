@@ -32,6 +32,8 @@ def test_parse_drive_folder():
 async def test_synology_drive_resolve():
     def handler(request: httpx.Request) -> httpx.Response:
         p = dict(request.url.params)
+        if request.method == "POST":
+            p.update(dict(httpx.QueryParams(request.content.decode())))
         if p.get("api") == "SYNO.API.Auth":
             return httpx.Response(200, json={"success": True, "data": {"sid": "S"}})
         if p.get("api") == "SYNO.SynologyDrive.Files":
