@@ -171,6 +171,30 @@ export function QrSettingsPage() {
                   <Input value={cur.filename_template} onChange={(e) => set("filename_template", e.target.value)} />
                 </FormRow>
                 <p className="-mt-2 font-mono text-xs text-muted-foreground">{t("tplHint")}</p>
+                <FormRow label={t("replaceMode")} hint={t("replaceHint")}>
+                  <Select value={cur.replace_mode ?? "ask"} onValueChange={(x) => set("replace_mode", x as QrSettings["replace_mode"])}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ask">{t("replaceAsk")}</SelectItem>
+                      <SelectItem value="replace">{t("replaceReplace")}</SelectItem>
+                      <SelectItem value="new">{t("replaceNew")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormRow>
+                <FormRow label={t("archiveMode")}>
+                  <Select value={cur.archive_mode ?? "ask"} onValueChange={(x) => set("archive_mode", x as QrSettings["archive_mode"])}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ask">{t("archiveAsk")}</SelectItem>
+                      <SelectItem value="archive">{t("archiveArchive")}</SelectItem>
+                      <SelectItem value="folder">{t("archiveFolder")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormRow>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormRow label={t("archiveMaxFiles")}><Input type="number" min={1} value={cur.archive_max_files ?? 1000} onChange={(e) => set("archive_max_files", Number(e.target.value))} /></FormRow>
+                  <FormRow label={t("archiveMaxMb")}><Input type="number" min={1} value={cur.archive_max_mb ?? 2048} onChange={(e) => set("archive_max_mb", Number(e.target.value))} /></FormRow>
+                </div>
                 <FormRow label={t("dupPolicy")}>
                   <Select value={cur.duplicate_policy} onValueChange={(x) => set("duplicate_policy", x as QrSettings["duplicate_policy"])}>
                     <SelectTrigger><SelectValue /></SelectTrigger>

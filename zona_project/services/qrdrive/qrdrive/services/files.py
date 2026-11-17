@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .. import settings_store
@@ -88,6 +89,21 @@ async def create_system_link(session: AsyncSession, rec: FileRecord, expires_at:
     return rec.link_url
 
 
+async def find_previous(session: AsyncSession, *, employee_id: int | None, api_key_id: int | None, name: str) -> FileRecord | None:
+    """Shu xodim (yoki API kalit) avval yuklagan, shu nomdagi joriy (yangilanmagan) fayl — asl yozuv."""
+    if not employee_id and not api_key_id:
+        return None
+    q = select(FileRecord).where(FileRecord.original_name == safe_name(name), FileRecord.status == "delivered",
+                                 FileRecord.deleted_at.is_(None), FileRecord.replaced_by.is_(None), FileRecord.kind == "file")
+    q = q.where(FileRecord.employee_id == employee_id) if employee_id else q.where(FileRecord.api_key_id == api_key_id)
+    rec = (await session.execute(q.order_by(FileRecord.id.desc()).limit(1))).scalars().first()
+    seen = set()
+    while rec is not None and rec.duplicate_of and rec.id not in seen:  # takroriy nusxa — asl faylga
+        seen.add(rec.id)
+        rec = await session.get(FileRecord, rec.duplicate_of)
+    return rec if rec is not None and rec.replaced_by is None and rec.deleted_at is None else None
+
+
 def visibility_of(rec: FileRecord, settings: dict[str, Any]) -> str:
     v = rec.options.get("visibility") or (settings.get("visibility_mode") if settings.get("visibility_mode") in ("public", "private")
                                            else settings.get("default_visibility")) or "public"
@@ -102,8 +118,8 @@ async def create_link(session: AsyncSession, rec: FileRecord, storage: Storage, 
         rec.link_visibility = "public"
         return rec.link_url
     try:
-        link = await provider.create_public_link(RemoteFile(path=rec.remote_path, id=rec.remote_id), expires_at, password or None,
-                                                 visibility=visibility)
+        link = await provider.create_public_link(RemoteFile(path=rec.remote_path, id=rec.remote_id, is_dir=rec.kind == "folder"),
+                                                 expires_at, password or None, visibility=visibility)
     except NotSupported:
         # Saqlash joyi bu turdagi havolani bera olmaydi (masalan, muddatli Drive havolasi) — tizim havolasi
         await create_system_link(session, rec, expires_at, password, settings_store.public_base(settings))
@@ -199,6 +215,7 @@ def serialize(rec: FileRecord, *, full: bool = False) -> dict[str, Any]:
         "remote_path": rec.remote_path, "url": rec.link_url, "link_kind": rec.link_kind,
         "expires_at": rec.link_expires_at, "has_password": rec.link_has_password, "downloads": rec.downloads,
         "visibility": rec.link_visibility or (rec.options or {}).get("visibility") or "",
+        "kind": rec.kind or "file", "items": rec.items or [], "version": rec.version or 1, "replaced_by": rec.replaced_by,
         "attempts": rec.attempts, "created_at": rec.created_at, "finished_at": rec.finished_at,
         "deleted_at": rec.deleted_at, "duplicate_of": rec.duplicate_of, "durations": rec.durations or {},
         "error": human(rec.error_kind) if rec.error_kind else None,

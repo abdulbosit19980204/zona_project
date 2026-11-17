@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from ..core.config import config
@@ -49,6 +51,34 @@ def public_config(storage: Storage) -> dict[str, Any]:
     if storage.kind == "gdrive":
         out["google_connected"] = bool(cfg.get("refresh_token"))
     return out
+
+
+# Worker jarayonida yoqiladi: provayder (va NAS sessiyasi) fayldan-faylga qayta ishlatiladi —
+# har faylga qayta login qilinmaydi (~0.6 s tejaladi), ko'p foydalanuvchida yuklama kamayadi.
+CACHE_ENABLED = False
+_CACHE: dict[int, tuple[tuple, StorageProvider]] = {}
+
+
+@asynccontextmanager
+async def use(storage: Storage) -> AsyncIterator[StorageProvider]:
+    if not CACHE_ENABLED or storage.id is None:
+        provider = build(storage)
+        try:
+            yield provider
+        finally:
+            await provider.close()
+        return
+    key = (storage.kind, storage.config_enc, storage.base_folder, storage.link_mode)
+    cached = _CACHE.get(storage.id)
+    if cached is None or cached[0] != key:  # sozlama o'zgargan — yangi provayder
+        if cached is not None:
+            try:
+                await cached[1].close()
+            except Exception:  # noqa: BLE001
+                pass
+        cached = (key, build(storage))
+        _CACHE[storage.id] = cached
+    yield cached[1]
 
 
 def build(storage: Storage) -> StorageProvider:

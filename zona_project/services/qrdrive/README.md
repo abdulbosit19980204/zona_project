@@ -132,5 +132,18 @@ SDK va aiogram plagini: [sdk/python/README.md](sdk/python/README.md).
     ID, username, ism, til, premium, getChat (bio, tug'ilgan sana, shaxsiy kanal), profil rasmi. Tasdiqlashda xodim kartasi shu ma'lumotlardan to'ldiriladi.
 15. **Havolalarni qayta yaratish** (Saqlash joylari → «Havolalarni yangilash» yoki fayllarda ommaviy amal) — eski tizim havolalari
     bekor qilinmaydi, allaqachon tarqatilgan QR kodlar ishlashda davom etadi.
-16. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
+16. **Fayl yangilanishi.** Shu xodim shu nomdagi faylni qayta yuborsa, bot so'raydi: «♻️ Eskisini yangilash» yoki «🆕 Yangi fayl».
+    Yangilashda fayl o'sha joyga ustidan yoziladi — Synology Drive'da fayl ID va havola o'zgarmaydi (NAS'da tekshirilgan),
+    QR o'zgarmaydi; eski versiyalar tarixda qoladi (fayl kartasida «Versiyalar»), ro'yxatda faqat joriy versiya.
+    Tarkib o'zgarmagan bo'lsa — yangi versiya yaratilmaydi. Tanlanmasa — standart «yangi fayl» (rozilikisiz ustidan yozilmaydi).
+    Yangi fayl hech qachon boshqa faylning ustidan yozmaydi (bir xil nom — «_2» qo'shiladi).
+17. **Arxiv → papka (bitta QR).** Zip/tar yuborilsa, bot so'raydi: «📦 Arxiv holida» yoki «📂 Papka qilib». Papka rejimida arxiv
+    ochiladi, tuzilmasi saqlanib parallel (4 ta) yuklanadi, papkaga bitta havola beriladi (Drive papka havolasi yoki tizim
+    havolasidagi fayllar ro'yxati sahifasi). Himoya: «../», absolyut yo'l, symlink, __MACOSX tashlanadi; fayllar soni va ochilgan
+    hajm chegarasi (zip-bomba); Windows zip'laridagi kirill nomlar (cp866) tiklanadi.
+18. **Tezlik va ko'p foydalanuvchi.** Barcha savollar bitta xabarda kombinatsiyalangan tugmalar bilan (bitta bosish).
+    Foydalanuvchi tugmani bosguncha worker faylni Telegram'dan oldindan yuklab oladi. Worker NAS sessiyasini qayta ishlatadi
+    (har faylga login ~0.6 s tejaladi), parallellik `QRDRIVE_WORKER_CONCURRENCY` (standart 4). Synology Drive yangi faylni
+    ~5–8 s da indekslaydi — havola shundan keyin yaratiladi (Drive'ning yuklash API'si bu NAS'da yo'l formatini qabul qilmadi).
+19. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
     oqim testlari va jonli QA (Next.js proksi orqali) ishlatildi.

@@ -155,7 +155,10 @@ function FileTable({ trash, onOpen }: { trash: boolean; onOpen: (id: number) => 
                         onCheckedChange={(v) => setSelected((s) => (v ? [...s, f.id] : s.filter((x) => x !== f.id)))} />
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{fmtDate(f.created_at)}</TableCell>
-                    <TableCell className="max-w-72"><div className="truncate font-medium">{f.original_name}</div>
+                    <TableCell className="max-w-72"><div className="flex items-center gap-1.5 truncate font-medium">
+                      {f.kind === "folder" && <Folder className="size-4 shrink-0 text-primary" />}{f.original_name}
+                      {f.kind === "folder" && <span className="shrink-0 text-xs font-normal text-muted-foreground">· {f.items.length}</span>}
+                      {f.version > 1 && <span className="shrink-0 rounded bg-muted px-1 font-mono text-[10px]">v{f.version}</span>}</div>
                       {f.remote_path && <div className="truncate text-xs text-muted-foreground">{f.remote_path}</div>}</TableCell>
                     <TableCell><div className="truncate">{f.employee_name || "—"}</div><div className="text-xs text-muted-foreground">{f.department}</div></TableCell>
                     <TableCell className="text-right font-mono text-xs">{formatBytes(f.size)}</TableCell>
@@ -281,6 +284,8 @@ export function UploadDialog({ open, onOpenChange, employeeId }: { open: boolean
   const [emp, setEmp] = useState(employeeId ? String(employeeId) : "none");
   const [folder, setFolder] = useState("");
   const [vis, setVis] = useState("default");
+  const [replace, setReplace] = useState(false);
+  const [extract, setExtract] = useState(false);
   const [drag, setDrag] = useState(false);
   const employees = useQr<QrEmployee[]>(["employees"], "employees", undefined, { enabled: open });
   const send = useQrAction(async () => {
@@ -289,6 +294,8 @@ export function UploadDialog({ open, onOpenChange, employeeId }: { open: boolean
     if (emp !== "none") fd.append("employee_id", emp);
     if (folder) fd.append("folder", folder);
     if (vis !== "default") fd.append("visibility", vis);
+    if (replace) fd.append("replace", "true");
+    if (extract) fd.append("extract", "true");
     return (await qrApi.post<QrFile[]>("files/upload", fd)).data;
   }, (r) => t("uploaded", { n: r.length }));
 
@@ -325,6 +332,8 @@ export function UploadDialog({ open, onOpenChange, employeeId }: { open: boolean
             </SelectContent>
           </Select>
         </FormRow>
+        <label className="flex items-start gap-2 text-sm"><Checkbox checked={replace} onCheckedChange={(v) => setReplace(!!v)} className="mt-0.5" />{t("uploadReplace")}</label>
+        <label className="flex items-start gap-2 text-sm"><Checkbox checked={extract} onCheckedChange={(v) => setExtract(!!v)} className="mt-0.5" />{t("uploadExtract")}</label>
         <FormRow label={t("visibility")}>
           <Select value={vis} onValueChange={setVis}>
             <SelectTrigger><SelectValue /></SelectTrigger>

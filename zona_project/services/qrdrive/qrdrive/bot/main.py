@@ -24,7 +24,8 @@ from ..db.models import Employee, FileRecord, TgAccount
 from ..db.session import session_scope
 from ..services import accounts, qr, system
 from ..services.audit import add_audit
-from ..services.files import enqueue, refresh_link
+from ..services.archive import is_archive
+from ..services.files import enqueue, find_previous, refresh_link
 
 log = logging.getLogger("qrdrive.bot")
 _HANDLERS: list[tuple[str, Callable[..., Any], tuple[Any, ...]]] = []
@@ -349,43 +350,96 @@ async def on_file(msg: Message, session, acc: TgAccount, created: bool, settings
     if not allowed(name, settings.get("allowed_types", "")):
         await msg.answer(t(settings, acc, "type_not_allowed", types=settings.get("allowed_types", "")))
         return
-    mode = settings.get("visibility_mode") or "ask"
-    ask = mode == "ask"
-    status = await msg.reply(t(settings, acc, "choose_visibility", name=name) if ask else t(settings, acc, "received"))
+    plan = await plan_choices(session, acc, settings, name)
+    status = await msg.reply(plan["text"] or t(settings, acc, "received"))
     rec = await enqueue(session, source="telegram", original_name=name, actor=acc.display, employee_id=acc.employee_id,
-                        account_id=acc.id, size=size, mime=mime, caption=msg.caption or "",
-                        options={} if ask else {"visibility": mode if mode in ("public", "private") else "public"},
-                        tg={"chat_id": msg.chat.id, "file_id": file_id, "status_msg_id": status.message_id}, awaiting=ask)
+                        account_id=acc.id, size=size, mime=mime, caption=msg.caption or "", options=plan["options"],
+                        tg={"chat_id": msg.chat.id, "file_id": file_id, "status_msg_id": status.message_id}, awaiting=bool(plan["rows"]))
     await session.commit()
-    if ask:  # foydalanuvchi havola turini tanlaydi: Public yoki Private
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text=t(settings, acc, "btn_public"), callback_data=f"vis:{rec.id}:public"),
-            InlineKeyboardButton(text=t(settings, acc, "btn_private"), callback_data=f"vis:{rec.id}:private")]])
+    if plan["rows"]:  # bitta xabarda barcha variantlar — bitta bosish yetadi
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, callback_data=f"ch:{rec.id}:{action}:{vis}")
+                                                    for label, action, vis in row] for row in plan["rows"]])
         await status.edit_reply_markup(reply_markup=kb)
-    log.info("fayl qabul qilindi", extra={"data": {"id": rec.id, "size": size, "awaiting": ask}})
+    log.info("fayl qabul qilindi", extra={"data": {"id": rec.id, "size": size, "awaiting": bool(plan["rows"])}})
+
+
+async def plan_choices(session, acc: TgAccount, settings: dict[str, Any], name: str) -> dict[str, Any]:
+    """Qaysi savollarni berish kerak: fayl yangilanishi (shu nom avval yuklangan), arxiv (papka qilish), havola turi.
+    Hammasi bitta xabarda, kombinatsiyalangan tugmalar bilan."""
+    vis_mode = settings.get("visibility_mode") or "ask"
+    ask_vis = vis_mode == "ask"
+    vis_opts = [("public", "🌐"), ("private", "🔒")] if ask_vis else [("-", "")]
+    options: dict[str, Any] = {} if ask_vis else {"visibility": vis_mode if vis_mode in ("public", "private") else "public"}
+    prev = await find_previous(session, employee_id=acc.employee_id, api_key_id=None, name=name)
+    replace_mode = settings.get("replace_mode") or "ask"
+    if prev is not None and replace_mode == "replace":
+        options["replace_of"] = prev.id
+        return {"text": "", "rows": [], "options": options}
+    if prev is not None and replace_mode == "ask":
+        date = f"{prev.created_at:%d.%m.%Y %H:%M}" if prev.created_at else ""
+        new_row = [(f"{t(settings, acc, 'btn_new')} {icon}".strip(), "new", v) for v, icon in vis_opts]
+        return {"text": t(settings, acc, "ask_replace", name=name, date=date),
+                "rows": [[(t(settings, acc, "btn_replace"), f"replace{prev.id}", "-")], new_row], "options": options}
+    archive_mode = settings.get("archive_mode") or "ask"
+    if is_archive(name) and archive_mode == "folder":
+        options["archive"] = "folder"
+    if is_archive(name) and archive_mode == "ask":
+        rows = [[(f"{t(settings, acc, 'btn_archive')} {icon}".strip(), "archive", v) for v, icon in vis_opts],
+                [(f"{t(settings, acc, 'btn_folder')} {icon}".strip(), "folder", v) for v, icon in vis_opts]]
+        return {"text": t(settings, acc, "ask_archive", name=name), "rows": rows, "options": options}
+    if ask_vis:
+        return {"text": t(settings, acc, "choose_visibility", name=name),
+                "rows": [[(t(settings, acc, "btn_public"), "file", "public"), (t(settings, acc, "btn_private"), "file", "private")]],
+                "options": options}
+    return {"text": "", "rows": [], "options": options}
+
+
+async def apply_choice(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str, Any], fid: str, action: str, vis: str) -> None:
+    try:
+        rec = await session.get(FileRecord, int(fid))
+    except (ValueError, TypeError):
+        rec = None
+    if rec is None or rec.account_id != acc.id or rec.status != "awaiting":  # begona yoki allaqachon tanlangan
+        await cb.answer()
+        return
+    opts = dict(rec.options or {})
+    labels = []
+    if action.startswith("replace"):
+        opts["replace_of"] = int(action[len("replace"):])
+        labels.append(t(settings, acc, "btn_replace"))
+    elif action in ("archive", "folder"):
+        opts["archive"] = action
+        labels.append(t(settings, acc, f"btn_{action}"))
+    elif action == "new":
+        labels.append(t(settings, acc, "btn_new"))
+    if vis in ("public", "private"):
+        opts["visibility"] = vis
+        labels.append(t(settings, acc, f"vis_{vis}"))
+    rec.options = opts
+    rec.status, rec.next_attempt_at = "queued", datetime.now(timezone.utc)
+    add_audit(session, "file.choice", actor=str(acc.telegram_id), actor_kind="bot", target=rec.original_name,
+              details={"action": action, "visibility": vis})
+    await session.commit()
+    await cb.answer()
+    if cb.message:
+        await cb.message.edit_text(t(settings, acc, "chosen", choice=" · ".join(labels)))
+
+
+@on("callback_query", F.data.startswith("ch:"))
+async def cb_choice(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str, Any]):
+    parts = cb.data.split(":")
+    if len(parts) != 4:
+        return await cb.answer()
+    await apply_choice(cb, session, acc, settings, parts[1], parts[2], parts[3])
 
 
 @on("callback_query", F.data.startswith("vis:"))
 async def cb_visibility(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str, Any]):
-    """Havola turi tanlandi: fayl navbatga qo'yiladi (worker yuklaydi va tanlangan turdagi havolani yaratadi)."""
-    try:
-        _, fid, vis = cb.data.split(":")
-        rec = await session.get(FileRecord, int(fid))
-    except (ValueError, TypeError):
-        rec, vis = None, ""
-    if rec is None or rec.account_id != acc.id or vis not in ("public", "private"):
-        await cb.answer()
-        return
-    if rec.status != "awaiting":  # allaqachon tanlangan yoki vaqt o'tib standart tur qo'llangan
-        await cb.answer()
-        return
-    rec.options = {**(rec.options or {}), "visibility": vis}
-    rec.status, rec.next_attempt_at = "queued", datetime.now(timezone.utc)
-    add_audit(session, "file.visibility", actor=str(acc.telegram_id), actor_kind="bot", target=rec.original_name, details={"visibility": vis})
-    await session.commit()
-    await cb.answer(t(settings, acc, f"vis_{vis}"))
-    if cb.message:
-        await cb.message.edit_text(t(settings, acc, "vis_chosen", vis=t(settings, acc, f"vis_{vis}")))
+    """Eski xabarlardagi tugmalar (faqat havola turi) uchun moslik."""
+    parts = cb.data.split(":")
+    if len(parts) != 3:
+        return await cb.answer()
+    await apply_choice(cb, session, acc, settings, parts[1], "file", parts[2])
 
 
 @on("message")

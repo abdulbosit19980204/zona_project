@@ -76,7 +76,7 @@ class S3Provider:
 
     async def create_public_link(self, remote: RemoteFile, expire_at: datetime | None = None,
                                  password: str | None = None, visibility: str = "public") -> PublicLink:
-        if password or not expire_at or visibility == "private":
+        if password or not expire_at or visibility == "private" or remote.is_dir:
             raise NotSupported("S3 havolasi parolsiz va muddatli bo'ladi")
         seconds = int((expire_at - datetime.now(timezone.utc)).total_seconds())
         if seconds > PRESIGN_MAX:

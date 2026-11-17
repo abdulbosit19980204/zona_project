@@ -166,7 +166,7 @@ async def test_invite_then_file_upload(session, employee, local_storage):
                                                                 "file_name": "Buyruq.pdf", "file_size": 2048}))
     assert s.sent[0][0] == "SendMessage" and "Havola turini tanlang" in s.texts()[0] and "Buyruq.pdf" in s.texts()[0]
     kb = next(d for n, d in s.sent if n == "EditMessageReplyMarkup")["reply_markup"]["inline_keyboard"][0]
-    assert [b["callback_data"].split(":")[2] for b in kb] == ["public", "private"]
+    assert [b["callback_data"].split(":")[-1] for b in kb] == ["public", "private"]
     async with session_scope() as db:
         rec = (await db.execute(select(FileRecord))).scalar_one()
         assert rec.source == "telegram" and rec.employee_id == employee.id and rec.tg_file_id == "FID1"

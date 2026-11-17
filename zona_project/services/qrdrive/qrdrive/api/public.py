@@ -1,16 +1,21 @@
 """Tizim havolasi: /qrdrive/s/<token> — muddat, parol, yuklab olishlar soni, bekor qilish."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import html
+import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Form
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.config import config
 from ..core.crypto import verify_password
 from ..db.models import FileRecord, SystemLink
 from ..db.session import get_session
+from ..services.files import guess_mime
 from .admin.files import stream_remote
 
 router = APIRouter(tags=["public"])
@@ -56,11 +61,75 @@ async def _serve(token: str, session: AsyncSession, password: str | None):
             return password_form(rec.original_name)
         if not verify_password(link.password_hash, password):
             return password_form(rec.original_name, "Parol noto'g'ri")
+    if rec.kind == "folder":
+        return folder_page(token, rec, set_cookie=bool(link.password_hash))
     link.downloads += 1
     rec.downloads = (rec.downloads or 0) + 1
     await session.commit()
     try:
         return await stream_remote(rec.storage, rec.remote_path, rec.stored_name or rec.original_name, rec.mime, download=False)
+    except Exception:  # noqa: BLE001
+        return message("Fayl vaqtincha mavjud emas", "Saqlash joyi javob bermayapti. Birozdan keyin qayta urinib ko'ring.", 503)
+
+
+def _cookie_value(token: str) -> str:
+    exp = str(int(time.time()) + 3600)
+    sig = hmac.new(config.master_key.encode(), f"{token}.{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{exp}.{sig}"
+
+
+def _cookie_ok(token: str, value: str) -> bool:
+    try:
+        exp, sig = value.split(".")
+    except ValueError:
+        return False
+    good = hmac.new(config.master_key.encode(), f"{token}.{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.compare_digest(sig, good) and int(exp) > time.time()
+
+
+def _size(n: int | None) -> str:
+    n = n or 0
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return ""
+
+
+def folder_page(token: str, rec: FileRecord, set_cookie: bool) -> HTMLResponse:
+    """Papka (ochilgan arxiv): ichidagi fayllar ro'yxati, har biri alohida ochiladi."""
+    rows = "".join(
+        f'<a class="r" href="{token}/{i}"><span>{html.escape(it["name"])}</span><small>{_size(it.get("size"))}</small></a>'
+        for i, it in enumerate(rec.items or []))
+    body = (f"<h1>📂 {html.escape(rec.stored_name or rec.original_name)}</h1>"
+            f"<p>{len(rec.items or [])} ta fayl · {_size(rec.size)}</p><div class='l'>{rows}</div>")
+    css = (".l{display:grid;gap:4px}.r{display:flex;justify-content:space-between;gap:12px;padding:9px 10px;border-radius:8px;"
+           "color:inherit;text-decoration:none;border:1px solid #8883}.r:hover{border-color:var(--acc)}.r small{color:var(--mut);"
+           "white-space:nowrap}.r span{word-break:break-all}</style>")
+    page_html = PAGE.format(title=html.escape(rec.original_name), body=body)
+    resp = HTMLResponse(page_html.replace("max-width:380px", "max-width:640px").replace("</style>", css, 1))
+    if set_cookie:
+        resp.set_cookie(f"qrs_{token[:16]}", _cookie_value(token), max_age=3600, httponly=True, samesite="lax")
+    return resp
+
+
+@router.get("/s/{token}/{index}", include_in_schema=False)
+async def open_folder_item(token: str, index: int, request: Request, session: AsyncSession = Depends(get_session)):
+    link = await session.get(SystemLink, token)
+    if link is None or link.revoked or (link.expires_at and link.expires_at < datetime.now(timezone.utc)):
+        return message("Havola yaroqsiz", "Bu havola bekor qilingan yoki muddati tugagan.", 404)
+    rec = await session.get(FileRecord, link.file_id)
+    if rec is None or rec.deleted_at is not None or rec.kind != "folder" or not rec.storage or not 0 <= index < len(rec.items or []):
+        return message("Fayl topilmadi", "Fayl o'chirilgan bo'lishi mumkin.", 404)
+    if link.password_hash and not _cookie_ok(token, request.cookies.get(f"qrs_{token[:16]}", "")):
+        return password_form(rec.original_name)
+    name = rec.items[index]["name"]
+    link.downloads += 1
+    rec.downloads = (rec.downloads or 0) + 1
+    await session.commit()
+    try:
+        return await stream_remote(rec.storage, f"{rec.remote_path.rstrip('/')}/{name}", name.rsplit("/", 1)[-1], guess_mime(name),
+                                   download=False)
     except Exception:  # noqa: BLE001
         return message("Fayl vaqtincha mavjud emas", "Saqlash joyi javob bermayapti. Birozdan keyin qayta urinib ko'ring.", 503)
 

@@ -58,6 +58,16 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "reg_edit": "✏️ Qaytadan",
         "reg_sent": "✅ Ro'yxatdan o'tdingiz. So'rovingiz administratorga yuborildi — tasdiqlangach fayl yubora olasiz.",
         "reg_need": "Avval ro'yxatdan o'ting — quyidagi savolga javob bering.",
+        "ask_replace": "♻️ «{name}» avval yuklangan ({date}).\nEskisini yangilasak — QR va havola o'zgarmaydi. Yoki yangi fayl sifatida saqlaymizmi?",
+        "ask_archive": "📦 «{name}» — arxiv.\nArxiv holida saqlaymizmi yoki ochib, papka qilib (bitta QR bilan ichidagi fayllar ko'rinadi)?",
+        "btn_replace": "♻️ Eskisini yangilash",
+        "btn_new": "🆕 Yangi fayl",
+        "btn_archive": "📦 Arxiv holida",
+        "btn_folder": "📂 Papka qilib",
+        "replaced_done": "♻️ Yangilandi (v{version}): {path}\nQR va havola o'zgarmadi:\n🔗 {url}",
+        "unchanged": "ℹ️ Fayl o'zgarmagan — oldingi QR:",
+        "folder_done": "📂 Papka saqlandi: {count} ta fayl\n{path}\n{vis}\n🔗 {url}",
+        "chosen": "⏳ Qabul qilindi: {choice}. Saqlanmoqda…",
         "choose_visibility": "📎 {name}\nHavola turini tanlang:\n🌐 Public — havolasi bor har kim ochadi\n🔒 Private — faqat NAS'da ruxsati borlar ochadi",
         "btn_public": "🌐 Public",
         "btn_private": "🔒 Private",
@@ -105,6 +115,16 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "reg_edit": "✏️ Заново",
         "reg_sent": "✅ Регистрация завершена. Запрос отправлен администратору — после подтверждения можно отправлять файлы.",
         "reg_need": "Сначала пройдите регистрацию — ответьте на вопрос ниже.",
+        "ask_replace": "♻️ «{name}» уже загружался ({date}).\nОбновим старый — QR и ссылка не изменятся. Или сохраним как новый файл?",
+        "ask_archive": "📦 «{name}» — архив.\nСохранить архивом или распаковать в папку (один QR — видны все файлы внутри)?",
+        "btn_replace": "♻️ Обновить старый",
+        "btn_new": "🆕 Новый файл",
+        "btn_archive": "📦 Архивом",
+        "btn_folder": "📂 Папкой",
+        "replaced_done": "♻️ Обновлено (v{version}): {path}\nQR и ссылка не изменились:\n🔗 {url}",
+        "unchanged": "ℹ️ Файл не изменился — прежний QR:",
+        "folder_done": "📂 Папка сохранена: {count} файлов\n{path}\n{vis}\n🔗 {url}",
+        "chosen": "⏳ Принято: {choice}. Сохраняю…",
         "choose_visibility": "📎 {name}\nВыберите тип ссылки:\n🌐 Public — откроет любой, у кого есть ссылка\n🔒 Private — только пользователи с доступом к NAS",
         "btn_public": "🌐 Public",
         "btn_private": "🔒 Private",
@@ -130,6 +150,12 @@ DEFAULTS: dict[str, Any] = {
     # Havola turi: ask — botda tugmalar (Public / Private); public / private — har doim shu
     # Telegram'da ro'yxatdan o'tish majburiy: F.I.Sh., telefon (kontakt), bo'lim, lavozim -> keyin kirish so'rovi
     "registration_required": True,
+    # Shu nomdagi fayl qayta yuborilsa: ask — so'rash | replace — eskisini yangilash (QR o'zgarmaydi) | new — yangi fayl
+    "replace_mode": "ask",
+    # Arxiv (zip, tar) yuborilsa: ask — so'rash | archive — arxiv holida | folder — ochib papka qilib (bitta QR)
+    "archive_mode": "ask",
+    "archive_max_files": 1000,
+    "archive_max_mb": 2048,  # ochilgandagi umumiy hajm chegarasi (zip-bomba himoyasi)
     "visibility_mode": "ask",
     "default_visibility": "public",
     "visibility_timeout_min": 10,  # tanlanmasa shuncha daqiqadan keyin standart tur

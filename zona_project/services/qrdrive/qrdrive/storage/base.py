@@ -27,6 +27,7 @@ class RemoteFile:
     path: str
     id: str = ""
     size: int | None = None
+    is_dir: bool = False
 
 
 @dataclass

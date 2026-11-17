@@ -102,6 +102,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "title": "NAS foydalanuvchisining paroli muddati tugagan",
         "hint": "DSM'ga shu foydalanuvchi bilan kirib parolni yangilang, keyin yangi parolni «Saqlash joylari»da kiriting.",
     },
+    "archive_bad": {
+        "title": "Arxivni ochib bo'lmadi",
+        "hint": "Arxiv buzilgan, parolli yoki bo'sh bo'lishi mumkin. ZIP yoki TAR ko'rinishida qayta yuboring yoki «Arxiv holida» saqlang.",
+    },
     "storage_down": {
         "title": "Saqlash joyi javob bermayapti",
         "hint": "NAS/server yoqilganini va internet borligini tekshiring. Tiklangach «Qayta urinish» bosing.",

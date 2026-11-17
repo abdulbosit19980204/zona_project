@@ -172,6 +172,14 @@ class GoogleDriveProvider:
         self._ids[target] = file_id
         return RemoteFile(path=target, id=file_id, size=size)
 
+    async def replace(self, local_path: Path, remote: RemoteFile) -> RemoteFile:
+        """Mavjud faylning tarkibini almashtirish (Drive'da shu fayl ID — havola o'zgarmaydi)."""
+        fid = remote.id if remote.id and not remote.id.startswith("/") else await self._file_id(remote.path)
+        size = local_path.stat().st_size
+        await self._req("PATCH", f"{UPLOAD}/{fid}", params={"uploadType": "media"}, content=file_chunks(local_path),
+                        headers={"Content-Length": str(size)})
+        return RemoteFile(path=remote.path, id=fid, size=size)
+
     async def _file_id(self, remote_path: str) -> str:
         return await self._resolve(remote_path)
 

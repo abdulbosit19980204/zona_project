@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import logging
 import signal
 import time
@@ -30,7 +31,7 @@ from ..storage import registry
 
 log = logging.getLogger("qrdrive.worker")
 
-CONCURRENCY = 2
+CONCURRENCY = max(1, int(os.environ.get("QRDRIVE_WORKER_CONCURRENCY", "4")))
 WEBHOOK_DELAYS = [10, 60, 300, 1800]
 STORAGE_CHECK_EVERY = 300
 
@@ -60,6 +61,26 @@ class Worker:
                     await s.commit()
         finally:
             self.sem.release()
+
+    async def _run_prefetch(self, fid: int) -> None:
+        try:
+            async with session_scope() as s:
+                await pipeline.prefetch(s, fid)
+        finally:
+            self.sem.release()
+
+    async def prefetches(self) -> None:
+        """Tanlov kutilayotgan fayllarni oldindan yuklab olish (bo'sh slot bo'lsa)."""
+        while not self.stop.is_set() and not self.sem.locked():
+            await self.sem.acquire()
+            async with session_scope() as s:
+                fid = await pipeline.claim_prefetch(s)
+            if fid is None:
+                self.sem.release()
+                return
+            task = asyncio.create_task(self._run_prefetch(fid))
+            self.running.add(task)
+            task.add_done_callback(self.running.discard)
 
     async def jobs(self) -> int:
         started = 0
@@ -249,7 +270,7 @@ class Worker:
         last_beat = 0.0
         while not self.stop.is_set():
             tick = time.monotonic()
-            for step in (self.jobs, self.webhooks, self.notifications, self.maintenance):
+            for step in (self.jobs, self.prefetches, self.webhooks, self.notifications, self.maintenance):
                 try:
                     await step()
                 except Exception:  # noqa: BLE001 — bitta vazifa xatosi qolganlarini to'xtatmaydi
@@ -273,6 +294,7 @@ class Worker:
 
 def run() -> None:
     setup_logging("worker", config.log_level)
+    registry.CACHE_ENABLED = True  # NAS sessiyasi fayldan-faylga qayta ishlatiladi
     worker = Worker()
 
     async def main() -> None:

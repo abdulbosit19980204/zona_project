@@ -16,6 +16,7 @@ import { useQr, useQrAction } from "@/hooks/use-qrdrive";
 import { blobUrl, download, formatBytes, qrApi, type QrFileDetail } from "@/lib/api/qrdrive";
 import { cn } from "@/lib/utils";
 
+import { FolderPicker } from "./folder-picker";
 import { AuthImage, ConfirmDialog, CopyButton, FormRow, QrGuard, StatusBadge, fmtDate, useAuthBlob, useDuration } from "./common";
 import { errorText, useQt, type QKey } from "./i18n";
 
@@ -122,7 +123,41 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                   </div>
                 )}
 
-                {f.status === "delivered" && <div><div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("preview")}</div><Preview file={f} /></div>}
+                {f.kind === "folder" && (
+                  <div>
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("folderItems", { n: f.items.length })}</div>
+                    <ul className="max-h-64 overflow-y-auto rounded-lg border text-sm">
+                      {f.items.map((it, i) => (
+                        <li key={it.name} className="flex items-center gap-2 border-b px-3 py-1.5 last:border-0">
+                          <span className="min-w-0 flex-1 truncate" title={it.name}>{it.name}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{formatBytes(it.size)}</span>
+                          <Button size="icon" variant="ghost" className="size-7" aria-label={t("download")}
+                            onClick={() => download(`files/${f.id}/items/${i}`, it.name.split("/").pop() || it.name, { download: true })}>
+                            <Download className="size-3.5" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {f.versions.length > 0 && (
+                  <div>
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("versions")}</div>
+                    <ul className="grid gap-1 text-sm">
+                      {f.versions.map((v) => (
+                        <li key={v.id} className={cn("flex items-center gap-2 rounded-md px-2 py-1", v.id === f.id && "bg-muted")}>
+                          <span className="font-mono text-xs">{t("versionN", { n: v.version })}</span>
+                          {v.current && <span className="rounded-full bg-success/15 px-1.5 text-[10px] text-success">{t("currentVersion")}</span>}
+                          <span className="text-xs text-muted-foreground">{fmtDate(v.created_at)} · {v.actor || "—"} · {formatBytes(v.size)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("replaceHint")}</p>
+                  </div>
+                )}
+
+                {f.status === "delivered" && f.kind !== "folder" && <div><div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("preview")}</div><Preview file={f} /></div>}
 
                 <div className="grid gap-1 rounded-lg border p-3 text-sm">
                   <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("info")}</div>
@@ -178,7 +213,9 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                       </div>
                     )}
                     {dialog === "rename" && <FormRow label={t("newName")}><Input value={name} onChange={(e) => setName(e.target.value)} /></FormRow>}
-                    {dialog === "move" && <FormRow label={t("targetFolder")}><Input value={folder} onChange={(e) => setFolder(e.target.value)} /></FormRow>}
+                    {dialog === "move" && (f.storage_id ? (
+                      <FolderPicker storageId={f.storage_id} root="/" value={folder} onChange={setFolder} />
+                    ) : <FormRow label={t("targetFolder")}><Input value={folder} onChange={(e) => setFolder(e.target.value)} /></FormRow>)}
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setDialog(null)}>{t("cancel")}</Button>
                       <Button disabled={act.isPending} onClick={() => run(() =>

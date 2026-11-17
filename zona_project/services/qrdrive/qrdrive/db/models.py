@@ -166,6 +166,12 @@ class FileRecord(Base):
     durations: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     options: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # folder, expire_days, password_enc, qr_style
     duplicate_of: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # file | folder (arxiv ochilib papka qilib saqlangan — bitta QR bilan ichidagi fayllar ko'rinadi)
+    kind: Mapped[str] = mapped_column(String(8), default="file")
+    items: Mapped[list[Any]] = mapped_column(JSON, default=list, nullable=True)  # papka: [{name, size}]
+    # Versiyalar: fayl yangilansa (ustidan yozilsa) eski yozuv yangisiga ishora qiladi, havola/QR o'zgarmaydi
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    replaced_by: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     tg_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     tg_file_id: Mapped[str] = mapped_column(Text, default="")
     tg_status_msg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

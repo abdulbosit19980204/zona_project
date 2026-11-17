@@ -10,7 +10,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ... import settings_store
@@ -20,7 +20,8 @@ from ...db.models import Employee, FileEvent, FileRecord, Storage
 from ...db.session import get_session
 from ...services import pipeline, qr
 from ...services.audit import add_audit
-from ...services.files import enqueue, refresh_link, revoke_link, save_upload, serialize
+from ...services.archive import is_archive
+from ...services.files import enqueue, find_previous, guess_mime, refresh_link, revoke_link, save_upload, serialize
 from ...services.naming import safe_name
 from ...storage import registry
 from ..deps import admin, viewer
@@ -46,8 +47,10 @@ async def _get(session: AsyncSession, file_id: int) -> FileRecord:
 
 
 def _filters(q: str, employee_id: int | None, department: str, status: str, source: str, storage_id: int | None,
-             date_from: date | None, date_to: date | None, ftype: str, trash: bool) -> list[Any]:
+             date_from: date | None, date_to: date | None, ftype: str, trash: bool, versions: bool = False) -> list[Any]:
     conds: list[Any] = [FileRecord.deleted_at.isnot(None) if trash else FileRecord.deleted_at.is_(None)]
+    if not versions:
+        conds.append(FileRecord.replaced_by.is_(None))  # eski versiyalar ro'yxatda ko'rinmaydi (fayl kartasida bor)
     if q:
         like = f"%{q}%"
         conds.append(or_(FileRecord.original_name.ilike(like), FileRecord.stored_name.ilike(like),
@@ -77,9 +80,9 @@ def _filters(q: str, employee_id: int | None, department: str, status: str, sour
 @router.get("")
 async def list_files(q: str = "", employee_id: int | None = None, department: str = "", status: str = "", source: str = "",
                      storage_id: int | None = None, date_from: date | None = None, date_to: date | None = None,
-                     type: str = "", trash: bool = False, page: int = Query(1, ge=1), page_size: int = Query(50, le=500),
-                     session: AsyncSession = Depends(get_session), _: Principal = Depends(viewer)):
-    conds = _filters(q, employee_id, department, status, source, storage_id, date_from, date_to, type, trash)
+                     type: str = "", trash: bool = False, versions: bool = False, page: int = Query(1, ge=1),
+                     page_size: int = Query(50, le=500), session: AsyncSession = Depends(get_session), _: Principal = Depends(viewer)):
+    conds = _filters(q, employee_id, department, status, source, storage_id, date_from, date_to, type, trash, versions)
     total = (await session.execute(select(func.count()).select_from(FileRecord).where(*conds))).scalar_one()
     rows = (await session.execute(select(FileRecord).where(*conds).order_by(FileRecord.id.desc())
                                   .offset((page - 1) * page_size).limit(page_size))).scalars().all()
@@ -154,13 +157,21 @@ async def browse(storage_id: int, path: str = "/", session: AsyncSession = Depen
 async def get_file(file_id: int, session: AsyncSession = Depends(get_session), _: Principal = Depends(viewer)):
     rec = await _get(session, file_id)
     events = (await session.execute(select(FileEvent).where(FileEvent.file_id == file_id).order_by(FileEvent.id))).scalars()
-    return {**serialize(rec, full=True), "events": [
+    versions = []
+    if rec.kind == "file" and rec.remote_path and rec.storage_id:
+        versions = [{"id": v.id, "version": v.version, "size": v.size, "created_at": v.created_at, "actor": v.actor,
+                     "current": v.replaced_by is None, "original_name": v.original_name}
+                    for v in (await session.execute(select(FileRecord).where(
+                        FileRecord.storage_id == rec.storage_id, FileRecord.remote_path == rec.remote_path,
+                        FileRecord.status == "delivered", FileRecord.duplicate_of.is_(None)).order_by(FileRecord.version.desc()))).scalars()]
+    return {**serialize(rec, full=True), "versions": versions if len(versions) > 1 else [], "events": [
         {"stage": e.stage, "ok": e.ok, "message": e.message, "duration_ms": e.duration_ms, "at": e.at} for e in events]}
 
 
 @router.post("/upload")
 async def upload(files: list[UploadFile] = File(...), employee_id: int | None = Form(None), folder: str = Form(""),
                  expire_days: int | None = Form(None), caption: str = Form(""), visibility: str = Form(""),
+                 replace: bool = Form(False), extract: bool = Form(False),
                  session: AsyncSession = Depends(get_session), user: Principal = Depends(admin)):
     """Vebdan yuklash — Telegram bilan bir xil jarayon (worker yuklaydi va havola yaratadi)."""
     settings = await settings_store.load(session)
@@ -171,10 +182,16 @@ async def upload(files: list[UploadFile] = File(...), employee_id: int | None = 
         if size > max_bytes:
             path.unlink(missing_ok=True)
             raise HTTPException(413, f"«{f.filename}» juda katta. Ruxsat: {settings.get('max_file_mb')} MB gacha.")
-        rec = await enqueue(session, source="web", original_name=f.filename or "fayl", actor=user.username,
+        name = f.filename or "fayl"
+        extra: dict[str, Any] = {"visibility": visibility} if visibility in ("public", "private") else {}
+        prev = await find_previous(session, employee_id=employee_id, api_key_id=None, name=name) if replace else None
+        if prev is not None:
+            extra["replace_of"] = prev.id
+        elif extract and is_archive(name):
+            extra["archive"] = "folder"
+        rec = await enqueue(session, source="web", original_name=name, actor=user.username,
                             employee_id=employee_id, temp_path=path, size=size, mime=f.content_type or "",
-                            caption=caption, options={"folder": folder, "expire_days": expire_days,
-                                                      **({"visibility": visibility} if visibility in ("public", "private") else {})})
+                            caption=caption, options={"folder": folder, "expire_days": expire_days, **extra})
         created.append(rec)
     add_audit(session, "file.upload_web", actor=user.username, target=", ".join(r.original_name for r in created))
     await session.commit()
@@ -264,14 +281,18 @@ async def restore(file_id: int, session: AsyncSession = Depends(get_session), us
 
 
 async def _purge(session: AsyncSession, rec: FileRecord) -> None:
-    """Butunlay o'chirish: havola bekor qilinadi va fayl saqlash joyidan o'chiriladi (takroriy nusxa bo'lmasa)."""
-    if rec.link_url and not rec.duplicate_of:
+    """Butunlay o'chirish: havola bekor qilinadi va fayl saqlash joyidan o'chiriladi —
+    agar shu fayl/havolani boshqa yozuv (takroriy nusxa yoki boshqa versiya) ishlatmasa."""
+    shared = (await session.execute(select(func.count()).select_from(FileRecord).where(
+        FileRecord.id != rec.id, FileRecord.deleted_at.is_(None),
+        or_(FileRecord.duplicate_of == rec.id,
+            and_(FileRecord.storage_id == rec.storage_id, FileRecord.remote_path == rec.remote_path, FileRecord.remote_path != ""))
+    ))).scalar_one()
+    if rec.link_url and not rec.duplicate_of and not shared:
         try:
             await revoke_link(session, rec)
         except Exception:  # noqa: BLE001 — havola allaqachon yo'q bo'lishi mumkin
             pass
-    shared = (await session.execute(select(func.count()).select_from(FileRecord).where(
-        FileRecord.duplicate_of == rec.id, FileRecord.deleted_at.is_(None)))).scalar_one()
     if rec.storage and rec.remote_path and not rec.duplicate_of and not shared:
         provider = registry.build(rec.storage)
         try:
@@ -366,6 +387,10 @@ async def move(file_id: int, body: MoveBody, session: AsyncSession = Depends(get
         old = rec.remote_path
         rec.remote_path = await provider.move(rec.remote_path, body.folder)
         rec.remote_id = rec.remote_path
+        # shu faylning boshqa versiyalari va takroriy nusxalari ham yangi joyga ishora qilsin
+        for other in (await session.execute(select(FileRecord).where(
+                FileRecord.id != rec.id, FileRecord.storage_id == rec.storage_id, FileRecord.remote_path == old))).scalars():
+            other.remote_path, other.remote_id = rec.remote_path, rec.remote_path
         if rec.link_kind == "provider":  # provayder havolasi eski yo'lga bog'langan — yangilanadi
             settings = await settings_store.load(session)
             await refresh_link(session, rec, settings)
@@ -435,6 +460,18 @@ async def content(file_id: int, download: bool = False, session: AsyncSession = 
     return await stream_remote(rec.storage, rec.remote_path, rec.stored_name or rec.original_name, rec.mime, download)
 
 
+@router.get("/{file_id}/items/{index}")
+async def folder_item(file_id: int, index: int, download: bool = False, session: AsyncSession = Depends(get_session),
+                      _: Principal = Depends(viewer)):
+    """Papka (ochilgan arxiv) ichidagi fayl."""
+    rec = await _get(session, file_id)
+    items = rec.items or []
+    if rec.kind != "folder" or not 0 <= index < len(items) or not rec.storage:
+        raise HTTPException(404, "Fayl topilmadi")
+    name = items[index]["name"]
+    return await stream_remote(rec.storage, f"{rec.remote_path.rstrip('/')}/{name}", name.rsplit("/", 1)[-1], guess_mime(name), download)
+
+
 @router.get("/raw/{storage_id}")
 async def raw(storage_id: int, path: str, download: bool = False, session: AsyncSession = Depends(get_session),
               _: Principal = Depends(viewer)):
@@ -443,5 +480,4 @@ async def raw(storage_id: int, path: str, download: bool = False, session: Async
     if storage is None:
         raise HTTPException(404, "Saqlash joyi topilmadi")
     name = path.rsplit("/", 1)[-1]
-    from ...services.files import guess_mime
     return await stream_remote(storage, path, name, guess_mime(name), download)

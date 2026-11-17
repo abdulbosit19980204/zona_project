@@ -216,7 +216,7 @@ class SynologyProvider:
             except (StorageError, StorageNotFound):
                 if time.monotonic() > deadline:
                     raise StorageNotFound(f"Synology Drive faylni ko'rmadi: {path}") from None
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(0.5)
 
     async def create_public_link(self, remote: RemoteFile, expire_at: datetime | None = None,
                                  password: str | None = None, visibility: str = "public") -> PublicLink:

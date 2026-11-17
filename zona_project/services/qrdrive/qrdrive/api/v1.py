@@ -18,7 +18,8 @@ from ..db.models import ApiKey, Employee, FileRecord, IdempotencyKey, TgAccount
 from ..db.session import get_session, session_scope
 from ..services import qr
 from ..services.audit import add_audit
-from ..services.files import enqueue, refresh_link, revoke_link, save_upload, serialize
+from ..services.archive import is_archive
+from ..services.files import enqueue, find_previous, refresh_link, revoke_link, save_upload, serialize
 from .admin.files import storage_error
 from .deps import api_key
 
@@ -38,6 +39,9 @@ class FileOut(BaseModel):
     size: int | None = None
     employee_id: int | None = None
     visibility: str = Field("", description="public | private")
+    kind: str = Field("file", description="file | folder (ochilgan arxiv)")
+    version: int = 1
+    items: list[dict[str, Any]] = Field(default_factory=list, description="Papka bo'lsa — ichidagi fayllar")
     created_at: datetime | None = None
     error: dict[str, str] | None = Field(None, description="Xato bo'lsa: kind, title, hint")
 
@@ -48,6 +52,7 @@ async def _out(session: AsyncSession, rec: FileRecord, with_qr: bool = True) -> 
     data = {"id": rec.id, "status": rec.status, "url": rec.link_url, "remote_path": rec.remote_path,
             "expires_at": rec.link_expires_at, "original_name": rec.original_name, "size": rec.size,
             "employee_id": rec.employee_id, "created_at": rec.created_at, "error": d["error"], "visibility": d["visibility"],
+            "kind": d["kind"], "version": d["version"], "items": d["items"],
             "qr_png_url": f"{base}{config.prefix}/api/v1/files/{rec.id}/qr.png" if rec.link_url else "",
             "qr_base64": ""}
     if with_qr and rec.link_url:
@@ -90,6 +95,8 @@ async def upload_file(
     folder: str = Form("", description="Saqlash joyidagi papka (asosiy papkaga nisbatan)"),
     expire_days: int | None = Form(None), password: str = Form(""), caption: str = Form(""),
     visibility: str = Form("", description="public | private (bo'sh — panel sozlamasi)"),
+    replace: bool = Form(False, description="Shu nomdagi fayl bo'lsa — ustidan yozish (havola va QR o'zgarmaydi)"),
+    extract: bool = Form(False, description="Arxiv (zip/tar) bo'lsa — ochib papka qilish (bitta havola)"),
     async_: bool = Query(False, alias="async", description="true — darhol 202, natija webhook orqali"),
     wait: int = Query(55, ge=0, le=120, description="Natijani necha soniya kutish"),
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
@@ -117,11 +124,18 @@ async def upload_file(
         if not source_url.startswith(("http://", "https://")):
             raise HTTPException(400, "source_url http(s) manzil bo'lishi kerak")
         name = source_url.split("?")[0].rstrip("/").rsplit("/", 1)[-1] or "fayl"
+    prev = await find_previous(session, employee_id=emp_id, api_key_id=None if emp_id else key.id, name=name) if replace else None
+    if prev is not None:
+        source_extra = {"replace_of": prev.id}
+    elif extract and is_archive(name):
+        source_extra = {"archive": "folder"}
+    else:
+        source_extra = {}
     rec = await enqueue(session, source="api", original_name=name, actor=key.name, employee_id=emp_id, account_id=acc_id,
                         api_key_id=key.id, external_user=external_user or ("" if emp_id else key.name), temp_path=temp,
                         size=size, mime=mime, caption=caption,
                         options={"folder": folder, "expire_days": expire_days, "password": password,
-                                 **({"visibility": visibility} if visibility in ("public", "private") else {}),
+                                 **({"visibility": visibility} if visibility in ("public", "private") else {}), **source_extra,
                                  **({"source_url": source_url} if source_url else {})})
     if idempotency_key:
         session.add(IdempotencyKey(api_key_id=key.id, key=idempotency_key, response={"id": rec.id}))

@@ -57,13 +57,15 @@ export interface QrFile {
   id: number; status: FileStatus; status_label: string; stage: string; source: "telegram" | "web" | "api";
   original_name: string; stored_name: string; size: number | null; mime: string; caption: string;
   employee_id: number | null; employee_name: string; department: string; storage_id: number | null; storage_name: string;
-  remote_path: string; url: string; link_kind: "" | "provider" | "system"; visibility: Visibility; expires_at: string | null; has_password: boolean;
+  remote_path: string; url: string; link_kind: "" | "provider" | "system"; visibility: Visibility;
+  kind: "file" | "folder"; items: { name: string; size: number }[]; version: number; replaced_by: number | null; expires_at: string | null; has_password: boolean;
   downloads: number; attempts: number; created_at: string; finished_at: string | null; deleted_at: string | null;
   duplicate_of: number | null; durations: Record<string, number>; error: HumanError | null;
 }
 
 export interface FileEvent { stage: string; ok: boolean; message: string; duration_ms: number | null; at: string }
-export interface QrFileDetail extends QrFile { events: FileEvent[]; options: Record<string, unknown>; external_user: string; actor: string }
+export interface FileVersion { id: number; version: number; size: number | null; created_at: string; actor: string; current: boolean; original_name: string }
+export interface QrFileDetail extends QrFile { versions: FileVersion[]; events: FileEvent[]; options: Record<string, unknown>; external_user: string; actor: string }
 export interface Paged<T> { items: T[]; total: number }
 
 export interface TgAccount {
@@ -112,7 +114,8 @@ export interface QrStyle { size: number; fg: string; bg: string; logo: boolean; 
 export interface QrSettings {
   setup_done: boolean; company_name: string; public_base_url: string; bot_username: string; bot_api_url: string; bot_api_local: boolean;
   max_file_mb: number; allowed_types: string; folder_template: string; filename_template: string; link_expire_days: number;
-  registration_required: boolean; visibility_mode: "ask" | "public" | "private"; default_visibility: "public" | "private"; visibility_timeout_min: number;
+  registration_required: boolean; visibility_mode: "ask" | "public" | "private";
+  replace_mode: "ask" | "replace" | "new"; archive_mode: "ask" | "archive" | "folder"; archive_max_files: number; archive_max_mb: number; default_visibility: "public" | "private"; visibility_timeout_min: number;
   duplicate_policy: "reuse" | "upload"; auto_fallback: boolean; qr_style: QrStyle; bot_texts: Record<string, Record<string, string>>;
   default_lang: string; timezone: string; notify_chat_ids: string; notify: Record<string, boolean>; daily_report_time: string;
   saved_minutes_per_file: number; retention_days: number; trash_days: number; backup_keep_days: number;

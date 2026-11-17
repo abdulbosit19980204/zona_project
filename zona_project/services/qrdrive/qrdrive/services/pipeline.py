@@ -2,7 +2,9 @@
 Har bosqich FileEvent sifatida vaqti bilan yoziladi. Xatoda 3 marta qayta urinish (10 s, 60 s, 5 daq)."""
 from __future__ import annotations
 
+import asyncio
 import logging
+import shutil
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -19,10 +21,10 @@ from ..core.config import config
 from ..core.errors import (FileTooBig, FileTypeNotAllowed, NoStorage, QRDriveError, StorageNotFound,
                            StorageUnavailable, TelegramError, classify, human)
 from ..core.logging import trace_id
-from ..db.models import ApiKey, FileEvent, FileRecord, Storage, TgAccount, WebhookDelivery
+from ..db.models import ApiKey, FileEvent, FileRecord, Storage, SystemLink, TgAccount, WebhookDelivery
 from ..storage import registry
-from ..storage.base import join
-from . import qr
+from ..storage.base import RemoteFile, join
+from . import archive, qr
 from .accounts import employee_folder, unique_folder
 from .audit import notify
 from .files import create_link, serialize, sha256_of, spool_path
@@ -55,6 +57,40 @@ async def claim_next(session: AsyncSession) -> int | None:
     return fid if res.rowcount else None
 
 
+async def claim_prefetch(session: AsyncSession) -> int | None:
+    """Tugma bosilishini kutayotgan Telegram faylini oldindan yuklab olish uchun band qiladi."""
+    now = _now()
+    cond = and_(FileRecord.status == "awaiting", FileRecord.source == "telegram", FileRecord.temp_path == "",
+                FileRecord.tg_file_id != "", or_(FileRecord.locked_until.is_(None), FileRecord.locked_until < now))
+    fid = (await session.execute(select(FileRecord.id).where(cond).order_by(FileRecord.id).limit(1))).scalar_one_or_none()
+    if fid is None:
+        return None
+    res = await session.execute(update(FileRecord).where(FileRecord.id == fid, cond)
+                                .values(locked_until=now + timedelta(minutes=10)))
+    await session.commit()
+    return fid if res.rowcount else None
+
+
+async def prefetch(session: AsyncSession, file_id: int) -> None:
+    """Telegram'dan oldindan yuklab olish — foydalanuvchi tugmani bosguncha fayl tayyor turadi (tezlik).
+    Faqat temp_path/hajm ustunlari yangilanadi: bot shu paytda holatni o'zgartirishi mumkin."""
+    rec = await session.get(FileRecord, file_id)
+    settings = await settings_store.load(session)
+    if rec is None or not settings.get("bot_token"):
+        return
+    dest = spool_path(f"tg{rec.id}")
+    try:
+        async with TelegramClient.from_settings(settings) as tg:
+            await tg.download(rec.tg_file_id, dest)
+        values: dict[str, Any] = {"temp_path": str(dest), "size": dest.stat().st_size, "locked_until": None}
+    except Exception as exc:  # noqa: BLE001 — asosiy jarayon keyin qayta urinadi
+        dest.unlink(missing_ok=True)
+        log.warning("oldindan yuklab olinmadi", extra={"data": {"id": file_id, "error": type(exc).__name__}})
+        values = {"locked_until": _now() + timedelta(minutes=5)}
+    await session.execute(update(FileRecord).where(FileRecord.id == file_id).values(**values))
+    await session.commit()
+
+
 def allowed(name: str, allowed_types: str) -> bool:
     types = {t.strip().lower().lstrip(".") for t in (allowed_types or "").split(",") if t.strip()}
     if not types:
@@ -69,6 +105,8 @@ class Ctx:
         self.lang = settings.get("default_lang", "uz")
         self.local_file: Path | None = None
         self.cleanup: list[Path] = []
+        self.cleanup_dirs: list[Path] = []
+        self.mode = "new"  # new | duplicate | replaced | unchanged | folder
 
     def text(self, key: str, **kw: Any) -> str:
         return settings_store.text(self.settings, self.lang, key, **kw)
@@ -162,7 +200,8 @@ async def _find_duplicate(session: AsyncSession, rec: FileRecord) -> FileRecord 
     q = select(FileRecord).where(FileRecord.sha256 == rec.sha256, FileRecord.id != rec.id,
                                  FileRecord.link_visibility == visibility_of(rec, await settings_store.load(session)),
                                  FileRecord.status == "delivered", FileRecord.deleted_at.is_(None),
-                                 FileRecord.link_url != "")
+                                 FileRecord.replaced_by.is_(None), FileRecord.link_url != "",
+                                 FileRecord.kind == ("folder" if rec.options.get("archive") == "folder" else "file"))
     if rec.employee_id:
         q = q.where(FileRecord.employee_id == rec.employee_id)
     elif rec.api_key_id:
@@ -188,19 +227,103 @@ async def _upload(ctx: Ctx, storage: Storage) -> None:
     else:
         folder = render_folder(s.get("folder_template", "{xodim}"), storage.base_folder, folder_name, dept, at)
     filename = render_filename(s.get("filename_template", "{asl_nom}"), rec.original_name, folder_name, at)
-    provider = registry.build(storage)
-    try:
+    async with registry.use(storage) as provider:
         await ctx.status_msg("uploading")
         async with ctx.stage("uploading"):
-            await provider.ensure_folder(folder)
-            remote = await provider.upload(ctx.local_file, folder, filename)
+            if rec.options.get("archive") == "folder":
+                # papka nomi: shablon bo'yicha, arxiv kengaytmasisiz (masalan «Hujjatlar_2026-11-17_18-30-00»)
+                dir_name = safe_name(render_filename(s.get("filename_template", "{asl_nom}"), archive.stem(rec.original_name) + ".x",
+                                                     folder_name, at)[:-2])
+                dir_name = await _free_name(ctx.session, storage.id, folder, dir_name)
+                remote = await _upload_tree(ctx, provider, join(folder, dir_name))
+                filename = dir_name
+            else:
+                # yangi fayl hech qachon boshqa faylning ustidan yozmasin (bir xil nom, bir soniya ichida)
+                filename = await _free_name(ctx.session, storage.id, folder, filename)
+                await provider.ensure_folder(folder)
+                remote = await provider.upload(ctx.local_file, folder, filename)
         rec.storage_id, rec.storage = storage.id, storage
         rec.remote_path, rec.remote_id, rec.stored_name = remote.path, remote.id, filename
         await ctx.status_msg("sharing")
         async with ctx.stage("sharing"):
             await create_link(ctx.session, rec, storage, provider, s)
-    finally:
-        await provider.close()
+
+
+async def _free_name(session: AsyncSession, storage_id: int, folder: str, name: str) -> str:
+    """Shu papkada tizimdagi boshqa fayl egallagan nom bo'lsa — «nom_2.ext», «nom_3.ext», ..."""
+    stem_, dot, ext = name.rpartition(".")
+    if not dot or not stem_:
+        stem_, ext = name, ""
+    candidate, n = name, 2
+    while (await session.execute(select(FileRecord.id).where(
+            FileRecord.storage_id == storage_id, FileRecord.remote_path == join(folder, candidate),
+            FileRecord.deleted_at.is_(None)).limit(1))).first():
+        candidate = f"{stem_}_{n}.{ext}" if ext else f"{stem_}_{n}"
+        n += 1
+    return candidate
+
+
+UPLOAD_PARALLEL = 4
+
+
+async def _upload_tree(ctx: Ctx, provider, target: str) -> RemoteFile:
+    """Arxivni ochib, papka tuzilmasi bilan parallel yuklaydi. Natija — papka (bitta havola uchun)."""
+    s = ctx.settings
+    max_mb = int(s.get("archive_max_mb") or 2048)
+    dest = spool_path(f"x{ctx.rec.id}")
+    ctx.cleanup_dirs.append(dest)
+    ex = await asyncio.to_thread(archive.extract, ctx.local_file, dest, max_files=int(s.get("archive_max_files") or 1000),
+                                 max_bytes=max_mb * 1024 * 1024, allowed=lambda n: allowed(n, s.get("allowed_types", "")))
+    dirs = sorted({target} | {join(target, rel.rsplit("/", 1)[0]) for rel, _ in ex.files if "/" in rel}, key=len)
+    for d in dirs:  # papkalar ketma-ket (ba'zi provayderlarda parallel yaratish dublikat beradi)
+        await provider.ensure_folder(d)
+    sem = asyncio.Semaphore(UPLOAD_PARALLEL)
+
+    async def one(rel: str) -> None:
+        async with sem:
+            parent, _, name = rel.rpartition("/")
+            await provider.upload(ex.root / rel, join(target, parent) if parent else target, name)
+
+    await asyncio.gather(*(one(rel) for rel, _ in ex.files))
+    ctx.rec.kind = "folder"
+    ctx.rec.items = [{"name": rel, "size": size} for rel, size in ex.files]
+    ctx.rec.size = sum(size for _, size in ex.files)
+    ctx.mode = "folder"
+    return RemoteFile(path=target, id=target, is_dir=True)
+
+
+async def _replace(ctx: Ctx, prev: FileRecord) -> None:
+    """Eski faylni yangisi bilan almashtirish: o'sha joyga ustidan yoziladi — havola va QR o'zgarmaydi."""
+    rec, session = ctx.rec, ctx.session
+    storage = prev.storage
+    folder, _, name = prev.remote_path.rpartition("/")
+    async with registry.use(storage) as provider:
+        await ctx.status_msg("uploading")
+        async with ctx.stage("uploading"):
+            if hasattr(provider, "replace"):
+                remote = await provider.replace(ctx.local_file, RemoteFile(path=prev.remote_path, id=prev.remote_id))
+            else:
+                remote = await provider.upload(ctx.local_file, folder or "/", name)
+    rec.storage_id, rec.storage = storage.id, storage
+    rec.remote_path, rec.remote_id, rec.stored_name = prev.remote_path, remote.id or prev.remote_id, prev.stored_name
+    rec.link_url, rec.link_id, rec.link_kind = prev.link_url, prev.link_id, prev.link_kind
+    rec.link_expires_at, rec.link_has_password, rec.link_visibility = prev.link_expires_at, prev.link_has_password, prev.link_visibility
+    if prev.link_kind == "system" and prev.link_id:  # tizim havolasi endi yangi versiyaga ishora qiladi
+        await session.execute(update(SystemLink).where(SystemLink.file_id == prev.id).values(file_id=rec.id))
+    rec.version, prev.replaced_by = (prev.version or 1) + 1, rec.id
+    session.add(FileEvent(file_id=rec.id, stage="sharing", ok=True, message=f"v{rec.version}: havola o'zgarmadi"))
+    ctx.mode = "replaced"
+
+
+async def _replace_target(session: AsyncSession, rec: FileRecord) -> FileRecord | None:
+    pid = rec.options.get("replace_of")
+    if not pid:
+        return None
+    prev = await session.get(FileRecord, int(pid))
+    if prev is None or prev.status != "delivered" or prev.deleted_at or prev.replaced_by or prev.kind != "file" or not prev.storage:
+        return None
+    await session.refresh(prev, ["storage"])
+    return prev
 
 
 async def _deliver(ctx: Ctx, duplicate: bool = False) -> None:
@@ -210,8 +333,15 @@ async def _deliver(ctx: Ctx, duplicate: bool = False) -> None:
         image = qr.png(rec.link_url, s.get("qr_style"), caption)
     async with ctx.stage("delivered"):
         if rec.source == "telegram" and ctx.tg and rec.tg_chat_id:
-            if duplicate:
+            if ctx.mode == "replaced":
+                text = ctx.text("replaced_done", version=rec.version, path=rec.remote_path, url=rec.link_url)
+            elif ctx.mode == "unchanged":
+                text = ctx.text("unchanged") + "\n" + rec.link_url
+            elif duplicate:
                 text = ctx.text("duplicate") + "\n" + rec.link_url
+            elif ctx.mode == "folder":
+                text = ctx.text("folder_done", count=len(rec.items or []), path=rec.remote_path, url=rec.link_url,
+                                vis=ctx.text("vis_private" if rec.link_visibility == "private" else "vis_public"))
             else:
                 text = ctx.text("done", path=rec.remote_path, url=rec.link_url,
                                 vis=ctx.text("vis_private" if rec.link_visibility == "private" else "vis_public"))
@@ -263,13 +393,22 @@ async def process(session: AsyncSession, file_id: int, tg: TelegramClient | None
     try:
         async with ctx.stage("downloading"):
             await _fetch(ctx)
-        dup = await _find_duplicate(session, rec) if settings.get("duplicate_policy", "reuse") == "reuse" else None
-        if dup:
+        prev = await _replace_target(session, rec)
+        dup = None
+        if prev is not None and prev.sha256 == rec.sha256:  # tarkib o'zgarmagan — eski QR
+            dup, ctx.mode = prev, "unchanged"
+        elif prev is None and settings.get("duplicate_policy", "reuse") == "reuse":
+            dup = await _find_duplicate(session, rec)
+        if prev is not None and dup is None:
+            await _replace(ctx, prev)
+            await _deliver(ctx)
+        elif dup:
             rec.duplicate_of, rec.storage_id, rec.storage = dup.duplicate_of or dup.id, dup.storage_id, dup.storage
             rec.remote_path, rec.remote_id, rec.stored_name = dup.remote_path, dup.remote_id, dup.stored_name
             rec.link_url, rec.link_id, rec.link_kind = dup.link_url, dup.link_id, dup.link_kind
             rec.link_expires_at, rec.link_has_password = dup.link_expires_at, dup.link_has_password
             rec.link_visibility = dup.link_visibility
+            rec.kind, rec.items = dup.kind, dup.items
             await _deliver(ctx, duplicate=True)
         else:
             storage = await choose_storage(session, rec)
@@ -302,6 +441,8 @@ async def process(session: AsyncSession, file_id: int, tg: TelegramClient | None
                     p.unlink()
             except OSError:
                 pass
+        for d in ctx.cleanup_dirs:
+            shutil.rmtree(d, ignore_errors=True)
         if own_tg and tg:
             await tg.close()
     return rec
