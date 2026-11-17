@@ -56,7 +56,7 @@ class LocalProvider:
         rel = join(dest_folder, filename)
         return RemoteFile(path=rel, id=rel, size=target.stat().st_size)
 
-    async def create_public_link(self, remote: RemoteFile, expire_at=None, password=None) -> PublicLink:
+    async def create_public_link(self, remote: RemoteFile, expire_at=None, password=None, visibility: str = "public") -> PublicLink:
         raise NotSupported("lokal disk o'z havolasini bera olmaydi")
 
     async def revoke_public_link(self, link_id: str) -> None:

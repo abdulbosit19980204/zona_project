@@ -160,7 +160,7 @@ async def get_file(file_id: int, session: AsyncSession = Depends(get_session), _
 
 @router.post("/upload")
 async def upload(files: list[UploadFile] = File(...), employee_id: int | None = Form(None), folder: str = Form(""),
-                 expire_days: int | None = Form(None), caption: str = Form(""),
+                 expire_days: int | None = Form(None), caption: str = Form(""), visibility: str = Form(""),
                  session: AsyncSession = Depends(get_session), user: Principal = Depends(admin)):
     """Vebdan yuklash — Telegram bilan bir xil jarayon (worker yuklaydi va havola yaratadi)."""
     settings = await settings_store.load(session)
@@ -173,7 +173,8 @@ async def upload(files: list[UploadFile] = File(...), employee_id: int | None = 
             raise HTTPException(413, f"«{f.filename}» juda katta. Ruxsat: {settings.get('max_file_mb')} MB gacha.")
         rec = await enqueue(session, source="web", original_name=f.filename or "fayl", actor=user.username,
                             employee_id=employee_id, temp_path=path, size=size, mime=f.content_type or "",
-                            caption=caption, options={"folder": folder, "expire_days": expire_days})
+                            caption=caption, options={"folder": folder, "expire_days": expire_days,
+                                                      **({"visibility": visibility} if visibility in ("public", "private") else {})})
         created.append(rec)
     add_audit(session, "file.upload_web", actor=user.username, target=", ".join(r.original_name for r in created))
     await session.commit()
@@ -271,12 +272,15 @@ async def purge(file_id: int, session: AsyncSession = Depends(get_session), user
 class LinkBody(BaseModel):
     expire_days: int | None = None
     password: str | None = None
+    visibility: str | None = None
 
 
 @router.post("/{file_id}/link")
 async def link_refresh(file_id: int, body: LinkBody, session: AsyncSession = Depends(get_session), user: Principal = Depends(admin)):
     rec = await _get(session, file_id)
     settings = await settings_store.load(session)
+    if body.visibility in ("public", "private"):
+        rec.options = {**(rec.options or {}), "visibility": body.visibility}
     try:
         await refresh_link(session, rec, settings, body.expire_days, body.password)
     except Exception as exc:  # noqa: BLE001

@@ -27,7 +27,7 @@ import { FileSheet } from "./file-sheet";
 import { useQt, type QKey } from "./i18n";
 
 const PAGE = 50;
-const STATUSES = ["delivered", "failed", "retrying", "queued", "processing"] as const;
+const STATUSES = ["delivered", "failed", "retrying", "queued", "processing", "awaiting"] as const;
 const TYPES = ["image", "video", "audio", "pdf", "other"] as const;
 
 export function QrFiles() {
@@ -274,6 +274,7 @@ export function UploadDialog({ open, onOpenChange, employeeId }: { open: boolean
   const [files, setFiles] = useState<File[]>([]);
   const [emp, setEmp] = useState(employeeId ? String(employeeId) : "none");
   const [folder, setFolder] = useState("");
+  const [vis, setVis] = useState("default");
   const [drag, setDrag] = useState(false);
   const employees = useQr<QrEmployee[]>(["employees"], "employees", undefined, { enabled: open });
   const send = useQrAction(async () => {
@@ -281,6 +282,7 @@ export function UploadDialog({ open, onOpenChange, employeeId }: { open: boolean
     files.forEach((f) => fd.append("files", f));
     if (emp !== "none") fd.append("employee_id", emp);
     if (folder) fd.append("folder", folder);
+    if (vis !== "default") fd.append("visibility", vis);
     return (await qrApi.post<QrFile[]>("files/upload", fd)).data;
   }, (r) => t("uploaded", { n: r.length }));
 
@@ -314,6 +316,16 @@ export function UploadDialog({ open, onOpenChange, employeeId }: { open: boolean
             <SelectContent>
               <SelectItem value="none">{t("noEmployee")}</SelectItem>
               {employees.data?.filter((e) => e.status === "active").map((e) => <SelectItem key={e.id} value={String(e.id)}>{e.full_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormRow>
+        <FormRow label={t("visibility")}>
+          <Select value={vis} onValueChange={setVis}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">{t("visDefault")}</SelectItem>
+              <SelectItem value="public">{t("visPublic")}</SelectItem>
+              <SelectItem value="private">{t("visPrivate")}</SelectItem>
             </SelectContent>
           </Select>
         </FormRow>

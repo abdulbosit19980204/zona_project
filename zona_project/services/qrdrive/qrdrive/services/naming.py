@@ -47,9 +47,13 @@ def render_folder(template: str, base: str, employee_folder: str, department: st
 
 
 def render_filename(template: str, original: str, employee_folder: str, at: datetime) -> str:
+    """{asl_nom} — kengaytmasiz asl nom; kengaytma (.pdf) har doim nom oxiriga qo'yiladi."""
     original = safe_name(original)
-    name = _render(template or "{asl_nom}", _values(employee_folder, "", original, at))
-    return safe_name(name, 180)
+    stem, dot, ext = original.rpartition(".")
+    if not dot or not stem or len(ext) > 10 or " " in ext:
+        stem, ext = original, ""
+    name = _render(template or "{asl_nom}", _values(employee_folder, "", stem, at)).strip(" ._")
+    return safe_name(f"{name or stem}.{ext}" if ext else (name or stem), 180)
 
 
 def validate_template(template: str) -> bool:

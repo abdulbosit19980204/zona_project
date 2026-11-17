@@ -124,5 +124,7 @@ SDK va aiogram plagini: [sdk/python/README.md](sdk/python/README.md).
 11. **Login/parolsiz saqlash joyi** serverga ulanib tekshirilmaydi — «kirish ma'lumotlari kiritilmagan» holatida turadi.
 12. **S3 havolasi** — presigned URL (S3 cheklovi 7 kun). Muddatsiz yoki parolli havola kerak bo'lsa avtomatik tizim havolasi.
     Google Drive havolasiga parol qo'yib bo'lmaydi — parol so'ralsa tizim havolasi.
-13. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
+13. **Havola turi (Public/Private)** botda tugmalar bilan tanlanadi; tanlov kutilayotgan fayl `awaiting` holatida turadi va navbatga
+    tushmaydi (N daqiqadan keyin standart tur). Private havola Synology Drive (`/d/f/`) va Google Drive'da; boshqalarida tizim havolasi.
+14. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
     oqim testlari va jonli QA (Next.js proksi orqali) ishlatildi.

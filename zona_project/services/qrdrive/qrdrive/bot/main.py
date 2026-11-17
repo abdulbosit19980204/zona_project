@@ -224,12 +224,43 @@ async def on_file(msg: Message, session, acc: TgAccount, created: bool, settings
     if not allowed(name, settings.get("allowed_types", "")):
         await msg.answer(t(settings, acc, "type_not_allowed", types=settings.get("allowed_types", "")))
         return
-    status = await msg.reply(t(settings, acc, "received"))
+    mode = settings.get("visibility_mode") or "ask"
+    ask = mode == "ask"
+    status = await msg.reply(t(settings, acc, "choose_visibility", name=name) if ask else t(settings, acc, "received"))
     rec = await enqueue(session, source="telegram", original_name=name, actor=acc.display, employee_id=acc.employee_id,
                         account_id=acc.id, size=size, mime=mime, caption=msg.caption or "",
-                        tg={"chat_id": msg.chat.id, "file_id": file_id, "status_msg_id": status.message_id})
+                        options={} if ask else {"visibility": mode if mode in ("public", "private") else "public"},
+                        tg={"chat_id": msg.chat.id, "file_id": file_id, "status_msg_id": status.message_id}, awaiting=ask)
     await session.commit()
-    log.info("fayl navbatga qo'yildi", extra={"data": {"id": rec.id, "size": size}})
+    if ask:  # foydalanuvchi havola turini tanlaydi: Public yoki Private
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=t(settings, acc, "btn_public"), callback_data=f"vis:{rec.id}:public"),
+            InlineKeyboardButton(text=t(settings, acc, "btn_private"), callback_data=f"vis:{rec.id}:private")]])
+        await status.edit_reply_markup(reply_markup=kb)
+    log.info("fayl qabul qilindi", extra={"data": {"id": rec.id, "size": size, "awaiting": ask}})
+
+
+@on("callback_query", F.data.startswith("vis:"))
+async def cb_visibility(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str, Any]):
+    """Havola turi tanlandi: fayl navbatga qo'yiladi (worker yuklaydi va tanlangan turdagi havolani yaratadi)."""
+    try:
+        _, fid, vis = cb.data.split(":")
+        rec = await session.get(FileRecord, int(fid))
+    except (ValueError, TypeError):
+        rec, vis = None, ""
+    if rec is None or rec.account_id != acc.id or vis not in ("public", "private"):
+        await cb.answer()
+        return
+    if rec.status != "awaiting":  # allaqachon tanlangan yoki vaqt o'tib standart tur qo'llangan
+        await cb.answer()
+        return
+    rec.options = {**(rec.options or {}), "visibility": vis}
+    rec.status, rec.next_attempt_at = "queued", datetime.now(timezone.utc)
+    add_audit(session, "file.visibility", actor=str(acc.telegram_id), actor_kind="bot", target=rec.original_name, details={"visibility": vis})
+    await session.commit()
+    await cb.answer(t(settings, acc, f"vis_{vis}"))
+    if cb.message:
+        await cb.message.edit_text(t(settings, acc, "vis_chosen", vis=t(settings, acc, f"vis_{vis}")))
 
 
 @on("message")

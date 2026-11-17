@@ -48,7 +48,7 @@ async def enqueue(session: AsyncSession, *, source: str, original_name: str, act
                   account_id: int | None = None, api_key_id: int | None = None, external_user: str = "",
                   temp_path: Path | None = None, size: int | None = None, mime: str = "", caption: str = "",
                   options: dict[str, Any] | None = None, tg: dict[str, Any] | None = None,
-                  storage_id: int | None = None) -> FileRecord:
+                  storage_id: int | None = None, awaiting: bool = False) -> FileRecord:
     opts = dict(options or {})
     if opts.get("password"):
         opts["password_enc"] = encrypt(str(opts.pop("password")))
@@ -56,7 +56,7 @@ async def enqueue(session: AsyncSession, *, source: str, original_name: str, act
                      account_id=account_id, api_key_id=api_key_id, external_user=external_user,
                      temp_path=str(temp_path or ""), size=size,
                      mime=mime if mime and mime != "application/octet-stream" else guess_mime(original_name), caption=caption,
-                     options=opts, status="queued", stage="received", next_attempt_at=datetime.now(timezone.utc),
+                     options=opts, status="awaiting" if awaiting else "queued", stage="received", next_attempt_at=datetime.now(timezone.utc),
                      storage_id=storage_id)
     if tg:
         rec.tg_chat_id, rec.tg_file_id, rec.tg_status_msg_id = tg.get("chat_id"), tg.get("file_id", ""), tg.get("status_msg_id")
@@ -88,16 +88,30 @@ async def create_system_link(session: AsyncSession, rec: FileRecord, expires_at:
     return rec.link_url
 
 
+def visibility_of(rec: FileRecord, settings: dict[str, Any]) -> str:
+    v = rec.options.get("visibility") or (settings.get("visibility_mode") if settings.get("visibility_mode") in ("public", "private")
+                                           else settings.get("default_visibility")) or "public"
+    return "private" if v == "private" else "public"
+
+
 async def create_link(session: AsyncSession, rec: FileRecord, storage: Storage, provider, settings: dict[str, Any]) -> str:
     expires_at, password = link_expiry(rec, settings), link_password(rec, settings)
+    visibility = visibility_of(rec, settings)
     if storage.link_mode == "system" or not provider.supports_links:
-        return await create_system_link(session, rec, expires_at, password, settings_store.public_base(settings))
+        await create_system_link(session, rec, expires_at, password, settings_store.public_base(settings))
+        rec.link_visibility = "public"
+        return rec.link_url
     try:
-        link = await provider.create_public_link(RemoteFile(path=rec.remote_path, id=rec.remote_id), expires_at, password or None)
+        link = await provider.create_public_link(RemoteFile(path=rec.remote_path, id=rec.remote_id), expires_at, password or None,
+                                                 visibility=visibility)
     except NotSupported:
-        return await create_system_link(session, rec, expires_at, password, settings_store.public_base(settings))
+        # Saqlash joyi bu turdagi havolani bera olmaydi (masalan, muddatli Drive havolasi) — tizim havolasi
+        await create_system_link(session, rec, expires_at, password, settings_store.public_base(settings))
+        rec.link_visibility = "public"
+        return rec.link_url
     rec.link_url, rec.link_id, rec.link_kind = link.url, link.id, "provider"
-    rec.link_expires_at, rec.link_has_password = expires_at, bool(password)
+    rec.link_expires_at, rec.link_has_password = link.expires_at, bool(password) and link.visibility == "public"
+    rec.link_visibility = link.visibility
     return rec.link_url
 
 
@@ -126,7 +140,8 @@ async def refresh_link(session: AsyncSession, rec: FileRecord, settings: dict[st
     if password is not None:
         opts["password_enc"] = encrypt(password) if password else ""
     rec.options = opts
-    await revoke_link(session, rec)
+    if not (rec.link_kind == "provider" and rec.link_id.startswith("drive:")):
+        await revoke_link(session, rec)  # Drive havolasi o'chirilmaydi (API yo'q) — yangisi yaratiladi
     provider = registry.build(rec.storage)
     try:
         return await create_link(session, rec, rec.storage, provider, settings)
@@ -134,7 +149,7 @@ async def refresh_link(session: AsyncSession, rec: FileRecord, settings: dict[st
         await provider.close()
 
 
-STATUS_LABEL = {"queued": "Navbatda", "processing": "Ishlanmoqda", "retrying": "Qayta urinilmoqda",
+STATUS_LABEL = {"awaiting": "Tanlov kutilmoqda", "queued": "Navbatda", "processing": "Ishlanmoqda", "retrying": "Qayta urinilmoqda",
                 "delivered": "Tayyor", "failed": "Xato"}
 
 
@@ -148,6 +163,7 @@ def serialize(rec: FileRecord, *, full: bool = False) -> dict[str, Any]:
         "storage_id": rec.storage_id, "storage_name": rec.storage.name if rec.storage else "",
         "remote_path": rec.remote_path, "url": rec.link_url, "link_kind": rec.link_kind,
         "expires_at": rec.link_expires_at, "has_password": rec.link_has_password, "downloads": rec.downloads,
+        "visibility": rec.link_visibility or (rec.options or {}).get("visibility") or "",
         "attempts": rec.attempts, "created_at": rec.created_at, "finished_at": rec.finished_at,
         "deleted_at": rec.deleted_at, "duplicate_of": rec.duplicate_of, "durations": rec.durations or {},
         "error": human(rec.error_kind) if rec.error_kind else None,

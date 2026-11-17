@@ -178,6 +178,13 @@ class Worker:
             settings = await settings_store.load(s)
             tz = ZoneInfo(settings.get("timezone") or config.tz)
             local = now.astimezone(tz)
+            # botda havola turi tanlanmagan fayllar: N daqiqadan keyin standart tur bilan navbatga
+            limit = now - timedelta(minutes=int(settings.get("visibility_timeout_min") or 10))
+            for rec in (await s.execute(select(FileRecord).where(FileRecord.status == "awaiting",
+                                                                 FileRecord.created_at < limit))).scalars().all():
+                rec.options = {**(rec.options or {}), "visibility": settings.get("default_visibility") or "public"}
+                rec.status, rec.next_attempt_at = "queued", now
+            await s.commit()
             # osilib qolgan (jarayon to'xtagan) fayllar navbatga qaytariladi
             await s.execute(update(FileRecord).where(FileRecord.status == "processing", FileRecord.locked_until < now)
                             .values(status="retrying", locked_until=None, next_attempt_at=now))

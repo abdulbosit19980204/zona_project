@@ -55,7 +55,8 @@ def build(storage: Storage) -> StorageProvider:
     cfg = get_config(storage)
     if storage.kind == "synology":
         return SynologyProvider(cfg.get("url", ""), cfg.get("username", ""), cfg.get("password", ""),
-                                verify_ssl=bool(cfg.get("verify_ssl", True)), base_folder=storage.base_folder)
+                                verify_ssl=bool(cfg.get("verify_ssl", True)), base_folder=storage.base_folder,
+                                drive_links=bool(parse_drive_folder(str(cfg.get("drive_folder") or ""))))
     if storage.kind == "local":
         return LocalProvider(cfg.get("root") or str(config.local_storage_default))
     if storage.kind == "webdav":

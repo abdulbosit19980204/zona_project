@@ -176,10 +176,14 @@ class GoogleDriveProvider:
         return await self._resolve(remote_path)
 
     async def create_public_link(self, remote: RemoteFile, expire_at: datetime | None = None,
-                                 password: str | None = None) -> PublicLink:
+                                 password: str | None = None, visibility: str = "public") -> PublicLink:
         if password:
             raise NotSupported("Google Drive havolasiga parol qo'yib bo'lmaydi")
         fid = remote.id if remote.id and not remote.id.startswith("/") else await self._file_id(remote.path)
+        if visibility == "private":  # ruxsatsiz: faqat Drive'da kirish huquqi borlar ochadi
+            info = (await self._req("GET", f"{API}/files/{fid}", params={"fields": "webViewLink"})).json()
+            return PublicLink(url=info.get("webViewLink") or f"https://drive.google.com/file/d/{fid}/view", id="",
+                              expires_at=None, visibility="private")
         body: dict[str, Any] = {"role": "reader", "type": "anyone"}
         perm = (await self._req("POST", f"{API}/files/{fid}/permissions", json=body, params={"fields": "id"})).json()
         info = (await self._req("GET", f"{API}/files/{fid}", params={"fields": "webViewLink"})).json()

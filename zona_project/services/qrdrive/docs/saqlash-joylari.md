@@ -29,8 +29,28 @@ Xato bilan tugagan fayllar **Xatolar markazi**da turadi. Muammo tuzatilgach **«
 
 Tekshirilgan holat (file.stargroup.uz, 2026-11-17): `#file_id=984701843502314054` → `/team-folders/Timur/qrable` →
 File Station yo'li `/Timur/qrable`. `caspar` foydalanuvchisiga File Station ilovasi yopiq (sessiya `FileStation` → kod 405),
-Synology Drive ochiq — QR Drive avtomatik Drive sessiyasiga o'tadi. Ommaviy havolalar `gofile.me` (Synology QuickConnect) domenida beriladi;
-o'z domeningizda havola kerak bo'lsa, saqlash joyida **Havola turi → «Tizim havolasi»** ni tanlang.
+Synology Drive ochiq — QR Drive avtomatik Drive sessiyasiga o'tadi.
+
+### Havolalar: Public va Private
+
+Synology Drive papkasi berilgan bo'lsa, havolalar NAS'ning o'z domenida, Synology Drive orqali beriladi:
+
+| Tur | Ko'rinishi | Kim ochadi |
+|---|---|---|
+| 🌐 Public | `https://file.stargroup.uz/d/s/<id>/<token>` | havolasi bor har kim |
+| 🔒 Private | `https://file.stargroup.uz/d/f/<id>` | faqat NAS'da shu faylga ruxsati bor foydalanuvchilar |
+
+Botda fayl yuborilgach **🌐 Public / 🔒 Private** tugmalari chiqadi — tanlovga qarab havola yaratiladi.
+Rejim: Bot sozlamalari → Havolalar → «Havola turini kim tanlaydi» (botda so'rash / har doim Public / har doim Private),
+tanlanmasa N daqiqadan keyin standart tur qo'llanadi. Vebdan va API'dan yuklashda ham tur tanlanadi (`visibility=public|private`).
+
+Cheklovlar (DSM API): Synology Drive public havolasiga API orqali **muddat va parol qo'yib bo'lmaydi** va havolani **bekor qilib bo'lmaydi**.
+Shuning uchun muddat yoki parol talab qilinsa, QR Drive o'zining tizim havolasini beradi (`/qrdrive/s/...` — muddat, parol, hisob bilan).
+Drive havolasini o'chirish kerak bo'lsa — Synology Drive'da faylni tanlab «Share» → Public Link oynasidan.
+Yangi yuklangan faylni Drive ~5–10 soniyada indekslaydi — QR Drive buni kutadi (90 soniyagacha).
+
+**Fayl nomi:** standart shablon `{asl_nom}_{sana}_{vaqt}` — asl nom boshida, kengaytma doim oxirida:
+`rasm_20261117_180820_2026-11-17_18-23-54.jpg`.
 
 ### DSM login xato kodlari
 

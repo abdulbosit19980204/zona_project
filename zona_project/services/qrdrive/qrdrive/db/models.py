@@ -143,8 +143,10 @@ class FileRecord(Base):
     link_kind: Mapped[str] = mapped_column(String(16), default="")  # provider | system
     link_expires_at: Mapped[datetime | None] = mapped_column(nullable=True)
     link_has_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    # public — havola bilan istalgan odam; private — faqat saqlash joyida ruxsati borlar (Synology Drive /d/f/...)
+    link_visibility: Mapped[str] = mapped_column(String(8), default="")
     downloads: Mapped[int] = mapped_column(Integer, default=0)
-    # queued | processing | retrying | delivered | failed
+    # awaiting (botda havola turi tanlanishi kutilmoqda) | queued | processing | retrying | delivered | failed
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     stage: Mapped[str] = mapped_column(String(24), default="received")
     error_kind: Mapped[str] = mapped_column(String(32), default="")

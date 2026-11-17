@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQr, useQrAction } from "@/hooks/use-qrdrive";
@@ -50,6 +51,7 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
   const f = q.data;
   const [dialog, setDialog] = useState<null | "link" | "rename" | "move" | "purge" | "revoke">(null);
   const [days, setDays] = useState("");
+  const [vis, setVis] = useState<string>("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [folder, setFolder] = useState("");
@@ -84,7 +86,14 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                   <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
                     <AuthImage path={`files/${f.id}/qr.png`} params={{ size: 400 }} alt="QR" className="w-40 rounded-lg border bg-white p-1" />
                     <div className="grid content-start gap-2 text-sm">
-                      <div className="text-xs text-muted-foreground">{f.link_kind === "system" ? t("linkSystem") : t("linkProvider")}</div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {f.link_kind === "system" ? t("linkSystem") : t("linkProvider")}
+                        {f.visibility && (
+                          <span className={cn("rounded-full px-2 py-0.5 font-medium", f.visibility === "private" ? "bg-violet/15 text-violet" : "bg-success/15 text-success")}>
+                            {f.visibility === "private" ? "🔒 " + t("visPrivateShort") : "🌐 " + t("visPublicShort")}
+                          </span>
+                        )}
+                      </div>
                       <a href={f.url} target="_blank" rel="noreferrer" className="break-all text-primary hover:underline">{f.url}</a>
                       <div className="text-xs text-muted-foreground">
                         {t("expires")}: {f.expires_at ? fmtDate(f.expires_at, false) : t("noExpiry")}
@@ -105,7 +114,7 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
 
                 {f.status === "delivered" && !f.deleted_at && (
                   <div className="flex flex-wrap gap-1.5">
-                    <Button size="sm" variant="outline" onClick={() => { setDays(""); setPassword(""); setDialog("link"); }}><RefreshCw className="size-4" />{t("refreshLink")}</Button>
+                    <Button size="sm" variant="outline" onClick={() => { setDays(""); setPassword(""); setVis(f.visibility || ""); setDialog("link"); }}><RefreshCw className="size-4" />{t("refreshLink")}</Button>
                     {f.url && <Button size="sm" variant="outline" onClick={() => setDialog("revoke")}><Link2Off className="size-4" />{t("revokeLink")}</Button>}
                     <Button size="sm" variant="outline" onClick={() => { setName(f.stored_name || f.original_name); setDialog("rename"); }}><Pencil className="size-4" />{t("rename")}</Button>
                     <Button size="sm" variant="outline" onClick={() => { setFolder(f.remote_path.split("/").slice(0, -1).join("/")); setDialog("move"); }}><FolderInput className="size-4" />{t("move")}</Button>
@@ -155,6 +164,15 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                     <DialogHeader><DialogTitle>{dialog === "link" ? t("linkSettings") : dialog === "rename" ? t("rename") : t("move")}</DialogTitle></DialogHeader>
                     {dialog === "link" && (
                       <div className="grid gap-3">
+                        <FormRow label={t("visibility")} hint={t("visHint")}>
+                          <Select value={vis || "public"} onValueChange={setVis}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="public">{t("visPublic")}</SelectItem>
+                              <SelectItem value="private">{t("visPrivate")}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormRow>
                         <FormRow label={t("expireDays")}><Input type="number" min={0} value={days} onChange={(e) => setDays(e.target.value)} placeholder="0" /></FormRow>
                         <FormRow label={t("newPassword")}><Input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></FormRow>
                       </div>
@@ -164,7 +182,7 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setDialog(null)}>{t("cancel")}</Button>
                       <Button disabled={act.isPending} onClick={() => run(() =>
-                        dialog === "link" ? qrApi.post(`files/${f.id}/link`, { expire_days: days === "" ? null : Number(days), password })
+                        dialog === "link" ? qrApi.post(`files/${f.id}/link`, { expire_days: days === "" ? null : Number(days), password, visibility: vis || null })
                           : dialog === "rename" ? qrApi.post(`files/${f.id}/rename`, { name })
                             : qrApi.post(`files/${f.id}/move`, { folder }))}>
                         {dialog === "link" ? <Link2 className="size-4" /> : null}{t("save")}

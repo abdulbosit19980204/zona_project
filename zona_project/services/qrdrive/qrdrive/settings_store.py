@@ -14,6 +14,7 @@ from .core.crypto import decrypt, encrypt
 from .db.models import Setting
 
 SECRET_KEYS = {"bot_token", "link_password"}
+OLD_FILENAME_TEMPLATE = "{sana}_{vaqt}_{asl_nom}"
 CACHE_TTL = 3.0
 
 BOT_TEXTS: dict[str, dict[str, str]] = {
@@ -28,7 +29,7 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "uploading": "⏳ Saqlash joyiga yuklanmoqda…",
         "sharing": "⏳ Havola yaratilmoqda…",
         "retrying": "⏳ Saqlash joyi vaqtincha javob bermayapti, birozdan keyin yana urinaman ({attempt}/{max})…",
-        "done": "✅ Saqlandi: {path}\n🔗 {url}",
+        "done": "✅ Saqlandi: {path}\n{vis}\n🔗 {url}",
         "expires": "⏰ Havola {date} gacha amal qiladi",
         "duplicate": "ℹ️ Bu fayl avval yuklangan — oldingi QR kod:",
         "failed": "❌ Faylni saqlab bo'lmadi: {reason}\nAdministratorga xabar berildi.",
@@ -43,6 +44,12 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "send_file": "Iltimos, fayl yuboring. ID'ingizni bilish uchun: /id",
         "your_id": "Sizning Telegram ID: {id}",
         "link_refreshed": "🔗 Havola yangilandi.",
+        "choose_visibility": "📎 {name}\nHavola turini tanlang:\n🌐 Public — havolasi bor har kim ochadi\n🔒 Private — faqat NAS'da ruxsati borlar ochadi",
+        "btn_public": "🌐 Public",
+        "btn_private": "🔒 Private",
+        "vis_public": "🌐 Public havola",
+        "vis_private": "🔒 Private havola (faqat ruxsat berilganlar)",
+        "vis_chosen": "⏳ Qabul qilindi: {vis}. Saqlanmoqda…",
     },
     "ru": {
         "start": "Здравствуйте, {name}! Отправьте мне файл (документ, фото, видео, аудио) — я сохраню его и верну ссылку в виде QR-кода.\nМаксимальный размер: {max_mb} МБ.\n\nЧтобы не терять качество фото, отправляйте «Как файл».",
@@ -55,7 +62,7 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "uploading": "⏳ Загружаю в хранилище…",
         "sharing": "⏳ Создаю ссылку…",
         "retrying": "⏳ Хранилище временно недоступно, попробую ещё раз ({attempt}/{max})…",
-        "done": "✅ Сохранено: {path}\n🔗 {url}",
+        "done": "✅ Сохранено: {path}\n{vis}\n🔗 {url}",
         "expires": "⏰ Ссылка действует до {date}",
         "duplicate": "ℹ️ Этот файл уже загружался — предыдущий QR-код:",
         "failed": "❌ Не удалось сохранить файл: {reason}\nАдминистратор уведомлён.",
@@ -70,6 +77,12 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "send_file": "Пожалуйста, отправьте файл. Узнать свой ID: /id",
         "your_id": "Ваш Telegram ID: {id}",
         "link_refreshed": "🔗 Ссылка обновлена.",
+        "choose_visibility": "📎 {name}\nВыберите тип ссылки:\n🌐 Public — откроет любой, у кого есть ссылка\n🔒 Private — только пользователи с доступом к NAS",
+        "btn_public": "🌐 Public",
+        "btn_private": "🔒 Private",
+        "vis_public": "🌐 Публичная ссылка",
+        "vis_private": "🔒 Приватная ссылка (только с доступом)",
+        "vis_chosen": "⏳ Принято: {vis}. Сохраняю…",
     },
 }
 
@@ -85,7 +98,11 @@ DEFAULTS: dict[str, Any] = {
     "max_file_mb": 100,
     "allowed_types": "",  # bo'sh = hamma tur; masalan: pdf,docx,jpg,png
     "folder_template": "{xodim}",
-    "filename_template": "{sana}_{vaqt}_{asl_nom}",
+    "filename_template": "{asl_nom}_{sana}_{vaqt}",  # kengaytma (.pdf, .jpg) doim oxiriga qo'yiladi
+    # Havola turi: ask — botda tugmalar (Public / Private); public / private — har doim shu
+    "visibility_mode": "ask",
+    "default_visibility": "public",
+    "visibility_timeout_min": 10,  # tanlanmasa shuncha daqiqadan keyin standart tur
     "link_expire_days": 0,
     "link_password": "",
     "duplicate_policy": "reuse",  # reuse — oldingi QR'ni yuborish | upload — baribir yuklash
@@ -125,6 +142,8 @@ async def load(session: AsyncSession, fresh: bool = False) -> dict[str, Any]:
             data[row.key] = decrypt(row.secret_enc)
         elif row.key in ("qr_style", "notify") and isinstance(row.value, dict):
             data[row.key] = {**DEFAULTS[row.key], **row.value}
+        elif row.key == "filename_template" and row.value == OLD_FILENAME_TEMPLATE:
+            data[row.key] = DEFAULTS["filename_template"]  # eski standart -> asl nom boshida
         elif row.key == "bot_texts" and isinstance(row.value, dict):
             data[row.key] = {lang: {**BOT_TEXTS.get(lang, BOT_TEXTS["uz"]), **(row.value.get(lang) or {})} for lang in BOT_TEXTS}
         else:

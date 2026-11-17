@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from ..core.errors import (QRDriveError, Storage2FA, StorageAccountDisabled, StorageAppDenied, StorageAuthError, StorageError,
+from ..core.errors import (NotSupported, QRDriveError, Storage2FA, StorageAccountDisabled, StorageAppDenied, StorageAuthError, StorageError,
                            StorageIPBlocked, StorageNotFound, StoragePasswordExpired, StoragePermission, StorageQuota,
                            StorageUnavailable)
 from .base import HealthResult, PublicLink, Quota, RemoteEntry, RemoteFile, join
@@ -25,6 +25,13 @@ def parse_drive_folder(value: str) -> str | None:
     """«https://file.stargroup.uz/#file_id=984701843502314054» yoki faqat ID -> "984701843502314054"."""
     m = DRIVE_ID.search((value or "").strip())
     return m.group(1) if m else None
+
+
+def filestation_to_drive(path: str) -> str:
+    """File Station yo'li -> Synology Drive yo'li (teskarisi)."""
+    if path == "/home" or path.startswith("/home/"):
+        return "/mydrive" + path[len("/home"):]
+    return "/team-folders" + path
 
 
 def drive_to_filestation(display_path: str) -> str:
@@ -74,12 +81,15 @@ class SynologyProvider:
     supports_links = True
 
     def __init__(self, url: str, username: str, password: str, verify_ssl: bool = True, base_folder: str = "/",
-                 transport: httpx.AsyncBaseTransport | None = None):
+                 transport: httpx.AsyncBaseTransport | None = None, drive_links: bool = False):
         self.base = url.rstrip("/")
         self.entry = f"{self.base}/webapi/entry.cgi"
         self.username, self.password = username, password
         self.base_folder = base_folder or "/"
         self.sid: str | None = None
+        # Synology Drive havolalari (file.stargroup.uz/d/s/..., /d/f/...) — Drive papkasi berilgan bo'lsa
+        self.drive_links = drive_links
+        self.drive_wait = 90  # Drive yangi faylni File Station'dan ~5-10 soniyada ko'radi
         self.session: str | None = None  # birinchi muvaffaqiyatli sessiya nomi eslab qolinadi
         self._client = httpx.AsyncClient(verify=verify_ssl, timeout=httpx.Timeout(900, connect=15), transport=transport)
 
@@ -196,8 +206,35 @@ class SynologyProvider:
             _raise("SYNO.FileStation.Upload", code)
         raise StorageError("Upload muvaffaqiyatsiz")
 
+    async def _drive_file(self, path: str) -> dict:
+        """Synology Drive fayl ma'lumoti (file_id, permanent_link). Yangi faylni indekslashini kutadi."""
+        drive_path = json.dumps(filestation_to_drive(path), ensure_ascii=False)
+        deadline = time.monotonic() + self.drive_wait
+        while True:
+            try:
+                return await self._call({"api": "SYNO.SynologyDrive.Files", "version": "2", "method": "get", "path": drive_path})
+            except (StorageError, StorageNotFound):
+                if time.monotonic() > deadline:
+                    raise StorageNotFound(f"Synology Drive faylni ko'rmadi: {path}") from None
+                await asyncio.sleep(1.5)
+
     async def create_public_link(self, remote: RemoteFile, expire_at: datetime | None = None,
-                                 password: str | None = None) -> PublicLink:
+                                 password: str | None = None, visibility: str = "public") -> PublicLink:
+        if self.drive_links:
+            info = await self._drive_file(remote.path)
+            if visibility == "private":
+                # Private: faqat NAS'da shu faylga ruxsati borlar ochadi
+                return PublicLink(url=f"{self.base}/d/f/{info['permanent_link']}", id=f"drive:{info['file_id']}",
+                                  expires_at=None, visibility="private")
+            if expire_at or password:
+                raise NotSupported("Synology Drive ommaviy havolasiga API orqali muddat/parol qo'yib bo'lmaydi")
+            data = await self._call({"api": "SYNO.SynologyDrive.AdvanceSharing", "version": "1", "method": "create",
+                                     "path": json.dumps(f"id:{info['file_id']}")}, method="POST")
+            if not data.get("url"):
+                raise StorageError("Synology Drive havola qaytarmadi")
+            return PublicLink(url=data["url"], id=f"drive:{info['file_id']}", expires_at=None, visibility="public")
+        if visibility == "private":
+            raise NotSupported("Private havola faqat Synology Drive papkasi bilan ishlaydi")
         params = {"api": "SYNO.FileStation.Sharing", "version": "3", "method": "create",
                   "path": json.dumps([remote.path], ensure_ascii=False)}
         if expire_at:
@@ -211,6 +248,9 @@ class SynologyProvider:
         return PublicLink(url=links[0]["url"], id=str(links[0].get("id", "")), expires_at=expire_at)
 
     async def revoke_public_link(self, link_id: str) -> None:
+        if link_id.startswith("drive:"):
+            # Synology Drive havolasini API orqali o'chirib bo'lmaydi — Synology Drive'da «Share» oynasidan o'chiriladi
+            raise NotSupported("Synology Drive havolasini NAS'dagi «Share» oynasidan o'chiring")
         if link_id:
             await self._call({"api": "SYNO.FileStation.Sharing", "version": "3", "method": "delete",
                               "id": json.dumps([link_id])})

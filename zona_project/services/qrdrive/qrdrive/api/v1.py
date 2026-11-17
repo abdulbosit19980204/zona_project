@@ -37,6 +37,7 @@ class FileOut(BaseModel):
     original_name: str = ""
     size: int | None = None
     employee_id: int | None = None
+    visibility: str = Field("", description="public | private")
     created_at: datetime | None = None
     error: dict[str, str] | None = Field(None, description="Xato bo'lsa: kind, title, hint")
 
@@ -46,7 +47,7 @@ async def _out(session: AsyncSession, rec: FileRecord, with_qr: bool = True) -> 
     base = settings_store.public_base(await settings_store.load(session))
     data = {"id": rec.id, "status": rec.status, "url": rec.link_url, "remote_path": rec.remote_path,
             "expires_at": rec.link_expires_at, "original_name": rec.original_name, "size": rec.size,
-            "employee_id": rec.employee_id, "created_at": rec.created_at, "error": d["error"],
+            "employee_id": rec.employee_id, "created_at": rec.created_at, "error": d["error"], "visibility": d["visibility"],
             "qr_png_url": f"{base}{config.prefix}/api/v1/files/{rec.id}/qr.png" if rec.link_url else "",
             "qr_base64": ""}
     if with_qr and rec.link_url:
@@ -88,6 +89,7 @@ async def upload_file(
     external_user: str = Form("", description="Tizimdan tashqi foydalanuvchi nomi (papka nomi bo'ladi)"),
     folder: str = Form("", description="Saqlash joyidagi papka (asosiy papkaga nisbatan)"),
     expire_days: int | None = Form(None), password: str = Form(""), caption: str = Form(""),
+    visibility: str = Form("", description="public | private (bo'sh — panel sozlamasi)"),
     async_: bool = Query(False, alias="async", description="true — darhol 202, natija webhook orqali"),
     wait: int = Query(55, ge=0, le=120, description="Natijani necha soniya kutish"),
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
@@ -119,6 +121,7 @@ async def upload_file(
                         api_key_id=key.id, external_user=external_user or ("" if emp_id else key.name), temp_path=temp,
                         size=size, mime=mime, caption=caption,
                         options={"folder": folder, "expire_days": expire_days, "password": password,
+                                 **({"visibility": visibility} if visibility in ("public", "private") else {}),
                                  **({"source_url": source_url} if source_url else {})})
     if idempotency_key:
         session.add(IdempotencyKey(api_key_id=key.id, key=idempotency_key, response={"id": rec.id}))

@@ -163,7 +163,7 @@ export function QrSettingsPage() {
                 <FormRow label={t("folderTpl")} help={t("tplHint")} hint={t("tplExample", { path: `/Kadrlar/${renderTpl(cur.folder_template)}` })}>
                   <Input value={cur.folder_template} onChange={(e) => set("folder_template", e.target.value)} />
                 </FormRow>
-                <FormRow label={t("fileTpl")} help={t("tplHint")} hint={t("tplExample", { path: renderTpl(cur.filename_template) })}>
+                <FormRow label={t("fileTpl")} help={t("tplHint")} hint={`${t("tplExample", { path: renderTpl(cur.filename_template, "Ariza") + ".pdf" })} ${t("extAuto")}`}>
                   <Input value={cur.filename_template} onChange={(e) => set("filename_template", e.target.value)} />
                 </FormRow>
                 <p className="-mt-2 font-mono text-xs text-muted-foreground">{t("tplHint")}</p>
@@ -180,6 +180,30 @@ export function QrSettingsPage() {
 
             <TabsContent value="links">
               <Card className="grid max-w-2xl gap-4 p-5">
+                <FormRow label={t("visMode")} hint={t("visHint")}>
+                  <Select value={cur.visibility_mode ?? "ask"} onValueChange={(x) => set("visibility_mode", x as QrSettings["visibility_mode"])}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ask">{t("visModeAsk")}</SelectItem>
+                      <SelectItem value="public">{t("visModePublic")}</SelectItem>
+                      <SelectItem value="private">{t("visModePrivate")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormRow>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormRow label={t("defaultVisibility")}>
+                    <Select value={cur.default_visibility ?? "public"} onValueChange={(x) => set("default_visibility", x as QrSettings["default_visibility"])}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="public">{t("visPublic")}</SelectItem>
+                        <SelectItem value="private">{t("visPrivate")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormRow>
+                  <FormRow label={t("visTimeout")}>
+                    <Input type="number" min={1} max={1440} value={cur.visibility_timeout_min ?? 10} onChange={(e) => set("visibility_timeout_min", Number(e.target.value))} />
+                  </FormRow>
+                </div>
                 <FormRow label={t("linkDays")}>
                   <Input type="number" min={0} className="w-40" value={cur.link_expire_days} onChange={(e) => set("link_expire_days", Number(e.target.value))} />
                 </FormRow>

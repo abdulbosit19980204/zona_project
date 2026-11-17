@@ -90,8 +90,8 @@ class WebDAVProvider:
         return RemoteFile(path=target, id=target, size=size)
 
     async def create_public_link(self, remote: RemoteFile, expire_at: datetime | None = None,
-                                 password: str | None = None) -> PublicLink:
-        if not self.nextcloud or not self.ocs:
+                                 password: str | None = None, visibility: str = "public") -> PublicLink:
+        if not self.nextcloud or not self.ocs or visibility == "private":
             raise NotSupported("WebDAV ommaviy havola bera olmaydi")
         data = {"path": remote.path, "shareType": "3", "permissions": "1"}
         if expire_at:

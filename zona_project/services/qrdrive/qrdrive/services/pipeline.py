@@ -158,7 +158,9 @@ async def _fetch(ctx: Ctx) -> None:
 
 
 async def _find_duplicate(session: AsyncSession, rec: FileRecord) -> FileRecord | None:
+    from .files import visibility_of
     q = select(FileRecord).where(FileRecord.sha256 == rec.sha256, FileRecord.id != rec.id,
+                                 FileRecord.link_visibility == visibility_of(rec, await settings_store.load(session)),
                                  FileRecord.status == "delivered", FileRecord.deleted_at.is_(None),
                                  FileRecord.link_url != "")
     if rec.employee_id:
@@ -211,7 +213,8 @@ async def _deliver(ctx: Ctx, duplicate: bool = False) -> None:
             if duplicate:
                 text = ctx.text("duplicate") + "\n" + rec.link_url
             else:
-                text = ctx.text("done", path=rec.remote_path, url=rec.link_url)
+                text = ctx.text("done", path=rec.remote_path, url=rec.link_url,
+                                vis=ctx.text("vis_private" if rec.link_visibility == "private" else "vis_public"))
                 if rec.link_expires_at:
                     tz = ZoneInfo(s.get("timezone") or config.tz)
                     text += "\n" + ctx.text("expires", date=f"{rec.link_expires_at.astimezone(tz):%d.%m.%Y}")
@@ -266,6 +269,7 @@ async def process(session: AsyncSession, file_id: int, tg: TelegramClient | None
             rec.remote_path, rec.remote_id, rec.stored_name = dup.remote_path, dup.remote_id, dup.stored_name
             rec.link_url, rec.link_id, rec.link_kind = dup.link_url, dup.link_id, dup.link_kind
             rec.link_expires_at, rec.link_has_password = dup.link_expires_at, dup.link_has_password
+            rec.link_visibility = dup.link_visibility
             await _deliver(ctx, duplicate=True)
         else:
             storage = await choose_storage(session, rec)

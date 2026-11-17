@@ -30,7 +30,7 @@ class FakeSession(BaseSession):
         self.next_id += 1
         if type(method).__name__ in ("SendMessage", "SendPhoto"):
             return Message(message_id=self.next_id, date=datetime.now(timezone.utc),
-                           chat=Chat(id=data["chat_id"], type="private"), text=data.get("text", ""))
+                           chat=Chat(id=data["chat_id"], type="private"), text=data.get("text", "")).as_(bot)
         return True
 
     async def stream_content(self, *a, **kw):  # pragma: no cover
@@ -89,11 +89,28 @@ async def test_invite_then_file_upload(session, employee, local_storage):
     assert "Olimova Dilnoza" in s.texts()[0]
     s = await feed(service, update(600, "dilnoza_tg", document={"file_id": "FID1", "file_unique_id": "U1",
                                                                 "file_name": "Buyruq.pdf", "file_size": 2048}))
-    assert s.sent[0][0] == "SendMessage" and "qabul qilindi" in s.texts()[0]
+    assert s.sent[0][0] == "SendMessage" and "Havola turini tanlang" in s.texts()[0] and "Buyruq.pdf" in s.texts()[0]
+    kb = next(d for n, d in s.sent if n == "EditMessageReplyMarkup")["reply_markup"]["inline_keyboard"][0]
+    assert [b["callback_data"].split(":")[2] for b in kb] == ["public", "private"]
     async with session_scope() as db:
         rec = (await db.execute(select(FileRecord))).scalar_one()
         assert rec.source == "telegram" and rec.employee_id == employee.id and rec.tg_file_id == "FID1"
-        assert rec.status == "queued" and rec.tg_status_msg_id
+        assert rec.status == "awaiting" and rec.tg_status_msg_id
+    # foydalanuvchi «Private» ni bosdi
+    raw = {"update_id": 9999, "callback_query": {
+        "id": "cb1", "chat_instance": "x", "data": kb[1]["callback_data"],
+        "from": {"id": 600, "is_bot": False, "first_name": "Ali", "username": "dilnoza_tg"},
+        "message": {"message_id": 5, "date": 0, "chat": {"id": 600, "type": "private"}, "text": "?"}}}
+    s = await feed(service, Update.model_validate(raw))
+    assert any(n == "EditMessageText" and "Private" in d["text"] for n, d in s.sent)
+    async with session_scope() as db:
+        rec = (await db.execute(select(FileRecord))).scalar_one()
+        assert rec.status == "queued" and rec.options["visibility"] == "private"
+    raw["update_id"] = 10000
+    raw["callback_query"]["data"] = kb[0]["callback_data"]  # keyin «Public» bosilsa — o'zgarmaydi
+    await feed(service, Update.model_validate(raw))
+    async with session_scope() as db:
+        assert (await db.execute(select(FileRecord))).scalar_one().options["visibility"] == "private"
 
 
 async def test_too_big_rejected_in_bot(session, employee):
