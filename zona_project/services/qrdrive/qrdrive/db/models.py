@@ -303,3 +303,19 @@ class Heartbeat(Base):
 
 
 Index("ix_files_queue", FileRecord.status, FileRecord.next_attempt_at)
+
+
+class UploadTicket(Base):
+    """Bir martalik veb-yuklash havolasi: /qrdrive/u/<token>. Rasmiy Telegram Bot API botga 20 MB dan katta
+    faylni bermaydi — bot shunday faylga havola beradi, foydalanuvchi brauzerda yuklaydi, QR Telegram'ga keladi."""
+    __tablename__ = "upload_tickets"
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("tg_accounts.id", ondelete="CASCADE"), index=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger)
+    name: Mapped[str] = mapped_column(String(300), default="")  # botga yuborilgan fayl nomi (ko'rsatish uchun)
+    size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    caption: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    expires_at: Mapped[datetime] = mapped_column()
+    used_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    file_id: Mapped[int | None] = mapped_column(nullable=True)

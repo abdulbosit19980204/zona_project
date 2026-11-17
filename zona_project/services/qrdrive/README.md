@@ -166,3 +166,10 @@ SDK va aiogram plagini: [sdk/python/README.md](sdk/python/README.md).
 23. **Tasdiqlash rejimi** (`approval_mode`): `manual` — admin tasdiqlaydi (panel yoki botdagi tugma); `auto` —
     ro'yxatdan o'tgan foydalanuvchi darhol faollashadi va adminlarga «Avtomatik tasdiqlandi» xabari boradi.
     Rejimni almashtirish eski so'rovlarni tasdiqlamaydi — ular `/pending`da qoladi.
+24. **20 MB dan katta fayllar.** Rasmiy Bot API botga bunday faylni bermaydi.
+    - Bot faylni navbatga qo'ymaydi (aks holda u yuklab olishda xato bilan tushardi). O'rniga bir martalik
+      veb-yuklash havolasini beradi: `/qrdrive/u/<token>`, 24 soat, bitta fayl.
+    - Fayl oqim bilan diskka yoziladi. To'liq kelmagan yoki juda katta fayl rad etiladi. Keyin fayl odatdagi
+      navbatdan o'tadi va QR Telegram chatiga keladi.
+    - To'liq yechim — lokal `telegram-bot-api` (2000 MB): `deploy/telegram-bot-api-setup.sh`.
+    - Next.js proksisi (lokalda 3000-port) uchun `proxyClientMaxBodySize` 2100 MB ga oshirilgan (standart 10 MB edi).

@@ -98,7 +98,7 @@ bash "$APP/deploy/control-setup.sh"
 
 step "systemd servislari"
 cp deploy/systemd/zona-*.service deploy/systemd/zona-backup.timer /etc/systemd/system/
-chmod +x deploy/backup.sh deploy/update.sh deploy/qrdrive-setup.sh deploy/control-setup.sh
+chmod +x deploy/backup.sh deploy/update.sh deploy/qrdrive-setup.sh deploy/control-setup.sh deploy/telegram-bot-api-setup.sh
 systemctl daemon-reload
 systemctl enable --now zona-backend zona-frontend zona-backup.timer
 systemctl restart zona-backend zona-frontend

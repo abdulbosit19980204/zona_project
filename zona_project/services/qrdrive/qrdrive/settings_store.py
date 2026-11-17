@@ -78,6 +78,9 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "vis_public": "🌐 Public havola",
         "vis_private": "🔒 Private havola (faqat ruxsat berilganlar)",
         "vis_chosen": "⏳ Qabul qilindi: {vis}. Saqlanmoqda…",
+        "big_file": "📦 Fayl katta ({size} MB). Telegram 20 MB dan katta faylni botga bermaydi.\n"
+                    "Uni shu havola orqali brauzerda yuklang — QR kod shu chatga keladi ({hours} soat amal qiladi):\n{url}",
+        "btn_upload": "⬆️ Brauzerda yuklash",
     },
     "ru": {
         "start": "Здравствуйте, {name}! Отправьте мне файл (документ, фото, видео, аудио) — я сохраню его и верну ссылку в виде QR-кода.\nМаксимальный размер: {max_mb} МБ.\n\nЧтобы не терять качество фото, отправляйте «Как файл».",
@@ -139,6 +142,9 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "vis_public": "🌐 Публичная ссылка",
         "vis_private": "🔒 Приватная ссылка (только с доступом)",
         "vis_chosen": "⏳ Принято: {vis}. Сохраняю…",
+        "big_file": "📦 Большой файл ({size} МБ). Telegram не отдаёт ботам файлы больше 20 МБ.\n"
+                    "Загрузите его в браузере по этой ссылке — QR-код придёт в этот чат (ссылка действует {hours} ч):\n{url}",
+        "btn_upload": "⬆️ Загрузить в браузере",
     },
 }
 

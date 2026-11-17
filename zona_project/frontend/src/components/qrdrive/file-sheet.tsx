@@ -49,7 +49,8 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
   const t = useQt();
   const dur = useDuration();
   const q = useQr<QrFileDetail>(["file", fileId], `files/${fileId}`, undefined, { enabled: fileId !== null });
-  const f = q.data;
+  // Eski API versiyasi (servis qayta ishga tushirilmagan) ba'zi maydonlarni bermasligi mumkin — sahifa yiqilmasin
+  const f = q.data ? { ...q.data, items: q.data.items ?? [], versions: q.data.versions ?? [], events: q.data.events ?? [] } : undefined;
   const [dialog, setDialog] = useState<null | "link" | "rename" | "move" | "purge" | "revoke">(null);
   const [days, setDays] = useState("");
   const [vis, setVis] = useState<string>("");

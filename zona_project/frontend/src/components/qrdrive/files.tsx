@@ -157,7 +157,7 @@ function FileTable({ trash, onOpen }: { trash: boolean; onOpen: (id: number) => 
                     <TableCell className="text-xs text-muted-foreground">{fmtDate(f.created_at)}</TableCell>
                     <TableCell className="max-w-72"><div className="flex items-center gap-1.5 truncate font-medium">
                       {f.kind === "folder" && <Folder className="size-4 shrink-0 text-primary" />}{f.original_name}
-                      {f.kind === "folder" && <span className="shrink-0 text-xs font-normal text-muted-foreground">· {f.items.length}</span>}
+                      {f.kind === "folder" && <span className="shrink-0 text-xs font-normal text-muted-foreground">· {f.items?.length ?? 0}</span>}
                       {f.version > 1 && <span className="shrink-0 rounded bg-muted px-1 font-mono text-[10px]">v{f.version}</span>}</div>
                       {f.remote_path && <div className="truncate text-xs text-muted-foreground">{f.remote_path}</div>}</TableCell>
                     <TableCell><div className="truncate">{f.employee_name || "—"}</div><div className="text-xs text-muted-foreground">{f.department}</div></TableCell>

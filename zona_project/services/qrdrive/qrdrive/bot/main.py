@@ -23,7 +23,7 @@ from ..core.config import config
 from ..core.logging import setup_logging
 from ..db.models import Employee, FileRecord, TgAccount
 from ..db.session import session_scope
-from ..services import accounts, admins, qr, system
+from ..services import accounts, admins, qr, system, uploads
 from ..services.audit import add_audit, notify
 from ..services.archive import is_archive
 from ..services.files import enqueue, find_previous, refresh_link
@@ -369,6 +369,18 @@ async def on_file(msg: Message, session, acc: TgAccount, created: bool, settings
     if not allowed(name, settings.get("allowed_types", "")):
         await msg.answer(t(settings, acc, "type_not_allowed", types=settings.get("allowed_types", "")))
         return
+    if not uploads.bot_can_download(size, settings):
+        # Rasmiy Bot API 20 MB dan katta faylni bermaydi — bir martalik veb-yuklash havolasi
+        ticket = await uploads.create_ticket(session, acc, msg.chat.id, name, size, msg.caption or "")
+        await session.commit()
+        url = uploads.ticket_url(settings, ticket)
+        text = t(settings, acc, "big_file", size=f"{size / 1024 / 1024:.1f}", url=url, hours=uploads.TICKET_HOURS)
+        try:
+            await msg.reply(text, reply_markup=_ikb_url(t(settings, acc, "btn_upload"), url))
+        except Exception:  # noqa: BLE001 — Telegram ba'zi manzillarni (localhost) tugmada qabul qilmaydi
+            await msg.reply(text)
+        log.info("katta fayl — veb-yuklash havolasi berildi", extra={"data": {"size": size}})
+        return
     rec = await enqueue(session, source="telegram", original_name=name, actor=acc.display, employee_id=acc.employee_id,
                         account_id=acc.id, size=size, mime=mime, caption=msg.caption or "", options={"pending": True},
                         tg={"chat_id": msg.chat.id, "file_id": file_id, "status_msg_id": None}, awaiting=True)
@@ -420,6 +432,10 @@ class Batcher:
 
 
 batcher = Batcher()
+
+
+def _ikb_url(label: str, url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, url=url)]])
 
 
 def _ikb(rows: list[list[tuple[str, str]]]) -> InlineKeyboardMarkup:

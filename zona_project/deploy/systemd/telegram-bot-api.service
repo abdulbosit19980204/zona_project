@@ -1,0 +1,21 @@
+[Unit]
+Description=Lokal Telegram Bot API server (botga 2000 MB gacha fayl)
+After=network.target
+# Mustaqil servis: to'xtasa bot rasmiy serverga qaytarilmaguncha fayl qabul qilmaydi, Zona va QR Drive paneli ishlayveradi
+
+[Service]
+User=zona
+Group=zona
+EnvironmentFile=/etc/zona/telegram-bot-api.env
+# --local: fayllar diskda (worker to'g'ridan o'qiydi), 2000 MB gacha; faqat lokal tarmoq interfeysi
+ExecStart=/usr/local/bin/telegram-bot-api --local --http-ip-address=127.0.0.1 --http-port=8081 \
+    --dir=/var/lib/zona/telegram-bot-api --temp-dir=/var/lib/zona/telegram-bot-api/tmp \
+    --api-id=${TELEGRAM_API_ID} --api-hash=${TELEGRAM_API_HASH}
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/zona
+
+[Install]
+WantedBy=multi-user.target

@@ -10,14 +10,13 @@ import { useAuth } from "@/stores/auth";
 import { queryKeys } from "./use-org";
 
 /**
- * WebSocket manzili: NEXT_PUBLIC_WS_URL; bo'lmasa — ishlab chiqishda (next dev, 3000-port) Django'ning 8000-porti,
- * serverda esa shu domen (nginx /ws/ ni backendga uzatadi).
+ * WebSocket manzili: NEXT_PUBLIC_WS_URL; bo'lmasa — sahifa ochilgan manzilning o'zi (/ws/events/).
+ * Lokalda Next.js (3000) uni backendga proksi qiladi, serverda — nginx. Shu sababli LAN manzildan
+ * (masalan 192.168.x.x:3000) ochilganda ham backend 8000-portini tarmoqqa ochish kerak emas.
  */
 function socketUrl(token: string) {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  const dev = window.location.port === "3000";
-  const base = process.env.NEXT_PUBLIC_WS_URL
-    ?? (dev ? `${proto}://${window.location.hostname}:8000/ws/events/` : `${proto}://${window.location.host}/ws/events/`);
+  const base = process.env.NEXT_PUBLIC_WS_URL ?? `${proto}://${window.location.host}/ws/events/`;
   return `${base}?token=${encodeURIComponent(token)}`;
 }
 

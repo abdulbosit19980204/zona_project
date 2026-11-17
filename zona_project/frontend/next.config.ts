@@ -10,12 +10,19 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   // Django API manzillari "/" bilan tugaydi — Next.js ularni qayta yo'naltirmasin
   skipTrailingSlashRedirect: true,
+  experimental: {
+    // Proksi (rewrites) orqali katta fayl yuklash: standart 10 MB va 30 s — QR Drive 2 GB gacha qabul qiladi
+    proxyClientMaxBodySize: "2100mb",
+    proxyTimeout: 30 * 60 * 1000,
+  },
   async rewrites() {
     // ":path*" oxirgi "/" ni olib tashlaydi; Django esa "/" li manzilga qayta yo'naltiradi → cheksiz halqa.
     // Shuning uchun "/" bilan tugaydigan so'rovlar alohida qoida bilan "/" saqlangan holda uzatiladi.
     return [
       { source: "/api/:path*/", destination: `${BACKEND_URL}/api/:path*/` },
       { source: "/api/:path*", destination: `${BACKEND_URL}/api/:path*` },
+      // WebSocket (jonli yangilanishlar) ham shu port orqali — backend 8000-portini tarmoqqa ochish shart emas
+      { source: "/ws/:path*/", destination: `${BACKEND_URL}/ws/:path*/` },
       { source: "/qrdrive/:path*", destination: `${QRDRIVE_URL}/qrdrive/:path*` },
     ];
   },

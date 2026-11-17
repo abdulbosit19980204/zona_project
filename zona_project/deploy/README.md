@@ -99,8 +99,27 @@ sudo systemctl start zona-backend
 O'rnatilgach: panel → chap menyu **QR Drive → Sozlash ustasi** (bot tokeni → StarGroup NAS login/paroli → xodimlar → sinov QR).
 Barcha sozlamalar panelda. Eski kadrlar-bot `.env` fayli: QR Drive → Tizim holati → «Eski bot sozlamalarini import qilish».
 
-20 MB dan katta fayllar uchun lokal Telegram Bot API server kerak (`telegram-bot-api --local`, 127.0.0.1:8081).
-Uni o'rnatgach: panel → Bot sozlamalari → «Botni rasmiy serverdan chiqarish», keyin server manzili va «Lokal rejim».
+### 20 MB dan katta fayllar
+
+Rasmiy `api.telegram.org` botlarga 20 MB dan katta faylni bermaydi. Shuning uchun ikki yo'l bor:
+
+1. **Hech narsa o'rnatmasdan (standart).** Bot katta fayl uchun bir martalik **veb-yuklash havolasi** beradi
+   (`/qrdrive/u/<token>`, 24 soat amal qiladi). Fayl brauzerda yuklanadi, QR odatdagidek Telegramga keladi.
+   Havola telefondan ochilishi uchun panelda **Sozlamalar → Umumiy → Tashqi manzil** to'g'ri bo'lishi kerak
+   (masalan `https://zona.stargroup.uz`).
+2. **Lokal Bot API server — 2000 MB gacha to'g'ridan-to'g'ri botga yuborish:**
+   ```bash
+   sudo bash deploy/telegram-bot-api-setup.sh   # 1-marta: /etc/zona/telegram-bot-api.env yaratadi
+   sudo nano /etc/zona/telegram-bot-api.env     # TELEGRAM_API_ID / TELEGRAM_API_HASH (https://my.telegram.org)
+   sudo bash deploy/telegram-bot-api-setup.sh   # yig'adi (10–30 daqiqa) va servisni yoqadi
+   ```
+   Keyin panelda **Bot** bo'limida quyidagilarni bajaring:
+   - «Rasmiy serverdan chiqish» tugmasini bosing;
+   - Bot API server sifatida `http://127.0.0.1:8081` ni kiriting;
+   - «Lokal rejim»ni yoqing;
+   - «Maksimal fayl hajmi»ni oshiring (masalan, 2000 MB).
+
+   Bot va worker yangi sozlamani o'zi sezadi.
 
 ## Eslatmalar
 
