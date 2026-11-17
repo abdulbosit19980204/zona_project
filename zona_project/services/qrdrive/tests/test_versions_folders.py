@@ -209,3 +209,40 @@ async def test_move_updates_all_versions(client, local_storage, employee, storag
     assert old["remote_path"] == new_path
     browse = (await client.get("/qrdrive/api/admin/files/browse", headers=auth(), params={"storage_id": local_storage.id, "path": "/Kadrlar"})).json()
     assert "Arxiv" in [e["name"] for e in browse["entries"] if e["is_dir"]]  # papka tanlagich shu ro'yxatni ko'rsatadi
+
+
+
+async def test_batch_folder_pipeline(session, local_storage, employee, storage_root):
+    children = []
+    for i, (name, data) in enumerate((("a.pdf", b"A"), ("a.pdf", b"B"), ("c.txt", b"C"))):
+        path = spool_path("t")
+        path.write_bytes(data)
+        r = await enqueue(session, source="telegram", original_name=name, employee_id=employee.id, temp_path=path, size=1,
+                          tg={"chat_id": 1, "file_id": f"F{i}", "status_msg_id": None}, awaiting=True)
+        r.status = "merged"
+        children.append(r)
+    folder = await enqueue(session, source="telegram", original_name="Fayllar (3)", employee_id=employee.id,
+                           options={"batch_children": [c.id for c in children]}, tg={"chat_id": 1, "file_id": "", "status_msg_id": None})
+    await session.commit()
+    done = await run(folder.id)
+    assert done.status == "delivered" and done.kind == "folder", done.error_text
+    assert [i["name"] for i in done.items] == ["a.pdf", "a_2.pdf", "c.txt"]  # bir xil nomlar ajratildi
+    root = storage_root / done.remote_path.lstrip("/")
+    assert (root / "a_2.pdf").read_bytes() == b"B"
+    async with session_scope() as s:
+        left = (await s.execute(select(FileRecord.id).where(FileRecord.id.in_([c.id for c in children])))).all()
+        assert left == []  # guruh a'zolari papkaga o'tdi
+
+
+def test_7z_archive(tmp_path: Path):
+    py7zr = pytest.importorskip("py7zr")
+    with py7zr.SevenZipFile(tmp_path / "a.7z", "w") as z:
+        z.writestr("salom", "Hujjat/Ариза.txt")
+        z.writestr("%PDF", "b.pdf")
+    raw = tmp_path / "spool"
+    raw.write_bytes((tmp_path / "a.7z").read_bytes())
+    ex = extract(raw, tmp_path / "out", max_files=10, max_bytes=10_000)
+    assert ex.files == [("Hujjat/Ариза.txt", 5), ("b.pdf", 4)]
+    with pytest.raises(FileTooBig):
+        extract(raw, tmp_path / "o2", max_files=10, max_bytes=3)
+    assert is_archive("a.RAR") and is_archive("b.7z")

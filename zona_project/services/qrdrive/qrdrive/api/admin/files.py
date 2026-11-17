@@ -50,7 +50,9 @@ def _filters(q: str, employee_id: int | None, department: str, status: str, sour
              date_from: date | None, date_to: date | None, ftype: str, trash: bool, versions: bool = False) -> list[Any]:
     conds: list[Any] = [FileRecord.deleted_at.isnot(None) if trash else FileRecord.deleted_at.is_(None)]
     if not versions:
-        conds.append(FileRecord.replaced_by.is_(None))  # eski versiyalar ro'yxatda ko'rinmaydi (fayl kartasida bor)
+        conds.append(FileRecord.replaced_by.is_(None))
+    if not status:
+        conds.append(FileRecord.status != "merged")  # papkaga yig'ilgan guruh a'zolari  # eski versiyalar ro'yxatda ko'rinmaydi (fayl kartasida bor)
     if q:
         like = f"%{q}%"
         conds.append(or_(FileRecord.original_name.ilike(like), FileRecord.stored_name.ilike(like),

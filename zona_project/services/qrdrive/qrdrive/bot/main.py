@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import time
 from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
@@ -26,6 +27,7 @@ from ..services import accounts, qr, system
 from ..services.audit import add_audit
 from ..services.archive import is_archive
 from ..services.files import enqueue, find_previous, refresh_link
+from ..services.naming import safe_name
 
 log = logging.getLogger("qrdrive.bot")
 _HANDLERS: list[tuple[str, Callable[..., Any], tuple[Any, ...]]] = []
@@ -338,7 +340,7 @@ async def cb_refresh(cb: CallbackQuery, session, acc: TgAccount, settings: dict[
 
 
 @on("message", F.document | F.photo | F.video | F.audio | F.voice | F.video_note | F.animation)
-async def on_file(msg: Message, session, acc: TgAccount, created: bool, settings: dict[str, Any]):
+async def on_file(msg: Message, session, acc: TgAccount, created: bool, settings: dict[str, Any], bot: Bot):
     if not await gate(msg, session, acc, created, settings):
         return
     file_id, size, name, mime = extract_file(msg)
@@ -350,17 +352,149 @@ async def on_file(msg: Message, session, acc: TgAccount, created: bool, settings
     if not allowed(name, settings.get("allowed_types", "")):
         await msg.answer(t(settings, acc, "type_not_allowed", types=settings.get("allowed_types", "")))
         return
-    plan = await plan_choices(session, acc, settings, name)
-    status = await msg.reply(plan["text"] or t(settings, acc, "received"))
     rec = await enqueue(session, source="telegram", original_name=name, actor=acc.display, employee_id=acc.employee_id,
-                        account_id=acc.id, size=size, mime=mime, caption=msg.caption or "", options=plan["options"],
-                        tg={"chat_id": msg.chat.id, "file_id": file_id, "status_msg_id": status.message_id}, awaiting=bool(plan["rows"]))
+                        account_id=acc.id, size=size, mime=mime, caption=msg.caption or "", options={"pending": True},
+                        tg={"chat_id": msg.chat.id, "file_id": file_id, "status_msg_id": None}, awaiting=True)
     await session.commit()
-    if plan["rows"]:  # bitta xabarda barcha variantlar — bitta bosish yetadi
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, callback_data=f"ch:{rec.id}:{action}:{vis}")
-                                                    for label, action, vis in row] for row in plan["rows"]])
-        await status.edit_reply_markup(reply_markup=kb)
-    log.info("fayl qabul qilindi", extra={"data": {"id": rec.id, "size": size, "awaiting": bool(plan["rows"])}})
+    first = await batcher.add(bot, acc.id, msg.chat.id, rec.id, name)
+    if first:
+        with suppress(Exception):
+            await bot.send_chat_action(msg.chat.id, "upload_document")
+    log.info("fayl qabul qilindi", extra={"data": {"id": rec.id, "size": size}})
+
+
+class Batcher:
+    """Ketma-ket kelgan fayllarni (albom, birga tanlangan fayllar) bitta guruhga yig'adi:
+    oxirgi fayldan keyin WINDOW soniya o'tgach bitta savol beriladi. Kutish paytida worker fayllarni oldindan yuklab oladi."""
+    WINDOW = 1.0
+
+    def __init__(self) -> None:
+        self.pending: dict[int, dict[str, Any]] = {}
+        self.lock = asyncio.Lock()
+        self.tasks: set[asyncio.Task] = set()
+
+    async def add(self, bot: Bot, acc_id: int, chat_id: int, rec_id: int, name: str) -> bool:
+        async with self.lock:
+            group = self.pending.get(acc_id)
+            first = group is None
+            if first:
+                group = {"ids": [], "names": [], "chat": chat_id, "last": 0.0}
+                self.pending[acc_id] = group
+                task = asyncio.create_task(self._close_later(bot, acc_id))
+                self.tasks.add(task)
+                task.add_done_callback(self.tasks.discard)
+            group["ids"].append(rec_id)
+            group["names"].append(name)
+            group["last"] = time.monotonic()
+            return first
+
+    async def _close_later(self, bot: Bot, acc_id: int) -> None:
+        while True:
+            await asyncio.sleep(min(0.2, self.WINDOW / 2))
+            async with self.lock:
+                group = self.pending[acc_id]
+                if time.monotonic() - group["last"] >= self.WINDOW:
+                    del self.pending[acc_id]
+                    break
+        try:
+            await close_group(bot, acc_id, group)
+        except Exception:  # noqa: BLE001
+            log.exception("guruhni yopishda xato")
+
+
+batcher = Batcher()
+
+
+def _ikb(rows: list[list[tuple[str, str]]]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, callback_data=data) for label, data in row] for row in rows])
+
+
+async def close_group(bot: Bot, acc_id: int, group: dict[str, Any]) -> None:
+    """Guruh yopildi: bitta fayl — odatiy savollar; bir nechta — «bitta papka» yoki «har biri alohida»."""
+    async with session_scope() as session:
+        acc = await session.get(TgAccount, acc_id)
+        settings = await settings_store.load(session)
+        recs = [r for r in [await session.get(FileRecord, i) for i in group["ids"]] if r is not None and r.status == "awaiting"]
+        if acc is None or not recs:
+            return
+        now = datetime.now(timezone.utc)
+        if len(recs) == 1:
+            rec = recs[0]
+            plan = await plan_choices(session, acc, settings, rec.original_name)
+            rec.options = {**{k: v for k, v in (rec.options or {}).items() if k != "pending"}, **plan["options"]}
+            if plan["rows"]:
+                kb = _ikb([[(label, f"ch:{rec.id}:{action}:{vis}") for label, action, vis in row] for row in plan["rows"]])
+                sent = await bot.send_message(group["chat"], plan["text"], reply_markup=kb)
+            else:
+                sent = await bot.send_message(group["chat"], t(settings, acc, "received"))
+                rec.status, rec.next_attempt_at = "queued", now
+            rec.tg_status_msg_id = sent.message_id
+            await session.commit()
+            return
+        vis_mode = settings.get("visibility_mode") or "ask"
+        vis_opts = [("public", "🌐"), ("private", "🔒")] if vis_mode == "ask" else [("-", "")]
+        multi = settings.get("multi_mode") or "ask"
+        first = recs[0]
+        first.options = {**(first.options or {}), "batch_children": [r.id for r in recs]}
+        if multi in ("folder", "separate"):
+            await session.commit()
+            vis = vis_mode if vis_mode in ("public", "private") else "-"
+            sent = await bot.send_message(group["chat"], t(settings, acc, "received"))
+            await apply_group(session, acc, settings, first, multi, vis, sent.message_id)
+            return
+        names = "\n".join(f"• {n}" for n in group["names"][:10])
+        if len(group["names"]) > 10:
+            names += "\n" + t(settings, acc, "batch_more", n=len(group["names"]) - 10)
+        rows = [[(f"{t(settings, acc, 'btn_one_folder')} {icon}".strip(), f"bt:{first.id}:folder:{v}") for v, icon in vis_opts],
+                [(f"{t(settings, acc, 'btn_separate')} {icon}".strip(), f"bt:{first.id}:separate:{v}") for v, icon in vis_opts]]
+        await session.commit()
+        await bot.send_message(group["chat"], t(settings, acc, "ask_batch", n=len(recs), names=names), reply_markup=_ikb(rows))
+
+
+async def apply_group(session, acc: TgAccount, settings: dict[str, Any], first: FileRecord, mode: str, vis: str,
+                      status_msg_id: int | None) -> FileRecord | None:
+    """Guruh uchun tanlov: bitta papka (yangi «folder» yozuv) yoki har bir fayl alohida navbatga."""
+    ids = [int(i) for i in (first.options or {}).get("batch_children") or [first.id]]
+    recs = [r for r in [await session.get(FileRecord, i) for i in ids] if r is not None and r.status == "awaiting"]
+    if not recs:
+        return None
+    now = datetime.now(timezone.utc)
+    extra = {"visibility": vis} if vis in ("public", "private") else {}
+    folder = None
+    if mode == "folder":
+        caption = next((r.caption for r in recs if r.caption), "")
+        folder = await enqueue(session, source="telegram", original_name=safe_name(caption[:60]) if caption else f"Fayllar ({len(recs)})",
+                               actor=acc.display, employee_id=acc.employee_id, account_id=acc.id,
+                               options={"batch_children": [r.id for r in recs], **extra},
+                               tg={"chat_id": recs[0].tg_chat_id, "file_id": "", "status_msg_id": status_msg_id})
+        for r in recs:
+            r.status = "merged"
+    else:
+        for i, r in enumerate(recs):
+            opts = {k: v for k, v in (r.options or {}).items() if k not in ("pending", "batch_children")}
+            r.options = {**opts, **extra}
+            r.status, r.next_attempt_at = "queued", now
+            if i == 0 and status_msg_id:
+                r.tg_status_msg_id = status_msg_id
+    add_audit(session, "file.group_choice", actor=str(acc.telegram_id), actor_kind="bot",
+              target=f"{len(recs)} ta fayl", details={"mode": mode, "visibility": vis})
+    await session.commit()
+    return folder
+
+
+@on("callback_query", F.data.startswith("bt:"))
+async def cb_group(cb: CallbackQuery, session, acc: TgAccount, settings: dict[str, Any]):
+    parts = cb.data.split(":")
+    first = await session.get(FileRecord, int(parts[1])) if len(parts) == 4 and parts[1].isdigit() else None
+    if first is None or first.account_id != acc.id or first.status != "awaiting" or parts[2] not in ("folder", "separate"):
+        return await cb.answer()
+    await apply_group(session, acc, settings, first, parts[2], parts[3], cb.message.message_id if cb.message else None)
+    await cb.answer()
+    if cb.message:
+        label = t(settings, acc, "btn_one_folder" if parts[2] == "folder" else "btn_separate")
+        if parts[3] in ("public", "private"):
+            label += " · " + t(settings, acc, f"vis_{parts[3]}")
+        await cb.message.edit_text(t(settings, acc, "chosen", choice=label))
 
 
 async def plan_choices(session, acc: TgAccount, settings: dict[str, Any], name: str) -> dict[str, Any]:
@@ -402,7 +536,7 @@ async def apply_choice(cb: CallbackQuery, session, acc: TgAccount, settings: dic
     if rec is None or rec.account_id != acc.id or rec.status != "awaiting":  # begona yoki allaqachon tanlangan
         await cb.answer()
         return
-    opts = dict(rec.options or {})
+    opts = {k: v for k, v in (rec.options or {}).items() if k != "pending"}
     labels = []
     if action.startswith("replace"):
         opts["replace_of"] = int(action[len("replace"):])

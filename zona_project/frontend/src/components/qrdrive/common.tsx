@@ -40,6 +40,7 @@ const STATUS_TONE: Record<FileStatus, string> = {
   processing: "bg-primary/15 text-primary",
   queued: "bg-muted text-muted-foreground",
   awaiting: "bg-violet/15 text-violet",
+  merged: "bg-muted text-muted-foreground",
 };
 
 export function StatusBadge({ status }: { status: FileStatus }) {

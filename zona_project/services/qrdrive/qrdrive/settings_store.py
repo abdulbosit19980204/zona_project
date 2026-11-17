@@ -68,6 +68,10 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "unchanged": "ℹ️ Fayl o'zgarmagan — oldingi QR:",
         "folder_done": "📂 Papka saqlandi: {count} ta fayl\n{path}\n{vis}\n🔗 {url}",
         "chosen": "⏳ Qabul qilindi: {choice}. Saqlanmoqda…",
+        "ask_batch": "📥 {n} ta fayl qabul qilindi:\n{names}\n\nQanday saqlaymiz?",
+        "btn_one_folder": "📂 Bitta papka (1 QR)",
+        "btn_separate": "📄 Har biri alohida",
+        "batch_more": "… yana {n} ta",
         "choose_visibility": "📎 {name}\nHavola turini tanlang:\n🌐 Public — havolasi bor har kim ochadi\n🔒 Private — faqat NAS'da ruxsati borlar ochadi",
         "btn_public": "🌐 Public",
         "btn_private": "🔒 Private",
@@ -125,6 +129,10 @@ BOT_TEXTS: dict[str, dict[str, str]] = {
         "unchanged": "ℹ️ Файл не изменился — прежний QR:",
         "folder_done": "📂 Папка сохранена: {count} файлов\n{path}\n{vis}\n🔗 {url}",
         "chosen": "⏳ Принято: {choice}. Сохраняю…",
+        "ask_batch": "📥 Получено файлов: {n}\n{names}\n\nКак сохранить?",
+        "btn_one_folder": "📂 Одной папкой (1 QR)",
+        "btn_separate": "📄 Каждый отдельно",
+        "batch_more": "… и ещё {n}",
         "choose_visibility": "📎 {name}\nВыберите тип ссылки:\n🌐 Public — откроет любой, у кого есть ссылка\n🔒 Private — только пользователи с доступом к NAS",
         "btn_public": "🌐 Public",
         "btn_private": "🔒 Private",
@@ -154,6 +162,8 @@ DEFAULTS: dict[str, Any] = {
     "replace_mode": "ask",
     # Arxiv (zip, tar) yuborilsa: ask — so'rash | archive — arxiv holida | folder — ochib papka qilib (bitta QR)
     "archive_mode": "ask",
+    # Bir nechta fayl birdaniga yuborilsa: ask — so'rash | folder — bitta papka (bitta QR) | separate — har biri alohida
+    "multi_mode": "ask",
     "archive_max_files": 1000,
     "archive_max_mb": 2048,  # ochilgandagi umumiy hajm chegarasi (zip-bomba himoyasi)
     "visibility_mode": "ask",

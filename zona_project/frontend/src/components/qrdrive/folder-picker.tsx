@@ -14,11 +14,11 @@ import { useQt } from "./i18n";
 interface Entry { name: string; path: string; is_dir: boolean }
 
 /** Saqlash joyidagi papkalarni ko'rib, birini tanlash (ko'chirish, yuklash uchun). */
-export function FolderPicker({ storageId, root, value, onChange }: {
-  storageId: number; root: string; value: string; onChange: (path: string) => void;
+export function FolderPicker({ storageId, root, current, value, onChange }: {
+  storageId: number; root: string; current?: string; value: string; onChange: (path: string) => void;
 }) {
   const t = useQt();
-  const [path, setPath] = useState(value || root || "/");
+  const [path, setPath] = useState(root || value || "/");  // asosiy papkadan — barcha xodim papkalari ko'rinadi
   const [newName, setNewName] = useState("");
   const q = useQr<{ entries: Entry[] }>(["browse", storageId, path], "files/browse", { storage_id: storageId, path });
   const dirs = (q.data?.entries ?? []).filter((e) => e.is_dir);
@@ -50,6 +50,7 @@ export function FolderPicker({ storageId, root, value, onChange }: {
             <button key={d.path} type="button" onClick={() => go(d.path)}
               className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted", value === d.path && "bg-primary/10")}>
               <Folder className="size-4 shrink-0 text-primary" /><span className="truncate">{d.name}</span>
+              {current === d.path && <span className="rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">{t("currentFolder")}</span>}
               <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
             </button>
           ))}

@@ -13,7 +13,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .. import settings_store
@@ -106,14 +106,19 @@ class Ctx:
         self.local_file: Path | None = None
         self.cleanup: list[Path] = []
         self.cleanup_dirs: list[Path] = []
+        self.bg: set[asyncio.Task] = set()
+        self.prepared: archive.Extracted | None = None  # bir nechta fayldan yig'ilgan papka
         self.mode = "new"  # new | duplicate | replaced | unchanged | folder
 
     def text(self, key: str, **kw: Any) -> str:
         return settings_store.text(self.settings, self.lang, key, **kw)
 
     async def status_msg(self, key: str, **kw: Any) -> None:
+        """Telegram'dagi holat xabari fonda yangilanadi — fayl jarayoni Telegram javobini kutmaydi (tezlik)."""
         if self.tg and self.rec.tg_chat_id and self.rec.tg_status_msg_id:
-            await self.tg.edit_message(self.rec.tg_chat_id, self.rec.tg_status_msg_id, self.text(key, **kw))
+            task = asyncio.create_task(self.tg.edit_message(self.rec.tg_chat_id, self.rec.tg_status_msg_id, self.text(key, **kw)))
+            self.bg.add(task)
+            task.add_done_callback(self.bg.discard)
 
     @asynccontextmanager
     async def stage(self, name: str):
@@ -230,7 +235,7 @@ async def _upload(ctx: Ctx, storage: Storage) -> None:
     async with registry.use(storage) as provider:
         await ctx.status_msg("uploading")
         async with ctx.stage("uploading"):
-            if rec.options.get("archive") == "folder":
+            if rec.options.get("archive") == "folder" or ctx.prepared is not None:
                 # papka nomi: shablon bo'yicha, arxiv kengaytmasisiz (masalan «Hujjatlar_2026-11-17_18-30-00»)
                 dir_name = safe_name(render_filename(s.get("filename_template", "{asl_nom}"), archive.stem(rec.original_name) + ".x",
                                                      folder_name, at)[:-2])
@@ -267,13 +272,15 @@ UPLOAD_PARALLEL = 4
 
 
 async def _upload_tree(ctx: Ctx, provider, target: str) -> RemoteFile:
-    """Arxivni ochib, papka tuzilmasi bilan parallel yuklaydi. Natija — papka (bitta havola uchun)."""
+    """Arxivni ochib (yoki guruhdagi fayllarni) papka tuzilmasi bilan parallel yuklaydi. Natija — papka (bitta havola)."""
     s = ctx.settings
-    max_mb = int(s.get("archive_max_mb") or 2048)
-    dest = spool_path(f"x{ctx.rec.id}")
-    ctx.cleanup_dirs.append(dest)
-    ex = await asyncio.to_thread(archive.extract, ctx.local_file, dest, max_files=int(s.get("archive_max_files") or 1000),
-                                 max_bytes=max_mb * 1024 * 1024, allowed=lambda n: allowed(n, s.get("allowed_types", "")))
+    ex = ctx.prepared
+    if ex is None:
+        max_mb = int(s.get("archive_max_mb") or 2048)
+        dest = spool_path(f"x{ctx.rec.id}")
+        ctx.cleanup_dirs.append(dest)
+        ex = await asyncio.to_thread(archive.extract, ctx.local_file, dest, max_files=int(s.get("archive_max_files") or 1000),
+                                     max_bytes=max_mb * 1024 * 1024, allowed=lambda n: allowed(n, s.get("allowed_types", "")))
     dirs = sorted({target} | {join(target, rel.rsplit("/", 1)[0]) for rel, _ in ex.files if "/" in rel}, key=len)
     for d in dirs:  # papkalar ketma-ket (ba'zi provayderlarda parallel yaratish dublikat beradi)
         await provider.ensure_folder(d)
@@ -290,6 +297,46 @@ async def _upload_tree(ctx: Ctx, provider, target: str) -> RemoteFile:
     ctx.rec.size = sum(size for _, size in ex.files)
     ctx.mode = "folder"
     return RemoteFile(path=target, id=target, is_dir=True)
+
+
+async def _fetch_batch(ctx: Ctx) -> archive.Extracted:
+    """Birdaniga yuborilgan fayllarni bitta papkaga yig'adi (oldindan yuklab olinganlari darhol, qolganlari parallel)."""
+    rec, s, session = ctx.rec, ctx.settings, ctx.session
+    ids = [int(i) for i in rec.options.get("batch_children") or []]
+    children = [c for c in [await session.get(FileRecord, i) for i in ids] if c is not None]
+    dest = spool_path(f"b{rec.id}")
+    dest.mkdir(parents=True, exist_ok=True)
+    ctx.cleanup_dirs.append(dest)
+    max_bytes = int(s.get("max_file_mb") or 100) * 1024 * 1024
+    sem = asyncio.Semaphore(4)
+
+    async def local(child: FileRecord) -> Path:
+        if child.temp_path and Path(child.temp_path).is_file():
+            return Path(child.temp_path)
+        if ctx.tg is None:
+            raise TelegramError("Bot tokeni kiritilmagan")
+        async with sem:
+            path, _ = await ctx.tg.download(child.tg_file_id, spool_path(f"tg{child.id}"))
+            return path
+
+    paths = await asyncio.gather(*(local(c) for c in children))
+    used: set[str] = set()
+    files: list[tuple[str, int]] = []
+    for child, path in zip(children, paths):
+        name = safe_name(child.original_name)
+        stem_, dot, ext = name.rpartition(".")
+        base, n = (stem_, f".{ext}") if dot and stem_ else (name, ""), 2
+        while name.lower() in used:  # bir xil nomli fayllar: «nom_2.pdf»
+            name = f"{base[0]}_{n}{base[1]}"
+            n += 1
+        used.add(name.lower())
+        size = path.stat().st_size
+        if size > max_bytes:
+            raise FileTooBig(str(size))
+        shutil.move(str(path), dest / name)
+        files.append((name, size))
+    rec.size = sum(sz for _, sz in files)
+    return archive.Extracted(root=dest, files=sorted(files))
 
 
 async def _replace(ctx: Ctx, prev: FileRecord) -> None:
@@ -391,13 +438,17 @@ async def process(session: AsyncSession, file_id: int, tg: TelegramClient | None
         if acc:
             ctx.lang = acc.lang or ctx.lang
     try:
+        batch = bool(rec.options.get("batch_children"))
         async with ctx.stage("downloading"):
-            await _fetch(ctx)
-        prev = await _replace_target(session, rec)
+            if batch:
+                ctx.prepared = await _fetch_batch(ctx)
+            else:
+                await _fetch(ctx)
+        prev = None if batch else await _replace_target(session, rec)
         dup = None
         if prev is not None and prev.sha256 == rec.sha256:  # tarkib o'zgarmagan — eski QR
             dup, ctx.mode = prev, "unchanged"
-        elif prev is None and settings.get("duplicate_policy", "reuse") == "reuse":
+        elif prev is None and not batch and settings.get("duplicate_policy", "reuse") == "reuse":
             dup = await _find_duplicate(session, rec)
         if prev is not None and dup is None:
             await _replace(ctx, prev)
@@ -424,6 +475,9 @@ async def process(session: AsyncSession, file_id: int, tg: TelegramClient | None
                 log.warning("asosiy saqlash joyi ishlamayapti — zaxiraga yuklanmoqda", extra={"data": {"storage": fb.name}})
                 await _upload(ctx, fb)
             await _deliver(ctx)
+        if batch:  # guruhdagi alohida yozuvlar endi papka ichida — ro'yxatdan olib tashlanadi
+            await session.execute(delete(FileRecord).where(FileRecord.id.in_([int(i) for i in rec.options["batch_children"]]),
+                                                           FileRecord.status == "merged"))
         rec.status, rec.error_kind, rec.error_text = "delivered", "", ""
         rec.finished_at, rec.locked_until, rec.next_attempt_at = _now(), None, None
         if rec.temp_path:
@@ -443,6 +497,8 @@ async def process(session: AsyncSession, file_id: int, tg: TelegramClient | None
                 pass
         for d in ctx.cleanup_dirs:
             shutil.rmtree(d, ignore_errors=True)
+        if ctx.bg:  # fondagi Telegram xabarlari tugashini qisqa kutamiz
+            await asyncio.wait(ctx.bg, timeout=5)
         if own_tg and tg:
             await tg.close()
     return rec

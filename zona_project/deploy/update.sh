@@ -12,6 +12,9 @@ REPO="$(git -C "$APP" rev-parse --show-toplevel)"
 echo "==> Yangilashdan oldin zaxira"
 sudo -u zona -H bash -c "set -a; source $ENVFILE; set +a; bash $APP/deploy/backup.sh"
 
+echo "==> Arxiv ochuvchilari (RAR/7z)"
+command -v bsdtar >/dev/null || apt-get install -y libarchive-tools >/dev/null 2>&1 || true
+
 echo "==> Kod (git pull)"
 sudo -u zona -H git -C "$REPO" pull --ff-only
 

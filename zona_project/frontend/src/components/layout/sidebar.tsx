@@ -76,7 +76,7 @@ function ModuleSection({ module, counts, down }: { module: NavModule; counts: Re
   const can = model?.state.me.can;
   const active = activeNav(pathname);
   const isCurrent = moduleOf(pathname).key === module.key;
-  const open = collapsed || !closed || isCurrent;
+  const open = collapsed || !closed;  // foydalanuvchi har bir modulni erkin yopadi/ochadi
   const Icon = module.icon;
 
   return (

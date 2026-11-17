@@ -24,7 +24,9 @@ step() { echo; echo "==> $*"; }
 
 step "Tizim paketlari"
 apt-get update -y
-apt-get install -y python3 python3-venv python3-dev build-essential git nginx curl ca-certificates gzip
+apt-get install -y python3 python3-venv python3-dev build-essential git nginx curl ca-certificates gzip libarchive-tools
+# RAR/7z arxivlarini ochish uchun (Ubuntu 24.04: 7zip, 22.04: p7zip-full); bo'lmasa bsdtar yetarli
+apt-get install -y 7zip 2>/dev/null || apt-get install -y p7zip-full 2>/dev/null || true
 
 # Next.js 16 uchun Node.js 20.9+ kerak
 NODE_MAJOR=$(node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || echo 0)

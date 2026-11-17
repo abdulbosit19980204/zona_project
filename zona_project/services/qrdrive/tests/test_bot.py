@@ -1,6 +1,8 @@
 """Bot handlerlari: haqiqiy aiogram Dispatcher, Telegram esa soxta sessiya (tarmoqsiz)."""
 from __future__ import annotations
 
+import asyncio
+
 from datetime import datetime, timezone
 from typing import Any
 
@@ -10,12 +12,21 @@ from aiogram.methods import TelegramMethod
 from aiogram.types import Chat, Message, Update, User
 from sqlalchemy import select
 
-from qrdrive.bot.main import BotService
+from qrdrive.bot.main import Batcher, BotService, batcher
 from qrdrive.db.models import FileRecord, Notification, TgAccount
 from qrdrive.db.session import session_scope
 from qrdrive.services import accounts
 
 TOKEN = "123456:" + "A" * 35
+Batcher.WINDOW = 0.05
+
+
+async def settle() -> None:
+    """Guruh oynasi yopilishini kutish (bot savolni guruh yopilgach beradi)."""
+    for _ in range(40):
+        await asyncio.sleep(0.05)
+        if not batcher.pending and not batcher.tasks:
+            return
 
 
 class FakeSession(BaseSession):
@@ -164,8 +175,10 @@ async def test_invite_then_file_upload(session, employee, local_storage):
     assert "Olimova Dilnoza" in s.texts()[0]
     s = await feed(service, update(600, "dilnoza_tg", document={"file_id": "FID1", "file_unique_id": "U1",
                                                                 "file_name": "Buyruq.pdf", "file_size": 2048}))
-    assert s.sent[0][0] == "SendMessage" and "Havola turini tanlang" in s.texts()[0] and "Buyruq.pdf" in s.texts()[0]
-    kb = next(d for n, d in s.sent if n == "EditMessageReplyMarkup")["reply_markup"]["inline_keyboard"][0]
+    assert s.sent[0][0] == "SendChatAction"  # darhol «yuklanmoqda…» belgisi
+    await settle()
+    assert "Havola turini tanlang" in s.texts()[0] and "Buyruq.pdf" in s.texts()[0]
+    kb = next(d for n, d in s.sent if n == "SendMessage")["reply_markup"]["inline_keyboard"][0]
     assert [b["callback_data"].split(":")[-1] for b in kb] == ["public", "private"]
     async with session_scope() as db:
         rec = (await db.execute(select(FileRecord))).scalar_one()
@@ -208,3 +221,29 @@ async def test_id_and_username_change(session, employee):
     async with session_scope() as db:
         acc = (await db.execute(select(TgAccount).where(TgAccount.telegram_id == 800))).scalar_one()
         assert acc.username == "yangi" and acc.employee_id == employee.id
+
+
+async def test_many_files_one_question(session, employee, local_storage):
+    acc = TgAccount(telegram_id=650, employee_id=employee.id, status="active")
+    session.add(acc)
+    await session.commit()
+    service = BotService()
+    sessions = [await feed(service, update(650, "x", document={"file_id": f"F{i}", "file_unique_id": f"U{i}",
+                                                                 "file_name": f"hujjat{i}.pdf", "file_size": 100}))
+                for i in range(3)]
+    await settle()
+    msgs = [d for s in sessions for n, d in s.sent if n == "SendMessage"]
+    assert len(msgs) == 1 and "3 ta fayl" in msgs[0]["text"]  # bitta savol, uchta emas
+    rows = msgs[0]["reply_markup"]["inline_keyboard"]
+    assert [b["callback_data"].split(":")[2] for b in rows[0]] == ["folder", "folder"]
+    assert [b["callback_data"].split(":")[2] for b in rows[1]] == ["separate", "separate"]
+    raw = {"update_id": 7777, "callback_query": {"id": "c", "chat_instance": "x", "data": rows[0][0]["callback_data"],
+           "from": {"id": 650, "is_bot": False, "first_name": "A"},
+           "message": {"message_id": 9, "date": 0, "chat": {"id": 650, "type": "private"}, "text": "?"}}}
+    await feed(service, Update.model_validate(raw))
+    async with session_scope() as db:
+        recs = (await db.execute(select(FileRecord).order_by(FileRecord.id))).scalars().all()
+        folder = recs[-1]
+        assert [r.status for r in recs[:3]] == ["merged"] * 3
+        assert folder.status == "queued" and folder.options["batch_children"] == [r.id for r in recs[:3]]
+        assert folder.options["visibility"] == "public" and folder.tg_status_msg_id == 9

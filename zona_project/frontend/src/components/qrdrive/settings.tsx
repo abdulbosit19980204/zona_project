@@ -181,6 +181,16 @@ export function QrSettingsPage() {
                     </SelectContent>
                   </Select>
                 </FormRow>
+                <FormRow label={t("multiMode")}>
+                  <Select value={cur.multi_mode ?? "ask"} onValueChange={(x) => set("multi_mode", x as QrSettings["multi_mode"])}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ask">{t("multiAsk")}</SelectItem>
+                      <SelectItem value="folder">{t("multiFolder")}</SelectItem>
+                      <SelectItem value="separate">{t("multiSeparate")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormRow>
                 <FormRow label={t("archiveMode")}>
                   <Select value={cur.archive_mode ?? "ask"} onValueChange={(x) => set("archive_mode", x as QrSettings["archive_mode"])}>
                     <SelectTrigger><SelectValue /></SelectTrigger>

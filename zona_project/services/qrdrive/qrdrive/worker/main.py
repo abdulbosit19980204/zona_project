@@ -31,7 +31,9 @@ from ..storage import registry
 
 log = logging.getLogger("qrdrive.worker")
 
-CONCURRENCY = max(1, int(os.environ.get("QRDRIVE_WORKER_CONCURRENCY", "4")))
+# Ko'p vaqt NAS/Drive javobini kutish (bo'sh I/O) — parallellik yuqori bo'lgani ma'qul
+CONCURRENCY = max(1, int(os.environ.get("QRDRIVE_WORKER_CONCURRENCY", "8")))
+IDLE_TICK = 0.3  # yangi fayl shuncha soniyada olinadi
 WEBHOOK_DELAYS = [10, 60, 300, 1800]
 STORAGE_CHECK_EVERY = 300
 
@@ -287,7 +289,7 @@ class Worker:
                             FileRecord.status.in_(("queued", "retrying"))))).scalar_one()
                     await system.beat("worker", {"processed": self.processed, "queue": queue, "running": len(self.running)})
             with suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(self.stop.wait(), timeout=1.0)
+                await asyncio.wait_for(self.stop.wait(), timeout=IDLE_TICK)
         if self.running:
             await asyncio.wait(self.running, timeout=60)
 

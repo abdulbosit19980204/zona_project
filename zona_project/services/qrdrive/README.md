@@ -145,5 +145,11 @@ SDK va aiogram plagini: [sdk/python/README.md](sdk/python/README.md).
     Foydalanuvchi tugmani bosguncha worker faylni Telegram'dan oldindan yuklab oladi. Worker NAS sessiyasini qayta ishlatadi
     (har faylga login ~0.6 s tejaladi), parallellik `QRDRIVE_WORKER_CONCURRENCY` (standart 4). Synology Drive yangi faylni
     ~5–8 s da indekslaydi — havola shundan keyin yaratiladi (Drive'ning yuklash API'si bu NAS'da yo'l formatini qabul qilmadi).
-19. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
+19. **Arxiv turlari:** ZIP va TAR — Python'da; RAR (4/5), 7z, CAB, ISO va boshqalar — tashqi ochuvchi bilan
+    (Windows'da 7-Zip, Linux'da bsdtar/libarchive-tools; `install.sh` o'rnatadi). Ochish paytida hajm kuzatiladi —
+    chegara oshsa jarayon to'xtatiladi. Parolli/buzilgan arxiv — tushunarli xato, «Arxiv holida» saqlash taklif qilinadi.
+20. **Bir nechta fayl birdaniga** (albom, birga tanlangan fayllar, ketma-ket yuborish): bot oxirgi fayldan ~1 s keyin
+    bitta savol beradi — «📂 Bitta papka (1 QR)» yoki «📄 Har biri alohida» (🌐/🔒 bilan). Kutish paytida fayllar
+    oldindan yuklab olinadi. Papka rejimida bitta Drive kutishi (~6 s) — fayllar soniga bog'liq emas.
+21. **2FA va sessiyalar** — Zona'da (QR Drive alohida login yuritmaydi). **Brauzer e2e testlari** o'rniga API darajasidagi
     oqim testlari va jonli QA (Next.js proksi orqali) ishlatildi.
