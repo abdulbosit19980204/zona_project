@@ -1,10 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bot, History, LogOut, Plus, Save, Send, ShieldCheck, Trash2, Users, Wifi } from "lucide-react";
+import { Bot, History, Link2, LogOut, Plus, Save, Search, Send, ShieldCheck, Trash2, Users, Wifi } from "lucide-react";
 import { useState } from "react";
 
-import { Page, PageHeader, SectionTitle } from "@/components/common/page";
+import { SectionTitle } from "@/components/common/page";
 import { ConfirmDialog, FormRow } from "@/components/qrdrive/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,28 +14,40 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
-import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type SupportSettings } from "./api";
+import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type SupportSettings, type TgUserInfo } from "./api";
 import { fmtDate, ModeBadge, useSupportMutation } from "./common";
-import { useSt, type ST } from "./i18n";
+import { useSt, type SKey, type ST } from "./i18n";
+import { SettingRow, SupportShell } from "./shell";
 
 const MODES: Mode[] = ["collect", "shadow", "live", "off"];
 
 /** Botlar, guruhlar, umumiy sozlamalar va bot taniydigan xodimlar (faqat administrator). */
+const SETTING_TABS: { key: string; label: SKey }[] = [
+  { key: "bots", label: "stBots" }, { key: "groups", label: "stGroups" }, { key: "answering", label: "stAnswering" },
+  { key: "images", label: "stImages" }, { key: "history", label: "stHistory" }, { key: "people", label: "stPeople" },
+  { key: "general", label: "stGeneral" },
+];
+
 export function SupportSettingsPage() {
   const t = useSt();
   return (
-    <Page>
-      <PageHeader title={t("setTitle")} description={t("setDesc")} />
-      <div className="grid gap-6">
-        <BotsSection t={t} />
-        <GroupsSection t={t} />
-        <GeneralSection t={t} />
-        <HistorySection t={t} />
-        <StaffSection t={t} />
-      </div>
-    </Page>
+    <SupportShell title={t("setTitle")} description={t("setDesc")}>
+      <Tabs defaultValue="bots" className="gap-4">
+        <TabsList className="h-auto flex-wrap justify-start">
+          {SETTING_TABS.map((x) => <TabsTrigger key={x.key} value={x.key}>{t(x.label)}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value="bots"><BotsSection t={t} /></TabsContent>
+        <TabsContent value="groups"><GroupsSection t={t} /></TabsContent>
+        <TabsContent value="answering"><SettingsForm t={t} part="answering" /></TabsContent>
+        <TabsContent value="images"><SettingsForm t={t} part="images" /></TabsContent>
+        <TabsContent value="history"><HistorySection t={t} /></TabsContent>
+        <TabsContent value="people"><div className="grid gap-6"><TgUsersSection t={t} /><StaffSection t={t} /></div></TabsContent>
+        <TabsContent value="general"><SettingsForm t={t} part="general" /></TabsContent>
+      </Tabs>
+    </SupportShell>
   );
 }
 
@@ -174,18 +186,21 @@ function GroupsSection({ t }: { t: ST }) {
   );
 }
 
-/* ---------------------------------------------------------------- umumiy sozlamalar */
+/* ---------------------------------------------------------------- sozlamalar (javob berish, rasmlar, umumiy) */
 type Form = Omit<SupportSettings, "ocr_available" | "ocr_languages" | "ai_ready" | "ai_quota_left" | "has_api_hash">;
+type Part = "answering" | "images" | "general";
 
-function GeneralSection({ t }: { t: ST }) {
+function SettingsForm({ t, part }: { t: ST; part: Part }) {
   const q = useQuery({ queryKey: ["support", "settings"], queryFn: supportApi.settings });
   if (!q.data) return <Skeleton className="h-64" />;
-  return <GeneralForm key={q.dataUpdatedAt} s={q.data} t={t} />;
+  return <SettingsFields key={q.dataUpdatedAt} s={q.data} t={t} part={part} />;
 }
 
-function GeneralForm({ s, t }: { s: SupportSettings; t: ST }) {
+function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part }) {
   const [f, setF] = useState<Form>({ ...s });
   const [hash, setHash] = useState("");
+  // kalitlar bosilishi bilan saqlanadi; raqam va matn maydonlari — «Saqlash» tugmasi bilan
+  const toggle = useSupportMutation((body: Partial<Form>) => supportApi.saveSettings(body), t("saved"));
   const save = useSupportMutation(() => {
     const body: Record<string, unknown> = { ...f };
     delete body.api_hash;
@@ -193,60 +208,152 @@ function GeneralForm({ s, t }: { s: SupportSettings; t: ST }) {
     return supportApi.saveSettings(body);
   }, t("saved"));
   const num = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value) || 0 });
-  const sw = (k: keyof Form, label: string, hint?: string, extra?: React.ReactNode) => (
-    <label className="flex items-start gap-2 text-sm">
-      <Switch className="mt-0.5" checked={Boolean(f[k])} onCheckedChange={(v) => setF({ ...f, [k]: v })} />
-      <span>{label}{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}{extra}</span>
-    </label>
+  const sw = (k: keyof Form, label: string, hint?: React.ReactNode) => (
+    <SettingRow label={label} hint={hint}>
+      <Switch checked={Boolean(f[k])} disabled={toggle.isPending}
+        onCheckedChange={(v) => { setF({ ...f, [k]: v }); toggle.mutate({ [k]: v } as Partial<Form>); }} />
+    </SettingRow>
+  );
+  const field = (label: string, hint: string | undefined, input: React.ReactNode) => (
+    <SettingRow label={label} hint={hint}><div className="w-36 sm:w-44">{input}</div></SettingRow>
+  );
+  const saveBtn = (
+    <Button className="mt-3" disabled={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => setHash("") })}>
+      <Save className="size-4" />{t("save")}
+    </Button>
   );
 
+  if (part === "answering") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="gap-0 p-4">
+          <div className="mb-1 text-sm font-semibold">{t("grpReply")}</div>
+          <p className="mb-2 text-xs text-muted-foreground">{t("behaviorHint")}</p>
+          {sw("mention_asker", t("t_mentionAsker"), t("t_mentionAskerHint"))}
+          {sw("mention_supervisor", t("t_mentionSv"), t("t_mentionSvHint"))}
+          {sw("mention_responsible", t("t_mention"))}
+          {sw("escalation_ack", t("t_escalation"))}
+          {sw("feedback_buttons", t("t_feedback"))}
+          {sw("ask_first_prompt", t("t_askFirst"))}
+        </Card>
+        <Card className="gap-0 p-4">
+          <div className="mb-1 text-sm font-semibold">{t("grpLearn")}</div>
+          <p className="mb-2 text-xs text-muted-foreground">{t("grpLearnHint")}</p>
+          {sw("learn_from_staff", t("learn"), t("learnHint"))}
+          {sw("learn_clarifications", t("t_clarify"), t("t_clarifyHint"))}
+          {sw("notify_candidates", t("t_candidates"))}
+          {sw("drafts_to_admin", t("t_drafts"))}
+        </Card>
+        <Card className="gap-0 p-4 lg:col-span-2">
+          <div className="mb-1 text-sm font-semibold">{t("grpPrecision")}</div>
+          {field(t("faqTh"), t("faqThHint"), <Input type="number" value={f.faq_threshold} onChange={num("faq_threshold")} />)}
+          {field(t("ruleTh"), undefined, <Input type="number" value={f.route_threshold} onChange={num("route_threshold")} />)}
+          {field(t("workers"), t("workersHint"), <Input type="number" min={1} max={8} value={f.workers} onChange={num("workers")} />)}
+          {field(t("signature"), undefined, <Input value={f.signature} onChange={(e) => setF({ ...f, signature: e.target.value })} />)}
+          <div>{saveBtn}</div>
+        </Card>
+      </div>
+    );
+  }
+  if (part === "images") {
+    return (
+      <Card className="gap-0 p-4">
+        {sw("image_match", t("imgMatch"), t("imgMatchHint"))}
+        {sw("image_autolabel", t("imgAuto"), t("imgAutoHint"))}
+        {sw("ocr_enabled", t("ocrOn"), s.ocr_available ? t("ocrLangs", { l: s.ocr_languages }) : <span className="text-warning">{t("ocrMissing")}</span>)}
+        {field(t("imgThreshold"), t("imgThresholdHint"), <Input type="number" min={2} max={20} value={f.image_threshold} onChange={num("image_threshold")} />)}
+        {field(t("mediaDays"), t("mediaDaysHint"), <Input type="number" value={f.media_days} onChange={num("media_days")} />)}
+        <div>{saveBtn}</div>
+      </Card>
+    );
+  }
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="gap-0 p-4">
+        <div className="mb-1 text-sm font-semibold">{t("ai")}</div>
+        <p className="mb-2 text-xs text-muted-foreground">{t("aiHint")}</p>
+        {sw("ai_enabled", t("ai"), !s.ai_ready ? <span className="text-warning">{t("aiNotReady")}</span> : undefined)}
+        {field(t("aiLimit"), t("aiLeft", { n: s.ai_quota_left }), <Input type="number" value={f.ai_daily_limit} onChange={num("ai_daily_limit")} />)}
+        {field(t("aiMin"), undefined, <Input type="number" value={f.ai_min_confidence} onChange={num("ai_min_confidence")} />)}
+        <div>{saveBtn}</div>
+      </Card>
+      <Card className="gap-0 p-4">
+        <div className="mb-1 text-sm font-semibold">Telegram API</div>
+        <p className="mb-2 text-xs text-muted-foreground">{t("apiHint")}</p>
+        <FormRow label={t("apiId")}><Input value={f.api_id} onChange={(e) => setF({ ...f, api_id: e.target.value })} /></FormRow>
+        <FormRow label={t("apiHash")} hint={s.has_api_hash ? s.api_hash : undefined} className="mt-3">
+          <Input value={hash} onChange={(e) => setHash(e.target.value)} type="password" autoComplete="off" placeholder={s.api_hash || ""} />
+        </FormRow>
+        <div>{saveBtn}</div>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- Telegram foydalanuvchilar <-> kontaktlar */
+function TgUsersSection({ t }: { t: ST }) {
+  const [onlyUnlinked, setOnlyUnlinked] = useState(false);
+  const users = useQuery({ queryKey: ["support", "tg-users", onlyUnlinked], queryFn: () => supportApi.tgUsers(onlyUnlinked) });
   return (
     <section>
-      <SectionTitle>{t("general")}</SectionTitle>
-      <Card className="gap-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormRow label={t("apiId")} hint={t("apiHint")}><Input value={f.api_id} onChange={(e) => setF({ ...f, api_id: e.target.value })} /></FormRow>
-          <FormRow label={t("apiHash")} hint={s.has_api_hash ? s.api_hash : t("apiHint")}>
-            <Input value={hash} onChange={(e) => setHash(e.target.value)} type="password" autoComplete="off" placeholder={s.api_hash || ""} />
-          </FormRow>
-        </div>
-        {sw("ai_enabled", t("ai"), t("aiHint"), !s.ai_ready && <span className="block text-xs text-warning">{t("aiNotReady")}</span>)}
-        <div className="grid gap-3 sm:grid-cols-3">
-          <FormRow label={t("aiLimit")} hint={t("aiLeft", { n: s.ai_quota_left })}><Input type="number" value={f.ai_daily_limit} onChange={num("ai_daily_limit")} /></FormRow>
-          <FormRow label={t("aiMin")}><Input type="number" value={f.ai_min_confidence} onChange={num("ai_min_confidence")} /></FormRow>
-          <FormRow label={t("faqTh")}><Input type="number" value={f.faq_threshold} onChange={num("faq_threshold")} /></FormRow>
-          <FormRow label={t("ruleTh")}><Input type="number" value={f.route_threshold} onChange={num("route_threshold")} /></FormRow>
-          <FormRow label={t("mediaDays")} hint={t("mediaDaysHint")}><Input type="number" value={f.media_days} onChange={num("media_days")} /></FormRow>
-          <FormRow label={t("signature")}><Input value={f.signature} onChange={(e) => setF({ ...f, signature: e.target.value })} /></FormRow>
-        </div>
-        {sw("learn_from_staff", t("learn"), t("learnHint"))}
-        <div className="grid gap-3 rounded-lg border p-3">
-          <div className="text-sm font-medium">{t("behavior")}</div>
-          <p className="text-xs text-muted-foreground">{t("behaviorHint")}</p>
-          {sw("drafts_to_admin", t("t_drafts"))}
-          {sw("escalation_ack", t("t_escalation"))}
-          {sw("mention_responsible", t("t_mention"))}
-          {sw("feedback_buttons", t("t_feedback"))}
-          {sw("notify_candidates", t("t_candidates"))}
-          {sw("learn_clarifications", t("t_clarify"), t("t_clarifyHint"))}
-          {sw("ask_first_prompt", t("t_askFirst"))}
-        </div>
-        <div className="grid gap-3 rounded-lg border p-3">
-          <div className="text-sm font-medium">{t("imgSettings")}</div>
-          {sw("image_match", t("imgMatch"), t("imgMatchHint"))}
-          {sw("image_autolabel", t("imgAuto"), t("imgAutoHint"))}
-          <FormRow label={t("imgThreshold")} hint={t("imgThresholdHint")}>
-            <Input type="number" min={2} max={20} value={f.image_threshold} onChange={num("image_threshold")} className="max-w-32" />
-          </FormRow>
-        </div>
-        {sw("ocr_enabled", t("ocrOn"), s.ocr_available ? t("ocrLangs", { l: s.ocr_languages }) : undefined,
-          !s.ocr_available && <span className="block text-xs text-warning">{t("ocrMissing")}</span>)}
-        <Button className="justify-self-start" disabled={save.isPending}
-          onClick={() => save.mutate(undefined, { onSuccess: () => setHash("") })}>
-          <Save className="size-4" />{t("save")}
-        </Button>
+      <SectionTitle actions={<label className="flex items-center gap-2 text-xs"><Switch checked={onlyUnlinked} onCheckedChange={setOnlyUnlinked} />{t("tgUnlinked")}</label>}>
+        <span className="inline-flex items-center gap-1.5"><Link2 className="size-4" />{t("tgUsers")}</span>
+      </SectionTitle>
+      <p className="mb-3 text-xs text-muted-foreground">{t("tgUsersHint")}</p>
+      <Card className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow><TableHead>Telegram</TableHead><TableHead>{t("tgStaff")}</TableHead><TableHead>{t("tgSupervisor")}</TableHead><TableHead className="text-right">{t("anQuestions")}</TableHead></TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.data?.length === 0 && <TableRow><TableCell colSpan={4} className="text-muted-foreground">{t("empty")}</TableCell></TableRow>}
+            {users.data?.map((u) => <TgUserRow key={u.id} u={u} t={t} />)}
+          </TableBody>
+        </Table>
       </Card>
     </section>
+  );
+}
+
+function TgUserRow({ u, t }: { u: TgUserInfo; t: ST }) {
+  const [editing, setEditing] = useState(false);
+  const [q, setQ] = useState("");
+  const found = useQuery({ queryKey: ["support", "staff-people", q], queryFn: () => supportApi.staffPeople(q), enabled: editing && q.length >= 2 });
+  const link = useSupportMutation((id: number | null) => supportApi.linkTgUser(u.id, id), t("saved"));
+  return (
+    <TableRow>
+      <TableCell>
+        <div className="font-medium">{u.name || "—"}</div>
+        <div className="text-xs text-muted-foreground">{u.username ? `@${u.username}` : ""}{u.is_staff && <Badge variant="outline" className="ml-1 font-normal">{t("staffBadge")}: {u.staff_name}</Badge>}</div>
+      </TableCell>
+      <TableCell className="min-w-56">
+        {!editing ? (
+          <div className="flex items-center gap-2">
+            {u.staff_person ? (
+              <span className="text-sm">{u.staff_person_name}<span className="block text-xs text-muted-foreground">{u.staff_person_role} · {u.project}{u.link === "auto" ? ` · ${t("tgAuto")}` : ""}</span></span>
+            ) : <span className="text-xs text-muted-foreground">{u.link === "none" ? t("tgNone") : "—"}</span>}
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>{t("edit")}</Button>
+          </div>
+        ) : (
+          <div className="grid gap-1.5">
+            <div className="relative"><Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+              <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("tgSearch")} className="h-8 pl-7" /></div>
+            {(found.data ?? []).map((p) => (
+              <button key={p.id} type="button" className="rounded-md px-2 py-1 text-left text-xs hover:bg-muted"
+                onClick={() => link.mutate(p.id, { onSuccess: () => setEditing(false) })}>
+                <span className="font-medium">{p.name}</span> · {p.role} · {p.project}{p.manager ? ` · ${t("tgSupervisor")}: ${p.manager}` : ""}
+              </button>
+            ))}
+            <div className="flex gap-1">
+              <Button size="sm" variant="ghost" onClick={() => link.mutate(null, { onSuccess: () => setEditing(false) })}>{t("tgUnlink")}</Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>{t("cancel")}</Button>
+            </div>
+          </div>
+        )}
+      </TableCell>
+      <TableCell className="text-sm">{u.supervisor || "—"}</TableCell>
+      <TableCell className="text-right font-mono text-xs">{u.questions}</TableCell>
+    </TableRow>
   );
 }
 

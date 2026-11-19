@@ -2,9 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Bot, HelpCircle, Image as ImageIcon, Inbox, ListChecks, UserRound } from "lucide-react";
+import { SupportShell } from "./shell";
 import { useState } from "react";
 
-import { Page, PageHeader, SectionTitle, StatCard } from "@/components/common/page";
+import { SectionTitle, StatCard } from "@/components/common/page";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,8 +27,7 @@ export function SupportAnalytics() {
   const maxGroup = Math.max(1, ...(a?.groups ?? []).map((g) => g.n));
 
   return (
-    <Page>
-      <PageHeader title={t("anTitle")} description={t("anDesc")}
+    <SupportShell title={t("anTitle")} description={t("anDesc")}
         actions={(
           <Tabs value={String(days)} onValueChange={(v) => setDays(Number(v))}>
             <TabsList>
@@ -36,7 +36,7 @@ export function SupportAnalytics() {
               <TabsTrigger value="90">{t("days90")}</TabsTrigger>
             </TabsList>
           </Tabs>
-        )} />
+        )}>
       {!a && <Skeleton className="h-96" />}
       {a && (
         <div className="grid gap-6">
@@ -170,6 +170,6 @@ export function SupportAnalytics() {
           </section>
         </div>
       )}
-    </Page>
+    </SupportShell>
   );
 }

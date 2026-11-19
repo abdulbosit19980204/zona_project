@@ -395,6 +395,15 @@ Shundan keyin ish **Bosqich 0/1** dan boshlanadi. Har bosqichda shu fayldagi hol
 - [x] Pro-target ko'rsatmalari (`--pack protarget`, tasdiqlangan): vizitni boshlab bo'lmasa, geoteg o'zgartirish,
       moderatsiya (9:00–18:00 da 5–10 daq, bosqichlar, navbat), bildirishnomalar (Profil → Bildirishnomalar);
       tahlilda Pro-target bo'limi
+- [x] Tezlik va aniqlik (2026-11-19, haqiqiy guruh ma'lumotidan): imlo xatolariga chidamlilik («kilent» → klient,
+      bir harf farqi/o'rin almashishi), bilim bazasi indeksi keshda, savollar parallel qayta ishlanadi (sozlanadi),
+      hisobot/e'lon va forward qilingan xabarlar savol hisoblanmaydi, Telegram yuborish oralig'i 1.2 s
+- [x] Belgilash: javobda savol beruvchi @ (yoki ID orqali) belgilanadi; javob supervayzer harakatini talab qilsa —
+      kontaktlardagi supervayzeri (Telegram ismi bo'yicha aniq va yagona moslik; shubha bo'lsa — paneldan qo'lda bog'lash)
+- [x] AI eksporti (`/api/knowledge/export.json|jsonl|chat|md`): savollar bazasiga qo'shimcha tasdiqlangan support javoblari,
+      xodim javob bergan haqiqiy savol zanjirlari (aniqlashtirishlar bilan) va rasm turlari (OCR → javob); ID/username chiqmaydi
+- [x] Panel qayta dizayni: yagona qobiq (bo'limlar, sanoqlar, bot holati, sozlash yo'riqnomasi), savollar — suhbat
+      ko'rinishi, bilim bazasi — kartochkalar va tabli muharrir, sozlamalar — mavzuli tablar
 - [ ] Bosqich 3 — AI *(kod tayyor, o'chiq: Support → Sozlamalar → «AI javoblari»)*; mas'ulga uzatish ishlaydi
 - [ ] Bosqich 4 — jonli ishga tushirish (soya rejimida aniqlik o'lchangach, guruh bo'yicha yoqiladi)
 - [ ] Bosqich 5 — kengaytirish

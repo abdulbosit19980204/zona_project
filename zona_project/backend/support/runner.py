@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from django.conf import settings as dj_settings
@@ -56,9 +57,10 @@ class NullClient:
 
 
 class Handler:
-    def __init__(self, bot: Bot, client: Client, history=False):
+    def __init__(self, bot: Bot, client: Client, history=False, executor=None):
         self.bot = bot
         self.tg = client
+        self.executor = executor     # savollarni parallel qayta ishlash (OCR/qidiruv boshqa xabarlarni to'xtatmasin)
         self.history = history       # guruh tarixi: faqat yig'ish va o'rganish, hech narsa yuborilmaydi
         self.photo_bytes = {}        # tarixda oldindan yuklangan rasmlar: message_id -> bytes
         self.settings = Settings.load()
@@ -155,7 +157,8 @@ class Handler:
             if q:
                 return self.on_info(msg, group, user, text, photo, q, mode)
 
-        if not engine.is_question(text, bool(photo)):
+        forwarded = bool(msg.get("forward_origin") or msg.get("forward_date") or msg.get("forward_from"))
+        if not engine.is_question(text, bool(photo), forwarded=forwarded):
             return None
         q, created = Message.objects.get_or_create(
             bot=self.bot, chat_id=chat["id"], message_id=msg["message_id"],
@@ -167,8 +170,29 @@ class Handler:
         if self.history:
             q.created_at = self.when(msg)
             Message.objects.filter(pk=q.pk).update(created_at=q.created_at)
+        if self.executor is not None:
+            meta, data = getattr(self, "media_meta", None), self.photo_bytes.get(q.message_id)
+            self.executor.submit(self._process_async, q.pk, mode, meta, data)
+            return q
         self.process_question(q, mode)
         return q
+
+    def _process_async(self, qid, mode, meta, data):
+        """Fon oqimida: alohida Handler (holat aralashmasin), o'z DB ulanishi."""
+        close_old_connections()
+        try:
+            h = Handler(self.bot, self.tg)
+            h.media_meta = meta
+            if data is not None:
+                h.photo_bytes[0] = data
+            q = Message.objects.select_related("user", "group").get(pk=qid)
+            if data is not None:
+                h.photo_bytes[q.message_id] = data
+            h.process_question(q, mode)
+        except Exception:  # noqa: BLE001
+            log.exception("question %s failed", qid)
+        finally:
+            close_old_connections()
 
     def on_info(self, msg, group, user, text, photo, q, mode):  # noqa: C901
         """Savol egasi so'ralgan ma'lumotni yubordi: zanjirga qo'shiladi; bot o'zi so'ragan bo'lsa — qayta javob beradi."""
@@ -261,7 +285,7 @@ class Handler:
                 body += "\n\n" + line
             buttons = ([[{"text": "👍", "callback_data": f"fb:{q.id}:1"}, {"text": "👎", "callback_data": f"fb:{q.id}:-1"}]]
                        if settings.feedback_buttons else None)
-            sent = self._send_answer(q, engine.to_html(body, settings.signature), d.entry, buttons)
+            sent = self._send_answer(q, self._decorate(q, d, engine.to_html(body, settings.signature)), d.entry, buttons)
             if sent:
                 q.status, q.answered_by, q.answered_at = Message.ANSWERED, "bot", timezone.now()
                 q.bot_reply_id = sent.get("message_id")
@@ -418,6 +442,17 @@ class Handler:
         if (media and media.kind == Media.PHOTO and not media.label_id and self.settings.image_autolabel and d.entry
                 and d.entry.status == Entry.APPROVED and d.stage in ("template", "faq") and d.confidence >= 90):
             vision.label([media], d.entry, "bot", auto=True)
+
+    def _decorate(self, q, d, body_html):
+        """Javob boshida savol beruvchi; supervayzer harakati kerak bo'lsa — uning supervayzeri (kontaktlar bo'yicha)."""
+        s = self.settings
+        head = engine.mention_html(q.user) + ", " if s.mention_asker and q.user else ""
+        tail = ""
+        if s.mention_supervisor and q.user and engine.needs_supervisor(d):
+            line = engine.supervisor_line(q.user, q.lang)
+            if line:
+                tail = "\n\n" + line
+        return head + body_html + tail
 
     def _send_answer(self, q, body_html, entry=None, buttons=None):
         """Javob matni + (bo'lsa) yozuvga biriktirilgan rasm/video/fayllar, savolga reply qilib."""
@@ -596,6 +631,8 @@ class BotWorker(threading.Thread):
     def run(self):
         client = Client(self.token)
         backoff = 5
+        workers = max(1, min(Settings.load().workers or 3, 8))
+        pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f"support-q{self.bot_id}")
         while not self.stop_event.is_set():
             close_old_connections()
             try:
@@ -604,7 +641,7 @@ class BotWorker(threading.Thread):
                     me = client.get_me()
                     Bot.objects.filter(pk=bot.pk).update(username=me.get("username", ""), tg_id=me.get("id"))
                 updates = client.get_updates(bot.last_update_id + 1 if bot.last_update_id else None)
-                handler = Handler(bot, client)
+                handler = Handler(bot, client, executor=pool)
                 for upd in updates or []:
                     if self.stop_event.is_set():
                         break

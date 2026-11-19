@@ -2,9 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Check, Images, Sparkles } from "lucide-react";
+import { SupportShell } from "./shell";
 import { useState } from "react";
 
-import { EmptyState, Page, PageHeader, SectionTitle } from "@/components/common/page";
+import { EmptyState, SectionTitle } from "@/components/common/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,8 +24,7 @@ export function SupportImages() {
   const q = useQuery({ queryKey: ["support", "images"], queryFn: supportApi.images });
   const entries = useQuery({ queryKey: ["support", "entries", "for-label"], queryFn: () => supportApi.entries({ status: "approved,review,new" }) });
   return (
-    <Page>
-      <PageHeader title={t("imgTitle")} description={t("imgDesc")} />
+    <SupportShell title={t("imgTitle")} description={t("imgDesc")}>
       {!q.data && <Skeleton className="h-64" />}
       {q.data && (
         <div className="grid gap-6">
@@ -53,7 +53,7 @@ export function SupportImages() {
           </section>
         </div>
       )}
-    </Page>
+    </SupportShell>
   );
 }
 

@@ -5,7 +5,7 @@ import { Check, ChevronRight, GitMerge, Layers, ListChecks, Pencil, SquareStack,
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
-import { EmptyState, Page, PageHeader } from "@/components/common/page";
+import { EmptyState } from "@/components/common/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import { useCan } from "@/hooks/use-org";
 import { supportApi, type Entry } from "./api";
 import { EntryBadge, fmtDate, useSupportMutation } from "./common";
 import { EntryEditor } from "./entry-editor";
+import { SupportShell } from "./shell";
 import { useSt, type SKey, type ST } from "./i18n";
 
 type View = "queue" | "cards" | "clusters";
@@ -41,8 +42,7 @@ function ReviewInner() {
   const edit = (id: number) => { setEditing(id); setOpen(true); };
 
   return (
-    <Page>
-      <PageHeader title={t("reviewTitle")} description={t("reviewDesc")} />
+    <SupportShell title={t("reviewTitle")} description={t("reviewDesc")}>
       <Tabs value={view} onValueChange={(v) => setView(v as View)} className="mb-4">
         <TabsList>
           <TabsTrigger value="queue"><ListChecks className="size-4" />{t("viewQueue")} · {items.length}</TabsTrigger>
@@ -56,7 +56,7 @@ function ReviewInner() {
       {items.length > 0 && view === "cards" && <CardsView items={items} t={t} />}
       {items.length > 0 && view === "clusters" && <ClustersView items={items.filter((e) => !e.pending)} t={t} onEdit={edit} />}
       <EntryEditor entryId={editing} open={open} onOpenChange={setOpen} />
-    </Page>
+    </SupportShell>
   );
 }
 

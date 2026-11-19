@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from django.db.models import Q
 from django.utils import timezone
 
-from zona.models import AITaskConfig, AIUsage, Member, Task, TeamContact
+from zona.models import AITaskConfig, AIUsage, Member, StaffPerson, Task, TeamContact
 from zona.search import search as run_search
 from zona.search.normalize import fold, tokens
 
@@ -49,11 +49,20 @@ def detect_lang(text):
     return "uz" if re.search(r"[ўқғҳЎҚҒҲ]", text) else "ru"
 
 
-def is_question(text, has_photo=False):
-    """Salom/rahmat/stiker emas, mazmunli xabar yoki rasm."""
+REPORT_START = re.compile(r"^\s*(✅|☑️|🌅|📊|📅|📌|📢|🔔|⚡|🟢|🔴|#)")
+
+
+def is_question(text, has_photo=False, forwarded=False):
+    """Salom/rahmat/stiker emas, mazmunli xabar yoki rasm. Forward qilingan xabarlar, avtomatik hisobot va
+    e'lonlar (ko'p qatorli, savol belgisisiz, emoji bilan boshlanadigan) savol hisoblanmaydi."""
+    if forwarded:
+        return False
+    t = (text or "").strip()
+    lines = [x for x in t.splitlines() if x.strip()]
+    if t and "?" not in t and (REPORT_START.match(t) and len(lines) >= 2 or len(lines) >= 8):
+        return False
     if has_photo:
         return True
-    t = (text or "").strip()
     if len(t) < 6:
         return False
     words = re.findall(r"[\w'ʻʼ’]+", t.lower())
@@ -117,11 +126,82 @@ def identify(tg_id, username="", name=""):
         TeamContact.objects.filter(pk=contact.pk).update(telegram_id=tg_id)  # username o'zgarsa ham taniladi
     if (contact.pk if contact else None) != user.contact_id or (member.pk if member else None) != user.member_id:
         user.contact, user.member, changed = contact, member, True
+    if not user.staff_person_id and not user.staff_link and not (contact or member):
+        sp = match_staff_person(name)
+        if sp:
+            user.staff_person, user.staff_link, changed = sp, "auto", True
     if changed:
         user.save()
     else:
         TgUser.objects.filter(pk=user.pk).update(last_seen=timezone.now())
     return user
+
+
+def _name_tokens(name):
+    return {t for t in re.findall(r"[a-z]+", fold(name or "")) if len(t) >= 3}
+
+
+def match_staff_person(tg_name):
+    """Telegram ismini kontaktlardagi dala xodimiga ehtiyotkorlik bilan bog'lash: kamida 2 so'z (familiya va ism)
+    mos kelishi va nomzod YAGONA bo'lishi shart. Shubha bo'lsa — bog'lanmaydi (paneldan qo'lda bog'lanadi)."""
+    tn = _name_tokens(tg_name)
+    if len(tn) < 2:
+        return None
+    hits = []
+    for sp in StaffPerson.objects.filter(is_vacancy=False).exclude(name="").only("id", "name"):
+        common = tn & _name_tokens(sp.name)
+        if len(common) >= 2:
+            hits.append((len(common), sp))
+    if not hits:
+        return None
+    hits.sort(key=lambda x: -x[0])
+    if len(hits) > 1 and hits[0][0] == hits[1][0]:
+        return None  # bir xil ismli bir nechta xodim — taxmin qilmaymiz
+    return hits[0][1]
+
+
+def supervisor_of(user):
+    """Savol beruvchining supervayzeri: kontaktlardagi rahbarlar zanjiri bo'yicha birinchi SVR (yoki birinchi rahbar)."""
+    sp = user.staff_person if user and user.staff_person_id else None
+    seen = set()
+    cur = sp.manager if sp else None
+    first = cur
+    while cur and cur.pk not in seen:
+        if cur.role == "SVR":
+            return cur
+        seen.add(cur.pk)
+        cur = cur.manager
+    return first
+
+
+def mention_html(tg_user=None, name="", username=""):
+    """Telegram belgisi: username bo'lsa @username, bo'lmasa ID orqali (tg://user) — ikkalasi ham bildirishnoma beradi."""
+    username = username or (tg_user.username if tg_user else "")
+    if username:
+        return "@" + html.escape(username)
+    if tg_user:
+        return f'<a href="tg://user?id={int(tg_user.tg_id)}">{html.escape(name or tg_user.name or "foydalanuvchi")}</a>'
+    return html.escape(name)
+
+
+SUPERVISOR_HINT = re.compile(r"supervayzer|supervizor|супервайзер", re.IGNORECASE)
+
+
+def needs_supervisor(d):
+    """Javob supervayzer harakatini talab qiladimi (mas'ul — Supervayzerlar yoki javob matnida supervayzer)."""
+    if d.entry and d.entry.responsible_id and SUPERVISOR_HINT.search(d.entry.responsible.name or ""):
+        return True
+    return bool(SUPERVISOR_HINT.search(d.text or ""))
+
+
+def supervisor_line(user, lang):
+    """«Supervayzeringiz: @...» — supervayzer ham guruhda yozgan bo'lsa belgilanadi, aks holda faqat ismi."""
+    sv = supervisor_of(user)
+    if not sv:
+        return ""
+    tg = TgUser.objects.filter(staff_person=sv).first()
+    who = mention_html(tg, sv.name) if tg else html.escape(sv.name)
+    return ("👤 Ваш супервайзер: " if lang == "ru" else "👤 Supervayzeringiz: ") + who
 
 
 # ------------------------------------------------------------------ 1. shablon
@@ -134,7 +214,8 @@ def _trigger_hit(trigger, folded, raw):
             return bool(re.search(trigger[3:], raw, re.IGNORECASE | re.MULTILINE))
         except re.error:
             return False
-    return all(fold(part).strip() in folded for part in trigger.split("&&") if part.strip())
+    return all(TYPO_RE.sub(lambda m: TYPOS[m.group(1).lower()], fold(part)).strip() in folded
+               for part in trigger.split("&&") if part.strip())
 
 
 def extract_fields(entry, raw):
@@ -150,7 +231,7 @@ def extract_fields(entry, raw):
 
 
 def match_template(raw, entries):
-    folded = fold(raw)
+    folded = TYPO_RE.sub(lambda m: TYPOS[m.group(1).lower()], fold(raw))
     best, best_hits = None, 0
     for e in entries:
         hits = sum(1 for t in e.triggers or [] if _trigger_hit(t, folded, raw))
@@ -162,12 +243,46 @@ def match_template(raw, entries):
 
 
 # ------------------------------------------------------------------ 2. o'xshash savol
+# agentlar yozishida tez-tez uchraydigan imlo shakllari -> bitta o'zak (fold va stem'dan keyin)
+TYPOS = {"kilent": "klient", "kliyent": "klient", "klent": "klient", "kilient": "klient", "kliet": "klient",
+         "kilyent": "klient", "magazn": "magazin", "magazen": "magazin", "zakas": "zakaz", "zakazl": "zakaz",
+         "prbs": "prbc", "protagret": "protarget", "protaget": "protarget", "protargit": "protarget",
+         "marshurt": "marshrut", "marshirut": "marshrut", "aksya": "aksiya", "aktsiya": "aksiya", "skitka": "skidka",
+         "xal": "hal", "korinma": "korin", "korinmay": "korin", "chiqma": "chiq", "chiqmay": "chiq"}
+TYPO_RE = re.compile(r"\b(" + "|".join(sorted(map(re.escape, TYPOS), key=len, reverse=True)) + r")", re.IGNORECASE)
+
+
+def toks(text):
+    """So'z o'zaklari + imlo shakllarini birlashtirish (kilent -> klient)."""
+    return [TYPOS.get(t, t) for t in tokens(TYPO_RE.sub(lambda m: TYPOS[m.group(1).lower()], fold(text or "")))]
+
+
+def _damerau1(a, b):
+    """Bitta harf qo'shilgan/tushgan/almashgan yoki ikki qo'shni harf o'rni almashgan (kilent~klient)."""
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:
+        diff = [i for i in range(la) if a[i] != b[i]]
+        return len(diff) == 1 or (len(diff) == 2 and diff[1] == diff[0] + 1 and a[diff[0]] == b[diff[1]] and a[diff[1]] == b[diff[0]])
+    if la > lb:
+        a, b = b, a
+    i = 0
+    while i < len(a) and a[i] == b[i]:
+        i += 1
+    return a[i:] == b[i + 1:]
+
+
 def _tok_eq(a, b):
     """Bir xil o'zak: to'liq teng, biri ikkinchisining boshlanishi (≥4 harf) yoki umumiy boshlanish ≥5 harf
     (o'zbekcha qo'shimchalar: tiklayman / tiklash, parolim / parol)."""
     if a == b:
         return True
     if min(len(a), len(b)) >= 4 and (a.startswith(b) or b.startswith(a)):
+        return True
+    if min(len(a), len(b)) >= 5 and _damerau1(a, b):
         return True
     n = 0
     for x, y in zip(a, b):
@@ -177,25 +292,42 @@ def _tok_eq(a, b):
     return n >= 5
 
 
-def similarity(a_text, b_text):
-    """0..100: so'z o'zaklari bo'yicha Dice o'xshashligi (prefiks mosligi bilan — imlo/qo'shimchaga chidamli)."""
-    a, b = list(dict.fromkeys(tokens(a_text))), list(dict.fromkeys(tokens(b_text)))
+def _dice(a, b):
     if not a or not b:
         return 0
     common = sum(1 for x in a if any(_tok_eq(x, y) for y in b))
     return round(100 * 2 * common / (len(a) + len(b)))
 
 
+def similarity(a_text, b_text):
+    """0..100: so'z o'zaklari bo'yicha Dice o'xshashligi (prefiks, imlo xatosi va qo'shimchalarga chidamli)."""
+    return _dice(list(dict.fromkeys(toks(a_text))), list(dict.fromkeys(toks(b_text))))
+
+
+_INDEX = {"key": None, "tok": {}}
+
+
+def _entry_tokens(entries):
+    """Har bir yozuvning savol ko'rinishlari tokenlari — yozuvlar o'zgarmaguncha keshda (har savolda qayta hisoblanmaydi)."""
+    key = tuple(sorted((e.pk, e.updated_at.timestamp() if e.updated_at else 0) for e in entries))
+    if _INDEX["key"] != key:
+        _INDEX["tok"] = {e.pk: [list(dict.fromkeys(toks(q))) for q in [e.title, *(e.questions or [])]] for e in entries}
+        _INDEX["key"] = key
+    return _INDEX["tok"]
+
+
 def match_faq(raw, entries):
     """Eng o'xshash yozuv. Teng ballda — savolga so'zma-so'z mos ko'rinish, keyin umumiy so'zlari ko'pi ustun."""
-    target = " ".join(tokens(raw))
+    raw_t = list(dict.fromkeys(toks(raw)))
+    target, raw_set = " ".join(raw_t), set(raw_t)
+    index = _entry_tokens(entries)
     best, key = None, (0, 0, 0)
     for e in entries:
-        for q in [e.title, *(e.questions or [])]:
-            s = similarity(raw, q)
+        for qt in index.get(e.pk) or []:
+            s = _dice(raw_t, qt)
             if not s:
                 continue
-            k = (s, int(" ".join(tokens(q)) == target), len(set(tokens(q)) & set(tokens(raw))))
+            k = (s, int(" ".join(qt) == target), len(set(qt) & raw_set))
             if k > key:
                 best, key = e, k
     return best, key[0]
@@ -312,7 +444,9 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None):
     if task is not None and task.rule and rule_conf >= settings.route_threshold:
         return Decision("rule", None, rule_conf, rule_text(task, lang), False, resp, note=f"task:{task.id}")
 
-    ranked = sorted(faqs, key=lambda x: -max(similarity(raw, q) for q in [x.title, *(x.questions or [])]))
+    raw_t = list(dict.fromkeys(toks(raw)))
+    index = _entry_tokens(faqs)
+    ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
     ai = ai_answer(raw, lang, [x for x in ranked if x.status == Entry.APPROVED], task, settings)
     if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
         return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])

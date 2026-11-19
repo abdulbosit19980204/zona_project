@@ -5,7 +5,7 @@ xodim yoki jamoa o'chirilsa, bu yerdagi bog'lanish bo'shaydi (SET_NULL), hech na
 """
 from django.db import models
 
-from zona.models import Member, TeamContact, Zone
+from zona.models import Member, StaffPerson, TeamContact, Zone
 
 
 class Settings(models.Model):
@@ -33,6 +33,9 @@ class Settings(models.Model):
     notify_candidates = models.BooleanField("Yangi javob nomzodini admin chatiga yuborish (✅/❌)", default=True)
     learn_clarifications = models.BooleanField("Xodimning aniqlashtiruvchi savollarini javob deb olmaslik", default=True)
     ask_first_prompt = models.BooleanField("Jonli: kerakli ma'lumot yo'q bo'lsa avval uni so'rash", default=True)
+    mention_asker = models.BooleanField("Jonli: javobda savol beruvchini belgilash", default=True)
+    mention_supervisor = models.BooleanField("Jonli: supervayzer harakati kerak bo'lsa — savol beruvchining supervayzerini belgilash", default=True)
+    workers = models.PositiveIntegerField("Bir vaqtda qayta ishlanadigan savollar", default=3)
     # --- guruh tarixini o'rganish (MTProto, egasining akkaunti orqali, faqat o'qish) ---
     history_days = models.PositiveIntegerField("Tarix: necha kunlik", default=30)
     history_photos = models.BooleanField("Tarix: rasmlarni ham o'qish (OCR)", default=True)
@@ -188,6 +191,9 @@ class TgUser(models.Model):
     name = models.CharField(max_length=150, blank=True)
     member = models.ForeignKey(Member, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     contact = models.ForeignKey(TeamContact, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # kontaktlardagi dala xodimi (agent/supervayzer): supervayzerini topish uchun. auto — ism bo'yicha aniq moslik, manual — paneldan
+    staff_person = models.ForeignKey(StaffPerson, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    staff_link = models.CharField(max_length=8, blank=True)
     first_seen = models.DateTimeField(auto_now_add=True)
     last_seen = models.DateTimeField(auto_now=True)
 

@@ -38,7 +38,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "learn_from_staff", "ocr_enabled", "media_days", "signature", "drafts_to_admin", "escalation_ack",
                    "mention_responsible", "feedback_buttons", "notify_candidates", "learn_clarifications",
                    "ask_first_prompt", "history_days", "history_photos", "history_max", "image_match",
-                   "image_threshold", "image_autolabel"]
+                   "image_threshold", "image_autolabel", "mention_asker", "mention_supervisor", "workers"]
 
 
 def _settings_payload(s):
@@ -761,3 +761,51 @@ def image_label(request):
     if not e:
         return Response({"detail": "Yozuv topilmadi"}, status=400)
     return Response({"done": vision.label(qs, e, _actor(request))})
+
+
+# ====================================================================== Telegram foydalanuvchilar <-> kontaktlar
+def _tg_user(u):
+    from .engine import supervisor_of
+    sp = u.staff_person
+    sv = supervisor_of(u) if sp else None
+    return {"id": u.id, "name": u.name, "username": u.username, "is_staff": u.is_staff,
+            "staff_name": u.staff_name() if u.is_staff else "",
+            "staff_person": sp.id if sp else None, "staff_person_name": sp.name if sp else "",
+            "staff_person_role": sp.get_role_display() if sp else "", "project": sp.project.name if sp else "",
+            "supervisor": sv.name if sv else "", "link": u.staff_link,
+            "questions": u.messages.filter(kind=Message.QUESTION).count(), "last_seen": u.last_seen}
+
+
+@zona_api(["GET"], [CanView])
+def tg_users(request):
+    qs = TgUser.objects.select_related("staff_person__project", "staff_person__manager__manager", "member", "contact")
+    if request.query_params.get("unlinked") == "1":
+        qs = qs.filter(staff_person__isnull=True, member__isnull=True, contact__isnull=True)
+    return Response([_tg_user(u) for u in qs.order_by("-last_seen")[:500]])
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def tg_user_link(request, pk):
+    """Telegram foydalanuvchini kontaktlardagi dala xodimiga qo'lda bog'lash (null — bog'lamaslik, avtomatik ham qilinmaydi)."""
+    from zona.models import StaffPerson
+    u = TgUser.objects.filter(pk=pk).first()
+    if not u:
+        return Response({"detail": "Topilmadi"}, status=404)
+    sp_id = request.data.get("staff_person")
+    u.staff_person = StaffPerson.objects.filter(pk=sp_id).first() if sp_id else None
+    u.staff_link = "manual" if u.staff_person else "none"
+    u.save(update_fields=["staff_person", "staff_link", "last_seen"])
+    return Response(_tg_user(u))
+
+
+@zona_api(["GET"], [CanView])
+def staff_people_search(request):
+    from django.db.models import Q as _Q
+
+    from zona.models import StaffPerson
+    q = str(request.query_params.get("q") or "").strip()
+    qs = StaffPerson.objects.filter(is_vacancy=False).exclude(name="").select_related("project", "manager")
+    if q:
+        qs = qs.filter(_Q(name__icontains=q) | _Q(territory__icontains=q) | _Q(phone__icontains=q))
+    return Response([{"id": p.id, "name": p.name, "role": p.get_role_display(), "project": p.project.name,
+                      "territory": p.territory, "manager": p.manager.name if p.manager_id else ""} for p in qs[:30]])

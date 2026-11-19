@@ -56,7 +56,14 @@ export interface SupportSettings {
   mtproto_available: boolean; mtproto_connected: boolean; mtproto_user: string; mtproto_pending: boolean;
   mtproto_need_password: boolean; mtproto_phone: string;
   image_match: boolean; image_threshold: number; image_autolabel: boolean;
+  mention_asker: boolean; mention_supervisor: boolean; workers: number;
 }
+export interface TgUserInfo {
+  id: number; name: string; username: string; is_staff: boolean; staff_name: string; staff_person: number | null;
+  staff_person_name: string; staff_person_role: string; project: string; supervisor: string; link: string; questions: number;
+  last_seen: string;
+}
+export interface StaffPersonHit { id: number; name: string; role: string; project: string; territory: string; manager: string }
 export interface ImageTypes {
   labeled: { entry: number; title: string; status: EntryStatus; count: number; auto: number; samples: MediaInfo[] }[];
   unlabeled: { count: number; ids: number[]; samples: MediaInfo[]; ocr: string; guess: number | null; guess_title: string }[];
@@ -145,4 +152,7 @@ export const supportApi = {
   mediaBlob: async (id: number) => (await api.get<Blob>(`${B}media/${id}/file/`, { responseType: "blob" })).data,
   images: () => get<ImageTypes>("images/"),
   label: (ids: number[], entry: number | null) => post<{ done: number }>("images/label/", { ids, entry }),
+  tgUsers: (unlinked = false) => get<TgUserInfo[]>("tg-users/", unlinked ? { unlinked: 1 } : {}),
+  linkTgUser: (id: number, staffPerson: number | null) => post<TgUserInfo>(`tg-users/${id}/link/`, { staff_person: staffPerson }),
+  staffPeople: (q: string) => get<StaffPersonHit[]>("staff-people/", { q }),
 };

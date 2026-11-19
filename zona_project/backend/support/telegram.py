@@ -13,7 +13,7 @@ import urllib.request
 import uuid
 
 API = "https://api.telegram.org"
-CHAT_GAP = 3.0       # bitta guruhga ketma-ket xabarlar orasidagi minimal vaqt (s)
+CHAT_GAP = 1.2       # bitta guruhga ketma-ket xabarlar orasidagi minimal vaqt (s); Telegram: ~20/daq
 GLOBAL_GAP = 0.04    # umumiy: soniyasiga ~25 xabar
 
 

@@ -146,9 +146,12 @@ def knowledge_export(request, fmt):
     json  — to'liq ro'yxat (zona, jarayon, savol, misollar, qoida, mas'ul, navbat);
     jsonl — har qatorda bitta savol (RAG / vektor bazasi uchun);
     chat  — fine-tuning uchun: har bir misol savol -> tayyor javob (messages formatida);
-    md    — odam o'qishi uchun hujjat."""
+    md    — odam o'qishi uchun hujjat.
+    support=0 — support bot ma'lumotlarisiz (standart: tasdiqlangan javoblar, xodim javob bergan savollar va
+    rasm turlari ham qo'shiladi)."""
     lang = request.query_params.get("lang") or translation.request_lang(request)
     only = request.query_params.get("frequent") in ("1", "true")
+    sup = _support() if request.query_params.get("support", "1") not in ("0", "false") else None
     qs = (Task.objects.select_related("process__zone", "process__system", "owner")
           .prefetch_related("fallbacks__member").order_by("process__zone__order", "process__order", "order", "id"))
     if only:
@@ -161,10 +164,16 @@ def knowledge_export(request, fmt):
                            "zones": [{"name": translation.current(z, "name", lang),
                                                          "description": translation.current(z, "description", lang)}
                                                         for z in Zone.objects.all()],
-                           "items": items}, ensure_ascii=False, indent=2)
+                           "items": items,
+                           **({"support": {"answers": sup.entries(lang), "threads": sup.threads(),
+                                           "image_types": sup.image_types()}} if sup else {})},
+                          ensure_ascii=False, indent=2)
         return _file(body, f"savollar-{stamp}.json", "application/json")
     if fmt == "jsonl":
-        body = "\n".join(json.dumps({**it, "answer": answer_text(it, lang)}, ensure_ascii=False) for it in items) + "\n"
+        rows = [json.dumps({"type": "question_type", **it, "answer": answer_text(it, lang)}, ensure_ascii=False) for it in items]
+        if sup:
+            rows += [json.dumps(r, ensure_ascii=False) for r in (*sup.entries(lang), *sup.threads(), *sup.image_types())]
+        body = "\n".join(rows) + "\n"
         return _file(body, f"savollar-{stamp}.jsonl", "application/x-ndjson")
     if fmt == "chat":
         system = (f"Siz {conf.get('COMPANY_NAME')} kompaniyasining yordamchi botisiz. Xodim savoliga qaysi zona ekanini, "
@@ -176,6 +185,8 @@ def knowledge_export(request, fmt):
                                                       {"role": "user", "content": q},
                                                       {"role": "assistant", "content": answer_text(it, lang)}]},
                                         ensure_ascii=False))
+        if sup:
+            lines += [json.dumps({"messages": m}, ensure_ascii=False) for m in sup.chat_lines(system, lang)]
         return _file("\n".join(lines) + "\n", f"savollar-chat-{stamp}.jsonl", "application/x-ndjson")
     if fmt == "md":
         out, zone, proc = [f"# Savollar bazasi — {conf.get('COMPANY_NAME')} ({stamp})", "", "## Kim nima uchun javob beradi", ""], None, None
@@ -204,8 +215,19 @@ def knowledge_export(request, fmt):
                 out.append("Qanday so'raladi: " + "; ".join(f"“{e}”" for e in it["examples"]))
             txt = answer_text(it, lang)
             out += [txt.split("\n", 1)[1] if "\n" in txt else "", ""]
+        if sup:
+            out.append(sup.markdown(lang))
         return _file("\n".join(out), f"savollar-{stamp}.md", "text/markdown")
     return _bad("Format: json, jsonl, chat yoki md.")
+
+
+def _support():
+    """Support bot ilovasi o'rnatilgan bo'lsa — uning eksporti (zona mustaqil ilova bo'lib qoladi)."""
+    try:
+        from support import export
+        return export
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _json(data):
