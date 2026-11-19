@@ -56,7 +56,8 @@
     "supKnowledge": "Knowledge base",
     "supSettings": "Bots & settings",
     "supAnalytics": "Analytics",
-    "supImages": "Image types"
+    "supImages": "Image types",
+    "aiHistory": "AI analyses"
   },
   "top": {
     "search": "Search…",
@@ -1056,5 +1057,14 @@
     "added": "Member added",
     "removed": "Member removed",
     "linked": "Telegram linked"
+  },
+  "aiHistory": {
+    "title": "AI analyses",
+    "description": "Every AI result is saved: question routing, employee analysis, audit, workload, translation and support bot analyses — to review, compare and train AI.",
+    "all": "All",
+    "search": "By title…",
+    "empty": "No AI analyses yet",
+    "emptyHint": "Every AI-powered analysis will appear here.",
+    "prompt": "Prompt"
   }
 }

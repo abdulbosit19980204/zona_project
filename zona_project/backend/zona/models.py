@@ -491,6 +491,29 @@ class AIUsage(models.Model):
         verbose_name_plural = "AI so'rovlar jurnali"
 
 
+class AIAnalysis(models.Model):
+    """Har bir AI tahlilining natijasi (savolni yo'naltirish, xodim tahlili, audit, yuklama, support bot tahlili...).
+
+    Natijalar yo'qolmaydi: keyin qayta ko'rish, solishtirish va AI'ni o'qitish uchun saqlanadi.
+    """
+
+    task = models.CharField(max_length=20, db_index=True)
+    label = models.CharField(max_length=300, blank=True)
+    user = models.CharField(max_length=150, blank=True)
+    provider = models.CharField(max_length=80, blank=True)
+    model = models.CharField(max_length=120, blank=True)
+    prompt = models.TextField(blank=True)   # foydalanuvchi so'rovi (tizim konteksti saqlanmaydi)
+    result = models.JSONField(default=dict)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        verbose_name = "AI tahlil"
+        verbose_name_plural = "AI tahlillar"
+
+
 # ---------------------------------------------------------------- dala jamoalari (brendlar bo'yicha)
 
 class StaffProject(models.Model):

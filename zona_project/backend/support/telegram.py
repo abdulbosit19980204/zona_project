@@ -112,6 +112,14 @@ class Client:
         except TelegramError:
             pass
 
+    def send_contact(self, chat_id, phone, first_name, last_name="", vcard="", reply_to=None):
+        self._throttle(chat_id)
+        params = {"chat_id": chat_id, "phone_number": phone, "first_name": first_name[:64], "last_name": last_name[:64] or None,
+                  "vcard": vcard[:2048] or None}
+        if reply_to:
+            params["reply_parameters"] = {"message_id": int(reply_to), "allow_sending_without_reply": True}
+        return self.call("sendContact", params)
+
     # ------------------------------------------------------------ fayllar (javob biriktirmalari)
     def call_multipart(self, method, fields, files, timeout=120):
         """multipart/form-data: fields — oddiy qiymatlar (dict/list JSON qilinadi), files — {nom: (fayl_nomi, bytes)}."""

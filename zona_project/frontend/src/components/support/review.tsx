@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, GitMerge, Layers, ListChecks, Pencil, SquareStack, Star, X } from "lucide-react";
+import { Check, ChevronRight, GitMerge, Layers, ListChecks, Pencil, Sparkles, SquareStack, Star, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -18,11 +18,12 @@ import { useCan } from "@/hooks/use-org";
 
 import { supportApi, type Entry } from "./api";
 import { EntryBadge, fmtDate, useSupportMutation } from "./common";
+import { AISuggestions } from "./ai-suggestions";
 import { EntryEditor } from "./entry-editor";
 import { SupportShell } from "./shell";
 import { useSt, type SKey, type ST } from "./i18n";
 
-type View = "queue" | "cards" | "clusters";
+type View = "queue" | "cards" | "clusters" | "ai";
 
 export function SupportReview() {
   return <Suspense><ReviewInner /></Suspense>;
@@ -48,10 +49,12 @@ function ReviewInner() {
           <TabsTrigger value="queue"><ListChecks className="size-4" />{t("viewQueue")} · {items.length}</TabsTrigger>
           <TabsTrigger value="cards"><SquareStack className="size-4" />{t("viewCards")}</TabsTrigger>
           <TabsTrigger value="clusters"><Layers className="size-4" />{t("viewClusters")}</TabsTrigger>
+          <TabsTrigger value="ai"><Sparkles className="size-4" />{t("viewAI")}</TabsTrigger>
         </TabsList>
       </Tabs>
-      {(fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
-      {!fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
+      {view === "ai" && <AISuggestions t={t} />}
+      {view !== "ai" && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
+      {view !== "ai" && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
       {items.length > 0 && view === "queue" && <QueueView items={items} t={t} onEdit={edit} />}
       {items.length > 0 && view === "cards" && <CardsView items={items} t={t} />}
       {items.length > 0 && view === "clusters" && <ClustersView items={items.filter((e) => !e.pending)} t={t} onEdit={edit} />}

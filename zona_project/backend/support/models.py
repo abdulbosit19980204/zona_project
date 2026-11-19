@@ -36,6 +36,7 @@ class Settings(models.Model):
     mention_asker = models.BooleanField("Jonli: javobda savol beruvchini belgilash", default=True)
     mention_supervisor = models.BooleanField("Jonli: supervayzer harakati kerak bo'lsa — savol beruvchining supervayzerini belgilash", default=True)
     workers = models.PositiveIntegerField("Bir vaqtda qayta ishlanadigan savollar", default=3)
+    contact_lookup = models.BooleanField("Kontakt qidiruvi (shaxsiy chatda, xodimlar va rahbarlar uchun)", default=True)
     # --- guruh tarixini o'rganish (MTProto, egasining akkaunti orqali, faqat o'qish) ---
     history_days = models.PositiveIntegerField("Tarix: necha kunlik", default=30)
     history_photos = models.BooleanField("Tarix: rasmlarni ham o'qish (OCR)", default=True)
@@ -307,3 +308,45 @@ class Media(models.Model):
     class Meta:
         ordering = ["-created_at", "-id"]
         indexes = [models.Index(fields=["kind", "label"])]
+
+
+class AIJob(models.Model):
+    """Bot bo'yicha AI tahlili: bilim bazasini ko'rib chiqish yoki javobsiz savollardan yangi javob taklif qilish."""
+
+    REVIEW_ENTRIES, REVIEW_UNANSWERED = "entries", "unanswered"
+    KINDS = [(REVIEW_ENTRIES, "Bilim bazasini ko'rib chiqish"), (REVIEW_UNANSWERED, "Javobsiz savollar tahlili")]
+    QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
+    kind = models.CharField(max_length=12, choices=KINDS)
+    params = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=8, default=QUEUED)
+    progress = models.JSONField(default=dict, blank=True)
+    error = models.CharField(max_length=500, blank=True)
+    created_by = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
+class Suggestion(models.Model):
+    """AI taklifi. Xodim tasdiqlaguncha hech narsa o'zgarmaydi; tasdiqlansa — eski holat versiyaga yoziladi."""
+
+    IMPROVE, QUESTIONS, MERGE, NEW, ARCHIVE = "improve", "questions", "merge", "new", "archive"
+    KINDS = [(IMPROVE, "Javobni yaxshilash"), (QUESTIONS, "Savol ko'rinishlari qo'shish"), (MERGE, "Takrorni birlashtirish"),
+             (NEW, "Yangi yozuv"), (ARCHIVE, "Arxivlash")]
+    PENDING, APPROVED, REJECTED = "pending", "approved", "rejected"
+    job = models.ForeignKey(AIJob, null=True, blank=True, on_delete=models.SET_NULL, related_name="suggestions")
+    kind = models.CharField(max_length=10, choices=KINDS)
+    entry = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.CASCADE, related_name="suggestions")
+    target = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    payload = models.JSONField(default=dict, blank=True)  # title, answer, answer_ru, ask_first, questions
+    reason = models.TextField(blank=True)
+    question_ids = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=9, default=PENDING)
+    decided_by = models.CharField(max_length=150, blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

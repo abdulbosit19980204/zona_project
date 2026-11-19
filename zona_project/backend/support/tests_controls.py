@@ -169,7 +169,7 @@ class HistoryTests(ControlsBase):
         from . import history
         self.login("admin")
         with mock.patch.object(history, "send_code") as sc:
-            r = self.call("post", "support/mtproto/send-code/", {"phone": "+998901234567"})
+            r = self.call("post", "support/mtproto/send-code/", {"phone": "+998901234567", "confirm": True})
         self.assertEqual(r.status_code, 200, r.content)
         sc.assert_called_once_with("+998901234567")
         with mock.patch.object(history, "sign_in", side_effect=history.NeedPassword()):

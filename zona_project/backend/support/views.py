@@ -16,7 +16,8 @@ from zona.permissions import CanView, IsZonaAdmin, ReadOrEdit, has_role
 
 from . import ocr, runner
 from .engine import ai_quota_left, decide, detect_lang, to_html
-from .models import MODES, Bot, Entry, EntryVersion, Group, HistoryJob, Media, Message, Settings, TgUser
+from .models import (MODES, AIJob, Bot, Entry, EntryVersion, Group, HistoryJob, Media, Message, Settings,
+                     Suggestion, TgUser)
 from .telegram import Client, TelegramError
 
 
@@ -38,7 +39,8 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "learn_from_staff", "ocr_enabled", "media_days", "signature", "drafts_to_admin", "escalation_ack",
                    "mention_responsible", "feedback_buttons", "notify_candidates", "learn_clarifications",
                    "ask_first_prompt", "history_days", "history_photos", "history_max", "image_match",
-                   "image_threshold", "image_autolabel", "mention_asker", "mention_supervisor", "workers"]
+                   "image_threshold", "image_autolabel", "mention_asker", "mention_supervisor", "workers",
+                   "contact_lookup"]
 
 
 def _settings_payload(s):
@@ -498,6 +500,8 @@ def _mt_error(e):
 @zona_api(["POST"], [AdminOnly])
 def mtproto_send_code(request):
     from . import history
+    if not request.data.get("confirm"):
+        return Response({"detail": "Ogohlantirishni o'qib, rozilik belgisini qo'ying."}, status=400)
     phone = str(request.data.get("phone") or "").strip().replace(" ", "")
     if not phone.startswith("+") or len(phone) < 10:
         return Response({"detail": "Telefon raqamini +998... ko'rinishida kiriting."}, status=400)
@@ -543,6 +547,12 @@ def history_jobs(request):
             return Response({"detail": "Guruhni tanlang."}, status=400)
         if HistoryJob.objects.filter(group=group, status__in=[HistoryJob.QUEUED, HistoryJob.RUNNING]).exists():
             return Response({"detail": "Bu guruh tarixi allaqachon o'qilmoqda."}, status=400)
+        # akkaunt xavfsizligi: Telegram ko'p so'rovni yoqtirmaydi — bitta guruh 6 soatda bir marta, sutkada 3 tadan ko'p emas
+        now = timezone.now()
+        if HistoryJob.objects.filter(group=group, created_at__gte=now - timezone.timedelta(hours=6)).exists():
+            return Response({"detail": "Bu guruh tarixi yaqinda o'qilgan. Akkaunt xavfsizligi uchun 6 soatdan keyin qayta urining."}, status=400)
+        if HistoryJob.objects.filter(created_at__gte=now - timezone.timedelta(days=1)).count() >= 3:
+            return Response({"detail": "Sutkalik chegara (3 ta) tugadi — ertaga davom eting."}, status=400)
         days = max(1, min(int(request.data.get("days") or s.history_days), 365))
         photos = bool(request.data.get("photos", s.history_photos))
         HistoryJob.objects.create(group=group, days=days, photos=photos, created_by=_actor(request))
@@ -809,3 +819,58 @@ def staff_people_search(request):
         qs = qs.filter(_Q(name__icontains=q) | _Q(territory__icontains=q) | _Q(phone__icontains=q))
     return Response([{"id": p.id, "name": p.name, "role": p.get_role_display(), "project": p.project.name,
                       "territory": p.territory, "manager": p.manager.name if p.manager_id else ""} for p in qs[:30]])
+
+
+# ====================================================================== bot bo'yicha AI tahlili va takliflar
+def _sugg(x):
+    e = x.entry
+    return {"id": x.id, "kind": x.kind, "status": x.status, "reason": x.reason, "payload": x.payload,
+            "entry": e.id if e else None, "entry_title": e.title if e else "",
+            "current": {"answer": e.answer, "answer_ru": e.answer_ru, "ask_first": e.ask_first,
+                        "questions": e.questions} if e else None,
+            "target": x.target_id, "target_title": x.target.title if x.target_id else "",
+            "question_ids": x.question_ids, "decided_by": x.decided_by, "created_at": x.created_at}
+
+
+@zona_api(["GET", "POST"], [ReadOrEdit])
+def ai_jobs(request):
+    if request.method == "POST":
+        from zona.ai import service as ai
+        if not ai.status().get("support"):
+            return Response({"detail": "AI sozlanmagan: Sozlamalar → AI → «Support bot javoblari» uchun model tanlang."}, status=400)
+        kind = request.data.get("kind")
+        if kind not in (AIJob.REVIEW_ENTRIES, AIJob.REVIEW_UNANSWERED):
+            return Response({"detail": "Tahlil turini tanlang."}, status=400)
+        if AIJob.objects.filter(status__in=[AIJob.QUEUED, AIJob.RUNNING]).exists():
+            return Response({"detail": "AI tahlili allaqachon bajarilmoqda."}, status=400)
+        AIJob.objects.create(kind=kind, created_by=_actor(request),
+                             params={k: request.data[k] for k in ("scope", "limit", "days") if k in request.data})
+    return Response([{"id": j.id, "kind": j.kind, "status": j.status, "progress": j.progress, "error": j.error,
+                      "created_by": j.created_by, "created_at": j.created_at, "finished_at": j.finished_at}
+                     for j in AIJob.objects.all()[:20]])
+
+
+@zona_api(["GET"], [CanView])
+def suggestions(request):
+    status_ = request.query_params.get("status") or Suggestion.PENDING
+    qs = Suggestion.objects.select_related("entry", "target")
+    if status_ != "all":
+        qs = qs.filter(status=status_)
+    return Response([_sugg(x) for x in qs[:300]])
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def suggestion_decide(request, pk, action):
+    from . import ai_review
+    x = Suggestion.objects.select_related("entry", "target").filter(pk=pk, status=Suggestion.PENDING).first()
+    if not x:
+        return Response({"detail": "Taklif topilmadi yoki allaqachon ko'rib chiqilgan."}, status=404)
+    try:
+        if action == "approve":
+            edits = request.data.get("payload") if isinstance(request.data.get("payload"), dict) else None
+            ai_review.apply(x, _actor(request), edits)
+        else:
+            ai_review.reject(x, _actor(request))
+    except ValueError as e:
+        return Response({"detail": str(e)}, status=400)
+    return Response(_sugg(x))

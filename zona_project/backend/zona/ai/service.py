@@ -118,10 +118,23 @@ def run(task, user, label, system, message, schema):
             _log(task, provider, model, user, label, t0, error=str(e))
             continue
         ms = _log(task, provider, model, user, label, t0, res=res)
+        _save(task, provider, model, user, label, message, data, res)
         return data, {"provider": provider.name, "kind": provider.kind, "model": model,
                       "input_tokens": res.input_tokens, "output_tokens": res.output_tokens, "latency_ms": ms,
                       "fallback": provider != chain[0][0] or model != chain[0][1]}
     raise last
+
+
+def _save(task, provider, model, user, label, message, data, res):
+    """AI natijasini saqlash (xato bo'lsa ham asosiy ish to'xtamasin)."""
+    from ..models import AIAnalysis
+    try:
+        AIAnalysis.objects.create(task=task, label=(label or "")[:300], user=getattr(user, "username", "") or "",
+                                  provider=provider.name, model=model, prompt=(message or "")[:20000],
+                                  result=data if isinstance(data, dict) else {"value": data},
+                                  input_tokens=res.input_tokens or 0, output_tokens=res.output_tokens or 0)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _log(task, provider, model, user, label, t0, res=None, error=""):

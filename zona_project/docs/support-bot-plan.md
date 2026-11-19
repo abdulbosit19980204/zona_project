@@ -404,6 +404,14 @@ Shundan keyin ish **Bosqich 0/1** dan boshlanadi. Har bosqichda shu fayldagi hol
       xodim javob bergan haqiqiy savol zanjirlari (aniqlashtirishlar bilan) va rasm turlari (OCR → javob); ID/username chiqmaydi
 - [x] Panel qayta dizayni: yagona qobiq (bo'limlar, sanoqlar, bot holati, sozlash yo'riqnomasi), savollar — suhbat
       ko'rinishi, bilim bazasi — kartochkalar va tabli muharrir, sozlamalar — mavzuli tablar
+- [x] AI tahlillari saqlanadi (`zona_aianalysis`): har bir AI natijasi — yo'naltirish, xodim tahlili, audit, yuklama, tarjima,
+      support — «AI tahlillar» sahifasida (`/ai-history`)
+- [x] Bot bo'yicha AI tahlili: bilim bazasini ko'rib chiqish (yaxshilash, savol ko'rinishlari, takrorni birlashtirish, arxiv)
+      va javobsiz savollardan yangi yozuv takliflari; taklif tasdiqlanmaguncha hech narsa o'zgarmaydi, tahrirlab tasdiqlash mumkin
+- [x] Yozuvlar: o'zbek kirill va yangi lotin alifbosi (ş, ç, ğ/ḡ, ō, ı) tushuniladi; kirillda so'ralsa javob kirillda
+- [x] Kontakt qidiruvi: shaxsiy chatda «L'Oréal ROP», «Jizzax supervayzeri», «Heinz SVR Toshkent» -> kontakt kartochkasi va
+      Telegram kontakti (vCard); faqat xodimlar va rahbarlar (ROP/RSM/ASM/KAM/SVR); guruhga raqam chiqmaydi
+- [x] Guruh tarixi xavfsizligi: ogohlantirish va rozilik, bitta guruh 6 soatda bir marta, sutkada ≤ 3 marta, faqat o'qish
 - [ ] Bosqich 3 — AI *(kod tayyor, o'chiq: Support → Sozlamalar → «AI javoblari»)*; mas'ulga uzatish ishlaydi
 - [ ] Bosqich 4 — jonli ishga tushirish (soya rejimida aniqlik o'lchangach, guruh bo'yicha yoqiladi)
 - [ ] Bosqich 5 — kengaytirish

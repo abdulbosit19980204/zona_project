@@ -235,6 +235,7 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {sw("escalation_ack", t("t_escalation"))}
           {sw("feedback_buttons", t("t_feedback"))}
           {sw("ask_first_prompt", t("t_askFirst"))}
+          {sw("contact_lookup", t("t_contacts"), t("t_contactsHint"))}
         </Card>
         <Card className="gap-0 p-4">
           <div className="mb-1 text-sm font-semibold">{t("grpLearn")}</div>
@@ -393,6 +394,7 @@ function HistorySection({ t }: { t: ST }) {
   });
   const s = st.data;
   const [phone, setPhone] = useState("+998");
+  const [agree, setAgree] = useState(false);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [group, setGroup] = useState("");
@@ -423,9 +425,16 @@ function HistorySection({ t }: { t: ST }) {
         ) : ready && s.mtproto_available && (
           <div className="grid gap-3">
             <p className="text-sm text-muted-foreground">{t("mtNotConnected")}</p>
+            <div className="rounded-lg border border-warning/50 bg-warning/5 p-3 text-xs leading-relaxed">
+              <b>{t("mtSafetyTitle")}</b>
+              <ul className="mt-1 list-disc pl-4">
+                <li>{t("mtSafe1")}</li><li>{t("mtSafe2")}</li><li>{t("mtSafe3")}</li><li>{t("mtSafe4")}</li>
+              </ul>
+              <label className="mt-2 flex items-center gap-2 text-sm"><Switch checked={agree} onCheckedChange={setAgree} />{t("mtAgree")}</label>
+            </div>
             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
               <FormRow label={t("mtPhone")}><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></FormRow>
-              <Button variant="outline" className="self-end" disabled={phone.length < 10 || send.isPending} onClick={() => send.mutate(undefined)}>
+              <Button variant="outline" className="self-end" disabled={!agree || phone.length < 10 || send.isPending} onClick={() => send.mutate(undefined)}>
                 <Send className="size-4" />{t("mtSendCode")}
               </Button>
             </div>

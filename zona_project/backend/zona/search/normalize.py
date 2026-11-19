@@ -16,6 +16,8 @@ CYR = {
     "ў": "o", "қ": "q", "ғ": "g", "ҳ": "h",
     # qozoq/qirg'iz/tojik harflari ham uchrab qoladi
     "ә": "a", "ө": "o", "ү": "u", "ұ": "u", "ң": "n", "і": "i", "ӣ": "i", "ӯ": "u", "ҷ": "j", "һ": "h",
+    # o'zbek lotin yozuvining yangi (turkcha uslubdagi) shakllari: ş=sh, ç=ch, ğ/ḡ=g', ō/ö=o', ı=i
+    "ş": "sh", "ç": "ch", "ğ": "g", "ḡ": "g", "ō": "o", "ö": "o", "ü": "u", "ı": "i", "ñ": "ng",
 }
 APOS = re.compile(r"[ʻʼ’‘`´'ʹʽ\"«»]")
 WORD = re.compile(r"[a-z0-9]+")

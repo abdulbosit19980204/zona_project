@@ -56,7 +56,18 @@ export interface SupportSettings {
   mtproto_available: boolean; mtproto_connected: boolean; mtproto_user: string; mtproto_pending: boolean;
   mtproto_need_password: boolean; mtproto_phone: string;
   image_match: boolean; image_threshold: number; image_autolabel: boolean;
-  mention_asker: boolean; mention_supervisor: boolean; workers: number;
+  mention_asker: boolean; mention_supervisor: boolean; workers: number; contact_lookup: boolean;
+}
+export interface AIJobInfo {
+  id: number; kind: "entries" | "unanswered"; status: "queued" | "running" | "done" | "failed";
+  progress: { done?: number; total?: number; suggestions?: number }; error: string; created_by: string; created_at: string;
+  finished_at: string | null;
+}
+export interface AISuggestion {
+  id: number; kind: "improve" | "questions" | "merge" | "new" | "archive"; status: string; reason: string;
+  payload: { title?: string; answer?: string; answer_ru?: string; ask_first?: string; questions?: string[]; merge_into?: number };
+  entry: number | null; entry_title: string; current: { answer: string; answer_ru: string; ask_first: string; questions: string[] } | null;
+  target: number | null; target_title: string; question_ids: number[]; decided_by: string; created_at: string;
 }
 export interface TgUserInfo {
   id: number; name: string; username: string; is_staff: boolean; staff_name: string; staff_person: number | null;
@@ -139,7 +150,7 @@ export const supportApi = {
   analytics: (days = 30) => get<Analytics>("analytics/", { days }),
   historyJobs: () => get<HistoryJob[]>("history/"),
   startHistory: (group: number, days: number, photos: boolean) => post<HistoryJob[]>("history/", { group, days, photos }),
-  mtSendCode: (phone: string) => post<SupportSettings & { need_password?: boolean }>("mtproto/send-code/", { phone }),
+  mtSendCode: (phone: string) => post<SupportSettings & { need_password?: boolean }>("mtproto/send-code/", { phone, confirm: true }),
   mtSignIn: (code: string, password = "") => post<SupportSettings & { need_password?: boolean }>("mtproto/sign-in/", { code, password }),
   mtLogout: () => post<SupportSettings>("mtproto/logout/"),
   upload: async (files: File[], opts: { label?: number; source?: string } = {}) => {
@@ -155,4 +166,9 @@ export const supportApi = {
   tgUsers: (unlinked = false) => get<TgUserInfo[]>("tg-users/", unlinked ? { unlinked: 1 } : {}),
   linkTgUser: (id: number, staffPerson: number | null) => post<TgUserInfo>(`tg-users/${id}/link/`, { staff_person: staffPerson }),
   staffPeople: (q: string) => get<StaffPersonHit[]>("staff-people/", { q }),
+  aiJobs: () => get<AIJobInfo[]>("ai/jobs/"),
+  startAIJob: (kind: "entries" | "unanswered") => post<AIJobInfo[]>("ai/jobs/", { kind }),
+  aiSuggestions: (status = "pending") => get<AISuggestion[]>("ai/suggestions/", { status }),
+  decideSuggestion: (id: number, action: "approve" | "reject", payload?: Record<string, unknown>) =>
+    post<AISuggestion>(`ai/suggestions/${id}/${action}/`, payload ? { payload } : {}),
 };

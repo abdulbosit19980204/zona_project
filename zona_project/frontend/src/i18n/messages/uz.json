@@ -56,7 +56,8 @@
     "supKnowledge": "Bilim bazasi",
     "supSettings": "Botlar va sozlamalar",
     "supAnalytics": "Tahlil",
-    "supImages": "Rasm turlari"
+    "supImages": "Rasm turlari",
+    "aiHistory": "AI tahlillar"
   },
   "top": {
     "search": "Qidirish…",
@@ -1056,5 +1057,14 @@
     "added": "Aʼzo qoʻshildi",
     "removed": "Aʼzo olib tashlandi",
     "linked": "Telegram bogʻlangan"
+  },
+  "aiHistory": {
+    "title": "AI tahlillar",
+    "description": "Barcha AI natijalari saqlanadi: savolni yoʻnaltirish, xodim tahlili, audit, yuklama, tarjima va support bot tahlillari. Qayta koʻrish, solishtirish va AI'ni oʻqitish uchun.",
+    "all": "Hammasi",
+    "search": "Sarlavha boʻyicha…",
+    "empty": "Hali AI tahlili yoʻq",
+    "emptyHint": "AI ishlatilgan har bir tahlil shu yerda paydo boʻladi.",
+    "prompt": "Soʻrov"
   }
 }

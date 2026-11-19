@@ -17,7 +17,7 @@ from django.utils import timezone
 from zona import conf
 from zona.crypto import decrypt
 
-from . import engine, ocr, vision
+from . import contacts, engine, ocr, translit, vision
 from .models import (MODE_COLLECT, MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, HistoryJob,
                      Media, Message, Settings)
 from .telegram import Client, TelegramError
@@ -112,6 +112,10 @@ class Handler:
         text = (msg.get("text") or "").strip()
         if text.startswith("/id"):
             return self._safe_send(msg["chat"]["id"], f"Chat ID: <code>{msg['chat']['id']}</code>")
+        if text.startswith("/kontakt") or text.startswith("/contact") or (
+                text and not text.startswith("/") and self.settings.contact_lookup):
+            return self.on_contact_lookup(msg, user, text.split(" ", 1)[1] if text.startswith("/") and " " in text else
+                                          ("" if text.startswith("/") else text))
         if text.startswith("/start") or text.startswith("/admin"):
             if user.is_staff and user.staff_level() == "LEAD" and not self.bot.admin_chat_id:
                 Bot.objects.filter(pk=self.bot.pk).update(admin_chat_id=msg["chat"]["id"])
@@ -122,6 +126,49 @@ class Handler:
                                          "Savolingizni guruhda yozing (rasm bilan ham bo'ladi).")
             return self._safe_send(msg["chat"]["id"], engine.html.escape(hello))
         return None
+
+    # ---------------------------------------------------------------- kontakt qidiruvi
+    LOOKUP_ROLES = {"ROP", "RSM", "ASM", "KAM", "SVR"}
+
+    def can_lookup(self, user, chat_id):
+        """Telefon raqamlari: bizning xodimlar, admin chat va rahbar darajasidagi dala xodimlari (agentlarga emas)."""
+        if chat_id == self.bot.admin_chat_id or user.is_staff:
+            return True
+        return bool(user.staff_person_id and user.staff_person.role in self.LOOKUP_ROLES)
+
+    def on_contact_lookup(self, msg, user, query):
+        chat_id = msg["chat"]["id"]
+        esc = engine.html.escape
+        if not self.settings.contact_lookup:
+            return None
+        if not self.can_lookup(user, chat_id):
+            return self._safe_send(chat_id, "🔒 Kontakt ma'lumotlari faqat xodimlar va rahbarlar uchun.")
+        results, q = contacts.search(query)
+        if q.empty:
+            return self._safe_send(chat_id, "🔎 <b>Kontakt qidiruvi</b>\nBrend, lavozim, hudud yoki ism yozing. Masalan:\n"
+                                            "• <i>L'Oréal ROP</i>\n• <i>Jizzax supervayzeri</i>\n• <i>Heinz SVR Toshkent</i>\n"
+                                            "• <i>Saidabror telefoni</i>")
+        if not results:
+            return self._safe_send(chat_id, f"Topilmadi: <i>{esc(contacts.describe(q))}</i>\n"
+                                            "Brend nomi (BIC, Heinz, JJ, L'Oréal), lavozim (ROP, RSM, SVR, agent) yoki hududni tekshiring.")
+        if len(results) > 6:
+            lines = [f"🔎 <b>{len(results)} ta topildi</b> ({esc(contacts.describe(q))}). Aniqroq yozing — masalan, hudud yoki ism qo'shing:"]
+            for r in results[:15]:
+                lines.append(f"• {esc(r['name'])} — {esc(r['role'])} · {esc(r['brand'])}"
+                             + (f" · {esc(r['place'] or r['unit'])}" if (r['place'] or r['unit']) else "")
+                             + (f" · <code>{esc(r['phone'])}</code>" if r["phone"] else ""))
+            return self._safe_send(chat_id, "\n".join(lines))
+        for r in results:
+            self._safe_send(chat_id, contacts.card_html(r))
+            phone = "".join(ch for ch in (r["phone"] or "") if ch.isdigit() or ch == "+")
+            if len(phone) >= 9:
+                parts = r["name"].split()
+                try:
+                    self.tg.send_contact(chat_id, phone, parts[0] if parts else r["name"], " ".join(parts[1:3]),
+                                         contacts.vcard(r))
+                except TelegramError as e:
+                    log.warning("send_contact failed: %s", e)
+        return results
 
     # ---------------------------------------------------------------- guruh xabari
     def on_group(self, msg):
@@ -142,6 +189,11 @@ class Handler:
         reply_to = (msg.get("reply_to_message") or {}).get("message_id")
         if mode == MODE_OFF:
             return None
+        if text.startswith("/kontakt") or text.startswith("/contact"):
+            # telefon raqamlari guruhga chiqarilmaydi
+            uname = self.bot.username or "bot"
+            return self._safe_send(chat["id"], engine.html.escape(f"Kontakt qidiruvi faqat shaxsiy chatda: @{uname} ga yozing."),
+                                   reply_to=msg["message_id"])
         if user.is_staff:
             return self.on_staff(msg, group, user, text, reply_to)
 
@@ -272,14 +324,14 @@ class Handler:
         ask = engine.ask_first_text(d.entry, q.lang)
         if ask and settings.ask_first_prompt and not skip_ask and not q.photo_file_id and not d.needs_human:
             # xodimlar odatda avval so'raydigan ma'lumotni bot o'zi so'raydi; javob kelgach qayta ishlanadi
-            sent = self._safe_send(q.chat_id, engine.to_html(ask), reply_to=q.message_id)
+            sent = self._safe_send(q.chat_id, engine.to_html(self._script(q, ask)), reply_to=q.message_id)
             q.stage, q.status = "ask", Message.NEW
             if sent:
                 q.bot_reply_id = sent.get("message_id")
             q.save()
             return q
         if not d.needs_human and d.text:
-            body = d.text
+            body = self._script(q, d.text)
             line = engine.responsible_line(d.responsible, q.lang) if d.stage == "rule" else ""
             if line and settings.mention_responsible:
                 body += "\n\n" + line
@@ -442,6 +494,11 @@ class Handler:
         if (media and media.kind == Media.PHOTO and not media.label_id and self.settings.image_autolabel and d.entry
                 and d.entry.status == Entry.APPROVED and d.stage in ("template", "faq") and d.confidence >= 90):
             vision.label([media], d.entry, "bot", auto=True)
+
+    @staticmethod
+    def _script(q, text):
+        """Savol o'zbek kirilida bo'lsa — javob matni ham kirillga o'giriladi."""
+        return translit.lat2cyr(text) if text and translit.is_uz_cyrillic(q.text) else text
 
     def _decorate(self, q, d, body_html):
         """Javob boshida savol beruvchi; supervayzer harakati kerak bo'lsa — uning supervayzeri (kontaktlar bo'yicha)."""
@@ -685,9 +742,25 @@ def _history_thread(job_id):
         close_old_connections()
 
 
+def _ai_thread(job_id):
+    from .ai_review import run_job
+    from .models import AIJob
+    close_old_connections()
+    try:
+        run_job(job_id)
+    except Exception as e:  # noqa: BLE001
+        log.exception("ai job %s failed", job_id)
+        AIJob.objects.filter(pk=job_id).update(status=AIJob.FAILED, error=f"{type(e).__name__}: {e}"[:500], finished_at=timezone.now())
+    finally:
+        close_old_connections()
+
+
 def run_forever(poll=10):
+    from .models import AIJob
     workers = {}
     history = None
+    ai_worker = None
+    AIJob.objects.filter(status=AIJob.RUNNING).update(status=AIJob.QUEUED)
     last_cleanup = 0.0
     # jarayon qayta ishga tushsa, chala qolgan vazifa qayta navbatga qo'yiladi
     HistoryJob.objects.filter(status=HistoryJob.RUNNING).update(status=HistoryJob.QUEUED)
@@ -714,6 +787,11 @@ def run_forever(poll=10):
                 if job:
                     history = threading.Thread(target=_history_thread, args=(job.id,), name="support-history", daemon=True)
                     history.start()
+            if ai_worker is None or not ai_worker.is_alive():
+                aj = AIJob.objects.filter(status=AIJob.QUEUED).order_by("created_at").first()
+                if aj:
+                    ai_worker = threading.Thread(target=_ai_thread, args=(aj.id,), name="support-ai", daemon=True)
+                    ai_worker.start()
             if time.time() - last_cleanup > 86400:
                 vision.cleanup(Settings.load().media_days)
                 last_cleanup = time.time()
