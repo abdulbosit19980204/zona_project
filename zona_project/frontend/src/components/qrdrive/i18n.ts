@@ -46,6 +46,7 @@ const uz = {
   // fayl paneli
   preview: "Koʻrish", previewNA: "Bu turdagi faylni brauzerda koʻrsatib boʻlmaydi — yuklab oling.",
   qrCode: "QR kod", link: "Havola", linkNone: "Faol havola yoʻq", linkSystem: "Tizim havolasi", linkProvider: "Saqlash joyi havolasi",
+  extraLinks: "Foydali havolalari", extraLinksHint: "Asosiy havola (saqlash joyidagi) oʻzgarmaydi. Foydali havolasi tizim orqali ochiladi — unga muddat va parol qoʻyish mumkin.", getExtraLink: "Foydali havolasini olish", extraLinkNone: "Qoʻshimcha havola yoʻq", linkProtectHint: "Synology Drive havolasiga muddat/parol qoʻyib boʻlmaydi: asosiy havola NAS havolasi boʻlib qoladi, muddat/parol esa qoʻshimcha foydali havolasiga qoʻyiladi.", revokeExtra: "Havolani bekor qilish",
   expires: "Muddati", noExpiry: "Muddatsiz", password: "Parol", passwordSet: "Parol bilan himoyalangan",
   downloads: "Yuklab olishlar: {n}", refreshLink: "Havolani yangilash", revokeLink: "Havolani bekor qilish",
   linkSettings: "Havola sozlamalari", expireDays: "Necha kun amal qiladi (0 = muddatsiz)",
@@ -264,6 +265,7 @@ const ru: Record<QKey, string> = {
   pickStorage: "Хранилище", up: "Вверх",
   preview: "Просмотр", previewNA: "Этот тип файла нельзя показать в браузере — скачайте его.",
   qrCode: "QR-код", link: "Ссылка", linkNone: "Нет активной ссылки", linkSystem: "Ссылка системы", linkProvider: "Ссылка хранилища",
+  extraLinks: "Ссылки Foydali", extraLinksHint: "Основная ссылка (хранилища) не меняется. Ссылка Foydali открывается через систему — на неё можно поставить срок и пароль.", getExtraLink: "Получить ссылку Foydali", extraLinkNone: "Дополнительных ссылок нет", linkProtectHint: "Ссылке Synology Drive нельзя задать срок/пароль: основной остаётся ссылка NAS, а срок/пароль ставятся на дополнительную ссылку Foydali.", revokeExtra: "Отозвать ссылку",
   expires: "Срок", noExpiry: "Бессрочно", password: "Пароль", passwordSet: "Защищена паролем",
   downloads: "Скачиваний: {n}", refreshLink: "Обновить ссылку", revokeLink: "Отозвать ссылку",
   linkSettings: "Настройки ссылки", expireDays: "Срок действия в днях (0 = бессрочно)",
@@ -466,6 +468,7 @@ const en: Record<QKey, string> = {
   pickStorage: "Storage", up: "Up",
   preview: "Preview", previewNA: "This file type can't be shown in the browser — download it.",
   qrCode: "QR code", link: "Link", linkNone: "No active link", linkSystem: "System link", linkProvider: "Storage link",
+  extraLinks: "Foydali links", extraLinksHint: "The main (storage) link stays unchanged. A Foydali link opens through this system — it can have an expiry and a password.", getExtraLink: "Get a Foydali link", extraLinkNone: "No extra links", linkProtectHint: "Synology Drive links cannot have an expiry/password: the main link stays the NAS link and the expiry/password go to an extra Foydali link.", revokeExtra: "Revoke link",
   expires: "Expires", noExpiry: "Never", password: "Password", passwordSet: "Password protected",
   downloads: "Downloads: {n}", refreshLink: "Refresh link", revokeLink: "Revoke link",
   linkSettings: "Link settings", expireDays: "Valid for days (0 = forever)",

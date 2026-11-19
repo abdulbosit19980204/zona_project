@@ -29,8 +29,9 @@ def bot_can_download(size: int | None, settings: dict[str, Any]) -> bool:
 
 
 async def create_ticket(session: AsyncSession, acc: TgAccount, chat_id: int, name: str, size: int | None,
-                        caption: str = "") -> UploadTicket:
+                        caption: str = "", reply_to: int | None = None) -> UploadTicket:
     ticket = UploadTicket(token=token(18), account_id=acc.id, chat_id=chat_id, name=name[:300], size=size, caption=caption,
+                          reply_to=reply_to,
                           expires_at=datetime.now(timezone.utc) + timedelta(hours=TICKET_HOURS))
     session.add(ticket)
     await session.flush()

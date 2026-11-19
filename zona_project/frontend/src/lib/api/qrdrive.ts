@@ -65,7 +65,8 @@ export interface QrFile {
 
 export interface FileEvent { stage: string; ok: boolean; message: string; duration_ms: number | null; at: string }
 export interface FileVersion { id: number; version: number; size: number | null; created_at: string; actor: string; current: boolean; original_name: string }
-export interface QrFileDetail extends QrFile { versions: FileVersion[]; events: FileEvent[]; options: Record<string, unknown>; external_user: string; actor: string }
+export interface ExtraLink { token: string; url: string; expires_at: string | null; has_password: boolean; downloads: number; created_at: string }
+export interface QrFileDetail extends QrFile { versions: FileVersion[]; events: FileEvent[]; extra_links?: ExtraLink[]; options: Record<string, unknown>; external_user: string; actor: string }
 export interface Paged<T> { items: T[]; total: number }
 
 export interface TgAccount {

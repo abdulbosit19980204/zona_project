@@ -50,8 +50,9 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
   const dur = useDuration();
   const q = useQr<QrFileDetail>(["file", fileId], `files/${fileId}`, undefined, { enabled: fileId !== null });
   // Eski API versiyasi (servis qayta ishga tushirilmagan) ba'zi maydonlarni bermasligi mumkin — sahifa yiqilmasin
-  const f = q.data ? { ...q.data, items: q.data.items ?? [], versions: q.data.versions ?? [], events: q.data.events ?? [] } : undefined;
-  const [dialog, setDialog] = useState<null | "link" | "rename" | "move" | "purge" | "revoke">(null);
+  const f = q.data ? { ...q.data, items: q.data.items ?? [], versions: q.data.versions ?? [], events: q.data.events ?? [],
+    extra_links: q.data.extra_links ?? [] } : undefined;
+  const [dialog, setDialog] = useState<null | "link" | "extra" | "rename" | "move" | "purge" | "revoke">(null);
   const [days, setDays] = useState("");
   const [vis, setVis] = useState<string>("");
   const [password, setPassword] = useState("");
@@ -126,6 +127,36 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                   </div>
                 ) : (
                   f.status === "delivered" && <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">{t("linkNone")}</p>
+                )}
+
+                {f.status === "delivered" && !f.deleted_at && f.remote_path && (
+                  <Section title={t("extraLinks")}>
+                    <div className="grid gap-2 rounded-xl border p-3">
+                      <p className="text-xs text-muted-foreground">{t("extraLinksHint")}</p>
+                      {f.extra_links.length === 0 && <p className="text-xs text-muted-foreground">{t("extraLinkNone")}</p>}
+                      {f.extra_links.map((l) => (
+                        <div key={l.token} className="grid gap-1">
+                          <div className="flex min-w-0 items-center gap-1 rounded-lg border bg-muted/40 py-1 pl-2.5 pr-1">
+                            <a href={l.url} target="_blank" rel="noreferrer" title={l.url} className="min-w-0 flex-1 truncate font-mono text-xs text-primary hover:underline">{l.url}</a>
+                            <CopyButton text={l.url} size="icon" />
+                            <Button size="icon" variant="ghost" asChild aria-label={t("open")}><a href={l.url} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a></Button>
+                            <Button size="icon" variant="ghost" aria-label={t("revokeExtra")} title={t("revokeExtra")} disabled={act.isPending}
+                              onClick={() => act.mutate(() => qrApi.delete(`files/${f.id}/extra-link/${l.token}`))}>
+                              <Link2Off className="size-4 text-destructive" />
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                            <span>{t("expires")}: {l.expires_at ? fmtDate(l.expires_at, false) : t("noExpiry")}</span>
+                            {l.has_password && <span className="inline-flex items-center gap-1"><KeyRound className="size-3" />{t("password")}</span>}
+                            <span>{t("downloadsLabel")}: {l.downloads}</span>
+                          </div>
+                        </div>
+                      ))}
+                      <Button size="sm" variant="outline" className="justify-self-start" onClick={() => { setDays(""); setPassword(""); setDialog("extra"); }}>
+                        <Link2 className="size-4" />{t("getExtraLink")}
+                      </Button>
+                    </div>
+                  </Section>
                 )}
 
                 {f.status === "delivered" && !f.deleted_at && (
@@ -206,9 +237,9 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                   </div>
                 )}
 
-                <Dialog open={dialog === "link" || dialog === "rename" || dialog === "move"} onOpenChange={(v) => !v && setDialog(null)}>
+                <Dialog open={dialog === "link" || dialog === "extra" || dialog === "rename" || dialog === "move"} onOpenChange={(v) => !v && setDialog(null)}>
                   <DialogContent className="sm:max-w-md">
-                    <DialogHeader><DialogTitle>{dialog === "link" ? t("linkSettings") : dialog === "rename" ? t("rename") : t("move")}</DialogTitle></DialogHeader>
+                    <DialogHeader><DialogTitle>{dialog === "link" ? t("linkSettings") : dialog === "extra" ? t("getExtraLink") : dialog === "rename" ? t("rename") : t("move")}</DialogTitle></DialogHeader>
                     {dialog === "link" && (
                       <div className="grid gap-3">
                         <FormRow label={t("visibility")} hint={t("visHint")}>
@@ -222,6 +253,14 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                         </FormRow>
                         <FormRow label={t("expireDays")}><Input type="number" min={0} value={days} onChange={(e) => setDays(e.target.value)} placeholder="0" /></FormRow>
                         <FormRow label={t("newPassword")}><Input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></FormRow>
+                        {f.link_kind !== "system" && <p className="text-xs text-muted-foreground">{t("linkProtectHint")}</p>}
+                      </div>
+                    )}
+                    {dialog === "extra" && (
+                      <div className="grid gap-3">
+                        <p className="text-xs text-muted-foreground">{t("extraLinksHint")}</p>
+                        <FormRow label={t("expireDays")}><Input type="number" min={0} value={days} onChange={(e) => setDays(e.target.value)} placeholder="0" /></FormRow>
+                        <FormRow label={t("newPassword")}><Input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></FormRow>
                       </div>
                     )}
                     {dialog === "rename" && <FormRow label={t("newName")}><Input value={name} onChange={(e) => setName(e.target.value)} /></FormRow>}
@@ -233,9 +272,10 @@ export function FileSheet({ fileId, onClose }: { fileId: number | null; onClose:
                       <Button variant="outline" onClick={() => setDialog(null)}>{t("cancel")}</Button>
                       <Button disabled={act.isPending} onClick={() => run(() =>
                         dialog === "link" ? qrApi.post(`files/${f.id}/link`, { expire_days: days === "" ? null : Number(days), password, visibility: vis || null })
+                          : dialog === "extra" ? qrApi.post(`files/${f.id}/extra-link`, { expire_days: days === "" ? 0 : Number(days), password: password || null })
                           : dialog === "rename" ? qrApi.post(`files/${f.id}/rename`, { name })
                             : qrApi.post(`files/${f.id}/move`, { folder }))}>
-                        {dialog === "link" ? <Link2 className="size-4" /> : null}{t("save")}
+                        {dialog === "link" || dialog === "extra" ? <Link2 className="size-4" /> : null}{dialog === "extra" ? t("getExtraLink") : t("save")}
                       </Button>
                     </DialogFooter>
                   </DialogContent>

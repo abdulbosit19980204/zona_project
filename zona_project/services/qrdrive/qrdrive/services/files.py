@@ -78,15 +78,53 @@ def link_expiry(rec: FileRecord, settings: dict[str, Any]) -> datetime | None:
     return datetime.now(timezone.utc) + timedelta(days=days) if days > 0 else None
 
 
-async def create_system_link(session: AsyncSession, rec: FileRecord, expires_at: datetime | None, password: str,
-                             base_url: str | None = None) -> str:
+def system_url(link_token: str, base_url: str | None = None) -> str:
+    return f"{base_url or config.public_base_url}{config.prefix}/s/{link_token}"
+
+
+def _new_system_link(session: AsyncSession, rec: FileRecord, expires_at: datetime | None, password: str) -> SystemLink:
     link = SystemLink(token=token(24), file_id=rec.id, expires_at=expires_at,
                       password_hash=hash_password(password) if password else "")
     session.add(link)
-    rec.link_url = f"{base_url or config.public_base_url}{config.prefix}/s/{link.token}"
+    return link
+
+
+async def create_system_link(session: AsyncSession, rec: FileRecord, expires_at: datetime | None, password: str,
+                             base_url: str | None = None) -> str:
+    """Tizim (foydali) havolasi — faylning ASOSIY havolasi sifatida (saqlash joyi o'z havolasini bera olmasa)."""
+    link = _new_system_link(session, rec, expires_at, password)
+    rec.link_url = system_url(link.token, base_url)
     rec.link_id, rec.link_kind = link.token, "system"
     rec.link_expires_at, rec.link_has_password = expires_at, bool(password)
     return rec.link_url
+
+
+def _root_id(rec: FileRecord) -> int:
+    return rec.duplicate_of or rec.id  # takroriy nusxaning havolalari asl faylda
+
+
+async def add_extra_link(session: AsyncSession, rec: FileRecord, expires_at: datetime | None, password: str) -> SystemLink:
+    """Qo'shimcha tizim (foydali) havolasi: asosiy havola (saqlash joyidagi) o'zgarmaydi."""
+    link = SystemLink(token=token(24), file_id=_root_id(rec), expires_at=expires_at,
+                      password_hash=hash_password(password) if password else "")
+    session.add(link)
+    await session.flush()
+    return link
+
+
+async def extra_links(session: AsyncSession, rec: FileRecord, base_url: str | None = None) -> list[dict[str, Any]]:
+    """Faylning faol qo'shimcha tizim havolalari (asosiy havoladan tashqari)."""
+    now = datetime.now(timezone.utc)
+    rows = (await session.execute(select(SystemLink).where(SystemLink.file_id == _root_id(rec), SystemLink.revoked.is_(False))
+                                  .order_by(SystemLink.created_at.desc()))).scalars().all()
+    out = []
+    for link in rows:
+        exp = link.expires_at if link.expires_at is None or link.expires_at.tzinfo else link.expires_at.replace(tzinfo=timezone.utc)
+        if link.token == rec.link_id or (exp and exp < now):
+            continue
+        out.append({"token": link.token, "url": system_url(link.token, base_url), "expires_at": link.expires_at,
+                    "has_password": bool(link.password_hash), "downloads": link.downloads, "created_at": link.created_at})
+    return out
 
 
 async def find_previous(session: AsyncSession, *, employee_id: int | None, api_key_id: int | None, name: str) -> FileRecord | None:
@@ -110,23 +148,38 @@ def visibility_of(rec: FileRecord, settings: dict[str, Any]) -> str:
     return "private" if v == "private" else "public"
 
 
-async def create_link(session: AsyncSession, rec: FileRecord, storage: Storage, provider, settings: dict[str, Any]) -> str:
+async def create_link(session: AsyncSession, rec: FileRecord, storage: Storage, provider, settings: dict[str, Any],
+                      *, keep_old_system: bool = False) -> str:
+    """Asosiy havola. Saqlash joyi o'z havolasini bera olsa — doim o'sha (masalan, Synology Drive havolasi).
+    Saqlash joyi muddat/parolni qo'llamasa, asosiy havola baribir saqlash joyiniki bo'ladi, muddat/parol esa
+    qo'shimcha tizim (foydali) havolasiga qo'yiladi. keep_old_system: eski asosiy tizim havolasi qo'shimcha bo'lib qoladi."""
     expires_at, password = link_expiry(rec, settings), link_password(rec, settings)
     visibility = visibility_of(rec, settings)
+    base = settings_store.public_base(settings)
     if storage.link_mode == "system" or not provider.supports_links:
-        await create_system_link(session, rec, expires_at, password, settings_store.public_base(settings))
+        await create_system_link(session, rec, expires_at, password, base)
         rec.link_visibility = "public"
         return rec.link_url
+    remote = RemoteFile(path=rec.remote_path, id=rec.remote_id, is_dir=rec.kind == "folder")
+    old_system = rec.link_id if keep_old_system and rec.link_kind == "system" else ""
+    applied = True  # muddat/parol saqlash joyi havolasiga qo'yildimi
     try:
-        link = await provider.create_public_link(RemoteFile(path=rec.remote_path, id=rec.remote_id, is_dir=rec.kind == "folder"),
-                                                 expires_at, password or None, visibility=visibility)
+        link = await provider.create_public_link(remote, expires_at, password or None, visibility=visibility)
     except NotSupported:
-        # Saqlash joyi bu turdagi havolani bera olmaydi (masalan, muddatli Drive havolasi) — tizim havolasi
-        await create_system_link(session, rec, expires_at, password, settings_store.public_base(settings))
-        rec.link_visibility = "public"
-        return rec.link_url
+        link, applied = None, False
+        if expires_at or password:
+            try:  # muddat/parolsiz — saqlash joyining o'z havolasi
+                link = await provider.create_public_link(remote, None, None, visibility=visibility)
+            except NotSupported:
+                link = None
+        if link is None:  # saqlash joyi umuman havola bera olmaydi — tizim havolasi asosiy
+            await create_system_link(session, rec, expires_at, password, base)
+            rec.link_visibility = "public"
+            return rec.link_url
+        if not old_system:  # so'ralgan muddat/parol yo'qolmasin — qo'shimcha foydali havolasida
+            await add_extra_link(session, rec, expires_at, password)
     rec.link_url, rec.link_id, rec.link_kind = link.url, link.id, "provider"
-    rec.link_expires_at, rec.link_has_password = link.expires_at, bool(password) and link.visibility == "public"
+    rec.link_expires_at, rec.link_has_password = link.expires_at, bool(password) and applied and link.visibility == "public"
     rec.link_visibility = link.visibility
     return rec.link_url
 
@@ -191,7 +244,7 @@ async def relink(session: AsyncSession, recs: list[FileRecord], settings: dict[s
         provider = registry.build(rec.storage)
         try:
             # eski tizim havolasi bekor qilinmaydi — allaqachon yuborilgan/chop etilgan QR kodlar ishlashda davom etadi
-            await create_link(session, rec, rec.storage, provider, settings)
+            await create_link(session, rec, rec.storage, provider, settings, keep_old_system=True)
             done += 1
         except Exception as exc:  # noqa: BLE001
             failed.append({"id": rec.id, "name": rec.original_name, **human(classify(exc).kind)})

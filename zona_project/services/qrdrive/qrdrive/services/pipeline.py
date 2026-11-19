@@ -395,7 +395,7 @@ async def _deliver(ctx: Ctx, duplicate: bool = False) -> None:
                 if rec.link_expires_at:
                     tz = ZoneInfo(s.get("timezone") or config.tz)
                     text += "\n" + ctx.text("expires", date=f"{rec.link_expires_at.astimezone(tz):%d.%m.%Y}")
-            await ctx.tg.send_photo(rec.tg_chat_id, image, text)
+            await ctx.tg.send_photo(rec.tg_chat_id, image, text, reply_to=(rec.options or {}).get("tg_msg_id"))
             if rec.tg_status_msg_id:
                 await ctx.tg.delete_message(rec.tg_chat_id, rec.tg_status_msg_id)
 

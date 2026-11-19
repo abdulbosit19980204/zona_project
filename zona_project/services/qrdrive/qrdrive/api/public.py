@@ -283,6 +283,8 @@ async def upload_file(token: str, request: Request, session: AsyncSession = Depe
     rec = await enqueue(session, source="telegram", original_name=name, actor=acc.display, employee_id=acc.employee_id,
                         account_id=acc.id, temp_path=dest, size=size, caption=ticket.caption, options=options,
                         tg={"chat_id": ticket.chat_id, "file_id": "", "status_msg_id": None})
+    if ticket.reply_to:
+        rec.options = {**(rec.options or {}), "tg_msg_id": ticket.reply_to}
     ticket.used_at, ticket.file_id = datetime.now(timezone.utc), rec.id
     add_audit(session, "file.web_upload", actor=str(acc.telegram_id), actor_kind="bot", target=name, details={"size": size})
     await session.commit()

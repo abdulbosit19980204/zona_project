@@ -15,6 +15,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import (BotCommand, BotCommandScopeChat, BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
+                           ReplyParameters,
                            ReplyKeyboardMarkup, ReplyKeyboardRemove, TelegramObject)
 from sqlalchemy import func, select
 
@@ -100,7 +101,7 @@ async def gate(msg: Message, s, acc: TgAccount, created: bool, settings: dict[st
     if state == "ok":
         return True
     if state == "registering":
-        await msg.answer(t(settings, acc, "reg_welcome" if created else "reg_need"))
+        await msg.reply(t(settings, acc, "reg_welcome" if created else "reg_need"))
         await reg_prompt(msg, s, acc, settings)
         return False
     if state == "pending":
@@ -108,15 +109,15 @@ async def gate(msg: Message, s, acc: TgAccount, created: bool, settings: dict[st
             add_audit(s, "request.new", actor=str(acc.telegram_id), actor_kind="bot", target=acc.display)
             if await admins.auto_approve(s, acc, settings):
                 await s.commit()
-                await msg.answer(t(settings, acc, "approved"))
+                await msg.reply(t(settings, acc, "approved"))
                 return True
             accounts.request_notification(s, acc)
             await s.commit()
-            await msg.answer(t(settings, acc, "request_sent", id=acc.telegram_id))
+            await msg.reply(t(settings, acc, "request_sent", id=acc.telegram_id))
         else:
-            await msg.answer(t(settings, acc, "request_pending"))
+            await msg.reply(t(settings, acc, "request_pending"))
         return False
-    await msg.answer(t(settings, acc, "blocked"))
+    await msg.reply(t(settings, acc, "blocked"))
     return False
 
 
@@ -127,9 +128,9 @@ async def cmd_start(msg: Message, command: CommandObject, session, acc: TgAccoun
         emp = await accounts.redeem_invite(session, acc, code)
         await session.commit()
         if emp:
-            await msg.answer(t(settings, acc, "invite_ok", name=emp.full_name))
+            await msg.reply(t(settings, acc, "invite_ok", name=emp.full_name))
             return
-        await msg.answer(t(settings, acc, "invite_invalid"))
+        await msg.reply(t(settings, acc, "invite_invalid"))
         if acc.status != "active":
             return
     if not await gate(msg, session, acc, created, settings):
@@ -139,12 +140,12 @@ async def cmd_start(msg: Message, command: CommandObject, session, acc: TgAccoun
         text += "\n\n" + ADMIN_HELP
         with suppress(Exception):  # admin buyruqlari shu chat menyusida ko'rinadi
             await msg.bot.set_my_commands(BASE_COMMANDS + ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=msg.chat.id))
-    await msg.answer(text)
+    await msg.reply(text)
 
 
 @on("message", Command("id"))
 async def cmd_id(msg: Message, acc: TgAccount, settings: dict[str, Any]):
-    await msg.answer(t(settings, acc, "your_id", id=acc.telegram_id))
+    await msg.reply(t(settings, acc, "your_id", id=acc.telegram_id))
 
 
 @on("message", Command("help"))
@@ -152,14 +153,14 @@ async def cmd_help(msg: Message, acc: TgAccount, settings: dict[str, Any]):
     text = t(settings, acc, "help")
     if admins.is_admin(acc, settings):
         text += "\n\n" + ADMIN_HELP
-    await msg.answer(text)
+    await msg.reply(text)
 
 
 @on("message", Command("lang"))
 async def cmd_lang(msg: Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="O'zbekcha", callback_data="lang:uz"),
                                                 InlineKeyboardButton(text="Русский", callback_data="lang:ru")]])
-    await msg.answer("Tilni tanlang / Выберите язык", reply_markup=kb)
+    await msg.reply("Tilni tanlang / Выберите язык", reply_markup=kb)
 
 
 @on("callback_query", F.data.startswith("lang:"))
@@ -192,20 +193,20 @@ async def reg_prompt(msg: Message, session, acc: TgAccount, settings: dict[str, 
     if step == "name":
         suggestion = f"{acc.first_name} {acc.last_name}".strip()
         markup = _kb([[KeyboardButton(text=suggestion)]]) if len(suggestion.split()) >= 2 else ReplyKeyboardRemove()
-        await msg.answer(t(settings, acc, "reg_name"), reply_markup=markup)
+        await msg.reply(t(settings, acc, "reg_name"), reply_markup=markup)
     elif step == "phone":
-        await msg.answer(t(settings, acc, "reg_phone"),
+        await msg.reply(t(settings, acc, "reg_phone"),
                          reply_markup=_kb([[KeyboardButton(text=t(settings, acc, "reg_phone_btn"), request_contact=True)]]))
     elif step == "department":
         depts = sorted({d for d in (await session.execute(select(Employee.department).where(Employee.department != ""))).scalars() if d})[:12]
         rows = [[KeyboardButton(text=d) for d in depts[i:i + 2]] for i in range(0, len(depts), 2)] + [[KeyboardButton(text=skip)]]
-        await msg.answer(t(settings, acc, "reg_department"), reply_markup=_kb(rows))
+        await msg.reply(t(settings, acc, "reg_department"), reply_markup=_kb(rows))
     elif step == "position":
-        await msg.answer(t(settings, acc, "reg_position"), reply_markup=_kb([[KeyboardButton(text=skip)]]))
+        await msg.reply(t(settings, acc, "reg_position"), reply_markup=_kb([[KeyboardButton(text=skip)]]))
     else:
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=t(settings, acc, "reg_yes"), callback_data="reg:ok"),
                                                     InlineKeyboardButton(text=t(settings, acc, "reg_edit"), callback_data="reg:edit")]])
-        await msg.answer(t(settings, acc, "reg_confirm", name=reg.get("full_name", "—"), phone=acc.phone or "—",
+        await msg.reply(t(settings, acc, "reg_confirm", name=reg.get("full_name", "—"), phone=acc.phone or "—",
                            department=reg.get("department") or "—", position=reg.get("position") or "—"), reply_markup=kb)
 
 
@@ -223,16 +224,16 @@ async def reg_input(msg: Message, session, acc: TgAccount, settings: dict[str, A
     if step == "phone":
         contact = msg.contact
         if contact is None or (contact.user_id and contact.user_id != msg.from_user.id):
-            await msg.answer(t(settings, acc, "reg_phone_wrong"))
+            await msg.reply(t(settings, acc, "reg_phone_wrong"))
             return await reg_prompt(msg, session, acc, settings)
         acc.phone = _phone(contact.phone_number)
         nxt = "department"
     elif not text:  # fayl, stiker va h.k. — avval ro'yxatdan o'tish
-        await msg.answer(t(settings, acc, "reg_need"))
+        await msg.reply(t(settings, acc, "reg_need"))
         return await reg_prompt(msg, session, acc, settings)
     elif step == "name":
         if len(text.split()) < 2 or len(text) > 150:
-            await msg.answer(t(settings, acc, "reg_name_short"))
+            await msg.reply(t(settings, acc, "reg_name_short"))
             return
         data["full_name"] = " ".join(text.split())
         nxt = "phone"
@@ -244,7 +245,7 @@ async def reg_input(msg: Message, session, acc: TgAccount, settings: dict[str, A
     acc.reg_data, acc.reg_state = data, nxt
     await session.commit()
     if nxt == "confirm":
-        await msg.answer("👍", reply_markup=ReplyKeyboardRemove())
+        await msg.reply("👍", reply_markup=ReplyKeyboardRemove())
     await reg_prompt(msg, session, acc, settings)
 
 
@@ -303,14 +304,14 @@ async def cmd_myfiles(msg: Message, session, acc: TgAccount, created: bool, sett
         FileRecord.employee_id == acc.employee_id, FileRecord.deleted_at.is_(None), FileRecord.status == "delivered")
         .order_by(FileRecord.id.desc()).limit(10))).scalars().all()
     if not rows:
-        await msg.answer(t(settings, acc, "myfiles_empty"))
+        await msg.reply(t(settings, acc, "myfiles_empty"))
         return
     lines, buttons = [t(settings, acc, "myfiles_title")], []
     for i, r in enumerate(rows, 1):
         lines.append(f"{i}. {r.original_name} — {r.created_at:%d.%m.%Y}")
         buttons.append([InlineKeyboardButton(text=f"📷 {i}. QR", callback_data=f"qr:{r.id}"),
                         InlineKeyboardButton(text=f"🔄 {i}. Havola", callback_data=f"rl:{r.id}")])
-    await msg.answer("\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await msg.reply("\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 async def _own_file(session, acc: TgAccount, data: str) -> FileRecord | None:
@@ -328,7 +329,7 @@ async def _send_qr(cb: CallbackQuery, rec: FileRecord, settings: dict[str, Any],
     style = settings.get("qr_style") or {}
     image = qr.png(rec.link_url, style, qr.caption_for(style, rec.original_name, settings.get("company_name", "")))
     caption = t(settings, acc, "done", path=rec.remote_path, url=rec.link_url)
-    await cb.message.answer_photo(BufferedInputFile(image, "qr.png"), caption=(extra + "\n" + caption).strip())
+    await cb.message.reply_photo(BufferedInputFile(image, "qr.png"), caption=(extra + "\n" + caption).strip())
 
 
 @on("callback_query", F.data.startswith("qr:"))
@@ -351,7 +352,7 @@ async def cb_refresh(cb: CallbackQuery, session, acc: TgAccount, settings: dict[
         await session.commit()
     except Exception:  # noqa: BLE001
         log.exception("havolani yangilab bo'lmadi")
-        await cb.message.answer(t(settings, acc, "failed", reason="—"))
+        await cb.message.reply(t(settings, acc, "failed", reason="—"))
         return
     await _send_qr(cb, rec, settings, acc, t(settings, acc, "link_refreshed"))
 
@@ -363,15 +364,15 @@ async def on_file(msg: Message, session, acc: TgAccount, created: bool, settings
     file_id, size, name, mime = extract_file(msg)
     max_mb = int(settings.get("max_file_mb") or 100)
     if size and size > max_mb * 1024 * 1024:
-        await msg.answer(t(settings, acc, "too_big", size=f"{size / 1024 / 1024:.1f}", max_mb=max_mb))
+        await msg.reply(t(settings, acc, "too_big", size=f"{size / 1024 / 1024:.1f}", max_mb=max_mb))
         return
     from ..services.pipeline import allowed
     if not allowed(name, settings.get("allowed_types", "")):
-        await msg.answer(t(settings, acc, "type_not_allowed", types=settings.get("allowed_types", "")))
+        await msg.reply(t(settings, acc, "type_not_allowed", types=settings.get("allowed_types", "")))
         return
     if not uploads.bot_can_download(size, settings):
         # Rasmiy Bot API 20 MB dan katta faylni bermaydi — bir martalik veb-yuklash havolasi
-        ticket = await uploads.create_ticket(session, acc, msg.chat.id, name, size, msg.caption or "")
+        ticket = await uploads.create_ticket(session, acc, msg.chat.id, name, size, msg.caption or "", reply_to=msg.message_id)
         await session.commit()
         url = uploads.ticket_url(settings, ticket)
         text = t(settings, acc, "big_file", size=f"{size / 1024 / 1024:.1f}", url=url, hours=uploads.TICKET_HOURS)
@@ -382,7 +383,8 @@ async def on_file(msg: Message, session, acc: TgAccount, created: bool, settings
         log.info("katta fayl — veb-yuklash havolasi berildi", extra={"data": {"size": size}})
         return
     rec = await enqueue(session, source="telegram", original_name=name, actor=acc.display, employee_id=acc.employee_id,
-                        account_id=acc.id, size=size, mime=mime, caption=msg.caption or "", options={"pending": True},
+                        account_id=acc.id, size=size, mime=mime, caption=msg.caption or "",
+                        options={"pending": True, "tg_msg_id": msg.message_id},
                         tg={"chat_id": msg.chat.id, "file_id": file_id, "status_msg_id": None}, awaiting=True)
     await session.commit()
     first = await batcher.add(bot, acc.id, msg.chat.id, rec.id, name)
@@ -434,6 +436,16 @@ class Batcher:
 batcher = Batcher()
 
 
+def _reply_opt(rec: FileRecord) -> dict[str, Any]:
+    mid = (rec.options or {}).get("tg_msg_id")
+    return {"tg_msg_id": mid} if mid else {}
+
+
+def _reply_to(rec: FileRecord) -> ReplyParameters | None:
+    mid = (rec.options or {}).get("tg_msg_id")
+    return ReplyParameters(message_id=int(mid), allow_sending_without_reply=True) if mid else None
+
+
 def _ikb_url(label: str, url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, url=url)]])
 
@@ -451,15 +463,16 @@ async def close_group(bot: Bot, acc_id: int, group: dict[str, Any]) -> None:
         if acc is None or not recs:
             return
         now = datetime.now(timezone.utc)
+        reply = _reply_to(recs[0])  # savol/holat xabari foydalanuvchi yuborgan faylga javob (reply) bo'ladi
         if len(recs) == 1:
             rec = recs[0]
             plan = await plan_choices(session, acc, settings, rec.original_name)
             rec.options = {**{k: v for k, v in (rec.options or {}).items() if k != "pending"}, **plan["options"]}
             if plan["rows"]:
                 kb = _ikb([[(label, f"ch:{rec.id}:{action}:{vis}") for label, action, vis in row] for row in plan["rows"]])
-                sent = await bot.send_message(group["chat"], plan["text"], reply_markup=kb)
+                sent = await bot.send_message(group["chat"], plan["text"], reply_markup=kb, reply_parameters=reply)
             else:
-                sent = await bot.send_message(group["chat"], t(settings, acc, "received"))
+                sent = await bot.send_message(group["chat"], t(settings, acc, "received"), reply_parameters=reply)
                 rec.status, rec.next_attempt_at = "queued", now
             rec.tg_status_msg_id = sent.message_id
             await session.commit()
@@ -472,7 +485,7 @@ async def close_group(bot: Bot, acc_id: int, group: dict[str, Any]) -> None:
         if multi in ("folder", "separate"):
             await session.commit()
             vis = vis_mode if vis_mode in ("public", "private") else "-"
-            sent = await bot.send_message(group["chat"], t(settings, acc, "received"))
+            sent = await bot.send_message(group["chat"], t(settings, acc, "received"), reply_parameters=reply)
             await apply_group(session, acc, settings, first, multi, vis, sent.message_id)
             return
         names = "\n".join(f"• {n}" for n in group["names"][:10])
@@ -481,7 +494,8 @@ async def close_group(bot: Bot, acc_id: int, group: dict[str, Any]) -> None:
         rows = [[(f"{t(settings, acc, 'btn_one_folder')} {icon}".strip(), f"bt:{first.id}:folder:{v}") for v, icon in vis_opts],
                 [(f"{t(settings, acc, 'btn_separate')} {icon}".strip(), f"bt:{first.id}:separate:{v}") for v, icon in vis_opts]]
         await session.commit()
-        await bot.send_message(group["chat"], t(settings, acc, "ask_batch", n=len(recs), names=names), reply_markup=_ikb(rows))
+        await bot.send_message(group["chat"], t(settings, acc, "ask_batch", n=len(recs), names=names), reply_markup=_ikb(rows),
+                               reply_parameters=reply)
 
 
 async def apply_group(session, acc: TgAccount, settings: dict[str, Any], first: FileRecord, mode: str, vis: str,
@@ -498,7 +512,7 @@ async def apply_group(session, acc: TgAccount, settings: dict[str, Any], first: 
         caption = next((r.caption for r in recs if r.caption), "")
         folder = await enqueue(session, source="telegram", original_name=safe_name(caption[:60]) if caption else f"Fayllar ({len(recs)})",
                                actor=acc.display, employee_id=acc.employee_id, account_id=acc.id,
-                               options={"batch_children": [r.id for r in recs], **extra},
+                               options={"batch_children": [r.id for r in recs], **extra, **_reply_opt(recs[0])},
                                tg={"chat_id": recs[0].tg_chat_id, "file_id": "", "status_msg_id": status_msg_id})
         for r in recs:
             r.status = "merged"
@@ -634,12 +648,12 @@ async def admin_only(event: Message | CallbackQuery, acc: TgAccount | None = Non
 
 @on("message", Command("admin"), admin_only)
 async def cmd_admin(msg: Message):
-    await msg.answer(ADMIN_HELP)
+    await msg.reply(ADMIN_HELP)
 
 
 @on("message", Command("stats"), admin_only)
 async def cmd_stats(msg: Message, session):
-    await msg.answer(await admins.stats_text(session))
+    await msg.reply(await admins.stats_text(session))
 
 
 @on("message", Command("pending"), admin_only)
@@ -647,10 +661,10 @@ async def cmd_pending(msg: Message, session):
     rows = (await session.execute(select(TgAccount).where(TgAccount.status == "pending")
                                   .order_by(TgAccount.id.desc()).limit(10))).scalars().all()
     if not rows:
-        return await msg.answer("✅ Kutilayotgan so'rov yo'q.")
-    await msg.answer(f"⏳ Kutilayotgan so'rovlar: {len(rows)}" + (" (oxirgi 10 tasi)" if len(rows) == 10 else ""))
+        return await msg.reply("✅ Kutilayotgan so'rov yo'q.")
+    await msg.reply(f"⏳ Kutilayotgan so'rovlar: {len(rows)}" + (" (oxirgi 10 tasi)" if len(rows) == 10 else ""))
     for a in rows:
-        await msg.answer(accounts.describe(a), reply_markup=_decision_kb(a.id))
+        await msg.reply(accounts.describe(a), reply_markup=_decision_kb(a.id))
 
 
 def _mode_kb(current: str) -> InlineKeyboardMarkup:
@@ -660,7 +674,7 @@ def _mode_kb(current: str) -> InlineKeyboardMarkup:
 @on("message", Command("mode"), admin_only)
 async def cmd_mode(msg: Message, settings: dict[str, Any]):
     current = settings.get("approval_mode") or "manual"
-    await msg.answer(f"Tasdiqlash rejimi:\n{MODE_LABEL.get(current, current)}", reply_markup=_mode_kb(current))
+    await msg.reply(f"Tasdiqlash rejimi:\n{MODE_LABEL.get(current, current)}", reply_markup=_mode_kb(current))
 
 
 @on("callback_query", F.data.startswith("mode:"), admin_only)
@@ -732,7 +746,7 @@ async def set_commands(bot: Bot) -> None:
 async def other(msg: Message, session, acc: TgAccount, created: bool, settings: dict[str, Any]):
     if not await gate(msg, session, acc, created, settings):
         return
-    await msg.answer(t(settings, acc, "send_file"))
+    await msg.reply(t(settings, acc, "send_file"))
 
 
 def make_bot(settings: dict[str, Any]) -> Bot:

@@ -183,6 +183,9 @@ async def test_invite_then_file_upload(session, employee, local_storage):
     async with session_scope() as db:
         rec = (await db.execute(select(FileRecord))).scalar_one()
         assert rec.source == "telegram" and rec.employee_id == employee.id and rec.tg_file_id == "FID1"
+        # savol foydalanuvchi yuborgan fayl xabariga javob (reply) — natija (QR) ham shu xabarga keladi
+        ask = next(d for n, d in s.sent if n == "SendMessage")
+        assert ask["reply_parameters"]["message_id"] == rec.options["tg_msg_id"]
         assert rec.status == "awaiting" and rec.tg_status_msg_id
     # foydalanuvchi «Private» ni bosdi
     raw = {"update_id": 9999, "callback_query": {

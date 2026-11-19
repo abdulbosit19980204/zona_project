@@ -16,12 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ... import settings_store
 from ...core.errors import QRDriveError, classify, human
 from ...core.security import Principal
-from ...db.models import Employee, FileEvent, FileRecord, Storage
+from ...db.models import Employee, FileEvent, FileRecord, Storage, SystemLink
 from ...db.session import get_session
 from ...services import pipeline, qr
 from ...services.audit import add_audit
 from ...services.archive import is_archive
-from ...services.files import enqueue, find_previous, guess_mime, refresh_link, revoke_link, save_upload, serialize
+from ...services.files import (add_extra_link, enqueue, extra_links, find_previous, guess_mime, refresh_link,
+                               revoke_link, save_upload, serialize, system_url)
 from ...services.naming import safe_name
 from ...storage import registry
 from ..deps import admin, viewer
@@ -166,7 +167,9 @@ async def get_file(file_id: int, session: AsyncSession = Depends(get_session), _
                     for v in (await session.execute(select(FileRecord).where(
                         FileRecord.storage_id == rec.storage_id, FileRecord.remote_path == rec.remote_path,
                         FileRecord.status == "delivered", FileRecord.duplicate_of.is_(None)).order_by(FileRecord.version.desc()))).scalars()]
-    return {**serialize(rec, full=True), "versions": versions if len(versions) > 1 else [], "events": [
+    settings = await settings_store.load(session)
+    return {**serialize(rec, full=True), "versions": versions if len(versions) > 1 else [],
+            "extra_links": await extra_links(session, rec, settings_store.public_base(settings)), "events": [
         {"stage": e.stage, "ok": e.ok, "message": e.message, "duration_ms": e.duration_ms, "at": e.at} for e in events]}
 
 
@@ -336,7 +339,45 @@ async def link_refresh(file_id: int, body: LinkBody, session: AsyncSession = Dep
     add_audit(session, "file.link_refresh", actor=user.username, target=rec.original_name,
               details={"expire_days": body.expire_days, "password": "••••••" if body.password else None})
     await session.commit()
-    return serialize(rec)
+    return {**serialize(rec), "extra_links": await extra_links(session, rec, settings_store.public_base(settings))}
+
+
+class ExtraLinkBody(BaseModel):
+    expire_days: int | None = None
+    password: str | None = None
+
+
+@router.post("/{file_id}/extra-link")
+async def extra_link_create(file_id: int, body: ExtraLinkBody, session: AsyncSession = Depends(get_session),
+                            user: Principal = Depends(admin)):
+    """Qo'shimcha foydali havolasi (/qrdrive/s/...): asosiy havola (saqlash joyidagi) o'zgarmaydi."""
+    rec = await _get(session, file_id)
+    if rec.status != "delivered" or not rec.remote_path:
+        raise HTTPException(400, "Fayl hali saqlanmagan")
+    settings = await settings_store.load(session)
+    days = body.expire_days if body.expire_days is not None else int(settings.get("link_expire_days") or 0)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=days) if days and days > 0 else None
+    link = await add_extra_link(session, rec, expires_at, body.password or "")
+    add_audit(session, "file.extra_link", actor=user.username, target=rec.original_name,
+              details={"expire_days": days or None, "password": "••••••" if body.password else None})
+    await session.commit()
+    base = settings_store.public_base(settings)
+    return {"url": system_url(link.token, base), "token": link.token, "expires_at": expires_at,
+            "has_password": bool(body.password), "extra_links": await extra_links(session, rec, base)}
+
+
+@router.delete("/{file_id}/extra-link/{token}")
+async def extra_link_revoke(file_id: int, token: str, session: AsyncSession = Depends(get_session),
+                            user: Principal = Depends(admin)):
+    rec = await _get(session, file_id)
+    link = await session.get(SystemLink, token)
+    if link is None or link.file_id != (rec.duplicate_of or rec.id) or token == rec.link_id:
+        raise HTTPException(404, "Havola topilmadi")
+    link.revoked = True
+    add_audit(session, "file.extra_link_revoke", actor=user.username, target=rec.original_name)
+    await session.commit()
+    settings = await settings_store.load(session)
+    return {"extra_links": await extra_links(session, rec, settings_store.public_base(settings))}
 
 
 @router.delete("/{file_id}/link")

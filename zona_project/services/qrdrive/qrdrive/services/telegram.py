@@ -72,9 +72,14 @@ class TelegramClient:
                     fh.write(chunk)
         return dest, True
 
-    async def send_message(self, chat_id: int, text: str, reply_markup: dict | None = None) -> dict:
+    @staticmethod
+    def _reply(reply_to: int | None) -> dict | None:
+        # foydalanuvchi xabariga javob (reply) — asl xabar o'chirilgan bo'lsa ham yuboriladi
+        return {"message_id": int(reply_to), "allow_sending_without_reply": True} if reply_to else None
+
+    async def send_message(self, chat_id: int, text: str, reply_markup: dict | None = None, reply_to: int | None = None) -> dict:
         return await self.call("sendMessage", {"chat_id": chat_id, "text": text, "reply_markup": reply_markup,
-                                               "disable_web_page_preview": "true"})
+                                               "disable_web_page_preview": "true", "reply_parameters": self._reply(reply_to)})
 
     async def edit_message(self, chat_id: int, message_id: int, text: str) -> None:
         try:
@@ -88,8 +93,10 @@ class TelegramClient:
         except TelegramError:
             pass
 
-    async def send_photo(self, chat_id: int, photo: bytes, caption: str = "", reply_markup: dict | None = None) -> dict:
-        return await self.call("sendPhoto", {"chat_id": chat_id, "caption": caption[:1024], "reply_markup": reply_markup},
+    async def send_photo(self, chat_id: int, photo: bytes, caption: str = "", reply_markup: dict | None = None,
+                         reply_to: int | None = None) -> dict:
+        return await self.call("sendPhoto", {"chat_id": chat_id, "caption": caption[:1024], "reply_markup": reply_markup,
+                                             "reply_parameters": self._reply(reply_to)},
                                files={"photo": ("qr.png", photo, "image/png")})
 
     async def send_document(self, chat_id: int, data: bytes, filename: str, caption: str = "") -> dict:

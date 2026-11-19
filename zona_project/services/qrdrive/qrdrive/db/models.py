@@ -319,3 +319,4 @@ class UploadTicket(Base):
     expires_at: Mapped[datetime] = mapped_column()
     used_at: Mapped[datetime | None] = mapped_column(nullable=True)
     file_id: Mapped[int | None] = mapped_column(nullable=True)
+    reply_to: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # foydalanuvchi xabari (javob reply bo'ladi)
