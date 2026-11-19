@@ -310,7 +310,7 @@ class Handler:
         images, photos = [], []
         if media and settings.image_match:
             # albomdagi HAR BIR rasm alohida tanib olinadi (turli mavzudagi ekranlar bo'lishi mumkin)
-            photos = list(Media.objects.filter(message=q, kind=Media.PHOTO).exclude(dhash="").order_by("id")[:10])
+            photos = sorted(Media.objects.filter(message=q, kind=Media.PHOTO).exclude(dhash="")[:10], key=_album_order)
             best = None
             for idx, m in enumerate(photos):
                 entry, dist, _ex = vision.match(m, settings.image_threshold, include_unapproved=unapproved)
@@ -529,7 +529,8 @@ class Handler:
     # ---------------------------------------------------------------- yordamchilar
     def _fetch_media(self, q):
         """Savoldagi faylni serverga saqlaydi (Media). Rasm uchun vizual iz hisoblanadi."""
-        existing = Media.objects.filter(message=q).first()
+        # albom bo'laklari (album:<id>) asosiy rasmdan oldin saqlanib qolishi mumkin — ularni asosiy rasm deb olmaymiz
+        existing = Media.objects.filter(message=q).exclude(name__startswith="album:").first()
         if existing:
             return existing
         file_id, kind, name, mime = getattr(self, "media_meta", None) or (q.photo_file_id, "photo", "", "")
@@ -725,6 +726,16 @@ def reject(entry, by):
 # ====================================================================== oqimlar
 def _full_name(u):
     return " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x)[:150]
+
+
+def _album_order(m):
+    """Albom tartibi: asosiy rasm birinchi, keyin bo'laklar Telegram xabar raqami bo'yicha (1-rasm, 2-rasm, ...)."""
+    if m.name.startswith("album:"):
+        try:
+            return (1, int(m.name.split(":", 1)[1]))
+        except ValueError:
+            return (1, m.id)
+    return (0, m.id)
 
 
 def _media_of(msg):

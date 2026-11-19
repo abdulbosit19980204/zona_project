@@ -6,7 +6,9 @@ from django.test import TestCase
 from zona.ai import service as ai_service
 
 from . import engine
-from .models import Bot, Entry, Message, Settings, TgUser
+from .models import Bot, Entry, Group, Media, Message, Settings, TgUser
+from .runner import _album_order
+from .tests_v6 import FlowBase
 
 
 def mk(title, answer, questions=(), kind=Entry.FAQ):
@@ -78,3 +80,14 @@ class StaffExamplesTests(TestCase):
             engine.ai_answer("klient bor ammo agentda chiqmayapti", "uz", [], None, s, ocr="Outlet already exists")
         self.assertIn("XODIM JAVOBI: Supervayzeringiz", captured["system"])
         self.assertIn("RASMDAGI MATN", captured["message"])
+
+
+class AlbumOrderTests(FlowBase):
+    def test_main_photo_fetched_even_if_album_parts_saved_first(self):
+        from . import vision
+        g = Group.objects.create(bot=self.bot, chat_id=-100, title="G")
+        q = Message.objects.create(bot=self.bot, group=g, chat_id=-100, message_id=10, photo_file_id="big", media_group_id="a1")
+        part = vision.store(b"part", kind="photo", name="album:11", message=q)  # bo'lak asosiy rasmdan oldin saqlandi
+        main = self.h()._fetch_media(q)
+        self.assertNotEqual(main.pk, part.pk)
+        self.assertEqual([m.pk for m in sorted(Media.objects.filter(message=q), key=_album_order)], [main.pk, part.pk])
