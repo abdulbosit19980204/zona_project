@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, GitMerge, ListPlus, Loader2, Sparkles, Wand2, X } from "lucide-react";
+import { Check, Copy, GitMerge, ListPlus, Loader2, Sparkles, Wand2, X } from "lucide-react";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/common/page";
@@ -23,7 +23,8 @@ export function AISuggestions({ t }: { t: ST }) {
     refetchInterval: (q) => ((q.state.data ?? []).some((j) => j.status === "queued" || j.status === "running") ? 4000 : 30_000),
   });
   const list = useQuery({ queryKey: ["support", "ai-suggestions"], queryFn: () => supportApi.aiSuggestions("pending"), refetchInterval: 15_000 });
-  const start = useSupportMutation((kind: "entries" | "unanswered") => supportApi.startAIJob(kind), t("aiJobStarted"));
+  const start = useSupportMutation((kind: "entries" | "unanswered" | "dedupe") => supportApi.startAIJob(kind), t("aiJobStarted"));
+  const jobLabel = (k: string) => t(k === "entries" ? "aiReviewKb" : k === "dedupe" ? "aiReviewDedupe" : "aiReviewUnanswered");
   const running = (jobs.data ?? []).find((j) => j.status === "queued" || j.status === "running");
 
   return (
@@ -35,17 +36,18 @@ export function AISuggestions({ t }: { t: ST }) {
           <div className="flex flex-wrap gap-2">
             <Button disabled={!!running || start.isPending} onClick={() => start.mutate("entries")}><Wand2 className="size-4" />{t("aiReviewKb")}</Button>
             <Button variant="outline" disabled={!!running || start.isPending} onClick={() => start.mutate("unanswered")}><ListPlus className="size-4" />{t("aiReviewUnanswered")}</Button>
+            <Button variant="outline" disabled={!!running || start.isPending} onClick={() => start.mutate("dedupe")}><Copy className="size-4" />{t("aiReviewDedupe")}</Button>
           </div>
         )}
         {running && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            {t(running.kind === "entries" ? "aiReviewKb" : "aiReviewUnanswered")} · {running.progress.done ?? 0}/{running.progress.total ?? "…"} · {t("aiFound", { n: running.progress.suggestions ?? 0 })}
+            {jobLabel(running.kind)} · {running.progress.done ?? 0}/{running.progress.total ?? "…"} · {t("aiFound", { n: running.progress.suggestions ?? 0 })}
           </div>
         )}
         {(jobs.data ?? []).filter((j) => j.status !== "queued" && j.status !== "running").slice(0, 3).map((j) => (
           <div key={j.id} className="text-xs text-muted-foreground">
-            {fmtDate(j.finished_at || j.created_at)} · {t(j.kind === "entries" ? "aiReviewKb" : "aiReviewUnanswered")} · {t("aiFound", { n: j.progress.suggestions ?? 0 })}
+            {fmtDate(j.finished_at || j.created_at)} · {jobLabel(j.kind)} · {t("aiFound", { n: j.progress.suggestions ?? 0 })}
             {j.error && <span className="text-destructive"> · {j.error}</span>}
           </div>
         ))}
@@ -59,13 +61,13 @@ export function AISuggestions({ t }: { t: ST }) {
   );
 }
 
-const KIND_ICON = { improve: Wand2, questions: ListPlus, merge: GitMerge, new: Sparkles, archive: X } as const;
+const KIND_ICON = { improve: Wand2, questions: ListPlus, merge: GitMerge, new: Sparkles, archive: X, dedupe: Copy } as const;
 
 function SuggestionCard({ s, t }: { s: AISuggestion; t: ST }) {
   const can = useCan();
   const [answer, setAnswer] = useState(s.payload.answer ?? "");
   const decide = useSupportMutation((action: "approve" | "reject") =>
-    supportApi.decideSuggestion(s.id, action, action === "approve" && (s.kind === "improve" || s.kind === "new") ? { answer } : undefined), t("saved"));
+    supportApi.decideSuggestion(s.id, action, action === "approve" && (s.kind === "improve" || s.kind === "new" || s.kind === "dedupe") ? { answer } : undefined), t("saved"));
   const Icon = KIND_ICON[s.kind];
 
   return (
@@ -91,6 +93,21 @@ function SuggestionCard({ s, t }: { s: AISuggestion; t: ST }) {
           </div>
         </div>
       )}
+      {s.kind === "dedupe" && (
+        <div className="grid gap-2">
+          <div className="text-xs text-muted-foreground">{t("dupWillArchive", { n: (s.group ?? []).length })}</div>
+          <ul className="grid gap-1.5">
+            {(s.group ?? []).map((g) => (
+              <li key={g.id} className="rounded-lg border border-dashed p-2 text-sm">
+                <div className="font-medium">{g.title}</div>
+                <p className="line-clamp-2 text-xs text-muted-foreground">{g.answer}</p>
+              </li>
+            ))}
+          </ul>
+          <div className="text-xs text-muted-foreground">{t("dupFinal")}</div>
+          <Textarea rows={5} value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={!can.edit} className="border-success/40" />
+        </div>
+      )}
       {s.kind === "new" && (s.payload.questions ?? []).length > 0 && (
         <p className="text-xs text-muted-foreground">{t("questions")}: {s.payload.questions!.join(" · ")}</p>
       )}
@@ -101,7 +118,7 @@ function SuggestionCard({ s, t }: { s: AISuggestion; t: ST }) {
 
       {can.edit && (
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" disabled={decide.isPending || ((s.kind === "new" || s.kind === "improve") && answer.trim().length < 2)}
+          <Button size="sm" disabled={decide.isPending || ((s.kind === "new" || s.kind === "improve" || s.kind === "dedupe") && answer.trim().length < 2)}
             onClick={() => decide.mutate("approve")}><Check className="size-4" />{t("approve")}</Button>
           <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate("reject")}><X className="size-4" />{t("reject")}</Button>
         </div>

@@ -124,10 +124,10 @@ def label(media_qs, entry, by="", auto=False):
     """Rasmlarni yozuvga o'rgatish. Avtomatik o'rgatish qo'lda qo'yilgan yorliqni almashtirmaydi."""
     n = 0
     for m in media_qs:
-        if auto and m.label_id and not m.label_auto:
-            continue
-        m.label, m.label_auto, m.label_by = entry, auto, by[:150]
-        m.save(update_fields=["label", "label_auto", "label_by"])
+        if auto and ((m.label_id and not m.label_auto) or m.ignored):
+            continue  # qo'lda qo'yilgan yorliq va rad etilgan rasm avtomatik o'zgarmaydi
+        m.label, m.label_auto, m.label_by, m.ignored = entry, auto, by[:150], False
+        m.save(update_fields=["label", "label_auto", "label_by", "ignored"])
         n += 1
     _CACHE["key"] = None
     return n

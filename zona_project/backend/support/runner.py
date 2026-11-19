@@ -547,7 +547,7 @@ class Handler:
 
     def _autolabel(self, media, d):
         """Ishonchli moslik (tasdiqlangan shablon/javob, ≥90%) — rasmni shu yozuvning namunasi qilib o'rganadi."""
-        if (media and media.kind == Media.PHOTO and not media.label_id and self.settings.image_autolabel and d.entry
+        if (media and media.kind == Media.PHOTO and not media.label_id and not media.ignored and self.settings.image_autolabel and d.entry
                 and d.entry.status == Entry.APPROVED and d.stage in ("template", "faq") and d.confidence >= 90):
             vision.label([media], d.entry, "bot", auto=True)
 

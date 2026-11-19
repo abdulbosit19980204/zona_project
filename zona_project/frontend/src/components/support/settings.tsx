@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -17,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type SupportSettings, type TgUserInfo } from "./api";
-import { fmtDate, ModeBadge, Segmented, useSupportMutation } from "./common";
+import { fmtDate, ModeBadge, SearchPicker, Segmented, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SettingRow, SupportShell } from "./shell";
 
@@ -132,10 +131,8 @@ function BotCard({ b, t }: { b: SupportBot; t: ST }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <FormRow label={t("botName")}><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></FormRow>
         <FormRow label={t("mode")} hint={`${t("modeHint2")} ${t("modeHint")}`}>
-          <Select value={f.mode} onValueChange={(v) => setF({ ...f, mode: v as Mode })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{MODES.map((m) => <SelectItem key={m} value={m}>{t(`mode_${m}`)}</SelectItem>)}</SelectContent>
-          </Select>
+          <Segmented size="sm" value={f.mode} onChange={(v) => setF({ ...f, mode: v as Mode })} className="w-full"
+            options={MODES.map((m) => ({ value: m, label: t(`mode_${m}`) }))} />
         </FormRow>
         <FormRow label={t("adminChat")} hint={t("adminChatHint")}>
           <Input value={f.admin_chat_id} onChange={(e) => setF({ ...f, admin_chat_id: e.target.value.replace(/[^\d-]/g, "") })} />
@@ -464,10 +461,9 @@ function HistorySection({ t }: { t: ST }) {
         {s.mtproto_connected && (
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr_auto_auto]">
             <FormRow label={t("histGroup")}>
-              <Select value={group} onValueChange={setGroup}>
-                <SelectTrigger><SelectValue placeholder={t("histGroup")} /></SelectTrigger>
-                <SelectContent>{(groups.data ?? []).map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.title || g.chat_id}</SelectItem>)}</SelectContent>
-              </Select>
+              <SearchPicker value={group} onChange={setGroup} className="w-full"
+                options={(groups.data ?? []).map((g) => ({ id: g.id, title: g.title || String(g.chat_id), sub: t("q7") + ": " + g.questions_7d }))}
+                placeholder={t("histGroup")} searchPlaceholder={t("search")} emptyText={t("pickNone")} />
             </FormRow>
             <FormRow label={t("histDays")}>
               <Input type="number" min={1} max={365} value={days ?? s.history_days} onChange={(e) => setDays(Number(e.target.value) || 1)} />

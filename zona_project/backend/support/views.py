@@ -339,6 +339,58 @@ class EntryViewSet(ZonaViewSet):
         e.save(update_fields=["status", "updated_at"])
         return Response(EntrySerializer(target).data)
 
+    # ---------------------------------------------------------------- takrorlar
+    @action(detail=False, methods=["get"])
+    def duplicates(self, request):
+        """O'xshash yozuvlar guruhlari, har birida eng yaxshi (qoldiriladigan) yozuv belgilangan."""
+        from .dedupe import find_groups
+        th = max(50, min(98, int(request.query_params.get("threshold") or 75)))
+        groups = find_groups(th)
+        return Response({"threshold": th, "groups": groups[:150], "total": len(groups),
+                         "entries": sum(len(g["entries"]) for g in groups)})
+
+    @action(detail=False, methods=["post"], url_path="dedupe-merge")
+    def dedupe_merge(self, request):
+        """Guruhni birlashtirish: keep qoladi (kerak bo'lsa yangi javob bilan), merge'dagilar arxivga tushadi."""
+        if (denied := self._editor_only()):
+            return denied
+        from .dedupe import merge_group
+        d = request.data
+        if not Entry.objects.filter(pk=d.get("keep")).exists():
+            return Response({"detail": "Qoldiriladigan yozuvni tanlang."}, status=400)
+        keep, n = merge_group(int(d["keep"]), [int(x) for x in d.get("merge") or []], _actor(request),
+                              answer=d.get("answer") or None, answer_ru=d.get("answer_ru") or None, title=d.get("title") or None)
+        return Response({"entry": EntrySerializer(keep).data, "merged": n})
+
+    @action(detail=False, methods=["post"], url_path="dedupe-auto")
+    def dedupe_auto(self, request):
+        """Deyarli bir xil takrorlarni avtomatik eng yaxshisiga birlashtirish (dry_run — faqat sanash)."""
+        if (denied := self._editor_only()):
+            return denied
+        from .dedupe import auto_clean
+        th = max(85, min(100, int(request.data.get("threshold") or 92)))
+        return Response(auto_clean(_actor(request), th, dry_run=bool(request.data.get("dry_run"))))
+
+    @action(detail=False, methods=["post"], url_path="dedupe-compose")
+    def dedupe_compose(self, request):
+        """AI: guruhdan eng yaxshi yozuvni tanlash va optimal javob yozish (hech narsa saqlanmaydi — faqat taklif)."""
+        from zona.ai import service as ai
+
+        from .ai_review import ai_merge_groups
+        ids = [int(x) for x in request.data.get("ids") or []][:8]
+        rows = list(Entry.objects.filter(pk__in=ids))
+        if len(rows) < 2:
+            return Response({"detail": "Kamida ikkita yozuv kerak."}, status=400)
+        if not ai.status().get("support"):
+            return Response({"detail": "AI sozlanmagan."}, status=400)
+        try:
+            res = ai_merge_groups([rows])
+        except Exception as e:  # noqa: BLE001
+            return Response({"detail": str(e)[:300]}, status=503)
+        if not res:
+            return Response({"detail": "AI javob bermadi, qayta urinib ko'ring."}, status=503)
+        return Response(res[0])
+
     @action(detail=False, methods=["post"])
     def bulk(self, request):
         if (denied := self._editor_only()):
@@ -790,14 +842,18 @@ def image_types(request):
         row["auto"] += int(m.label_auto)
         if len(row["samples"]) < 4:
             row["samples"].append(media_dict(m))
-    unl = Media.objects.filter(kind=Media.PHOTO, label__isnull=True).exclude(dhash="").exclude(path="").order_by("-created_at")[:600]
+    unl = (Media.objects.filter(kind=Media.PHOTO, label__isnull=True, ignored=False).exclude(dhash="").exclude(path="")
+           .order_by("-created_at")[:600])
+    ign = Media.objects.filter(kind=Media.PHOTO, ignored=True).exclude(path="").order_by("-created_at")[:300]
+    ignored = [{"count": len(g), "ids": [m.id for m in g], "samples": [media_dict(m) for m in g[:4]]}
+               for g in vision.clusters(list(ign), s.image_threshold)[:40]]
     groups = []
     for g in vision.clusters(list(unl), s.image_threshold)[:60]:
         guess, dist, _ = vision.match(g[0], s.image_threshold * 2, include_unapproved=True)
         groups.append({"count": len(g), "ids": [m.id for m in g], "samples": [media_dict(m) for m in g[:4]],
                        "ocr": next((m.ocr_text[:300] for m in g if m.ocr_text), ""),
                        "guess": guess.id if guess else None, "guess_title": guess.title if guess else ""})
-    return Response({"labeled": sorted(labeled.values(), key=lambda r: -r["count"]), "unlabeled": groups,
+    return Response({"labeled": sorted(labeled.values(), key=lambda r: -r["count"]), "unlabeled": groups, "ignored": ignored,
                      "threshold": s.image_threshold,
                      "total": Media.objects.filter(kind=Media.PHOTO).count()})
 
@@ -816,6 +872,18 @@ def image_label(request):
     if not e:
         return Response({"detail": "Yozuv topilmadi"}, status=400)
     return Response({"done": vision.label(qs, e, _actor(request))})
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def image_ignore(request):
+    """Noto'g'ri yuborilgan rasmlarni rad etish (ignored=true) yoki qaytarish (false). Rad etilgan rasm yorlig'idan ham ajraladi."""
+    from . import vision
+    ids = [int(x) for x in request.data.get("ids") or []][:1000]
+    flag = bool(request.data.get("ignored", True))
+    qs = Media.objects.filter(id__in=ids, kind=Media.PHOTO)
+    n = qs.update(ignored=True, label=None, label_auto=False, label_by=_actor(request)) if flag else qs.update(ignored=False)
+    vision._CACHE["key"] = None
+    return Response({"done": n})
 
 
 # ====================================================================== Telegram foydalanuvchilar <-> kontaktlar
@@ -874,7 +942,9 @@ def _sugg(x):
             "current": {"answer": e.answer, "answer_ru": e.answer_ru, "ask_first": e.ask_first,
                         "questions": e.questions} if e else None,
             "target": x.target_id, "target_title": x.target.title if x.target_id else "",
-            "question_ids": x.question_ids, "decided_by": x.decided_by, "created_at": x.created_at}
+            "question_ids": x.question_ids, "decided_by": x.decided_by, "created_at": x.created_at,
+            "group": [{"id": g.id, "title": g.title, "answer": g.answer[:600], "status": g.status}
+                      for g in Entry.objects.filter(pk__in=(x.payload or {}).get("merge") or [])] if x.kind == Suggestion.DEDUPE else []}
 
 
 @zona_api(["GET", "POST"], [ReadOrEdit])
@@ -884,12 +954,12 @@ def ai_jobs(request):
         if not ai.status().get("support"):
             return Response({"detail": "AI sozlanmagan: Sozlamalar → AI → «Support bot javoblari» uchun model tanlang."}, status=400)
         kind = request.data.get("kind")
-        if kind not in (AIJob.REVIEW_ENTRIES, AIJob.REVIEW_UNANSWERED):
+        if kind not in (AIJob.REVIEW_ENTRIES, AIJob.REVIEW_UNANSWERED, AIJob.DEDUPE):
             return Response({"detail": "Tahlil turini tanlang."}, status=400)
         if AIJob.objects.filter(status__in=[AIJob.QUEUED, AIJob.RUNNING]).exists():
             return Response({"detail": "AI tahlili allaqachon bajarilmoqda."}, status=400)
         AIJob.objects.create(kind=kind, created_by=_actor(request),
-                             params={k: request.data[k] for k in ("scope", "limit", "days") if k in request.data})
+                             params={k: request.data[k] for k in ("scope", "limit", "days", "threshold", "auto") if k in request.data})
     return Response([{"id": j.id, "kind": j.kind, "status": j.status, "progress": j.progress, "error": j.error,
                       "created_by": j.created_by, "created_at": j.created_at, "finished_at": j.finished_at}
                      for j in AIJob.objects.all()[:20]])

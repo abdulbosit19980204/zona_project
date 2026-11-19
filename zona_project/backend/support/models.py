@@ -316,6 +316,8 @@ class Media(models.Model):
     label = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="image_examples")
     label_auto = models.BooleanField(default=False)
     label_by = models.CharField(max_length=150, blank=True)
+    # noto'g'ri yuborilgan / keraksiz rasm: tanilmaganlar ro'yxatida ko'rinmaydi va avtomatik o'rgatilmaydi (qaytarsa bo'ladi)
+    ignored = models.BooleanField(default=False)
     tg_file_ids = models.JSONField(default=dict, blank=True)  # {bot_id: file_id} — qayta yuklamasdan yuborish
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -327,8 +329,9 @@ class Media(models.Model):
 class AIJob(models.Model):
     """Bot bo'yicha AI tahlili: bilim bazasini ko'rib chiqish yoki javobsiz savollardan yangi javob taklif qilish."""
 
-    REVIEW_ENTRIES, REVIEW_UNANSWERED = "entries", "unanswered"
-    KINDS = [(REVIEW_ENTRIES, "Bilim bazasini ko'rib chiqish"), (REVIEW_UNANSWERED, "Javobsiz savollar tahlili")]
+    REVIEW_ENTRIES, REVIEW_UNANSWERED, DEDUPE = "entries", "unanswered", "dedupe"
+    KINDS = [(REVIEW_ENTRIES, "Bilim bazasini ko'rib chiqish"), (REVIEW_UNANSWERED, "Javobsiz savollar tahlili"),
+             (DEDUPE, "Takror savol-javoblarni tozalash")]
     QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
     kind = models.CharField(max_length=12, choices=KINDS)
     params = models.JSONField(default=dict, blank=True)
@@ -346,9 +349,9 @@ class AIJob(models.Model):
 class Suggestion(models.Model):
     """AI taklifi. Xodim tasdiqlaguncha hech narsa o'zgarmaydi; tasdiqlansa — eski holat versiyaga yoziladi."""
 
-    IMPROVE, QUESTIONS, MERGE, NEW, ARCHIVE = "improve", "questions", "merge", "new", "archive"
+    IMPROVE, QUESTIONS, MERGE, NEW, ARCHIVE, DEDUPE = "improve", "questions", "merge", "new", "archive", "dedupe"
     KINDS = [(IMPROVE, "Javobni yaxshilash"), (QUESTIONS, "Savol ko'rinishlari qo'shish"), (MERGE, "Takrorni birlashtirish"),
-             (NEW, "Yangi yozuv"), (ARCHIVE, "Arxivlash")]
+             (NEW, "Yangi yozuv"), (ARCHIVE, "Arxivlash"), (DEDUPE, "Takrorlar guruhini birlashtirish")]
     PENDING, APPROVED, REJECTED = "pending", "approved", "rejected"
     job = models.ForeignKey(AIJob, null=True, blank=True, on_delete=models.SET_NULL, related_name="suggestions")
     kind = models.CharField(max_length=10, choices=KINDS)

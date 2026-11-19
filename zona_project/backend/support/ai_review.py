@@ -172,11 +172,91 @@ def review_unanswered(job):
     return created
 
 
+# ====================================================================== takrorlarni tozalash
+DEDUPE_SCHEMA = {
+    "type": "object",
+    "properties": {"groups": {"type": "array", "items": {
+        "type": "object",
+        "properties": {
+            "group": {"type": "integer"}, "same": {"type": "boolean"}, "keep_id": {"type": "integer"},
+            "merge_ids": {"type": "array", "items": {"type": "integer"}},
+            "title": {"type": "string"}, "answer": {"type": "string"}, "answer_ru": {"type": "string"}, "reason": {"type": "string"},
+        },
+        "required": ["group", "same", "keep_id", "merge_ids", "title", "answer", "answer_ru", "reason"],
+        "additionalProperties": False}}},
+    "required": ["groups"], "additionalProperties": False,
+}
+DEDUPE_TASK = """VAZIFA: har bir guruhda bir-biriga o'xshash bilim bazasi yozuvlari bor (bir savolga turli xodimlar turli javob yozgan).
+- same — guruhdagi yozuvlar HAQIQATAN bitta savolga javobmi? Faqat umumiy so'zlari bor, lekin boshqa-boshqa muammo bo'lsa — same=false.
+- keep_id — qoldiriladigan eng yaxshi yozuv (aniq, to'g'ri, ko'p ishlatilgan/yaxshi baholangan).
+- merge_ids — keep_id ga qo'shiladigan (arxivga tushadigan) takrorlar; boshqa mavzudagi yozuvni qo'shma.
+- answer — eng optimal javob: qisqa javob ham, batafsil javob ham bor bo'lsa, ulardagi FOYDALI ma'lumotlarni birlashtirib,
+  aniq va qisqa (2-8 qator, kerak bo'lsa raqamlangan qadamlar) yoz. Faqat berilgan javoblardagi ma'lumotdan foydalan.
+  answer_ru — rus tilida. title — qisqa aniq sarlavha. reason — nima uchun shunday qaror qilding (1-2 gap)."""
+
+
+def _group_text(n, rows):
+    return f"=== GURUH {n} ===\n" + "\n\n".join(_entry_text(e) for e in rows)
+
+
+def ai_merge_groups(groups):
+    """groups: [[Entry, ...], ...] -> AI qarorlari ro'yxati (guruh tartibida, same=false bo'lsa ham)."""
+    data = _run(f"Support: takrorlarni tozalash ({len(groups)} guruh)", RULES + "\n\n" + DEDUPE_TASK,
+                "\n\n".join(_group_text(i + 1, g) for i, g in enumerate(groups)), DEDUPE_SCHEMA)
+    out = []
+    for d in data.get("groups") or []:
+        i = (d.get("group") or 0) - 1
+        if not 0 <= i < len(groups):
+            continue
+        ids = {e.id for e in groups[i]}
+        keep = d.get("keep_id") if d.get("keep_id") in ids else None
+        merge = [x for x in d.get("merge_ids") or [] if x in ids and x != keep]
+        out.append({"index": i, "same": bool(d.get("same")) and bool(keep) and bool(merge), "keep": keep, "merge": merge,
+                    "title": (d.get("title") or "").strip(), "answer": (d.get("answer") or "").strip(),
+                    "answer_ru": (d.get("answer_ru") or "").strip(), "reason": (d.get("reason") or "").strip()})
+    return out
+
+
+def review_dedupe(job):
+    """Takrorlar guruhlarini AI bilan ko'rib chiqish. params.auto=true — qarorlar darhol qo'llanadi (arxivga, o'chirmasdan)."""
+    from .dedupe import find_groups
+    params = job.params or {}
+    threshold = int(params.get("threshold") or 75)
+    auto = bool(params.get("auto"))
+    busy = set(Suggestion.objects.filter(status=Suggestion.PENDING, kind=Suggestion.DEDUPE).values_list("entry_id", flat=True))
+    groups = [g for g in find_groups(threshold) if not any(r["id"] in busy for r in g["entries"])][: int(params.get("limit") or 40)]
+    by_id = {e.id: e for e in Entry.objects.filter(pk__in=[r["id"] for g in groups for r in g["entries"]])}
+    created = applied = 0
+    step = 4
+    for i in range(0, len(groups), step):
+        chunk = [[by_id[r["id"]] for r in g["entries"][:6] if r["id"] in by_id] for g in groups[i:i + step]]
+        try:
+            decisions = ai_merge_groups(chunk)
+        except Exception as e:  # noqa: BLE001
+            job.error = f"{type(e).__name__}: {e}"[:500]
+            continue
+        for d in decisions:
+            if not d["same"]:
+                continue
+            payload = {"keep": d["keep"], "merge": d["merge"], "title": d["title"], "answer": d["answer"], "answer_ru": d["answer_ru"]}
+            sg = Suggestion.objects.create(job=job, kind=Suggestion.DEDUPE, entry_id=d["keep"], payload=payload, reason=d["reason"][:2000])
+            created += 1
+            if auto:
+                try:
+                    apply(sg, f"AI avto-tozalash ({job.created_by})")
+                    applied += 1
+                except Exception as e:  # noqa: BLE001
+                    log.warning("dedupe auto-apply failed: %s", e)
+        job.progress = {"done": min(i + step, len(groups)), "total": len(groups), "suggestions": created, "applied": applied}
+        job.save(update_fields=["progress", "error"])
+    return created
+
+
 def run_job(job_id):
     job = AIJob.objects.get(pk=job_id)
     job.status, job.error = AIJob.RUNNING, ""
     job.save(update_fields=["status", "error"])
-    n = review_entries(job) if job.kind == AIJob.REVIEW_ENTRIES else review_unanswered(job)
+    n = {AIJob.REVIEW_ENTRIES: review_entries, AIJob.DEDUPE: review_dedupe}.get(job.kind, review_unanswered)(job)
     job.status = AIJob.FAILED if job.error and not n else AIJob.DONE
     job.progress = {**(job.progress or {}), "suggestions": n}
     job.finished_at = timezone.now()
@@ -207,6 +287,14 @@ def apply(s, by, edits=None):
         t.save(update_fields=["questions", "updated_at"])
         e.status = Entry.ARCHIVED
         e.save(update_fields=["status", "updated_at"])
+    elif s.kind == Suggestion.DEDUPE:
+        from .dedupe import merge_group
+        keep_id = payload.get("keep") or (e.id if e else None)
+        if not keep_id or not Entry.objects.filter(pk=keep_id).exists():
+            raise ValueError("Qoldiriladigan yozuv topilmadi.")
+        e, _n = merge_group(keep_id, payload.get("merge") or [], by, answer=payload.get("answer") or None,
+                            answer_ru=payload.get("answer_ru") or None, title=payload.get("title") or None,
+                            note="AI: takrorlar birlashtirildi")
     elif s.kind == Suggestion.ARCHIVE and e:
         e.status = Entry.ARCHIVED
         e.save(update_fields=["status", "updated_at"])

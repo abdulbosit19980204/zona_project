@@ -59,14 +59,23 @@ export interface SupportSettings {
   mention_asker: boolean; mention_supervisor: boolean; workers: number; contact_lookup: boolean;
   ai_primary: boolean; ai_primary_below: number; album_window: number;
 }
+export interface DupRow {
+  id: number; title: string; answer: string; status: EntryStatus; uses: number; likes: number; dislikes: number; author: string;
+  quality: number; question_sim: number; answer_sim: number; questions: number; reasons: string[]; best: boolean;
+}
+export interface DupGroup { keep: number; similarity: number; entries: DupRow[] }
+export interface Duplicates { threshold: number; groups: DupGroup[]; total: number; entries: number }
+export interface DedupeDecision { same: boolean; keep: number | null; merge: number[]; title: string; answer: string; answer_ru: string; reason: string }
 export interface AIJobInfo {
-  id: number; kind: "entries" | "unanswered"; status: "queued" | "running" | "done" | "failed";
-  progress: { done?: number; total?: number; suggestions?: number }; error: string; created_by: string; created_at: string;
+  id: number; kind: "entries" | "unanswered" | "dedupe"; status: "queued" | "running" | "done" | "failed";
+  progress: { done?: number; total?: number; suggestions?: number; applied?: number }; error: string; created_by: string; created_at: string;
   finished_at: string | null;
 }
 export interface AISuggestion {
-  id: number; kind: "improve" | "questions" | "merge" | "new" | "archive"; status: string; reason: string;
-  payload: { title?: string; answer?: string; answer_ru?: string; ask_first?: string; questions?: string[]; merge_into?: number };
+  id: number; kind: "improve" | "questions" | "merge" | "new" | "archive" | "dedupe"; status: string; reason: string;
+  payload: { title?: string; answer?: string; answer_ru?: string; ask_first?: string; questions?: string[]; merge_into?: number;
+    keep?: number; merge?: number[] };
+  group?: { id: number; title: string; answer: string; status: EntryStatus }[];
   entry: number | null; entry_title: string; current: { answer: string; answer_ru: string; ask_first: string; questions: string[] } | null;
   target: number | null; target_title: string; question_ids: number[]; decided_by: string; created_at: string;
 }
@@ -79,6 +88,7 @@ export interface StaffPersonHit { id: number; name: string; role: string; projec
 export interface ImageTypes {
   labeled: { entry: number; title: string; status: EntryStatus; count: number; auto: number; samples: MediaInfo[] }[];
   unlabeled: { count: number; ids: number[]; samples: MediaInfo[]; ocr: string; guess: number | null; guess_title: string }[];
+  ignored: { count: number; ids: number[]; samples: MediaInfo[] }[];
   threshold: number; total: number;
 }
 export interface HistoryJob {
@@ -168,11 +178,17 @@ export const supportApi = {
   mediaBlob: async (id: number) => (await api.get<Blob>(`${B}media/${id}/file/`, { responseType: "blob" })).data,
   images: () => get<ImageTypes>("images/"),
   label: (ids: number[], entry: number | null) => post<{ done: number }>("images/label/", { ids, entry }),
+  ignoreImages: (ids: number[], ignored = true) => post<{ done: number }>("images/ignore/", { ids, ignored }),
+  duplicates: (threshold: number) => get<Duplicates>("entries/duplicates/", { threshold }),
+  dedupeMerge: (body: { keep: number; merge: number[]; answer?: string; answer_ru?: string; title?: string }) =>
+    post<{ entry: Entry; merged: number }>("entries/dedupe-merge/", body),
+  dedupeAuto: (threshold: number, dryRun = false) => post<{ groups: number; merged: number }>("entries/dedupe-auto/", { threshold, dry_run: dryRun }),
+  dedupeCompose: (ids: number[]) => post<DedupeDecision>("entries/dedupe-compose/", { ids }),
   tgUsers: (unlinked = false) => get<TgUserInfo[]>("tg-users/", unlinked ? { unlinked: 1 } : {}),
   linkTgUser: (id: number, staffPerson: number | null) => post<TgUserInfo>(`tg-users/${id}/link/`, { staff_person: staffPerson }),
   staffPeople: (q: string) => get<StaffPersonHit[]>("staff-people/", { q }),
   aiJobs: () => get<AIJobInfo[]>("ai/jobs/"),
-  startAIJob: (kind: "entries" | "unanswered") => post<AIJobInfo[]>("ai/jobs/", { kind }),
+  startAIJob: (kind: "entries" | "unanswered" | "dedupe", params: Record<string, unknown> = {}) => post<AIJobInfo[]>("ai/jobs/", { kind, ...params }),
   aiSuggestions: (status = "pending") => get<AISuggestion[]>("ai/suggestions/", { status }),
   decideSuggestion: (id: number, action: "approve" | "reject", payload?: Record<string, unknown>) =>
     post<AISuggestion>(`ai/suggestions/${id}/${action}/`, payload ? { payload } : {}),

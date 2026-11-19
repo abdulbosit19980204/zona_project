@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, type LucideIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 import type { EntryStatus, Mode, MsgStatus } from "./api";
+import { smartFilter } from "./smart-search";
 import type { SKey, ST } from "./i18n";
 
 export { fmtDate } from "@/components/qrdrive/common";
@@ -164,35 +165,43 @@ export function Initials({ name, className }: { name: string; className?: string
 }
 
 /**
- * Javob tanlagich: qidiruvli ochiladigan ro'yxat. Uzun nomlar qatorga sig'adi (kesiladi, to'liq nomi — maslahatda),
- * yuzlab javob orasidan bir necha harf bilan topiladi.
+ * Smart qidiruvli tanlagich (barcha katta ro'yxatlar uchun): kirill/lotin, apostrof va imlo xatosiga chidamli,
+ * eng mos variant birinchi. Uzun nomlar kesiladi (to'liq nomi — maslahatda).
  */
-export function EntryPicker({ value, onChange, options, placeholder, searchPlaceholder, emptyText, hintId, hintLabel, className }: {
-  value: string; onChange: (v: string) => void; options: { id: number; title: string }[];
-  placeholder: string; searchPlaceholder: string; emptyText: string; hintId?: number | null; hintLabel?: string; className?: string;
+export function SearchPicker({ value, onChange, options, placeholder, searchPlaceholder, emptyText, hintId, hintLabel, className, disabled }: {
+  value: string; onChange: (v: string) => void; options: { id: number | string; title: string; sub?: string }[];
+  placeholder: string; searchPlaceholder: string; emptyText: string; hintId?: number | string | null; hintLabel?: string;
+  className?: string; disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
   const current = options.find((o) => String(o.id) === value);
+  const shown = useMemo(() => smartFilter(options, q, (o) => `${o.title} ${o.sub ?? ""}`).slice(0, 200), [options, q]);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setQ(""); }}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" role="combobox" aria-expanded={open} title={current?.title}
+        <Button type="button" variant="outline" role="combobox" aria-expanded={open} title={current?.title} disabled={disabled}
           className={cn("h-9 min-w-0 justify-between gap-2 font-normal", !current && "text-muted-foreground", className)}>
           <span className="truncate">{current?.title ?? placeholder}</span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[min(30rem,calc(100vw-2rem))] p-0">
-        <Command filter={(v, q) => (v.toLowerCase().includes(q.toLowerCase()) ? 1 : 0)}>
-          <CommandInput placeholder={searchPlaceholder} />
-          <CommandList className="max-h-72">
+      <PopoverContent align="start" className="w-[min(32rem,calc(100vw-2rem))] p-0">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder={searchPlaceholder} value={q} onValueChange={setQ} />
+          <CommandList className="max-h-80">
             <CommandEmpty>{emptyText}</CommandEmpty>
-            {options.map((o) => (
-              <CommandItem key={o.id} value={`${o.title} #${o.id}`} onSelect={() => { onChange(String(o.id)); setOpen(false); }}
+            {shown.map((o) => (
+              <CommandItem key={o.id} value={String(o.id)} onSelect={() => { onChange(String(o.id)); setOpen(false); setQ(""); }}
                 className="items-start gap-2">
                 <Check className={cn("mt-0.5 size-4 shrink-0", String(o.id) === value ? "opacity-100" : "opacity-0")} />
-                <span className="flex-1 leading-snug">{o.title}</span>
-                {hintId === o.id && hintLabel && <Badge variant="outline" className="shrink-0 border-primary/40 font-normal text-primary">{hintLabel}</Badge>}
+                <span className="min-w-0 flex-1">
+                  <span className="block leading-snug">{o.title}</span>
+                  {o.sub && <span className="block truncate text-xs text-muted-foreground">{o.sub}</span>}
+                </span>
+                {hintId != null && String(hintId) === String(o.id) && hintLabel && (
+                  <Badge variant="outline" className="shrink-0 border-primary/40 font-normal text-primary">{hintLabel}</Badge>
+                )}
               </CommandItem>
             ))}
           </CommandList>
@@ -201,3 +210,6 @@ export function EntryPicker({ value, onChange, options, placeholder, searchPlace
     </Popover>
   );
 }
+
+/** Bilim bazasidagi javobni tanlash (SearchPicker). */
+export const EntryPicker = SearchPicker;

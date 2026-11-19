@@ -1,24 +1,25 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, ExternalLink, Gauge, Images, ScanSearch, Sparkles, Wand2 } from "lucide-react";
+import { Ban, Check, ChevronDown, ExternalLink, Gauge, Images, RotateCcw, ScanSearch, Sparkles, Wand2, X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/common/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCan } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
 
 import { supportApi, type ImageTypes, type MediaInfo } from "./api";
 import { EntryBadge, EntryPicker, Metric, Segmented, useSupportMutation } from "./common";
-import { useSt, type ST } from "./i18n";
+import { useSt, type SKey, type ST } from "./i18n";
 import { MediaThumb } from "./media";
 import { SupportShell } from "./shell";
 
-type View = "new" | "known";
+type View = "new" | "known" | "ignored";
 
 /** Rasm turlari: bot qaysi ekranlarni taniydi (o'rgatilgan namunalar) va hali tanimaydigan rasmlar guruhlari. */
 export function SupportImages() {
@@ -27,7 +28,18 @@ export function SupportImages() {
   const q = useQuery({ queryKey: ["support", "images"], queryFn: supportApi.images });
   const entries = useQuery({ queryKey: ["support", "entries", "for-label"], queryFn: () => supportApi.entries({ status: "approved,review,new" }) });
   const d = q.data;
-  const options = (entries.data ?? []).map((e) => ({ id: e.id, title: e.title }));
+  const can = useCan();
+  const [removing, setRemoving] = useState<MediaInfo | null>(null);
+  const unlabel = useSupportMutation((ids: number[]) => supportApi.label(ids, null), t("imgUnlabeled1"));
+  const ignore = useSupportMutation((ids: number[]) => supportApi.ignoreImages(ids, true), t("imgIgnoredDone"));
+  const options = useMemo(() => {
+    const list = (entries.data ?? []).map((e) => ({ id: e.id, title: e.title, sub: t(`e_${e.status}` as SKey) }));
+    // taxmin qilingan javob ro'yxatda bo'lmasa ham (masalan, arxivda) tanlangan holda ko'rinsin
+    for (const g of q.data?.unlabeled ?? []) {
+      if (g.guess && !list.some((o) => o.id === g.guess)) list.push({ id: g.guess, title: g.guess_title, sub: "" });
+    }
+    return list;
+  }, [entries.data, q.data, t]);
 
   return (
     <SupportShell title={t("imgTitle")} description={t("imgDesc")}>
@@ -45,8 +57,11 @@ export function SupportImages() {
             <Segmented value={view} onChange={setView} options={[
               { value: "new", label: t("imgTabNew"), count: d.unlabeled.length, icon: Sparkles },
               { value: "known", label: t("imgTabKnown"), count: d.labeled.length, icon: Images },
+              { value: "ignored", label: t("imgTabIgnored"), count: (d.ignored ?? []).reduce((n, g) => n + g.count, 0), icon: Ban },
             ]} />
-            <p className="min-w-0 flex-1 text-xs text-muted-foreground">{view === "new" ? t("imgUnlabeledHint") : t("imgKnownHint")}</p>
+            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+              {view === "new" ? t("imgUnlabeledHint") : view === "known" ? t("imgKnownHint") : t("imgIgnoredHint")}
+            </p>
           </div>
 
           {view === "new" && (
@@ -59,6 +74,16 @@ export function SupportImages() {
               )
           )}
 
+          {view === "ignored" && (
+            (d.ignored ?? []).length === 0
+              ? <EmptyState icon={Ban} title={t("empty")} />
+              : (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {d.ignored.map((g) => <IgnoredCard key={g.ids[0]} g={g} t={t} />)}
+                </div>
+              )
+          )}
+
           {view === "known" && (
             d.labeled.length === 0
               ? <EmptyState icon={Images} title={t("empty")} />
@@ -66,7 +91,7 @@ export function SupportImages() {
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {d.labeled.map((r) => (
                     <div key={r.entry} className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs">
-                      <Shots items={r.samples} total={r.count} max={3} />
+                      <Shots items={r.samples} total={r.count} max={3} onRemove={can.edit ? (m) => setRemoving(m) : undefined} t={t} />
                       <div className="grid gap-2 p-3">
                         <div className="line-clamp-2 text-sm font-medium leading-snug" title={r.title}>{r.title}</div>
                         <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -86,12 +111,46 @@ export function SupportImages() {
           )}
         </div>
       )}
+      <Dialog open={!!removing} onOpenChange={(v) => !v && setRemoving(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t("imgWrongTitle")}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("imgWrongHint")}</p>
+          <div className="grid gap-2">
+            <Button variant="outline" disabled={unlabel.isPending} onClick={() => removing && unlabel.mutate([removing.id], { onSuccess: () => setRemoving(null) })}>
+              <RotateCcw className="size-4" />{t("imgUnlabelBtn")}
+            </Button>
+            <Button variant="destructive" disabled={ignore.isPending} onClick={() => removing && ignore.mutate([removing.id], { onSuccess: () => setRemoving(null) })}>
+              <Ban className="size-4" />{t("imgIgnoreBtn")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </SupportShell>
   );
 }
 
+function IgnoredCard({ g, t }: { g: ImageTypes["ignored"][number]; t: ST }) {
+  const can = useCan();
+  const restore = useSupportMutation(() => supportApi.ignoreImages(g.ids, false), t("imgRestored"));
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl border bg-card opacity-90 shadow-xs">
+      <Shots items={g.samples} total={g.count} max={3} />
+      <div className="flex items-center gap-2 p-3">
+        <span className="text-xs text-muted-foreground">{t("imgPhotos", { n: g.count })}</span>
+        {can.edit && (
+          <Button size="sm" variant="outline" className="ml-auto" disabled={restore.isPending} onClick={() => restore.mutate(undefined)}>
+            <RotateCcw className="size-4" />{t("imgRestore")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Telefon ekrani nisbatidagi namunalar qatori; ko'rsatilmaganlar soni oxirgi rasm ustida. */
-function Shots({ items, total, max = 4 }: { items: MediaInfo[]; total: number; max?: number }) {
+function Shots({ items, total, max = 4, onRemove, t }: {
+  items: MediaInfo[]; total: number; max?: number; onRemove?: (m: MediaInfo) => void; t?: ST;
+}) {
   const shown = items.slice(0, max);
   const rest = total - shown.length;
   return (
@@ -101,6 +160,12 @@ function Shots({ items, total, max = 4 }: { items: MediaInfo[]; total: number; m
           <MediaThumb m={m} className="aspect-[9/16] size-auto w-full rounded-md bg-background" />
           {i === shown.length - 1 && rest > 0 && (
             <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-md bg-black/55 text-sm font-semibold text-white">+{rest}</span>
+          )}
+          {onRemove && (
+            <button type="button" onClick={() => onRemove(m)} title={t?.("imgWrongTitle")} aria-label={t?.("imgWrongTitle")}
+              className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-black/60 text-white opacity-80 transition-opacity hover:bg-destructive hover:opacity-100">
+              <X className="size-3.5" />
+            </button>
           )}
         </div>
       ))}
@@ -114,6 +179,7 @@ function Cluster({ g, t, options }: { g: ImageTypes["unlabeled"][number]; t: ST;
   const [entry, setEntry] = useState(g.guess ? String(g.guess) : "");
   const [ocr, setOcr] = useState(false);
   const label = useSupportMutation(() => supportApi.label(g.ids, Number(entry)), (r) => t("imgTaught", { n: r.done }));
+  const ignore = useSupportMutation(() => supportApi.ignoreImages(g.ids, true), t("imgIgnoredDone"));
   const isGuess = !!g.guess && entry === String(g.guess);
 
   return (
@@ -145,9 +211,15 @@ function Cluster({ g, t, options }: { g: ImageTypes["unlabeled"][number]; t: ST;
             <EntryPicker value={entry} onChange={setEntry} options={options} className="w-full"
               placeholder={t("imgChoose")} searchPlaceholder={t("pickSearch")} emptyText={t("pickNone")}
               hintId={g.guess} hintLabel={t("imgGuess")} />
-            <Button className="w-full" disabled={!entry || label.isPending} onClick={() => label.mutate(undefined)}>
-              <Check className="size-4" />{isGuess ? t("imgTeachGuess") : t("imgTeach")}
-            </Button>
+            <div className="flex gap-2">
+              <Button className="flex-1" disabled={!entry || label.isPending} onClick={() => label.mutate(undefined)}>
+                <Check className="size-4" />{isGuess ? t("imgTeachGuess") : t("imgTeach")}
+              </Button>
+              <Button variant="outline" className="text-destructive hover:text-destructive" disabled={ignore.isPending}
+                title={t("imgIgnoreHint")} onClick={() => ignore.mutate(undefined)}>
+                <Ban className="size-4" />{t("imgIgnore")}
+              </Button>
+            </div>
           </div>
         )}
       </div>

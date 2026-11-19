@@ -19,6 +19,7 @@ import { fmtDate, Initials, Metric, MsgBadge, Segmented, stageLabel, useSupportM
 import { useSt, type SKey, type ST } from "./i18n";
 import { MediaRow } from "./media";
 import { SupportShell } from "./shell";
+import { smartFilter } from "./smart-search";
 
 type Filter = "open" | MsgStatus | "all";
 const STATUS_DOT: Record<MsgStatus, string> = {
@@ -35,14 +36,16 @@ export function SupportInbox() {
   const status = filter === "open" ? "escalated,drafted,new" : filter;
   const stats = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7), refetchInterval: 30_000 });
   const list = useQuery({
-    queryKey: ["support", "messages", status, q],
-    queryFn: () => supportApi.messages({ status, ...(q ? { q } : {}), limit: 200 }),
+    queryKey: ["support", "messages", status],
+    queryFn: () => supportApi.messages({ status, limit: 300 }),
     refetchInterval: 15_000,
   });
+  const shown = useMemo(() => (list.data ? smartFilter(list.data, q,
+    (m) => `${m.user_name} ${m.user_username} ${m.group_title} ${m.text} ${m.ocr_text} ${m.entry_title}`) : undefined), [list.data, q]);
   const s = stats.data;
   const bs = s?.by_status ?? {};
   const botClosed = ["template", "faq", "rule", "ai", "image"].reduce((n, k) => n + (s?.by_stage[k] ?? 0), 0);
-  const current = useMemo(() => list.data?.find((m) => m.id === selected) ?? null, [list.data, selected]);
+  const current = useMemo(() => shown?.find((m) => m.id === selected) ?? null, [shown, selected]);
   const queue = (s?.entries.new ?? 0) + (s?.entries.review ?? 0) + (s?.pending_edits ?? 0);
 
   return (
@@ -75,8 +78,8 @@ export function SupportInbox() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {list.isLoading && <div className="grid gap-2 p-3">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16" />)}</div>}
-            {list.data?.length === 0 && <div className="p-6"><EmptyState icon={Inbox} title={t("inboxEmpty")} hint={t("inboxEmptyHint")} /></div>}
-            {list.data?.map((m) => (
+            {shown?.length === 0 && <div className="p-6"><EmptyState icon={Inbox} title={t("inboxEmpty")} hint={t("inboxEmptyHint")} /></div>}
+            {shown?.map((m) => (
               <button key={m.id} type="button" onClick={() => setSelected(m.id)}
                 className={cn("relative flex w-full gap-3 border-b px-3 py-3 text-left transition-colors hover:bg-muted/50",
                   selected === m.id && "bg-primary/[0.06] before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary")}>

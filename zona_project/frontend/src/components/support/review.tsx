@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, GitMerge, Layers, ListChecks, Pencil, Sparkles, SquareStack, Star, X } from "lucide-react";
+import { Check, ChevronRight, Copy, GitMerge, Layers, ListChecks, Pencil, Sparkles, SquareStack, Star, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -10,19 +10,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
 
 import { supportApi, type Entry } from "./api";
-import { EntryBadge, fmtDate, Segmented, useSupportMutation } from "./common";
+import { EntryBadge, EntryPicker, fmtDate, Segmented, useSupportMutation } from "./common";
 import { AISuggestions } from "./ai-suggestions";
+import { Duplicates } from "./duplicates";
 import { EntryEditor } from "./entry-editor";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 
-type View = "queue" | "cards" | "clusters" | "ai";
+type View = "queue" | "cards" | "clusters" | "dups" | "ai";
 
 export function SupportReview() {
   return <Suspense><ReviewInner /></Suspense>;
@@ -48,13 +48,15 @@ function ReviewInner() {
           { value: "queue", label: t("viewQueue"), count: items.length, icon: ListChecks },
           { value: "cards", label: t("viewCards"), icon: SquareStack },
           { value: "clusters", label: t("viewClusters"), icon: Layers },
+          { value: "dups", label: t("viewDups"), icon: Copy },
           { value: "ai", label: t("viewAI"), icon: Sparkles },
         ]} />
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t(`viewHint_${view}` as SKey)}</p>
       </div>
       {view === "ai" && <AISuggestions t={t} />}
-      {view !== "ai" && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
-      {view !== "ai" && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
+      {view === "dups" && <Duplicates t={t} />}
+      {view !== "ai" && view !== "dups" && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
+      {view !== "ai" && view !== "dups" && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
       {items.length > 0 && view === "queue" && <QueueView items={items} t={t} onEdit={edit} />}
       {items.length > 0 && view === "cards" && <CardsView items={items} t={t} />}
       {items.length > 0 && view === "clusters" && <ClustersView items={items.filter((e) => !e.pending)} t={t} onEdit={edit} />}
@@ -180,12 +182,9 @@ function OneCard({ e, t, pos, total, next }: { e: Entry; t: ST; pos: number; tot
           <div className="flex items-center gap-1.5 text-sm font-medium"><GitMerge className="size-4" />{t("mergeInto")}</div>
           <p className="text-xs text-muted-foreground">{t("mergeHint")}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Select value={target} onValueChange={setTarget}>
-              <SelectTrigger className="flex-1"><SelectValue placeholder={t("chooseTarget")} /></SelectTrigger>
-              <SelectContent>
-                {(approved.data ?? []).filter((x) => x.id !== e.id).map((x) => <SelectItem key={x.id} value={String(x.id)}>{x.title}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <EntryPicker value={target} onChange={setTarget} className="flex-1"
+              options={(approved.data ?? []).filter((x) => x.id !== e.id).map((x) => ({ id: x.id, title: x.title }))}
+              placeholder={t("chooseTarget")} searchPlaceholder={t("pickSearch")} emptyText={t("pickNone")} />
             <Button variant="outline" disabled={!target || act.isPending} onClick={() => act.mutate(() => supportApi.merge(e.id, Number(target)))}>
               <GitMerge className="size-4" />{t("mergeInto")}
             </Button>

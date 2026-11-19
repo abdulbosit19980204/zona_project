@@ -21,6 +21,7 @@ urlpatterns = [
     path("media/<int:pk>/file/", views.media_file, name="media-file"),
     path("images/", views.image_types, name="images"),
     path("images/label/", views.image_label, name="images-label"),
+    path("images/ignore/", views.image_ignore, name="images-ignore"),
     path("tg-users/", views.tg_users, name="tg-users"),
     path("tg-users/<int:pk>/link/", views.tg_user_link, name="tg-user-link"),
     path("staff-people/", views.staff_people_search, name="staff-people"),

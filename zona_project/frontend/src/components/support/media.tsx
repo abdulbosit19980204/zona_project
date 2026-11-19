@@ -23,7 +23,7 @@ export function MediaThumb({ m, className }: { m: MediaInfo; className?: string 
       <>
         <button type="button" className={box} onClick={() => setOpen(true)} title={m.label_title || m.name}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {url && <img src={url} alt={m.name || "rasm"} className="size-full object-cover object-top" />}
+          {url && <img src={url} alt={m.name || "rasm"} className={cn("size-full", m.width > m.height * 1.1 ? "object-contain" : "object-cover object-top")} />}
           {m.label && <span className="absolute bottom-0 left-0 right-0 truncate bg-black/60 px-1 text-[9px] text-white">{m.label_title}</span>}
         </button>
         <Dialog open={open} onOpenChange={setOpen}>

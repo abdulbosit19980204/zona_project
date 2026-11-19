@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { BotMessageSquare, FlaskConical, Images, ListChecks, Paperclip, Plus, Search, Star, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/common/page";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supportApi, type EntryStatus, type TestResult } from "./api";
 import { EntryBadge, fmtDate, Segmented, stageLabel, useSupportMutation } from "./common";
 import { EntryEditor } from "./entry-editor";
+import { smartFilter } from "./smart-search";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 
@@ -41,9 +42,12 @@ function KnowledgeInner() {
   const stats = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7) });
   const counts = stats.data?.entries ?? {};
   const list = useQuery({
-    queryKey: ["support", "entries", status, kind, q],
-    queryFn: () => supportApi.entries({ status, ...(kind !== "any" ? { kind } : {}), ...(q ? { q } : {}) }),
+    queryKey: ["support", "entries", status, kind],
+    queryFn: () => supportApi.entries({ status, ...(kind !== "any" ? { kind } : {}) }),
   });
+  // smart qidiruv: kirill/lotin, apostrof va imlo xatosiga chidamli; eng mos yozuv birinchi
+  const shown = useMemo(() => (list.data ? smartFilter(list.data, q, (e) => `${e.title} ${(e.questions ?? []).join(" ")} ${e.answer}`) : undefined),
+    [list.data, q]);
   const edit = (id: number | null) => { setEditing(id); setOpen(true); };
 
   return (
@@ -67,14 +71,14 @@ function KnowledgeInner() {
       </div>
 
       {list.isLoading && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-40" />)}</div>}
-      {list.data && list.data.length === 0 && (
+      {shown && shown.length === 0 && (
         <EmptyState icon={BotMessageSquare} title={t("empty")} action={<Button onClick={() => edit(null)}><Plus className="size-4" />{t("newEntry")}</Button>} />
       )}
-      {list.data && list.data.length > 0 && (
+      {shown && shown.length > 0 && (
         <>
-          <p className="mb-2 text-xs text-muted-foreground">{t("kbCount", { n: list.data.length })}</p>
+          <p className="mb-2 text-xs text-muted-foreground">{t("kbCount", { n: shown.length })}</p>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {list.data.map((e) => (
+            {shown.map((e) => (
               <button key={e.id} type="button" onClick={() => edit(e.id)}
                 className="group flex flex-col rounded-xl border bg-card text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
                 <div className="flex flex-1 flex-col gap-2 p-4">
