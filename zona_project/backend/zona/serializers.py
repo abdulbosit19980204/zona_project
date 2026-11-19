@@ -496,8 +496,23 @@ class AITaskConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = AITaskConfig
         fields = ["task", "label", "enabled", "provider", "model", "effort", "temperature", "max_tokens",
-                  "fallback_provider", "fallback_model", "instructions", "updated_at"]
+                  "fallback_provider", "fallback_model", "extra_fallbacks", "instructions", "updated_at"]
         read_only_fields = ["task", "updated_at"]
+
+    def validate_extra_fallbacks(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Ro'yxat bo'lishi kerak.")
+        ids = set(AIProvider.objects.values_list("id", flat=True))
+        out = []
+        for row in value[:8]:
+            try:
+                pid, model = int(row.get("provider")), str(row.get("model") or "").strip()
+            except (TypeError, ValueError, AttributeError):
+                raise serializers.ValidationError("Har bir qatorda provider va model bo'lsin.") from None
+            if pid not in ids or not model:
+                raise serializers.ValidationError("Provayder yoki model noto'g'ri.")
+            out.append({"provider": pid, "model": model[:120]})
+        return out
 
     def validate_max_tokens(self, value):
         if not 256 <= value <= 128000:

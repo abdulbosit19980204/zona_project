@@ -275,7 +275,7 @@ def call(provider, model, system, user, schema=None, max_tokens=4000, effort="",
         system += "\n\nJavobni FAQAT shu JSON sxemaga mos yagona JSON obyekt sifatida qaytar:\n" + json.dumps(schema, ensure_ascii=False)
     fn = {"anthropic": _call_anthropic, "gemini": _call_gemini}.get(provider.kind, _call_openai)
     # vaqtinchalik xatolar (limit, server band) — qisqa kutib qayta urinish; bepul tariflarda tez-tez uchraydi
-    for attempt, wait in enumerate((2, 6, None)):
+    for attempt, wait in enumerate((1.5, None)):  # bir marta qisqa kutish; keyin zanjirdagi boshqa model
         try:
             return fn(provider, model, system, user, schema, max_tokens, effort or None, temperature)
         except HTTPFail as e:

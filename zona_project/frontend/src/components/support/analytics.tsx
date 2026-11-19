@@ -139,24 +139,34 @@ export function SupportAnalytics() {
                   <TableRow>
                     <TableHead>{t("staff")}</TableHead>
                     <TableHead className="text-right">{t("anAnswers")}</TableHead>
+                    <TableHead className="text-right">{t("anShare")}</TableHead>
                     <TableHead className="text-right">{t("anClar")}</TableHead>
                     <TableHead className="text-right">{t("anSpeed")}</TableHead>
-                    <TableHead className="text-right">{t("anCand")}</TableHead>
+                    <TableHead className="text-right">{t("anPerDay")}</TableHead>
+                    <TableHead className="text-right">{t("anMessages")}</TableHead>
                     <TableHead className="text-right">{t("anApproved")}</TableHead>
-                    <TableHead>{t("groups")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {a.staff.length === 0 && <TableRow><TableCell colSpan={7} className="text-muted-foreground">{t("empty")}</TableCell></TableRow>}
+                  {a.staff.length === 0 && <TableRow><TableCell colSpan={8} className="text-muted-foreground">{t("empty")}</TableCell></TableRow>}
                   {a.staff.map((s) => (
                     <TableRow key={s.name}>
-                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">{s.name}</div>
+                        {s.topics.length > 0 && <div className="max-w-64 truncate text-xs text-muted-foreground">{s.topics.map((x) => `${x.title} (${x.n})`).join(" · ")}</div>}
+                        <div className="text-[11px] text-muted-foreground">{s.groups.join(", ")}</div>
+                      </TableCell>
                       <TableCell className="text-right font-mono">{s.answers}{s.panel > 0 && <span className="text-xs text-muted-foreground"> ({s.panel} panel)</span>}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="font-mono text-xs">{s.share}%</div>
+                        <div className="ml-auto mt-1 h-1 w-16 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary" style={{ width: `${s.share}%` }} /></div>
+                      </TableCell>
                       <TableCell className="text-right font-mono">{s.clarifications}</TableCell>
-                      <TableCell className="text-right font-mono">{s.median_minutes == null ? "—" : t("anMin", { n: s.median_minutes })}</TableCell>
-                      <TableCell className="text-right font-mono">{s.candidates}</TableCell>
-                      <TableCell className="text-right font-mono">{s.approved}</TableCell>
-                      <TableCell className="max-w-56 truncate text-xs text-muted-foreground">{s.groups.join(", ")}</TableCell>
+                      <TableCell className="text-right font-mono text-xs">{s.median_minutes == null ? "—" : t("anMin", { n: s.median_minutes })}
+                        {s.avg_minutes != null && <div className="text-muted-foreground">⌀ {t("anMin", { n: s.avg_minutes })}</div>}</TableCell>
+                      <TableCell className="text-right font-mono">{s.per_day}<div className="text-[11px] text-muted-foreground">{t("anDays", { n: s.active_days })}</div></TableCell>
+                      <TableCell className="text-right font-mono">{s.messages}</TableCell>
+                      <TableCell className="text-right font-mono">{s.approved}/{s.candidates}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

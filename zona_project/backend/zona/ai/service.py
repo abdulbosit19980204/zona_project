@@ -83,13 +83,40 @@ def status():
     return out
 
 
+# Asosiy/zaxira band bo'lsa avtomatik sinab ko'riladigan modellar (provayder turi bo'yicha, tejamkoridan)
+AUTO_BACKUP = {
+    "gemini": ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    "anthropic": ["claude-haiku-5-5", "claude-sonnet-5-5"],
+    "openai": ["gpt-5-mini"], "groq": ["llama-3.3-70b-versatile"], "deepseek": ["deepseek-chat"],
+    "mistral": ["mistral-small-latest"], "openrouter": ["openrouter/auto"],
+}
+COOLDOWN = 120  # "band" degan model shuncha soniya zanjir oxiriga suriladi
+_cool = {}
+
+
 def _chain(cfg):
-    chain = []
-    if cfg.model and _ready(cfg.provider):
-        chain.append((cfg.provider, cfg.model))
-    if _ready(cfg.fallback_provider) and (cfg.fallback_model or cfg.model):
-        chain.append((cfg.fallback_provider, cfg.fallback_model or cfg.model))
-    return chain
+    """Asosiy -> zaxira -> admin qo'shgan zaxiralar -> o'sha va boshqa faol provayderlarning tejamkor modellari.
+    Yaqinda band bo'lgan modellar oxiriga suriladi (lekin hammasi band bo'lsa ular ham sinab ko'riladi)."""
+    from ..models import AIProvider
+    chain, seen = [], set()
+
+    def add(provider, model):
+        if provider is not None and model and _ready(provider) and (provider.id, model) not in seen:
+            seen.add((provider.id, model))
+            chain.append((provider, model))
+
+    add(cfg.provider, cfg.model)
+    add(cfg.fallback_provider, cfg.fallback_model or cfg.model)
+    providers_by_id = {p.id: p for p in AIProvider.objects.filter(is_active=True)}
+    for row in cfg.extra_fallbacks or []:
+        add(providers_by_id.get(row.get("provider")), row.get("model"))
+    ordered = [p for p in (cfg.provider, cfg.fallback_provider) if p] + [p for p in providers_by_id.values()
+                                                                        if p not in (cfg.provider, cfg.fallback_provider)]
+    for p in ordered:
+        for model in AUTO_BACKUP.get(p.kind, []):
+            add(p, model)
+    now = time.monotonic()
+    return [x for x in chain if _cool.get((x[0].id, x[1]), 0) <= now] + [x for x in chain if _cool.get((x[0].id, x[1]), 0) > now]
 
 
 def run(task, user, label, system, message, schema):
@@ -105,7 +132,7 @@ def run(task, user, label, system, message, schema):
         raise AIUnavailable("AI vazifasi uchun provayder va model tanlanmagan.")
     if cfg.instructions:
         system += "\n\nQO'SHIMCHA KO'RSATMA (administrator):\n" + cfg.instructions
-    last = None
+    last, tried = None, []
     for provider, model in chain:
         t0 = time.monotonic()
         try:
@@ -115,6 +142,9 @@ def run(task, user, label, system, message, schema):
             data = providers.parse_json(res.text) if schema else {"text": res.text}
         except AIError as e:
             last = e
+            tried.append(f"{provider.name}/{model}")
+            if getattr(e, "status", None) in providers.RETRY_STATUS or "vaqt tugadi" in str(e) or "ulanib" in str(e):
+                _cool[(provider.id, model)] = time.monotonic() + COOLDOWN  # band — keyingi so'rovlarda oxirga
             _log(task, provider, model, user, label, t0, error=str(e))
             continue
         ms = _log(task, provider, model, user, label, t0, res=res)
@@ -122,6 +152,9 @@ def run(task, user, label, system, message, schema):
         return data, {"provider": provider.name, "kind": provider.kind, "model": model,
                       "input_tokens": res.input_tokens, "output_tokens": res.output_tokens, "latency_ms": ms,
                       "fallback": provider != chain[0][0] or model != chain[0][1]}
+    if last is not None and getattr(last, "status", None) in providers.RETRY_STATUS:
+        raise AIUnavailable(f"Barcha AI modellar hozir band ({len(tried)} ta sinab ko'rildi). Bir ozdan keyin qayta urining "
+                            "yoki Sozlamalar → AI bo'limida boshqa provayder qo'shing.") from last
     raise last
 
 

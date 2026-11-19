@@ -575,31 +575,46 @@ def analytics(request):
     msgs = Message.objects.filter(created_at__gte=since)
     questions = msgs.filter(kind=Message.QUESTION)
 
-    # xodimlar
-    per = defaultdict(lambda: {"answers": 0, "clarifications": 0, "times": [], "groups": set()})
+    # xodimlar: kim nechta savolga javob berdi, qanchalik tez, qancha ishladi
+    per = defaultdict(lambda: {"answers": 0, "clarifications": 0, "times": [], "groups": set(), "questions": set(),
+                               "days": set(), "topics": Counter(), "last": None, "user": None})
     for r in (msgs.filter(kind__in=[Message.STAFF, Message.CLARIFY], user__isnull=False)
-              .select_related("user__member", "user__contact", "question", "group")):
+              .select_related("user__member", "user__contact", "question__entry", "group")):
         name = r.user.staff_name()
         row = per[name]
+        row["user"] = row["user"] or r.user
         row["groups"].add(r.group.title if r.group else "")
+        row["days"].add(timezone.localtime(r.created_at).date())
+        row["last"] = max(row["last"], r.created_at) if row["last"] else r.created_at
         if r.kind == Message.CLARIFY:
             row["clarifications"] += 1
         else:
             row["answers"] += 1
             if r.question_id:
+                row["questions"].add(r.question_id)
                 row["times"].append(max(0.0, (r.created_at - r.question.created_at).total_seconds() / 60))
+                if r.question.entry_id:
+                    row["topics"][r.question.entry.title] += 1
     panel = Counter(questions.filter(stage="panel").values_list("answered_by", flat=True))
     authored = defaultdict(Counter)
     for author, st in Entry.objects.filter(source__in=["staff", "history", "panel"]).values_list("author", "status"):
         authored[author][st] += 1
+    total_answers = sum(r["answers"] for r in per.values()) + sum(panel.values()) or 1
     staff = []
     for name in set(per) | set(panel):
         r = per[name]
         a = authored.get(name, Counter())
-        staff.append({"name": name, "answers": r["answers"] + panel.get(name, 0), "panel": panel.get(name, 0),
-                      "clarifications": r["clarifications"],
+        answers = r["answers"] + panel.get(name, 0)
+        u = r["user"]
+        staff.append({"name": name, "answers": answers, "panel": panel.get(name, 0), "clarifications": r["clarifications"],
+                      "questions": len(r["questions"]) + panel.get(name, 0),
+                      "share": round(100 * answers / total_answers),
                       "median_minutes": round(median(r["times"]), 1) if r["times"] else None,
+                      "avg_minutes": round(sum(r["times"]) / len(r["times"]), 1) if r["times"] else None,
+                      "active_days": len(r["days"]), "per_day": round(answers / max(1, len(r["days"])), 1),
+                      "messages": u.msg_count if u else 0, "last": r["last"],
                       "groups": sorted(g for g in r["groups"] if g),
+                      "topics": [{"title": t, "n": n} for t, n in r["topics"].most_common(3)],
                       "candidates": sum(a.values()), "approved": a.get(Entry.APPROVED, 0),
                       "rejected": a.get(Entry.REJECTED, 0)})
     staff.sort(key=lambda x: -x["answers"])

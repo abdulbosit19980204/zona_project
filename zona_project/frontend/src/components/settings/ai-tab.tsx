@@ -15,6 +15,7 @@ import { SectionTitle } from "@/components/common/page";
 import { CheckboxField, FormDialog, fromId, NONE, NumberField, Row, SelectField, TextareaField, TextField, toId } from "@/components/forms/form-kit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { FieldGroup } from "@/components/ui/field";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -274,6 +275,7 @@ function TaskConfigCard({ config, providers, kinds }: { config: AITaskConfig; pr
             <SelectField control={form.control} name="fallback_provider" label={t("ai.fallbackProvider")} options={providerOptions} />
             <TextField control={form.control} name="fallback_model" label={t("ai.fallbackModel")} />
           </Row>
+          <ExtraFallbacks config={config} providers={providers} />
           <TextareaField control={form.control} name="instructions" label={t("ai.instructions")} rows={3} placeholder={t("ai.instructionsHint")} />
         </FieldGroup>
         <div className="mt-5 flex gap-2">
@@ -401,5 +403,40 @@ function UsageSection() {
         </Card>
       </div>
     </>
+  );
+}
+
+/** Qo'shimcha zaxira modellar: asosiy va zaxira model band bo'lsa (masalan, "503 high demand") navbat bilan sinab ko'riladi. */
+function ExtraFallbacks({ config, providers }: { config: AITaskConfig; providers: AIProvider[] }) {
+  const t = useTranslations("ai");
+  const qc = useQueryClient();
+  const [rows, setRows] = useState(config.extra_fallbacks ?? []);
+  const save = useMutation({
+    mutationFn: () => adminApi.aiTasks.update(config.task, { extra_fallbacks: rows.filter((r) => r.provider && r.model.trim()) }),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: KEYS.tasks }); toast.success(t("fallbacksSaved")); },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  return (
+    <div className="grid gap-2 rounded-lg border p-3">
+      <div className="text-sm font-medium">{t("extraFallbacks")}</div>
+      <p className="text-xs text-muted-foreground">{t("extraFallbacksHint")}</p>
+      {rows.map((r, i) => (
+        <div key={i} className="flex flex-wrap gap-2">
+          <select className="h-9 min-w-40 rounded-md border bg-background px-2 text-sm" value={r.provider || ""}
+            onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, provider: Number(e.target.value) } : x)))}>
+            <option value="">—</option>
+            {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <Input className="h-9 flex-1 font-mono text-xs" value={r.model} placeholder="model-id"
+            onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, model: e.target.value } : x)))} />
+          <Button type="button" size="sm" variant="ghost" onClick={() => setRows(rows.filter((_x, j) => j !== i))}>✕</Button>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={rows.length >= 8}
+          onClick={() => setRows([...rows, { provider: providers[0]?.id ?? 0, model: "" }])}>{t("addFallback")}</Button>
+        <Button type="button" size="sm" disabled={save.isPending} onClick={() => save.mutate()}>{t("saveFallbacks")}</Button>
+      </div>
+    </div>
   );
 }

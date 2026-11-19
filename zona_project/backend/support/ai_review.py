@@ -87,9 +87,10 @@ def review_entries(job):
         try:
             data = _run(f"Support: bilim bazasi tahlili ({len(chunk)} ta yozuv)", system,
                         "\n\n".join(_entry_text(e) for e in chunk), REVIEW_SCHEMA)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001 — bitta bo'lak yiqilsa keyingisiga o'tamiz, topilgan takliflar saqlanadi
             job.error = f"{type(e).__name__}: {e}"[:500]
-            break
+            job.progress = {**(job.progress or {}), "failed_chunks": (job.progress or {}).get("failed_chunks", 0) + 1}
+            continue
         for s in data.get("suggestions") or []:
             eid, kind = s.get("entry_id"), s.get("kind")
             entry = next((x for x in chunk if x.id == eid), None)
@@ -145,9 +146,10 @@ def review_unanswered(job):
                   "qoldir — o'ylab topma). Salom, rahmat, hisobot kabi savol bo'lmaganlarni tashlab ket.\n\nMAVJUD YOZUVLAR:\n" + titles)
         try:
             data = _run(f"Support: javobsiz savollar tahlili ({len(chunk)} ta)", system, "\n".join(chunk), NEW_SCHEMA)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001 — bitta bo'lak yiqilsa keyingisiga o'tamiz, topilgan takliflar saqlanadi
             job.error = f"{type(e).__name__}: {e}"[:500]
-            break
+            job.progress = {**(job.progress or {}), "failed_chunks": (job.progress or {}).get("failed_chunks", 0) + 1}
+            continue
         for it in data.get("items") or []:
             qids = [x for x in it.get("question_ids") or [] if isinstance(x, int)]
             ex = Entry.objects.filter(pk=it.get("existing_entry_id") or 0).first()

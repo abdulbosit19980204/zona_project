@@ -91,7 +91,8 @@ export interface Analytics {
   days: number; questions: number; unanswered: number; with_photo: number; entries_with_ask_first: number;
   by_source: Record<string, number>; by_stage: Record<string, number>;
   staff: { name: string; answers: number; panel: number; clarifications: number; median_minutes: number | null; groups: string[];
-    candidates: number; approved: number; rejected: number }[];
+    candidates: number; approved: number; rejected: number; questions: number; share: number; avg_minutes: number | null;
+    active_days: number; per_day: number; messages: number; last: string | null; topics: { title: string; n: number }[] }[];
   top_asks: { text: string; count: number }[];
   daily: { date: string; total: number; bot: number; staff: number }[];
   groups: { title: string; n: number }[];

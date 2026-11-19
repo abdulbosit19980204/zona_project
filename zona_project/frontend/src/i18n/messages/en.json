@@ -672,7 +672,12 @@
       "step3": "Click the button below and paste the key into “Google Gemini (bepul)” — all AI tasks start working",
       "note": "The free tier has a daily request limit and Google may use free-tier data to improve its models. Good for testing; for ongoing use, connect a paid tier or another provider.",
       "enterKey": "Enter key"
-    }
+    },
+    "extraFallbacks": "Extra fallback models",
+    "extraFallbacksHint": "If the main and fallback models are busy (e.g. “503 high demand”), these are tried in order. After them the system automatically tries the providers' economical models. A busy model is moved to the end of the queue for 2 minutes.",
+    "addFallback": "Add model",
+    "saveFallbacks": "Save fallbacks",
+    "fallbacksSaved": "Fallback models saved"
   },
   "cheatsheet": {
     "pageTitle": "Who to contact",

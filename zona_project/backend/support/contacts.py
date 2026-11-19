@@ -142,10 +142,14 @@ def _name_ok(names, full_name):
 
 
 def search(text):
-    """-> (barcha natijalar, Query). Natija: {"kind", "name", "role", "brand", "unit", "place", "phone", "telegram", "manager"}."""
+    """-> (barcha natijalar, Query)."""
     q = parse(text)
+    return search_query(q), q
+
+
+def search_query(q):
     if q.empty:
-        return [], q
+        return []
     out = []
     for p in StaffPerson.objects.filter(is_vacancy=False).exclude(name="").select_related("project", "unit", "manager"):
         if q.roles and p.role not in q.roles:
@@ -169,7 +173,7 @@ def search(text):
         out = _fallback(q)
     order = {"ROP": 0, "RSM": 1, "ASM": 2, "KAM": 3, "SVR": 4, "MER": 5, "TP": 6, "": 7}
     out.sort(key=lambda r: (order.get(r["role_code"], 7), r["brand"], r["name"]))
-    return out, q
+    return out
 
 
 MANAGERS = {"ROP", "RSM", "ASM", "KAM", "SVR"}
@@ -240,3 +244,89 @@ def vcard(r):
 def describe(q):
     bits = sorted(q.brands) + sorted(q.roles) + sorted(q.places) + q.names
     return ", ".join(bits)
+
+
+# ====================================================================== aqlli rejim: turli usullar, ≤ 15 soniya
+def _relaxed(q, limit=8):
+    """Qat'iy shartlar bilan topilmasa: har bir xodim mos kelgan shartlar bo'yicha baholanadi, eng yaqinlari qaytadi."""
+    scored = []
+    for p in StaffPerson.objects.filter(is_vacancy=False).exclude(name="").select_related("project", "unit", "manager"):
+        score, total = 0, 0
+        if q.roles:
+            total += 3
+            score += 3 if p.role in q.roles else 0
+        if q.brands:
+            total += 3
+            score += 3 if p.project.name in q.brands else 0
+        if q.places:
+            keys = _place_keys(p.unit.title if p.unit_id else "", p.region, p.city, p.territory)
+            total += 2 * len(q.places)
+            score += 2 * len(q.places & keys)
+        for n in q.names:
+            total += 2
+            score += 2 if _name_ok([n], p.name) else 0
+        if total and score * 2 >= total:  # kamida yarmi mos
+            scored.append((score / total, p))
+    scored.sort(key=lambda x: (-x[0], LEVEL.get(x[1].role, 9), x[1].name))
+    return [_row(p, "yaqin") for _sc, p in scored[:limit]]
+
+
+AI_SCHEMA = {
+    "type": "object",
+    "properties": {"brands": {"type": "array", "items": {"type": "string"}}, "roles": {"type": "array", "items": {"type": "string"}},
+                   "places": {"type": "array", "items": {"type": "string"}}, "names": {"type": "array", "items": {"type": "string"}}},
+    "required": ["brands", "roles", "places", "names"], "additionalProperties": False,
+}
+
+
+def _ai_parse(text, timeout):
+    """AI so'rovni tushunib, faqat bizning lug'atdagi qiymatlarni qaytaradi (brend, lavozim kodi, hudud kaliti, ism)."""
+    import concurrent.futures
+
+    from zona.ai import service as ai
+    from zona.models import AITaskConfig, StaffProject
+    brands = list(StaffProject.objects.values_list("name", flat=True))
+    system = ("Sen kontakt qidiruv so'rovini tahlil qilasan. Faqat quyidagi qiymatlardan tanla, boshqasini qo'shma:\n"
+              f"brands: {brands}\nroles: {sorted(ROLE)} (ROP-bo'lim rahbari, RSM/ASM-hudud menejeri, SVR-supervayzer, "
+              f"TP-agent/savdo vakili, MER-merchandayzer, KAM-kalit mijozlar)\nplaces: {sorted(PLACE)}\n"
+              "names — so'rovdagi odam ismi/familiyasi (lotin), bo'lmasa bo'sh. So'rov o'zbek (lotin/kirill), rus yoki aralash.")
+
+    def call():
+        data, _meta = ai.run(AITaskConfig.SUPPORT, None, f"Kontakt qidiruvi: {text[:80]}", system, text[:300], AI_SCHEMA)
+        return data
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        data = ex.submit(call).result(timeout=timeout)
+    q = Query()
+    q.brands = {b for b in data.get("brands") or [] if b in brands}
+    q.roles = {r for r in data.get("roles") or [] if r in ROLE}
+    q.places = {x for x in data.get("places") or [] if x in PLACE}
+    q.names = [_norm(n) for n in data.get("names") or [] if len(_norm(n)) >= 2][:3]
+    return q
+
+
+def smart_search(text, deadline=15.0):
+    """-> (natijalar, Query, usul). Usullar: aniq -> rahbar/hudud bo'yicha (search ichida) -> eng yaqin -> AI tushunishi.
+    Umumiy vaqt deadline soniyadan oshmaydi (AI'ga qolgan vaqt beriladi)."""
+    import time
+    t0 = time.monotonic()
+    results, q = search(text)
+    if results:
+        return results, q, "aniq"
+    if not q.empty:
+        near = _relaxed(q)
+        if near:
+            return near, q, "yaqin"
+    from .models import Settings
+    left = deadline - (time.monotonic() - t0) - 1.0
+    if Settings.load().ai_enabled and left > 2:
+        try:
+            aq = _ai_parse(text, min(left, 10.0))
+            if not aq.empty:
+                res = search_query(aq) or _relaxed(aq)
+                if res:
+                    return res, aq, "ai"
+                return [], aq, "ai"
+        except Exception:  # noqa: BLE001 — AI band/vaqt tugadi: oddiy natija bilan qaytamiz
+            pass
+    return [], q, "topilmadi"

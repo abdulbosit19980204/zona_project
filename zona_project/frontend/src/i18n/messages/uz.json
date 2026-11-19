@@ -672,7 +672,12 @@
       "step3": "Pastdagi tugmani bosib, kalitni “Google Gemini (bepul)” ga joylang — barcha AI vazifalari ishga tushadi",
       "note": "Bepul tarifda kunlik so'rovlar soni cheklangan va Google bepul tarif ma'lumotlaridan modelni yaxshilashda foydalanishi mumkin. Sinov uchun mos; doimiy ish uchun pullik tarif yoki boshqa provayderni ulang.",
       "enterKey": "Kalitni kiritish"
-    }
+    },
+    "extraFallbacks": "Qoʻshimcha zaxira modellar",
+    "extraFallbacksHint": "Asosiy va zaxira model band boʻlsa (masalan, «503 high demand»), shu modellar navbat bilan sinab koʻriladi. Ulardan keyin tizim provayderning tejamkor modellarini ham avtomatik sinaydi. Band boʻlgan model 2 daqiqa navbat oxiriga suriladi.",
+    "addFallback": "Model qoʻshish",
+    "saveFallbacks": "Zaxiralarni saqlash",
+    "fallbacksSaved": "Zaxira modellar saqlandi"
   },
   "cheatsheet": {
     "pageTitle": "Kimga murojaat qilish",

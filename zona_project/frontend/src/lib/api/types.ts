@@ -369,6 +369,8 @@ export interface AITaskConfig {
   max_tokens: number;
   fallback_provider: number | null;
   fallback_model: string;
+  /** Asosiy va zaxira band bo'lsa navbat bilan sinab ko'riladigan modellar. */
+  extra_fallbacks?: { provider: number; model: string }[];
   instructions: string;
   updated_at: string;
 }

@@ -462,6 +462,8 @@ class AITaskConfig(models.Model):
     fallback_provider = models.ForeignKey(AIProvider, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     fallback_model = models.CharField(max_length=120, blank=True)
     instructions = models.TextField("Qo'shimcha ko'rsatma", blank=True)
+    # asosiy va zaxira model band bo'lsa navbat bilan sinab ko'riladiganlar: [{"provider": id, "model": "..."}]
+    extra_fallbacks = models.JSONField("Qo'shimcha zaxira modellar", default=list, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

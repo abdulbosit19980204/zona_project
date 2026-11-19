@@ -19,7 +19,7 @@ from zona.crypto import decrypt
 
 from . import contacts, engine, ocr, translit, vision
 from .models import (MODE_COLLECT, MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, HistoryJob,
-                     Media, Message, Settings)
+                     Media, Message, Settings, TgUser)
 from .telegram import Client, TelegramError
 
 log = logging.getLogger("support")
@@ -143,14 +143,21 @@ class Handler:
             return None
         if not self.can_lookup(user, chat_id):
             return self._safe_send(chat_id, "🔒 Kontakt ma'lumotlari faqat xodimlar va rahbarlar uchun.")
-        results, q = contacts.search(query)
-        if q.empty:
+        try:
+            self.tg.typing(chat_id)
+        except Exception:  # noqa: BLE001
+            pass
+        results, q, how = contacts.smart_search(query, deadline=15.0)
+        if q.empty and how != "ai":
             return self._safe_send(chat_id, "🔎 <b>Kontakt qidiruvi</b>\nBrend, lavozim, hudud yoki ism yozing. Masalan:\n"
                                             "• <i>L'Oréal ROP</i>\n• <i>Jizzax supervayzeri</i>\n• <i>Heinz SVR Toshkent</i>\n"
                                             "• <i>Saidabror telefoni</i>")
         if not results:
             return self._safe_send(chat_id, f"Topilmadi: <i>{esc(contacts.describe(q))}</i>\n"
                                             "Brend nomi (BIC, Heinz, JJ, L'Oréal), lavozim (ROP, RSM, SVR, agent) yoki hududni tekshiring.")
+        if how in ("yaqin", "ai"):
+            note = "🤖 AI so'rovni shunday tushundi" if how == "ai" else "🔎 Aniq moslik yo'q — eng yaqin natijalar"
+            self._safe_send(chat_id, f"{note}: <i>{esc(contacts.describe(q))}</i>")
         if len(results) > 6:
             lines = [f"🔎 <b>{len(results)} ta topildi</b> ({esc(contacts.describe(q))}). Aniqroq yozing — masalan, hudud yoki ism qo'shing:"]
             for r in results[:15]:
@@ -184,6 +191,9 @@ class Handler:
         group.save()
         mode = MODE_COLLECT if self.history else group.effective_mode()
         user = engine.identify(sender["id"], sender.get("username", ""), _full_name(sender))
+        if not self.history:  # faollik hisobi (har bir guruh xabari) — xodimlar ishini tahlil qilish uchun
+            from django.db.models import F as _F
+            TgUser.objects.filter(pk=user.pk).update(msg_count=_F("msg_count") + 1, last_msg_at=timezone.now())
         text = (msg.get("text") or msg.get("caption") or "").strip()
         media = _media_of(msg) or (("history", "photo", "", "image/jpeg") if msg["message_id"] in self.photo_bytes else None)
         photo = media[0] if media else None
