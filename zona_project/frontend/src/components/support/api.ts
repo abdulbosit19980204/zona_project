@@ -32,7 +32,7 @@ export interface PendingEdit {
 export interface Entry {
   id: number; kind: EntryKind; title: string; questions: string[]; triggers: string[]; extract: string[];
   answer: string; answer_ru: string; ask_first: string; attachments: number[]; attachments_info?: MediaInfo[];
-  creates_task?: boolean; task_assignee?: string;
+  creates_task?: boolean; task_assignee?: string; variants?: { uz: string; ru: string }[] | null;
   image_examples_count?: number; zone: number | null; zone_name: string; responsible: number | null;
   responsible_name: string; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
   author: string; approved_by: string; approved_at: string | null; uses: number; likes: number; dislikes: number;
@@ -63,7 +63,7 @@ export interface SupportSettings {
   tasks_enabled: boolean; task_bot: string; task_default_assignee: string; task_departments: number[]; task_members: number[];
   task_daily_limit: number; task_gap: number; task_attach: boolean;
   task_mode: "command" | "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
-  self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all";
+  self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all"; answer_variety: boolean;
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
@@ -78,6 +78,7 @@ export interface TasksPayload {
 export interface SpeedRow { n: number; p50: number | null; p90: number | null; max: number }
 export interface Speed {
   days: number; answered: number; p50: number | null; p90: number | null; p99: number | null; max: number | null; within_5: number | null;
+  within_3?: number | null;
   buckets: { label: string; n: number }[];
   by_stage: (SpeedRow & { stage: string })[]; by_kind: (SpeedRow & { kind: string })[]; by_group: (SpeedRow & { group: string })[];
   by_hour: { hour: number; n: number; p50: number | null; p90: number | null }[];
@@ -106,7 +107,7 @@ export interface DupGroup { keep: number; similarity: number; entries: DupRow[] 
 export interface Duplicates { threshold: number; groups: DupGroup[]; total: number; entries: number }
 export interface DedupeDecision { same: boolean; keep: number | null; merge: number[]; title: string; answer: string; answer_ru: string; reason: string }
 export interface AIJobInfo {
-  id: number; kind: "entries" | "unanswered" | "dedupe"; status: "queued" | "running" | "done" | "failed";
+  id: number; kind: "entries" | "unanswered" | "dedupe" | "variants"; status: "queued" | "running" | "done" | "failed";
   progress: { done?: number; total?: number; suggestions?: number; applied?: number }; error: string; created_by: string; created_at: string;
   finished_at: string | null;
 }
@@ -232,7 +233,7 @@ export const supportApi = {
   linkTgUser: (id: number, staffPerson: number | null) => post<TgUserInfo>(`tg-users/${id}/link/`, { staff_person: staffPerson }),
   staffPeople: (q: string) => get<StaffPersonHit[]>("staff-people/", { q }),
   aiJobs: () => get<AIJobInfo[]>("ai/jobs/"),
-  startAIJob: (kind: "entries" | "unanswered" | "dedupe", params: Record<string, unknown> = {}) => post<AIJobInfo[]>("ai/jobs/", { kind, ...params }),
+  startAIJob: (kind: "entries" | "unanswered" | "dedupe" | "variants", params: Record<string, unknown> = {}) => post<AIJobInfo[]>("ai/jobs/", { kind, ...params }),
   aiSuggestions: (status = "pending") => get<AISuggestion[]>("ai/suggestions/", { status }),
   decideSuggestion: (id: number, action: "approve" | "reject", payload?: Record<string, unknown>) =>
     post<AISuggestion>(`ai/suggestions/${id}/${action}/`, payload ? { payload } : {}),

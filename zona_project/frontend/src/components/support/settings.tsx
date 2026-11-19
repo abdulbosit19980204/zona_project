@@ -247,6 +247,7 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           <div className="mb-1 text-sm font-semibold">{t("grpLearn")}</div>
           <p className="mb-2 text-xs text-muted-foreground">{t("grpLearnHint")}</p>
           {sw("self_learning", t("t_selfLearn"), t("t_selfLearnHint"))}
+          {sw("answer_variety", t("t_variety"), t("t_varietyHint"))}
           <SettingRow label={t("t_autoLevel")} hint={t("t_autoLevelHint")}>
             <Segmented size="sm" value={f.auto_approve_level}
               onChange={(v) => { setF({ ...f, auto_approve_level: v }); toggle.mutate({ auto_approve_level: v }); }}

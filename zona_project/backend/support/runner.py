@@ -254,8 +254,9 @@ class Handler:
             meta, data = getattr(self, "media_meta", None), self.photo_bytes.get(q.message_id)
             # albom/izoh kutish — taymer bilan: worker uxlab o'tirmaydi, boshqa savollar shu vaqtda javob oladi
             wait = 1.5 if mgid else 0.0
-            if not engine.substantive(text) and (self.settings.merge_window or 0):
-                wait = 3.5
+            if text and not photo and not engine.substantive(text) and (self.settings.merge_window or 0):
+                wait = 3.5  # qisqa matn — ortidan rasm kelishi mumkin
+            # yolg'iz rasm kutmaydi: tanilgan ekran darhol javob oladi (tanilmasa — _process_question o'zi kechiktiradi)
             recv = max(0, int((time.time() - (msg.get("date") or time.time())) * 1000))
             meta_t = {"recv": recv, "wait": int(wait * 1000)}
             if wait:
@@ -315,6 +316,11 @@ class Handler:
             Message.objects.filter(pk=q.pk).update(text=(q.text + "\n" + text).strip()[:4000])
         return q
 
+    def _later(self, wait, qid, mode, meta, data, meta_t):
+        timer = threading.Timer(wait, self._submit, args=(qid, mode, meta, data, meta_t))
+        timer.daemon = True
+        timer.start()
+
     def _submit(self, qid, mode, meta, data, meta_t):
         """Taymerdan keyin navbatga qo'yish. Pool yopilgan bo'lsa (bot oqimi qayta ishga tushdi) — savol yo'qolmasin."""
         try:
@@ -331,6 +337,9 @@ class Handler:
             if "queued" in t:
                 t["queue"] = int((time.time() - t.pop("queued")) * 1000)  # bo'sh worker kutilgan vaqt
             h.timing = t
+            if not t.get("deferred"):
+                base = {k: v for k, v in t.items() if k in ("recv", "wait")}
+                h.defer = lambda: self._later(3.0, qid, mode, meta, data, {**base, "deferred": 1, "wait": base.get("wait", 0) + 3000})
             h.media_meta = meta
             if data is not None:
                 h.photo_bytes[0] = data
@@ -406,6 +415,11 @@ class Handler:
             if best:
                 image = (best[0], vision.confidence(best[1]))
         mark("media")
+        if (not (q.text or "").strip() and media is not None and not images and (settings.merge_window or 0)
+                and mode == MODE_LIVE and getattr(self, "defer", None) and not q.media_group_id):
+            self.defer()  # ekran tanilmadi — izoh kelishini 3 s kutamiz (worker band bo'lmaydi), keyin qayta ishlanadi
+            marks["deferred"] = 1
+            return q
         q.lang = engine.detect_lang(q.text or q.ocr_text)
         if mode == MODE_LIVE:
             self.tg.typing(q.chat_id)
@@ -494,7 +508,7 @@ class Handler:
             q.save()
             return q
         if not d.needs_human and d.text:
-            body = self._script(q, d.text)
+            body = self._script(q, engine.vary(d, q.lang, settings))
             line = engine.responsible_line(d.responsible, q.lang) if d.stage == "rule" else ""
             if line and settings.mention_responsible:
                 body += "\n\n" + line

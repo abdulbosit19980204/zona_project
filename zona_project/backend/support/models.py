@@ -55,6 +55,8 @@ class Settings(models.Model):
     task_mode = models.CharField("Vazifa rejimi", max_length=8, default="command", db_default="command")
     task_remind_group = models.BooleanField("Guruhda qisqa eslatma (@mas'ul)", default=True, db_default=True)
     task_remind_dm = models.BooleanField("Mas'ulga shaxsiy xabarda tafsilot", default=True, db_default=True)
+    answer_variety = models.BooleanField("Javoblarni har safar biroz boshqacha (mazmuni o'zgarmagan holda) yozish",
+                                         default=True, db_default=True)
     self_learning = models.BooleanField("O'z-o'zini o'qitish (chatlardan o'rganish)", default=True, db_default=True)
     auto_approve_level = models.CharField("Xodim tuzatishi darhol qo'llanadigan daraja", max_length=4, default="l2",
                                           db_default="l2")  # off / lead / l2 / all
@@ -176,6 +178,7 @@ class Entry(models.Model):
     priority = models.BooleanField("Ustuvor (bot javobini xodim tuzatgan)", default=False)
     pending = models.JSONField("Tasdiq kutayotgan tahrir", null=True, blank=True)
     attachments = models.JSONField("Javob bilan yuboriladigan fayllar (Media id)", default=list, blank=True)
+    variants = models.JSONField("Javobning qayta yozilgan variantlari (AI, mazmuni bir xil)", null=True, blank=True)
     creates_task = models.BooleanField("Bu turdagi savolga PRBC vazifa yaratiladi", default=False, db_default=False)
     task_assignee = models.CharField("Vazifa ijrochisi (username, bo'sh — mas'ul)", max_length=64, blank=True, default="",
                                      db_default="")
@@ -190,6 +193,16 @@ class Entry(models.Model):
     last_used_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        """Javob matni o'zgarsa — AI variantlari eskiradi (mazmuni boshqa), ular o'chiriladi."""
+        if self.pk and self.variants:
+            old = Entry.objects.filter(pk=self.pk).values("answer", "answer_ru").first()
+            if old and (old["answer"] != self.answer or old["answer_ru"] != self.answer_ru):
+                self.variants = None
+                if kwargs.get("update_fields") is not None:
+                    kwargs["update_fields"] = list({*kwargs["update_fields"], "variants"})
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ["-priority", "-updated_at", "-id"]
@@ -355,9 +368,9 @@ class Media(models.Model):
 class AIJob(models.Model):
     """Bot bo'yicha AI tahlili: bilim bazasini ko'rib chiqish yoki javobsiz savollardan yangi javob taklif qilish."""
 
-    REVIEW_ENTRIES, REVIEW_UNANSWERED, DEDUPE = "entries", "unanswered", "dedupe"
+    REVIEW_ENTRIES, REVIEW_UNANSWERED, DEDUPE, VARIANTS = "entries", "unanswered", "dedupe", "variants"
     KINDS = [(REVIEW_ENTRIES, "Bilim bazasini ko'rib chiqish"), (REVIEW_UNANSWERED, "Javobsiz savollar tahlili"),
-             (DEDUPE, "Takror savol-javoblarni tozalash")]
+             (DEDUPE, "Takror savol-javoblarni tozalash"), (VARIANTS, "Javob variantlarini yozish")]
     QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
     kind = models.CharField(max_length=12, choices=KINDS)
     params = models.JSONField(default=dict, blank=True)

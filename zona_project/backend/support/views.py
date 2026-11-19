@@ -43,7 +43,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "contact_lookup", "ai_primary", "ai_primary_below", "album_window",
                    "tasks_enabled", "task_bot", "task_default_assignee", "task_departments", "task_members",
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
-                   "merge_window", "self_learning", "auto_approve_level"]
+                   "merge_window", "self_learning", "auto_approve_level", "answer_variety"]
 
 
 def _settings_payload(s):
@@ -203,7 +203,7 @@ class EntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Entry
         fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first",
-                  "attachments", "attachments_info", "image_examples_count", "zone", "zone_name", "creates_task", "task_assignee",
+                  "attachments", "attachments_info", "image_examples_count", "zone", "zone_name", "creates_task", "task_assignee", "variants",
                   "responsible", "responsible_name", "status", "source", "priority", "pending", "author",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
         read_only_fields = ["status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",
@@ -1050,7 +1050,7 @@ def ai_jobs(request):
         if not ai.status().get("support"):
             return Response({"detail": "AI sozlanmagan: Sozlamalar → AI → «Support bot javoblari» uchun model tanlang."}, status=400)
         kind = request.data.get("kind")
-        if kind not in (AIJob.REVIEW_ENTRIES, AIJob.REVIEW_UNANSWERED, AIJob.DEDUPE):
+        if kind not in (AIJob.REVIEW_ENTRIES, AIJob.REVIEW_UNANSWERED, AIJob.DEDUPE, AIJob.VARIANTS):
             return Response({"detail": "Tahlil turini tanlang."}, status=400)
         if AIJob.objects.filter(status__in=[AIJob.QUEUED, AIJob.RUNNING]).exists():
             return Response({"detail": "AI tahlili allaqachon bajarilmoqda."}, status=400)

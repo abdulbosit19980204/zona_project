@@ -4,6 +4,7 @@ AI hech narsani o'zi o'zgartirmaydi — faqat Suggestion (taklif) yaratadi. Xodi
 versiyada qoladi). Har bir AI chaqiruvi natijasi zona.AIAnalysis'da saqlanadi (AI tahlillar tarixi).
 """
 import logging
+import re
 
 from django.db.models import Q
 from django.utils import timezone
@@ -281,11 +282,88 @@ def review_dedupe(job):
     return created
 
 
+# ====================================================================== javob variantlari
+VARIANTS_SCHEMA = {
+    "type": "object",
+    "properties": {"items": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"entry_id": {"type": "integer"},
+                       "variants": {"type": "array", "items": {
+                           "type": "object", "properties": {"uz": {"type": "string"}, "ru": {"type": "string"}},
+                           "required": ["uz", "ru"], "additionalProperties": False}}},
+        "required": ["entry_id", "variants"], "additionalProperties": False}}},
+    "required": ["items"], "additionalProperties": False,
+}
+VARIANTS_TASK = """VAZIFA: har bir javobni 3 xil uslubda QAYTA YOZ — chatdagilar har safar bir xil shablonni ko'rib zerikmasin, lekin
+MAZMUN AYNAN SAQLANSIN:
+- hamma qadamlar, raqamlar, muddatlar, tugma va bo'lim nomlari («...»), kodlar, odam nomlari (**qalin**) o'zgarmaydi;
+- {kod}, {nom} kabi jingalak qavsdagi maydonlar aynan qoladi;
+- yangi ma'lumot qo'shma, hech narsani olib tashlama; uzunligi asl javobga yaqin; emoji va **qalin** belgilar mumkin;
+- uz — o'zbek lotin (o', g' bilan), ru — rus tilida (asl ru javob bo'lmasa, uz'dan tarjima qil);
+- uslublar: 1) qisqa va do'stona, 2) qadam-baqadam, 3) xotirjam tushuntiruvchi."""
+
+_NUM = re.compile(r"\d+")
+_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_FIELD = re.compile(r"\{[a-z_]+\}")
+_URL = re.compile(r"https?://\S+")
+
+
+def valid_variant(orig, text):
+    """Variant mazmunni buzmaganmi: maydonlar, raqamlar, qalin nomlar va havolalar saqlangan, uzunligi yaqin."""
+    if not text or not orig:
+        return False
+    if set(_FIELD.findall(orig)) != set(_FIELD.findall(text)):
+        return False
+    if not set(_NUM.findall(orig)) <= set(_NUM.findall(text)):
+        return False
+    if not {b.strip().lower() for b in _BOLD.findall(orig)} <= {b.strip().lower() for b in _BOLD.findall(text)} | {
+            w.lower() for w in text.split()}:
+        return False
+    if not set(_URL.findall(orig)) <= set(_URL.findall(text)):
+        return False
+    return 0.55 * len(orig) <= len(text) <= 1.6 * len(orig) + 40
+
+
+def write_variants(job):
+    """Ko'p ishlatiladigan tasdiqlangan javoblar uchun 3 tadan variant (mazmuni bir xil) — bot ulardan birini tanlaydi."""
+    params = job.params or {}
+    ids = [int(x) for x in params.get("ids") or []][:100]
+    qs = Entry.objects.filter(pk__in=ids) if ids else Entry.objects.filter(status=Entry.APPROVED, variants__isnull=True)
+    entries = sorted(qs, key=lambda e: (-(e.uses or 0), -e.image_examples.count(), e.id))[: len(ids) or int(params.get("limit") or 25)]
+    done = 0
+    for i in range(0, len(entries), 5):
+        chunk = entries[i:i + 5]
+        text = "\n\n".join(f"[id={e.id}] SARLAVHA: {e.title}\nJAVOB (uz):\n{e.answer[:1500]}\nJAVOB (ru):\n{(e.answer_ru or '')[:1200]}"
+                           for e in chunk)
+        try:
+            data = _run(f"Support: javob variantlari ({len(chunk)} ta)", RULES + "\n\n" + VARIANTS_TASK, text, VARIANTS_SCHEMA)
+        except Exception as e:  # noqa: BLE001
+            job.error = f"{type(e).__name__}: {e}"[:500]
+            continue
+        for item in data.get("items") or []:
+            e = next((x for x in chunk if x.id == item.get("entry_id")), None)
+            if not e:
+                continue
+            ok = []
+            for v in item.get("variants") or []:
+                uz = (v.get("uz") or "").strip()
+                ru = (v.get("ru") or "").strip()
+                if valid_variant(e.answer, uz):
+                    ok.append({"uz": uz, "ru": ru if (not e.answer_ru or valid_variant(e.answer_ru, ru)) else ""})
+            if ok:
+                Entry.objects.filter(pk=e.pk).update(variants=ok[:4])  # javob matni o'zgarmaydi
+                done += 1
+        job.progress = {"done": min(i + 5, len(entries)), "total": len(entries), "suggestions": done}
+        job.save(update_fields=["progress", "error"])
+    return done
+
+
 def run_job(job_id):
     job = AIJob.objects.get(pk=job_id)
     job.status, job.error = AIJob.RUNNING, ""
     job.save(update_fields=["status", "error"])
-    n = {AIJob.REVIEW_ENTRIES: review_entries, AIJob.DEDUPE: review_dedupe}.get(job.kind, review_unanswered)(job)
+    n = {AIJob.REVIEW_ENTRIES: review_entries, AIJob.DEDUPE: review_dedupe,
+         AIJob.VARIANTS: write_variants}.get(job.kind, review_unanswered)(job)
     job.status = AIJob.FAILED if job.error and not n else AIJob.DONE
     job.progress = {**(job.progress or {}), "suggestions": n}
     job.finished_at = timezone.now()

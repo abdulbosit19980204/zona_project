@@ -175,6 +175,7 @@ def speed(days=7):
         "days": days, "answered": len(rows), "p50": _q(all_s, 0.5), "p90": _q(all_s, 0.9), "p99": _q(all_s, 0.99),
         "max": round(max(all_s), 1) if all_s else None,
         "within_5": round(100 * sum(1 for v in all_s if v <= 5) / len(all_s)) if all_s else None,
+        "within_3": round(100 * sum(1 for v in all_s if v <= 3) / len(all_s)) if all_s else None,
         "buckets": [{"label": label, "n": buckets.get(label, 0)} for _lim, label in SPEED_BUCKETS],
         "by_stage": pack(stage, "stage"), "by_kind": pack(kind, "kind"), "by_group": pack(group, "group")[:20],
         "by_hour": [{"hour": h, "n": len(hour.get(h, [])), "p50": _q(hour.get(h, []), 0.5), "p90": _q(hour.get(h, []), 0.9)} for h in range(24)],

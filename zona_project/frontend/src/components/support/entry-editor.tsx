@@ -115,6 +115,7 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
             <FormRow label={t("askFirst")} hint={t("askFirstHint")}>
               <Textarea rows={2} value={d.ask_first} onChange={(x) => set("ask_first")(x.target.value)} />
             </FormRow>
+            {e && <Variants e={e} />}
             <div className={cn("grid gap-2 rounded-lg border p-3", d.creates_task && "border-primary/40 bg-primary/[0.04]")}>
               <label className="flex items-start gap-3 text-sm">
                 <Switch checked={d.creates_task} onCheckedChange={(v) => setD({ ...d, creates_task: v })} className="mt-0.5" />
@@ -225,6 +226,35 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Javobning AI yozgan variantlari (mazmuni bir xil) — bot har safar shulardan birini tanlaydi. O'chirish va qayta yozish. */
+function Variants({ e }: { e: Entry }) {
+  const t = useSt();
+  const can = useCan();
+  const list = e.variants ?? [];
+  const save = useSupportMutation((v: { uz: string; ru: string }[]) => supportApi.updateEntry(e.id, { variants: v.length ? v : null }), t("saved"));
+  const gen = useSupportMutation(() => supportApi.startAIJob("variants", { ids: [e.id] }), t("varQueued"));
+  return (
+    <div className="grid gap-2 rounded-lg border p-3">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">{t("varTitle")}</span>
+        <span className="text-xs text-muted-foreground">{list.length ? t("varCount", { n: list.length }) : t("varNone")}</span>
+        {can.edit && <Button size="sm" variant="outline" className="ml-auto h-7 text-xs" disabled={gen.isPending} onClick={() => gen.mutate(undefined)}>{t("varGen")}</Button>}
+      </div>
+      <p className="text-xs text-muted-foreground">{t("varHint")}</p>
+      {list.map((v, i) => (
+        <div key={i} className="relative rounded-md bg-muted/50 p-2 pr-8 text-xs">
+          <p className="whitespace-pre-wrap">{v.uz}</p>
+          {v.ru && <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{v.ru}</p>}
+          {can.edit && (
+            <button type="button" className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full hover:bg-destructive hover:text-white"
+              aria-label={t("delete")} onClick={() => save.mutate(list.filter((_x, j) => j !== i))}>✕</button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -26,7 +26,7 @@ export function Speed({ days, t }: { days: number; t: ST }) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Metric label={t("spP50")} value={sec(d.p50)} hint={t("spP50Hint")} icon={Zap} tone="success" />
         <Metric label={t("spP90")} value={sec(d.p90)} hint={t("spP90Hint")} icon={Gauge} tone={(d.p90 ?? 0) > 15 ? "warning" : undefined} />
-        <Metric label={t("spWithin5")} value={d.within_5 == null ? "—" : `${d.within_5}%`} icon={Timer} />
+        <Metric label={t("spWithin5")} value={d.within_5 == null ? "—" : `${d.within_5}%`} hint={d.within_3 == null ? undefined : t("spWithin3", { n: d.within_3 })} icon={Timer} />
         <Metric label={t("spAnswered")} value={d.answered} hint={t("spMax", { n: d.max ?? "—" })} icon={Turtle} />
         <Metric label={t("spWorkers")} value={d.workers} hint={t("spCpu", { n: d.cpu ?? "—" })} icon={Cpu}
           tone={queueP90 > 2 ? "warning" : "primary"} />

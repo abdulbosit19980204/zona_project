@@ -623,7 +623,38 @@ def staff_examples(query, k=3, min_score=35):
 
 
 def render_answer(entry, fields, lang):
-    text = entry.answer_ru if lang == "ru" and entry.answer_ru else entry.answer
+    return render_text(entry.answer_ru if lang == "ru" and entry.answer_ru else entry.answer, fields)
+
+
+OPENERS = {
+    "uz": {"image": ["", "", "Ko'rdim 👀", "Tushunarli 👍", "Mana yechimi 👇", "Skrinshot bo'yicha:"],
+           "other": ["", "", "Tushunarli 👍", "Mana javob 👇", "Bu tez hal bo'ladi."]},
+    "ru": {"image": ["", "", "Вижу скриншот 👀", "Понятно 👍", "Вот решение 👇"],
+           "other": ["", "", "Понятно 👍", "Вот ответ 👇", "Это быстро решается."]},
+}
+
+
+def vary(d, lang, settings, rnd=None):
+    """Standart javobni har safar biroz boshqacha: AI oldindan yozgan variantlardan biri (mazmuni bir xil) va qisqa
+    insoniy kirish so'zi. Bir zumda — javob paytida AI chaqirilmaydi."""
+    import random
+    rnd = rnd or random
+    if not getattr(settings, "answer_variety", False) or d.stage not in ("image", "template", "faq") or d.entry is None:
+        return d.text
+    text = d.text
+    key = "ru" if lang == "ru" else "uz"
+    pool = [v.get(key) for v in (d.entry.variants or []) if isinstance(v, dict) and v.get(key)]
+    if pool and not (d.note or "").startswith("albom"):  # albomdagi bir nechta ekran bo'yicha qo'shma javob almashtirilmaydi
+        pick = rnd.choice([None, *pool])
+        if pick:
+            text = render_text(pick, d.fields or {})
+    opener = rnd.choice(OPENERS[key]["image" if d.stage == "image" else "other"])
+    if opener and not text.startswith(opener):
+        text = f"{opener}\n{text}"
+    return text
+
+
+def render_text(text, fields):
     lines = []
     for line in text.splitlines():
         keys = PLACEHOLDER.findall(line)

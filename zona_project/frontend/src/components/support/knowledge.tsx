@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BotMessageSquare, FlaskConical, Images, ListChecks, ListTodo, Paperclip, Plus, Search, Star, ThumbsDown, ThumbsUp } from "lucide-react";
+import { BotMessageSquare, FlaskConical, Images, ListChecks, ListTodo, Paperclip, Plus, Route, Search, Shuffle, Star, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 
 import { supportApi, type EntryStatus, type TestResult } from "./api";
-import { EntryBadge, fmtDate, Segmented, stageLabel, useSupportMutation } from "./common";
+import { EntryBadge, fmtDate, SearchPicker, Segmented, stageLabel, useSupportMutation } from "./common";
 import { EntryEditor } from "./entry-editor";
 import { smartFilter } from "./smart-search";
 import { useSt, type SKey, type ST } from "./i18n";
@@ -24,6 +24,14 @@ import { SupportShell } from "./shell";
 const STATUSES: (EntryStatus | "all")[] = ["approved", "review", "new", "archived", "rejected", "all"];
 type KindFilter = "any" | "faq" | "template";
 const KINDS: KindFilter[] = ["any", "template", "faq"];
+
+type Flag = "routing" | "images" | "variants" | "novariants" | "task";
+type Sort = "used" | "images" | "new";
+
+/** Faqat "falonchi hal qiladi" deb yo'naltiradigan (haqiqiy yechimi yo'q) javoblar — birinchi navbatda to'ldirish kerak. */
+const isRouting = (a: string) => /hal qiladi|Avval \*\*.+\*\*ga yozing|Mas'ul: \*\*/i.test(a) && a.length < 320;
+const uniq = <T extends { id: number | string; title: string }>(xs: T[]) => [...new Map(xs.map((x) => [String(x.id), x])).values()]
+  .sort((a, b) => a.title.localeCompare(b.title));
 
 export function SupportKnowledge() {
   return <Suspense><KnowledgeInner /></Suspense>;
@@ -45,10 +53,26 @@ function KnowledgeInner() {
     queryKey: ["support", "entries", status, kind],
     queryFn: () => supportApi.entries({ status, ...(kind !== "any" ? { kind } : {}) }),
   });
-  // smart qidiruv: kirill/lotin, apostrof va imlo xatosiga chidamli; eng mos yozuv birinchi
-  const [onlyTask, setOnlyTask] = useState(false);
-  const shown = useMemo(() => (list.data ? smartFilter(list.data.filter((e) => !onlyTask || e.creates_task), q,
-    (e) => `${e.title} ${(e.questions ?? []).join(" ")} ${e.answer}`) : undefined), [list.data, q, onlyTask]);
+  // filtrlar: mas'ul, zona, tezkor belgilar va tartib; qidiruv — smart (kirill/lotin, imlo xatosiga chidamli)
+  const [resp, setResp] = useState("");
+  const [zone, setZone] = useState("");
+  const [flags, setFlags] = useState<Set<Flag>>(new Set());
+  const [sort, setSort] = useState<Sort>("used");
+  const toggleFlag = (f: Flag) => setFlags((s) => { const n = new Set(s); if (n.has(f)) n.delete(f); else n.add(f); return n; });
+  const respOptions = useMemo(() => uniq((list.data ?? []).filter((e) => e.responsible).map((e) => ({ id: e.responsible!, title: e.responsible_name }))), [list.data]);
+  const zoneOptions = useMemo(() => uniq((list.data ?? []).filter((e) => e.zone_name).map((e) => ({ id: e.zone_name, title: e.zone_name }))), [list.data]);
+  const shown = useMemo(() => {
+    if (!list.data) return undefined;
+    const rows = list.data.filter((e) => (!resp || String(e.responsible) === resp) && (!zone || e.zone_name === zone)
+      && (!flags.has("task") || e.creates_task) && (!flags.has("routing") || isRouting(e.answer))
+      && (!flags.has("images") || (e.image_examples_count ?? 0) > 0) && (!flags.has("variants") || (e.variants?.length ?? 0) > 0)
+      && (!flags.has("novariants") || !(e.variants?.length)));
+    if (q.trim()) return smartFilter(rows, q, (e) => `${e.title} ${(e.questions ?? []).join(" ")} ${e.answer}`);
+    const key = sort === "used" ? (e: (typeof rows)[number]) => -(e.uses ?? 0) : sort === "images"
+      ? (e: (typeof rows)[number]) => -(e.image_examples_count ?? 0) : (e: (typeof rows)[number]) => -new Date(e.updated_at).getTime();
+    return [...rows].sort((a, b) => key(a) - key(b));
+  }, [list.data, q, resp, zone, flags, sort]);
+  const routingCount = useMemo(() => (list.data ?? []).filter((e) => isRouting(e.answer)).length, [list.data]);
   const edit = (id: number | null) => { setEditing(id); setOpen(true); };
 
   return (
@@ -66,13 +90,34 @@ function KnowledgeInner() {
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("kbSearch")} className="h-9 bg-muted/40 pl-8" />
           </div>
           <Segmented size="sm" value={kind} onChange={setKind} options={KINDS.map((k) => ({ value: k, label: k === "any" ? t("allKinds") : t(`k_${k}` as SKey) }))} />
-          <button type="button" onClick={() => setOnlyTask(!onlyTask)}
-            className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors ${onlyTask ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-            <ListTodo className="size-3.5" />{t("kbOnlyTask")}
-          </button>
         </div>
-        <Segmented size="sm" value={status} onChange={setStatus} className="w-full sm:w-auto"
-          options={STATUSES.map((x) => ({ value: x, label: x === "all" ? t("all") : t(`e_${x}` as SKey), count: x === "all" ? undefined : counts[x] }))} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented size="sm" value={status} onChange={setStatus}
+            options={STATUSES.map((x) => ({ value: x, label: x === "all" ? t("all") : t(`e_${x}` as SKey), count: x === "all" ? undefined : counts[x] }))} />
+          <SearchPicker value={resp} onChange={setResp} className="h-8 w-48 text-xs" options={respOptions}
+            placeholder={t("kbResp")} searchPlaceholder={t("search")} emptyText={t("pickNone")} />
+          {zoneOptions.length > 0 && (
+            <SearchPicker value={zone} onChange={setZone} className="h-8 w-44 text-xs" options={zoneOptions}
+              placeholder={t("kbZone")} searchPlaceholder={t("search")} emptyText={t("pickNone")} />
+          )}
+          {(resp || zone) && <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setResp(""); setZone(""); }}><X className="size-3.5" />{t("kbClear")}</Button>}
+          <Segmented size="sm" value={sort} onChange={setSort} className="ml-auto" options={[
+            { value: "used", label: t("kbSortUsed") }, { value: "images", label: t("kbSortImages") }, { value: "new", label: t("kbSortNew") },
+          ]} />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            ["routing", t("kbFRouting"), Route, routingCount], ["images", t("kbFImages"), Images, undefined],
+            ["variants", t("kbFVariants"), Shuffle, undefined], ["novariants", t("kbFNoVariants"), Shuffle, undefined],
+            ["task", t("kbOnlyTask"), ListTodo, undefined],
+          ] as [Flag, string, typeof Route, number | undefined][]).map(([f, label, Icon, n]) => (
+            <button key={f} type="button" onClick={() => toggleFlag(f)}
+              className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors ${flags.has(f) ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+              <Icon className="size-3.5" />{label}{n != null && n > 0 && <span className="rounded-full bg-foreground/10 px-1.5 text-[10px] font-semibold">{n}</span>}
+            </button>
+          ))}
+        </div>
+        {flags.has("routing") && <p className="text-xs text-muted-foreground">{t("kbFRoutingHint")}</p>}
       </div>
 
       {list.isLoading && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-40" />)}</div>}
@@ -95,12 +140,13 @@ function KnowledgeInner() {
                     {e.priority && <Star className="ml-auto size-4 fill-warning text-warning" />}
                   </div>
                   <span className="line-clamp-2 font-medium leading-snug group-hover:text-primary">{e.title}</span>
-                  <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{e.answer}</p>
+                  <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{e.answer.replace(/\*\*/g, "")}</p>
                 </div>
                 <div className="flex items-center gap-3 border-t px-4 py-2 text-xs text-muted-foreground">
                   {(e.attachments?.length ?? 0) > 0 && <span className="inline-flex items-center gap-0.5" title={t("attachments")}><Paperclip className="size-3" />{e.attachments.length}</span>}
                   {(e.image_examples_count ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Images className="size-3" />{e.image_examples_count}</span>}
                   {e.ask_first && <span className="inline-flex items-center" title={t("askFirst")}><ListChecks className="size-3" /></span>}
+                  {(e.variants?.length ?? 0) > 0 && <span className="inline-flex items-center gap-0.5" title={t("kbFVariants")}><Shuffle className="size-3" />{e.variants!.length}</span>}
                   <span className="truncate">{e.author || "—"} · {fmtDate(e.updated_at, false)}</span>
                   <span className="ml-auto inline-flex shrink-0 items-center gap-2 tabular-nums">
                     <span title={t("uses")}>{e.uses}×</span>
