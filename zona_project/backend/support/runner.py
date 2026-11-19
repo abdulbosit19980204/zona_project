@@ -692,7 +692,16 @@ class Handler:
         """Javob matni + (bo'lsa) yozuvga biriktirilgan rasm/video/fayllar, savolga reply qilib."""
         sent = self._safe_send(q.chat_id, body_html, reply_to=q.message_id, buttons=buttons)
         ids = list(entry.attachments or []) if entry else []
-        if sent and ids:
+        if sent and ids and self.executor is not None and not self.history:
+            # fayllar fonda: javob matni darhol, video/rasm ortidan (worker keyingi savolga o'tadi)
+            threading.Thread(target=self._send_files, args=(q, ids), name="support-files", daemon=True).start()
+        elif sent and ids:
+            self._send_files(q, ids)
+        return sent
+
+    def _send_files(self, q, ids):
+        """Javob fayllari (rasm/video/hujjat). Saqlangan file_id bo'lsa — qayta yuklanmaydi (bir zumda)."""
+        try:
             files = {m.id: m for m in Media.objects.filter(id__in=ids)}
             items, order = [], []
             for i in ids:
@@ -709,14 +718,15 @@ class Handler:
                 items.append({"kind": m.kind, "name": m.name or f"file{m.id}", "data": data, "file_id": fid})
                 order.append(m)
             if items:
-                try:
-                    new_ids = self.tg.send_media(q.chat_id, items, reply_to=q.message_id)
-                    for m, fid in zip(order, new_ids or []):
-                        if fid and (m.tg_file_ids or {}).get(str(self.bot.id)) != fid:
-                            Media.objects.filter(pk=m.pk).update(tg_file_ids={**(m.tg_file_ids or {}), str(self.bot.id): fid})
-                except TelegramError as e:
-                    log.warning("send_media failed: %s", e)
-        return sent
+                new_ids = self.tg.send_media(q.chat_id, items, reply_to=q.message_id)
+                for m, fid in zip(order, new_ids or []):
+                    if fid and (m.tg_file_ids or {}).get(str(self.bot.id)) != fid:
+                        Media.objects.filter(pk=m.pk).update(tg_file_ids={**(m.tg_file_ids or {}), str(self.bot.id): fid})
+        except TelegramError as e:
+            log.warning("send_media failed: %s", e)
+        finally:
+            if threading.current_thread().name == "support-files":
+                close_old_connections()
 
     def _send_draft(self, q, d, escalated=False):
         if not self.bot.admin_chat_id:
@@ -892,6 +902,20 @@ class BotWorker(threading.Thread):
         super().__init__(name=f"support-bot-{bot_id}", daemon=True)
         self.bot_id, self.token = bot_id, token
         self.stop_event = threading.Event()
+        self.last_warm = time.time() - 540  # ishga tushgandan ~1 daqiqada birinchi oldindan yuklash
+
+    @staticmethod
+    def _warm(bot, client):
+        close_old_connections()
+        try:
+            from . import mediaprep
+            n = mediaprep.warm(bot, client)
+            if n:
+                log.info("warmed %s attachment(s) for bot %s", n, bot.id)
+        except Exception:  # noqa: BLE001
+            log.exception("warm failed")
+        finally:
+            close_old_connections()
 
     def run(self):
         client = Client(self.token.split("|", 1)[0])
@@ -918,6 +942,9 @@ class BotWorker(threading.Thread):
                     handler.bot.last_update_id = upd["update_id"]
                 Bot.objects.filter(pk=bot.pk).update(last_ok_at=timezone.now(), last_error="")
                 backoff = 5
+                if time.time() - self.last_warm > 600:
+                    self.last_warm = time.time()
+                    threading.Thread(target=self._warm, args=(bot, client), name="support-warm", daemon=True).start()
             except Bot.DoesNotExist:
                 return
             except TelegramError as e:

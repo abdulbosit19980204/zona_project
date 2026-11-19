@@ -64,6 +64,9 @@ def distance(m1, m2):
 def store(data, kind="photo", name="", mime="", source="question", message=None):
     """Faylni serverga yozadi (sha256 bo'yicha bir marta) va Media yozuvini qaytaradi."""
     from .runner import media_dir
+    if kind == "video" and source in ("answer", "seed"):
+        from .mediaprep import compress_video
+        data = compress_video(data, name)  # javob videolari siqiladi (ffmpeg bo'lsa) — tez yuklanadi va ochiladi
     sha = hashlib.sha256(data).hexdigest()
     ext = Path(name).suffix.lower() if name and Path(name).suffix else (EXT.get(kind) or mimetypes.guess_extension(mime or "") or "")
     folder = media_dir() / "files" / sha[:2]

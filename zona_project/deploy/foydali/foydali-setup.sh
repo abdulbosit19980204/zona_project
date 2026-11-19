@@ -56,6 +56,7 @@ if ((${#need[@]})); then apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-
 # RAR/7z arxivlari uchun (bo'lmasa bsdtar yetarli)
 dpkg -s 7zip >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq 7zip >/dev/null 2>&1 || true
 # Support bot: rasmdagi matnni o'qish (OCR, ixtiyoriy — bo'lmasa bot rasmsiz ishlaydi)
+dpkg -s ffmpeg >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg >/dev/null 2>&1 || true  # javob videolarini siqish
 dpkg -s tesseract-ocr-uzb >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tesseract-ocr tesseract-ocr-rus tesseract-ocr-uzb tesseract-ocr-uzb-cyrl >/dev/null 2>&1 || true
 
 step "Foydalanuvchi va papkalar"

@@ -182,7 +182,7 @@ class Client:
                     ref = it.get("file_id") or f"attach://f{j}"
                     if not it.get("file_id"):
                         files[f"f{j}"] = (it.get("name") or f"f{j}", it["data"])
-                    media.append({"type": it["kind"], "media": ref})
+                    media.append({"type": it["kind"], "media": ref, **({"supports_streaming": True} if it["kind"] == "video" else {})})
                 self._throttle(chat_id)
                 res = self.call_multipart("sendMediaGroup", {"chat_id": chat_id, "media": media, "reply_parameters": reply}, files)
                 for i, r in zip(chunk, res):
@@ -191,10 +191,11 @@ class Client:
             it = items[i]
             method, field = self.SEND.get(it["kind"], self.SEND["document"])
             self._throttle(chat_id)
+            extra = {"supports_streaming": True} if it["kind"] == "video" else {}  # to'liq yuklanmasdan ijro boshlanadi
             if it.get("file_id"):
-                r = self.call(method, {"chat_id": chat_id, field: it["file_id"], "reply_parameters": reply})
+                r = self.call(method, {"chat_id": chat_id, field: it["file_id"], "reply_parameters": reply, **extra})
             else:
-                r = self.call_multipart(method, {"chat_id": chat_id, "reply_parameters": reply},
+                r = self.call_multipart(method, {"chat_id": chat_id, "reply_parameters": reply, **extra},
                                         {field: (it.get("name") or field, it["data"])})
             ids[i] = self._file_id(r, it["kind"])
         return ids
