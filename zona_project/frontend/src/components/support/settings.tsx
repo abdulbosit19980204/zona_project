@@ -216,7 +216,7 @@ function GeneralForm({ s, t }: { s: SupportSettings; t: ST }) {
           <FormRow label={t("aiMin")}><Input type="number" value={f.ai_min_confidence} onChange={num("ai_min_confidence")} /></FormRow>
           <FormRow label={t("faqTh")}><Input type="number" value={f.faq_threshold} onChange={num("faq_threshold")} /></FormRow>
           <FormRow label={t("ruleTh")}><Input type="number" value={f.route_threshold} onChange={num("route_threshold")} /></FormRow>
-          <FormRow label={t("mediaDays")}><Input type="number" value={f.media_days} onChange={num("media_days")} /></FormRow>
+          <FormRow label={t("mediaDays")} hint={t("mediaDaysHint")}><Input type="number" value={f.media_days} onChange={num("media_days")} /></FormRow>
           <FormRow label={t("signature")}><Input value={f.signature} onChange={(e) => setF({ ...f, signature: e.target.value })} /></FormRow>
         </div>
         {sw("learn_from_staff", t("learn"), t("learnHint"))}
@@ -230,6 +230,14 @@ function GeneralForm({ s, t }: { s: SupportSettings; t: ST }) {
           {sw("notify_candidates", t("t_candidates"))}
           {sw("learn_clarifications", t("t_clarify"), t("t_clarifyHint"))}
           {sw("ask_first_prompt", t("t_askFirst"))}
+        </div>
+        <div className="grid gap-3 rounded-lg border p-3">
+          <div className="text-sm font-medium">{t("imgSettings")}</div>
+          {sw("image_match", t("imgMatch"), t("imgMatchHint"))}
+          {sw("image_autolabel", t("imgAuto"), t("imgAutoHint"))}
+          <FormRow label={t("imgThreshold")} hint={t("imgThresholdHint")}>
+            <Input type="number" min={2} max={20} value={f.image_threshold} onChange={num("image_threshold")} className="max-w-32" />
+          </FormRow>
         </div>
         {sw("ocr_enabled", t("ocrOn"), s.ocr_available ? t("ocrLangs", { l: s.ocr_languages }) : undefined,
           !s.ocr_available && <span className="block text-xs text-warning">{t("ocrMissing")}</span>)}

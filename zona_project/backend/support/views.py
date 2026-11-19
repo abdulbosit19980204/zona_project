@@ -16,7 +16,7 @@ from zona.permissions import CanView, IsZonaAdmin, ReadOrEdit, has_role
 
 from . import ocr, runner
 from .engine import ai_quota_left, decide, detect_lang, to_html
-from .models import MODES, Bot, Entry, EntryVersion, Group, HistoryJob, Message, Settings, TgUser
+from .models import MODES, Bot, Entry, EntryVersion, Group, HistoryJob, Media, Message, Settings, TgUser
 from .telegram import Client, TelegramError
 
 
@@ -37,7 +37,8 @@ class AdminOnly(IsZonaAdmin):
 SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence", "faq_threshold", "route_threshold",
                    "learn_from_staff", "ocr_enabled", "media_days", "signature", "drafts_to_admin", "escalation_ack",
                    "mention_responsible", "feedback_buttons", "notify_candidates", "learn_clarifications",
-                   "ask_first_prompt", "history_days", "history_photos", "history_max"]
+                   "ask_first_prompt", "history_days", "history_photos", "history_max", "image_match",
+                   "image_threshold", "image_autolabel"]
 
 
 def _settings_payload(s):
@@ -176,11 +177,28 @@ class VersionSerializer(serializers.ModelSerializer):
 class EntrySerializer(serializers.ModelSerializer):
     zone_name = serializers.CharField(source="zone.name", read_only=True, default="")
     responsible_name = serializers.CharField(source="responsible.name", read_only=True, default="")
+    attachments_info = serializers.SerializerMethodField()
+    image_examples_count = serializers.SerializerMethodField()
+
+    def get_attachments_info(self, obj):
+        files = {m.id: m for m in Media.objects.filter(id__in=obj.attachments or [])}
+        return [media_dict(files[i]) for i in obj.attachments or [] if i in files]
+
+    def get_image_examples_count(self, obj):
+        return obj.image_examples.count()
+
+    def validate_attachments(self, v):
+        if not isinstance(v, list):
+            raise serializers.ValidationError("Ro'yxat bo'lishi kerak.")
+        ids = [int(x) for x in v][:10]
+        if Media.objects.filter(id__in=ids).count() != len(set(ids)):
+            raise serializers.ValidationError("Fayl topilmadi.")
+        return list(dict.fromkeys(ids))
 
     class Meta:
         model = Entry
-        fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first", "zone",
-                  "zone_name",
+        fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first",
+                  "attachments", "attachments_info", "image_examples_count", "zone", "zone_name",
                   "responsible", "responsible_name", "status", "source", "priority", "pending", "author",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
         read_only_fields = ["status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",
@@ -209,7 +227,7 @@ class EntrySerializer(serializers.ModelSerializer):
 
 
 VERSIONED = ("title", "questions", "triggers", "extract", "answer", "answer_ru")
-EDITABLE = (*VERSIONED, "ask_first")
+EDITABLE = (*VERSIONED, "ask_first", "attachments")
 
 
 class EntryViewSet(ZonaViewSet):
@@ -360,10 +378,14 @@ class MessageSerializer(serializers.ModelSerializer):
     entry_title = serializers.CharField(source="entry.title", read_only=True, default="")
     has_photo = serializers.SerializerMethodField()
     staff_answers = serializers.SerializerMethodField()
+    media = serializers.SerializerMethodField()
+
+    def get_media(self, obj):
+        return [media_dict(m) for m in obj.media.all()]
 
     class Meta:
         model = Message
-        fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "lang",
+        fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "media", "lang",
                   "status", "stage", "entry", "entry_title", "confidence", "answer_text", "answered_by", "feedback",
                   "created_at", "answered_at", "staff_answers"]
 
@@ -373,7 +395,7 @@ class MessageSerializer(serializers.ModelSerializer):
     def get_staff_answers(self, obj):
         """Zanjir: aniqlashtirish (clarify), savol egasining ma'lumoti (info), xodimning yakuniy javobi (staff)."""
         return [{"by": (r.user.staff_name() if r.user else ""), "text": r.text[:1000], "at": r.created_at, "kind": r.kind,
-                 "ocr": r.ocr_text[:500]}
+                 "ocr": r.ocr_text[:500], "media": [media_dict(m) for m in r.media.all()]}
                 for r in sorted(obj.staff_replies.all(), key=lambda r: r.created_at)]
 
 
@@ -384,7 +406,8 @@ class MessageViewSet(ZonaViewSet):
 
     def get_queryset(self):
         qs = (Message.objects.filter(kind=Message.QUESTION)
-              .select_related("group", "user", "entry").prefetch_related("staff_replies__user__member",
+              .select_related("group", "user", "entry").prefetch_related("media", "staff_replies__media",
+                                                                          "staff_replies__user__member",
                                                                           "staff_replies__user__contact"))
         p = self.request.query_params
         if p.get("status") and p["status"] != "all":
@@ -597,4 +620,144 @@ def analytics(request):
         "groups": [{"title": g["group__title"] or "—", "n": g["n"]} for g in groups],
         "with_photo": questions.exclude(photo_file_id="").count(),
         "entries_with_ask_first": Entry.objects.exclude(ask_first="").count(),
+        "zones": _zones(questions),
+        "protarget": _protarget(questions, since),
+        "images": {"total": Media.objects.filter(kind=Media.PHOTO).count(),
+                   "labeled": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).count(),
+                   "types": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).values("label").distinct().count(),
+                   "by_image": questions.filter(stage="image").count()},
     })
+
+
+def _zones(questions):
+    """Savollar zonalar bo'yicha (topilgan yozuvning zonasi yoki mas'uli orqali)."""
+    out = {}
+    for zone, resp in questions.filter(entry__isnull=False).values_list("entry__zone__name", "entry__responsible__name"):
+        key = zone or ("ProTarget va mobil ilova" if resp == "Pro-target" else "Boshqa")
+        out[key] = out.get(key, 0) + 1
+    return out
+
+
+def _protarget(questions, since):
+    """Pro-target'ga tegishli savollar: turlari, javobsizlari va Pro-target jamoasi javoblari."""
+    from collections import Counter
+    from statistics import median
+
+    from zona.models import TeamContact
+    pt = questions.filter(Q(entry__responsible__name="Pro-target") | Q(entry__zone__name="ProTarget va mobil ilova")
+                          | Q(entry__title__istartswith="ProTarget"))
+    types = Counter(pt.values_list("entry__title", flat=True))
+    team = set(TeamContact.objects.filter(member__name="Pro-target").values_list("name", flat=True))
+    times = [max(0.0, (r.created_at - r.question.created_at).total_seconds() / 60)
+             for r in Message.objects.filter(kind=Message.STAFF, created_at__gte=since, question__isnull=False)
+             .select_related("user__contact", "user__member", "question") if r.user and r.user.staff_name() in team]
+    return {"questions": pt.count(), "by_bot": pt.filter(stage__in=["template", "faq", "rule", "ai", "image"]).count(),
+            "unanswered": pt.exclude(status__in=[Message.ANSWERED, Message.CLOSED, Message.IGNORED]).count(),
+            "types": [{"title": t, "n": n} for t, n in types.most_common(10)],
+            "team_answers": len(times), "team_median_minutes": round(median(times), 1) if times else None}
+
+
+# ====================================================================== fayllar va rasm turlari (o'rgatish)
+def media_dict(m):
+    return {"id": m.id, "kind": m.kind, "name": m.name, "mime": m.mime, "size": m.size, "width": m.width, "height": m.height,
+            "label": m.label_id, "label_title": m.label.title if m.label_id else "", "label_auto": m.label_auto,
+            "ocr": (m.ocr_text or "")[:300], "source": m.source, "created_at": m.created_at, "available": bool(m.path)}
+
+
+def upload_api(fn):
+    from rest_framework.decorators import (api_view, authentication_classes, parser_classes, permission_classes,
+                                           renderer_classes)
+    from rest_framework.parsers import FormParser, MultiPartParser
+    from rest_framework.renderers import JSONRenderer
+
+    from zona.auth import AUTHENTICATION
+    fn = authentication_classes(AUTHENTICATION)(fn)
+    fn = permission_classes([ReadOrEdit])(fn)
+    fn = renderer_classes([JSONRenderer])(fn)
+    fn = parser_classes([MultiPartParser, FormParser])(fn)
+    return api_view(["POST"])(fn)
+
+
+MAX_UPLOAD = 45 * 1024 * 1024  # Telegram bot fayl yuborish chegarasi ~50 MB
+
+
+@upload_api
+def media_upload(request):
+    """Javob biriktirmasi (rasm, video, fayl) yoki o'rgatish namunasi (rasm). Bir nechta fayl bo'lishi mumkin."""
+    from . import ocr, vision
+    out = []
+    for f in request.FILES.getlist("files") or request.FILES.getlist("file"):
+        if f.size > MAX_UPLOAD:
+            return Response({"detail": f"{f.name}: fayl juda katta (≤45 MB)."}, status=400)
+        mime = f.content_type or ""
+        kind = request.data.get("kind") or ("photo" if mime.startswith("image/") else "video" if mime.startswith("video/")
+                                            else "document")
+        data = f.read()
+        m = vision.store(data, kind=kind, name=f.name, mime=mime, source=request.data.get("source") or "answer")
+        label = request.data.get("label")
+        if label and kind == Media.PHOTO:
+            e = Entry.objects.filter(pk=label).first()
+            if e:
+                if Settings.load().ocr_enabled:
+                    Media.objects.filter(pk=m.pk).update(ocr_text=ocr.read_text(data))
+                vision.label([m], e, _actor(request))
+                m.refresh_from_db()
+        out.append(media_dict(m))
+    if not out:
+        return Response({"detail": "Fayl tanlang."}, status=400)
+    return Response(out)
+
+
+@zona_api(["GET"], [CanView])
+def media_file(request, pk):
+    from django.http import FileResponse, Http404
+    m = Media.objects.filter(pk=pk).first()
+    if not m or not m.path:
+        raise Http404
+    try:
+        fh = open(m.path, "rb")
+    except OSError as e:
+        raise Http404 from e
+    return FileResponse(fh, content_type=m.mime or ("image/jpeg" if m.kind == Media.PHOTO else "application/octet-stream"),
+                        filename=m.name or None)
+
+
+@zona_api(["GET"], [CanView])
+def image_types(request):
+    """Rasm turlari: o'rgatilgan namunalar (yozuv bo'yicha) va yorliqsiz rasmlar guruhlari."""
+    from . import vision
+    s = Settings.load()
+    labeled = {}
+    for m in Media.objects.filter(kind=Media.PHOTO, label__isnull=False).select_related("label").order_by("-created_at"):
+        row = labeled.setdefault(m.label_id, {"entry": m.label_id, "title": m.label.title, "status": m.label.status,
+                                              "count": 0, "auto": 0, "samples": []})
+        row["count"] += 1
+        row["auto"] += int(m.label_auto)
+        if len(row["samples"]) < 4:
+            row["samples"].append(media_dict(m))
+    unl = Media.objects.filter(kind=Media.PHOTO, label__isnull=True).exclude(dhash="").exclude(path="").order_by("-created_at")[:600]
+    groups = []
+    for g in vision.clusters(list(unl), s.image_threshold)[:60]:
+        guess, dist, _ = vision.match(g[0], s.image_threshold * 2, include_unapproved=True)
+        groups.append({"count": len(g), "ids": [m.id for m in g], "samples": [media_dict(m) for m in g[:4]],
+                       "ocr": next((m.ocr_text[:300] for m in g if m.ocr_text), ""),
+                       "guess": guess.id if guess else None, "guess_title": guess.title if guess else ""})
+    return Response({"labeled": sorted(labeled.values(), key=lambda r: -r["count"]), "unlabeled": groups,
+                     "threshold": s.image_threshold,
+                     "total": Media.objects.filter(kind=Media.PHOTO).count()})
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def image_label(request):
+    """Rasmlarni yozuvga o'rgatish (entry=null — yorliqni olib tashlash)."""
+    from . import vision
+    ids = [int(x) for x in request.data.get("ids") or []][:1000]
+    qs = Media.objects.filter(id__in=ids, kind=Media.PHOTO)
+    entry_id = request.data.get("entry")
+    if not entry_id:
+        n = qs.update(label=None, label_auto=False, label_by=_actor(request))
+        return Response({"done": n})
+    e = Entry.objects.filter(pk=entry_id).first()
+    if not e:
+        return Response({"detail": "Yozuv topilmadi"}, status=400)
+    return Response({"done": vision.label(qs, e, _actor(request))})

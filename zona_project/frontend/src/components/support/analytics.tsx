@@ -56,6 +56,38 @@ export function SupportAnalytics() {
             ))}
           </div>
 
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section>
+              <SectionTitle>{t("anPt")}</SectionTitle>
+              <Card className="gap-2 p-3 text-sm">
+                <div className="flex flex-wrap gap-3">
+                  <span>{t("anQuestions")}: <b>{a.protarget.questions}</b></span>
+                  <span>{t("kpiBot")}: <b>{a.protarget.by_bot}</b></span>
+                  <span>{t("anUnanswered")}: <b>{a.protarget.unanswered}</b></span>
+                  <span>{t("anPtTeam")}: <b>{a.protarget.team_answers}</b>
+                    {a.protarget.team_median_minutes != null && ` · ${t("anMin", { n: a.protarget.team_median_minutes })}`}</span>
+                </div>
+                {a.protarget.types.map((x) => (
+                  <div key={x.title} className="flex justify-between gap-2 text-xs"><span className="truncate">{x.title}</span><span className="font-mono">{x.n}</span></div>
+                ))}
+              </Card>
+            </section>
+            <section>
+              <SectionTitle>{t("anImages")}</SectionTitle>
+              <Card className="gap-2 p-3 text-sm">
+                <div className="flex flex-wrap gap-3">
+                  <span>{t("anImgTotal")}: <b>{a.images.total}</b></span>
+                  <span>{t("anImgLabeled")}: <b>{a.images.labeled}</b></span>
+                  <span>{t("anImgTypes")}: <b>{a.images.types}</b></span>
+                  <span>{t("anImgByImage")}: <b>{a.images.by_image}</b></span>
+                </div>
+                {Object.entries(a.zones).sort((x, y) => y[1] - x[1]).map(([z, n]) => (
+                  <div key={z} className="flex justify-between gap-2 text-xs"><span className="truncate">{z}</span><span className="font-mono">{n}</span></div>
+                ))}
+              </Card>
+            </section>
+          </div>
+
           <section>
             <SectionTitle><span className="inline-flex items-center gap-1.5"><UserRound className="size-4" />{t("anStaff")}</span></SectionTitle>
             <Card className="p-0">

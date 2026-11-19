@@ -20,7 +20,10 @@ class Settings(models.Model):
     route_threshold = models.PositiveIntegerField("Qoida bo'yicha javob: ishonch chegarasi (%)", default=60)
     learn_from_staff = models.BooleanField("Xodimlar javoblaridan o'rganish", default=True)
     ocr_enabled = models.BooleanField("Rasmdagi matnni o'qish (OCR)", default=True)
-    media_days = models.PositiveIntegerField("Rasmlarni saqlash (kun)", default=30)
+    media_days = models.PositiveIntegerField("O'rgatilmagan rasmlarni saqlash (kun, 0 — doim)", default=0)
+    image_match = models.BooleanField("Rasm turini o'rgatilgan namunalar bo'yicha tanish", default=True)
+    image_threshold = models.PositiveIntegerField("Rasm o'xshashligi chegarasi (0–64, kichik — qattiqroq)", default=10)
+    image_autolabel = models.BooleanField("Xodim javobi va ishonchli moslikdan rasmni avtomatik o'rgatish", default=True)
     signature = models.CharField("Javob imzosi", max_length=120, blank=True, default="🤖 Avto-javob")
     # --- xatti-harakat (har biri yoqib/o'chiriladi) ---
     drafts_to_admin = models.BooleanField("Soya rejimi: javob taklifini admin chatiga yuborish", default=True)
@@ -137,6 +140,7 @@ class Entry(models.Model):
     source = models.CharField(max_length=8, choices=SOURCES, default="manual")
     priority = models.BooleanField("Ustuvor (bot javobini xodim tuzatgan)", default=False)
     pending = models.JSONField("Tasdiq kutayotgan tahrir", null=True, blank=True)
+    attachments = models.JSONField("Javob bilan yuboriladigan fayllar (Media id)", default=list, blank=True)
     ask_first = models.TextField("Javobdan oldin so'raladigan ma'lumot", blank=True,
                                  help_text="Xodimlar odatda avval nimani so'raydi (masalan: STIR, skrinshot)")
     author = models.CharField(max_length=150, blank=True)
@@ -263,3 +267,37 @@ class HistoryJob(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class Media(models.Model):
+    """Serverda saqlanadigan fayl: savoldagi rasm/video yoki javob biriktirmasi.
+
+    Rasmlar uchun "vizual iz" (perceptual hash) hisoblanadi: agentlar yuboradigan skrinshotlar deyarli bir xil ekran
+    bo'ladi (faqat foydalanuvchi ma'lumoti farq qiladi), shuning uchun yangi rasm o'rgatilgan namunalarga (label)
+    eng yaqin qo'shni bo'yicha solishtiriladi — OCR'siz, bir zumda. O'rgatilgan va biriktirilgan fayllar o'chirilmaydi.
+    """
+
+    PHOTO, VIDEO, VIDEO_NOTE, ANIMATION, DOCUMENT = "photo", "video", "video_note", "animation", "document"
+    KINDS = [(PHOTO, "Rasm"), (VIDEO, "Video"), (VIDEO_NOTE, "Dumaloq video"), (ANIMATION, "GIF"), (DOCUMENT, "Fayl")]
+    kind = models.CharField(max_length=12, choices=KINDS, default=PHOTO)
+    path = models.CharField(max_length=400, blank=True)
+    name = models.CharField(max_length=200, blank=True)
+    mime = models.CharField(max_length=100, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True, db_index=True)
+    width = models.PositiveIntegerField(default=0)
+    height = models.PositiveIntegerField(default=0)
+    dhash = models.CharField(max_length=16, blank=True)
+    dhash_mid = models.CharField(max_length=16, blank=True)
+    ocr_text = models.TextField(blank=True)
+    source = models.CharField(max_length=10, default="question")  # question / history / answer / seed
+    message = models.ForeignKey(Message, null=True, blank=True, on_delete=models.SET_NULL, related_name="media")
+    label = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="image_examples")
+    label_auto = models.BooleanField(default=False)
+    label_by = models.CharField(max_length=150, blank=True)
+    tg_file_ids = models.JSONField(default=dict, blank=True)  # {bot_id: file_id} — qayta yuklamasdan yuborish
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["kind", "label"])]

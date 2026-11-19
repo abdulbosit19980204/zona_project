@@ -5,6 +5,11 @@ export type Mode = "off" | "collect" | "shadow" | "live";
 export type EntryStatus = "new" | "review" | "approved" | "rejected" | "archived";
 export type EntryKind = "template" | "faq";
 export type MsgStatus = "new" | "answered" | "drafted" | "escalated" | "ignored" | "closed";
+export interface MediaInfo {
+  id: number; kind: "photo" | "video" | "video_note" | "animation" | "document"; name: string; mime: string; size: number;
+  width: number; height: number; label: number | null; label_title: string; label_auto: boolean; ocr: string; source: string;
+  created_at: string; available: boolean;
+}
 
 export interface SupportBot {
   id: number; name: string; username: string; enabled: boolean; mode: Mode; admin_chat_id: number | null;
@@ -26,7 +31,8 @@ export interface PendingEdit {
 }
 export interface Entry {
   id: number; kind: EntryKind; title: string; questions: string[]; triggers: string[]; extract: string[];
-  answer: string; answer_ru: string; ask_first: string; zone: number | null; zone_name: string; responsible: number | null;
+  answer: string; answer_ru: string; ask_first: string; attachments: number[]; attachments_info?: MediaInfo[];
+  image_examples_count?: number; zone: number | null; zone_name: string; responsible: number | null;
   responsible_name: string; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
   author: string; approved_by: string; approved_at: string | null; uses: number; likes: number; dislikes: number;
   last_used_at: string | null; created_at: string; updated_at: string;
@@ -34,10 +40,10 @@ export interface Entry {
 }
 export interface SupportMessage {
   id: number; group: number | null; group_title: string; user_name: string; user_username: string; text: string;
-  ocr_text: string; has_photo: boolean; lang: string; status: MsgStatus; stage: string; entry: number | null;
+  ocr_text: string; has_photo: boolean; media: MediaInfo[]; lang: string; status: MsgStatus; stage: string; entry: number | null;
   entry_title: string; confidence: number; answer_text: string; answered_by: string; feedback: number;
   created_at: string; answered_at: string | null;
-  staff_answers: { by: string; text: string; at: string; kind: "staff" | "clarify" | "info"; ocr: string }[];
+  staff_answers: { by: string; text: string; at: string; kind: "staff" | "clarify" | "info"; ocr: string; media: MediaInfo[] }[];
 }
 export interface SupportSettings {
   api_id: string; api_hash: string; has_api_hash: boolean; ai_enabled: boolean; ai_daily_limit: number;
@@ -49,6 +55,12 @@ export interface SupportSettings {
   history_days: number; history_photos: boolean; history_max: number;
   mtproto_available: boolean; mtproto_connected: boolean; mtproto_user: string; mtproto_pending: boolean;
   mtproto_need_password: boolean; mtproto_phone: string;
+  image_match: boolean; image_threshold: number; image_autolabel: boolean;
+}
+export interface ImageTypes {
+  labeled: { entry: number; title: string; status: EntryStatus; count: number; auto: number; samples: MediaInfo[] }[];
+  unlabeled: { count: number; ids: number[]; samples: MediaInfo[]; ocr: string; guess: number | null; guess_title: string }[];
+  threshold: number; total: number;
 }
 export interface HistoryJob {
   id: number; group: number; group_title: string; days: number; photos: boolean; status: "queued" | "running" | "done" | "failed";
@@ -64,6 +76,10 @@ export interface Analytics {
   top_asks: { text: string; count: number }[];
   daily: { date: string; total: number; bot: number; staff: number }[];
   groups: { title: string; n: number }[];
+  zones: Record<string, number>;
+  protarget: { questions: number; by_bot: number; unanswered: number; types: { title: string; n: number }[];
+    team_answers: number; team_median_minutes: number | null };
+  images: { total: number; labeled: number; types: number; by_image: number };
 }
 export interface SupportStats {
   total: number; by_status: Partial<Record<MsgStatus, number>>; by_stage: Record<string, number>;
@@ -119,4 +135,14 @@ export const supportApi = {
   mtSendCode: (phone: string) => post<SupportSettings & { need_password?: boolean }>("mtproto/send-code/", { phone }),
   mtSignIn: (code: string, password = "") => post<SupportSettings & { need_password?: boolean }>("mtproto/sign-in/", { code, password }),
   mtLogout: () => post<SupportSettings>("mtproto/logout/"),
+  upload: async (files: File[], opts: { label?: number; source?: string } = {}) => {
+    const fd = new FormData();
+    files.forEach((f) => fd.append("files", f));
+    if (opts.label) fd.append("label", String(opts.label));
+    if (opts.source) fd.append("source", opts.source);
+    return (await api.post<MediaInfo[]>(B + "media/upload/", fd, { headers: { "Content-Type": "multipart/form-data" } })).data;
+  },
+  mediaBlob: async (id: number) => (await api.get<Blob>(`${B}media/${id}/file/`, { responseType: "blob" })).data,
+  images: () => get<ImageTypes>("images/"),
+  label: (ids: number[], entry: number | null) => post<{ done: number }>("images/label/", { ids, entry }),
 };

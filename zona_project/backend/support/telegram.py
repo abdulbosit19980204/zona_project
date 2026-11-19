@@ -3,12 +3,14 @@
 Bloklanmaslik uchun: faqat rasmiy Bot API; har bir chatga yuborish oralig'i ≥ 3 s (daqiqasiga ~20),
 umumiy oqim soniyasiga ≤ 25; 429 javobida Telegram aytgan `retry_after` kutiladi.
 """
+import io
 import json
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 API = "https://api.telegram.org"
 CHAT_GAP = 3.0       # bitta guruhga ketma-ket xabarlar orasidagi minimal vaqt (s)
@@ -109,6 +111,80 @@ class Client:
             self.call("sendChatAction", {"chat_id": chat_id, "action": "typing"}, retries=0, timeout=10)
         except TelegramError:
             pass
+
+    # ------------------------------------------------------------ fayllar (javob biriktirmalari)
+    def call_multipart(self, method, fields, files, timeout=120):
+        """multipart/form-data: fields — oddiy qiymatlar (dict/list JSON qilinadi), files — {nom: (fayl_nomi, bytes)}."""
+        boundary = f"----foydali{uuid.uuid4().hex}"
+        body = io.BytesIO()
+        for k, v in fields.items():
+            if v is None:
+                continue
+            if isinstance(v, (dict, list)):
+                v = json.dumps(v, ensure_ascii=False)
+            body.write(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
+        for k, (fname, data) in files.items():
+            body.write(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"; filename=\"{fname}\"\r\n"
+                       f"Content-Type: application/octet-stream\r\n\r\n".encode())
+            body.write(data)
+            body.write(b"\r\n")
+        body.write(f"--{boundary}--\r\n".encode())
+        req = urllib.request.Request(f"{self.base}/bot{self.token}/{method}", data=body.getvalue(),
+                                     headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                res = json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            res = json.loads(e.read().decode("utf-8") or "{}")
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            raise TelegramError(f"Tarmoq xatosi: {e}") from e
+        if not res.get("ok"):
+            raise TelegramError(res.get("description", "Telegram xatosi"), res.get("error_code", 0),
+                                (res.get("parameters") or {}).get("retry_after", 0))
+        return res["result"]
+
+    SEND = {"photo": ("sendPhoto", "photo"), "video": ("sendVideo", "video"), "video_note": ("sendVideoNote", "video_note"),
+            "animation": ("sendAnimation", "animation"), "document": ("sendDocument", "document")}
+
+    @staticmethod
+    def _file_id(result, kind):
+        if kind == "photo":
+            return (result.get("photo") or [{}])[-1].get("file_id")
+        return (result.get(kind) or result.get("document") or {}).get("file_id")
+
+    def send_media(self, chat_id, items, reply_to=None):
+        """items: [{"kind", "name", "data" (bytes, ixtiyoriy), "file_id" (ixtiyoriy)}] -> har biri uchun file_id ro'yxati.
+
+        Bitta fayl — o'z turida; rasm/video ko'p bo'lsa — albom (media group, 10 tadan); hujjatlar alohida."""
+        reply = {"message_id": int(reply_to), "allow_sending_without_reply": True} if reply_to else None
+        ids = [None] * len(items)
+        album = [i for i, it in enumerate(items) if it["kind"] in ("photo", "video")]
+        single = [i for i in range(len(items)) if i not in album] if len(album) > 1 else list(range(len(items)))
+        if len(album) > 1:
+            for start in range(0, len(album), 10):
+                chunk = album[start:start + 10]
+                media, files = [], {}
+                for j, i in enumerate(chunk):
+                    it = items[i]
+                    ref = it.get("file_id") or f"attach://f{j}"
+                    if not it.get("file_id"):
+                        files[f"f{j}"] = (it.get("name") or f"f{j}", it["data"])
+                    media.append({"type": it["kind"], "media": ref})
+                self._throttle(chat_id)
+                res = self.call_multipart("sendMediaGroup", {"chat_id": chat_id, "media": media, "reply_parameters": reply}, files)
+                for i, r in zip(chunk, res):
+                    ids[i] = self._file_id(r, items[i]["kind"])
+        for i in single:
+            it = items[i]
+            method, field = self.SEND.get(it["kind"], self.SEND["document"])
+            self._throttle(chat_id)
+            if it.get("file_id"):
+                r = self.call(method, {"chat_id": chat_id, field: it["file_id"], "reply_parameters": reply})
+            else:
+                r = self.call_multipart(method, {"chat_id": chat_id, "reply_parameters": reply},
+                                        {field: (it.get("name") or field, it["data"])})
+            ids[i] = self._file_id(r, it["kind"])
+        return ids
 
     def download(self, file_id, max_bytes=8 * 1024 * 1024):
         info = self.call("getFile", {"file_id": file_id})

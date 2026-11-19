@@ -281,15 +281,24 @@ def ai_answer(raw, lang, context_entries, rule_task, settings):
 
 
 # ------------------------------------------------------------------ yig'ish
-def decide(raw, lang="uz", allow_unapproved=False):
-    """Savol matni (+ rasm matni) -> Decision. allow_unapproved: soya rejimida ko'rib chiqilayotgan shablonlar ham."""
+def decide(raw, lang="uz", allow_unapproved=False, image=None):
+    """Savol matni (+ rasm matni) -> Decision. allow_unapproved: soya rejimida ko'rib chiqilayotgan shablonlar ham.
+    image: (yozuv, ishonch) — rasm turi o'rgatilgan namunadan tanilgan bo'lsa, eng birinchi va eng tez bosqich."""
     settings = Settings.load()
     statuses = [Entry.APPROVED, Entry.REVIEW, Entry.NEW] if allow_unapproved else [Entry.APPROVED]
     entries = list(Entry.objects.filter(status__in=statuses))
     templates = [e for e in entries if e.kind == Entry.TEMPLATE]
     faqs = [e for e in entries if e.kind == Entry.FAQ]
 
-    task, rule_conf, resp = rule_answer(raw, lang)
+    task, rule_conf, resp = rule_answer(raw, lang) if raw else (None, 0, [])
+
+    if image and image[0] is not None:
+        e = image[0]
+        fields = extract_fields(e, raw)
+        if e.responsible_id:
+            resp = [_person(e.responsible)] + [r for r in resp if r.get("id") != e.responsible_id]
+        return Decision("image", e, image[1], render_answer(e, fields, lang), False, resp, fields,
+                        e.status != Entry.APPROVED)
 
     e, fields, conf = match_template(raw, templates)
     if e:

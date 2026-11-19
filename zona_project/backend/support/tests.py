@@ -16,7 +16,7 @@ from .runner import Handler
 OCR_1C = """1c DMS food · #1588 · 1-tahrir  1C da allaqachon bor
 1C DMS da bu nuqta allaqachon bor edi — mavjudini qaytardi; yangisi yaratilmadi.
 1C dagi nuqta kodi UZ-00032829
-1C dagi kontragent BOBOJONOVA MAXFUZA AZIMOVNA (UZ-00024680)
+1C dagi kontragent TESTOVA NAMUNA KLIENTOVNA (UZ-00024680)
 Marshrut Kunlarsiz"""
 OCR_PT = 'Новая торговая точка\nТорговая точка "BRAND-BRO-TRADE" MAS`ULIYATI CHEKLANGAN JAMIYAT\nотправлена на модерацию!'
 
@@ -38,7 +38,7 @@ class FakeClient:
     def typing(self, chat_id):
         pass
 
-    def download(self, file_id):
+    def download(self, file_id, max_bytes=0):
         return b"img"
 
 

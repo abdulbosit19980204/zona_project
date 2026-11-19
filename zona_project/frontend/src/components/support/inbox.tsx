@@ -18,6 +18,7 @@ import { useCan } from "@/hooks/use-org";
 
 import { supportApi, type MsgStatus, type SupportMessage } from "./api";
 import { fmtDate, MsgBadge, stageLabel, useSupportMutation } from "./common";
+import { MediaRow } from "./media";
 import { useSt, type ST } from "./i18n";
 
 const TABS: (MsgStatus | "open" | "all")[] = ["open", "escalated", "drafted", "answered", "closed", "all"];
@@ -107,6 +108,7 @@ function MessageCard({ m, t }: { m: SupportMessage; t: ST }) {
         {m.feedback === -1 && <ThumbsDown className="size-3.5 text-destructive" />}
       </div>
       {m.text && <p className="whitespace-pre-wrap text-sm">{m.text}</p>}
+      <MediaRow items={m.media} />
       {m.has_photo && (
         <div className="rounded-lg border bg-muted/40 p-2 text-xs">
           <div className="mb-1 flex items-center gap-1 font-medium"><ImageIcon className="size-3.5" />{m.ocr_text ? t("ocr") : t("photo")}</div>
@@ -133,6 +135,7 @@ function MessageCard({ m, t }: { m: SupportMessage; t: ST }) {
             <Badge variant="outline" className="h-5 font-normal">{t(`k_${a.kind}`)}</Badge>{a.by} · {fmtDate(a.at)}
           </div>
           <p className="whitespace-pre-wrap">{a.text}</p>
+          <MediaRow items={a.media} />
           {a.ocr && <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">🖼 {a.ocr}</p>}
         </div>
       ))}

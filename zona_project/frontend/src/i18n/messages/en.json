@@ -55,7 +55,8 @@
     "supReview": "Approval queue",
     "supKnowledge": "Knowledge base",
     "supSettings": "Bots & settings",
-    "supAnalytics": "Analytics"
+    "supAnalytics": "Analytics",
+    "supImages": "Image types"
   },
   "top": {
     "search": "Search…",

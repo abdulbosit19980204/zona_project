@@ -16,9 +16,9 @@ from django.utils import timezone
 from zona import conf
 from zona.crypto import decrypt
 
-from . import engine, ocr
+from . import engine, ocr, vision
 from .models import (MODE_COLLECT, MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, HistoryJob,
-                     Message, Settings)
+                     Media, Message, Settings)
 from .telegram import Client, TelegramError
 
 log = logging.getLogger("support")
@@ -134,7 +134,9 @@ class Handler:
         mode = MODE_COLLECT if self.history else group.effective_mode()
         user = engine.identify(sender["id"], sender.get("username", ""), _full_name(sender))
         text = (msg.get("text") or msg.get("caption") or "").strip()
-        photo = _photo_id(msg) or ("history" if msg["message_id"] in self.photo_bytes else None)
+        media = _media_of(msg) or (("history", "photo", "", "image/jpeg") if msg["message_id"] in self.photo_bytes else None)
+        photo = media[0] if media else None
+        self.media_meta = media
         reply_to = (msg.get("reply_to_message") or {}).get("message_id")
         if mode == MODE_OFF:
             return None
@@ -168,7 +170,7 @@ class Handler:
         self.process_question(q, mode)
         return q
 
-    def on_info(self, msg, group, user, text, photo, q, mode):
+    def on_info(self, msg, group, user, text, photo, q, mode):  # noqa: C901
         """Savol egasi so'ralgan ma'lumotni yubordi: zanjirga qo'shiladi; bot o'zi so'ragan bo'lsa — qayta javob beradi."""
         info, created = Message.objects.get_or_create(
             bot=self.bot, chat_id=msg["chat"]["id"], message_id=msg["message_id"],
@@ -181,8 +183,10 @@ class Handler:
         if self.history:
             info.created_at = self.when(msg)
             Message.objects.filter(pk=info.pk).update(created_at=info.created_at)
-        if photo and self.settings.ocr_enabled:
-            self._read_photo(info)
+        if photo:
+            m = self._fetch_media(info)
+            if m and m.kind == Media.PHOTO and self.settings.ocr_enabled:
+                self._ocr(info, m)
             info.save(update_fields=["photo_path", "ocr_text", "error"])
         if q.stage == "ask" and mode == MODE_LIVE:
             extra = "\n".join(x for x in (info.text, info.ocr_text) if x)
@@ -192,17 +196,38 @@ class Handler:
 
     def process_question(self, q, mode, skip_ask=False):
         settings = self.settings
-        if q.photo_file_id and settings.ocr_enabled and not q.ocr_text:
-            self._read_photo(q)
+        unapproved = mode in (MODE_SHADOW, MODE_COLLECT)
+        media, image, deferred_ocr = None, None, False
+        if q.photo_file_id:
+            media = self._fetch_media(q)
+        if media and media.kind == Media.PHOTO:
+            if settings.image_match:
+                entry, dist, _ex = vision.match(media, settings.image_threshold, include_unapproved=unapproved)
+                if entry:
+                    image = (entry, vision.confidence(dist))
+            # rasm turi tanilgan va yozuv rasmdan maydon olmaydi -> OCR javobdan keyin (tezlik uchun)
+            deferred_ocr = bool(image) and not image[0].extract and mode == MODE_LIVE
+            if settings.ocr_enabled and not q.ocr_text and not deferred_ocr:
+                self._ocr(q, media)
         raw = "\n".join(x for x in (q.text, q.ocr_text) if x).strip()
         q.lang = engine.detect_lang(q.text or q.ocr_text)
-        if not raw:
+        if not raw and not image:
             q.status = Message.IGNORED
             q.save()
             return q
         if mode == MODE_LIVE:
             self.tg.typing(q.chat_id)
-        d = engine.decide(raw, q.lang, allow_unapproved=(mode in (MODE_SHADOW, MODE_COLLECT)))
+        d = engine.decide(raw, q.lang, allow_unapproved=unapproved, image=image)
+        self._autolabel(media, d)
+        try:
+            return self._respond(q, d, mode, skip_ask)
+        finally:
+            if deferred_ocr and settings.ocr_enabled:
+                self._ocr(q, media)
+                Message.objects.filter(pk=q.pk).update(ocr_text=q.ocr_text)
+
+    def _respond(self, q, d, mode, skip_ask):
+        settings = self.settings
         q.stage, q.entry, q.confidence = d.stage, d.entry, d.confidence
         q.answer_text = d.text
         if d.entry:
@@ -236,8 +261,7 @@ class Handler:
                 body += "\n\n" + line
             buttons = ([[{"text": "👍", "callback_data": f"fb:{q.id}:1"}, {"text": "👎", "callback_data": f"fb:{q.id}:-1"}]]
                        if settings.feedback_buttons else None)
-            sent = self._safe_send(q.chat_id, engine.to_html(body, settings.signature), reply_to=q.message_id,
-                                   buttons=buttons)
+            sent = self._send_answer(q, engine.to_html(body, settings.signature), d.entry, buttons)
             if sent:
                 q.status, q.answered_by, q.answered_at = Message.ANSWERED, "bot", timezone.now()
                 q.bot_reply_id = sent.get("message_id")
@@ -299,6 +323,8 @@ class Handler:
                                source="history" if self.history else "staff")
             if new and settings.notify_candidates and not self.history:
                 self._send_candidate(entry, q, staff_name)
+            if entry and settings.image_autolabel:
+                vision.label(Media.objects.filter(message=q, kind=Media.PHOTO), entry, staff_name, auto=True)
         return a
 
     # ---------------------------------------------------------------- tugmalar
@@ -333,8 +359,9 @@ class Handler:
             if not q:
                 return self.tg.answer_callback(cb["id"], "Topilmadi")
             if kind == "send" and q.answer_text and q.status != Message.ANSWERED:
-                sent = self._safe_send(q.chat_id, engine.to_html(q.answer_text, Settings.load().signature),
-                                       reply_to=q.message_id)
+                sent = self._send_answer(q, engine.to_html(q.answer_text, Settings.load().signature), q.entry)
+                if sent and self.settings.image_autolabel and q.entry_id:  # admin tasdiqladi -> rasm namunasi
+                    vision.label(Media.objects.filter(message=q, kind=Media.PHOTO), q.entry, by, auto=True)
                 if sent:
                     q.status, q.answered_by, q.answered_at = Message.ANSWERED, f"bot ({by})", timezone.now()
                     q.bot_reply_id = sent.get("message_id")
@@ -356,24 +383,71 @@ class Handler:
         return self.tg.answer_callback(cb["id"])
 
     # ---------------------------------------------------------------- yordamchilar
-    def _read_photo(self, q):
+    def _fetch_media(self, q):
+        """Savoldagi faylni serverga saqlaydi (Media). Rasm uchun vizual iz hisoblanadi."""
+        existing = Media.objects.filter(message=q).first()
+        if existing:
+            return existing
+        file_id, kind, name, mime = getattr(self, "media_meta", None) or (q.photo_file_id, "photo", "", "")
         data = self.photo_bytes.get(q.message_id)
         if data is None:
             try:
-                data = self.tg.download(q.photo_file_id)
+                data = self.tg.download(file_id, max_bytes=(8 if kind == "photo" else 20) * 1024 * 1024)
             except TelegramError as e:
-                q.error = f"Rasm olinmadi: {e}"[:300]
-                return
-        day = timezone.localdate().isoformat()
-        folder = media_dir() / day
+                q.error = f"Fayl olinmadi: {e}"[:300]
+                return None
+        m = vision.store(data, kind=kind, name=name, mime=mime, source="history" if self.history else "question", message=q)
+        q.photo_path = m.path
+        return m
+
+    def _ocr(self, q, media):
+        if not media or media.kind != Media.PHOTO:
+            return
+        if media.ocr_text:
+            q.ocr_text = media.ocr_text
+            return
         try:
-            folder.mkdir(parents=True, exist_ok=True)
-            path = folder / f"{q.bot_id}_{q.chat_id}_{q.message_id}.jpg"
-            path.write_bytes(data)
-            q.photo_path = str(path)
+            data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
         except OSError:
-            pass
-        q.ocr_text = ocr.read_text(data)
+            data = self.photo_bytes.get(q.message_id)
+        q.ocr_text = ocr.read_text(data or b"")
+        Media.objects.filter(pk=media.pk).update(ocr_text=q.ocr_text)
+
+    def _autolabel(self, media, d):
+        """Ishonchli moslik (tasdiqlangan shablon/javob, ≥90%) — rasmni shu yozuvning namunasi qilib o'rganadi."""
+        if (media and media.kind == Media.PHOTO and not media.label_id and self.settings.image_autolabel and d.entry
+                and d.entry.status == Entry.APPROVED and d.stage in ("template", "faq") and d.confidence >= 90):
+            vision.label([media], d.entry, "bot", auto=True)
+
+    def _send_answer(self, q, body_html, entry=None, buttons=None):
+        """Javob matni + (bo'lsa) yozuvga biriktirilgan rasm/video/fayllar, savolga reply qilib."""
+        sent = self._safe_send(q.chat_id, body_html, reply_to=q.message_id, buttons=buttons)
+        ids = list(entry.attachments or []) if entry else []
+        if sent and ids:
+            files = {m.id: m for m in Media.objects.filter(id__in=ids)}
+            items, order = [], []
+            for i in ids:
+                m = files.get(i)
+                if not m:
+                    continue
+                fid = (m.tg_file_ids or {}).get(str(self.bot.id))
+                data = None
+                if not fid:
+                    try:
+                        data = open(m.path, "rb").read()
+                    except OSError:
+                        continue
+                items.append({"kind": m.kind, "name": m.name or f"file{m.id}", "data": data, "file_id": fid})
+                order.append(m)
+            if items:
+                try:
+                    new_ids = self.tg.send_media(q.chat_id, items, reply_to=q.message_id)
+                    for m, fid in zip(order, new_ids or []):
+                        if fid and (m.tg_file_ids or {}).get(str(self.bot.id)) != fid:
+                            Media.objects.filter(pk=m.pk).update(tg_file_ids={**(m.tg_file_ids or {}), str(self.bot.id): fid})
+                except TelegramError as e:
+                    log.warning("send_media failed: %s", e)
+        return sent
 
     def _send_draft(self, q, d, escalated=False):
         if not self.bot.admin_chat_id:
@@ -390,6 +464,10 @@ class Handler:
             parts.append(f"— — —\n💬 <b>{label}</b> ({d.confidence}%){warn}:\n{esc(d.text[:1500])}")
         else:
             parts.append("— — —\n❔ Javob topilmadi")
+        if d.entry and d.entry.attachments:
+            parts.append(f"📎 {len(d.entry.attachments)} ta fayl javob bilan yuboriladi")
+        if d.stage == "image":
+            parts.append("🖼 Rasm turi o'rgatilgan namunadan tanildi")
         if d.note:
             parts.append(f"<i>{esc(d.note[:300])}</i>")
         line = engine.responsible_line(d.responsible, "uz")
@@ -489,13 +567,24 @@ def _full_name(u):
     return " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x)[:150]
 
 
-def _photo_id(msg):
+def _media_of(msg):
+    """Xabardagi fayl: (file_id, tur, nomi, mime) yoki None. Rasm-hujjat ham rasm sifatida (iz va OCR uchun)."""
     if msg.get("photo"):
-        return msg["photo"][-1]["file_id"]  # eng katta o'lcham
+        return msg["photo"][-1]["file_id"], "photo", "", "image/jpeg"  # eng katta o'lcham
+    for kind in ("video", "video_note", "animation"):
+        v = msg.get(kind)
+        if v:
+            return v["file_id"], kind, v.get("file_name", ""), v.get("mime_type", "video/mp4")
     doc = msg.get("document") or {}
-    if str(doc.get("mime_type", "")).startswith("image/"):
-        return doc.get("file_id")
+    if doc.get("file_id"):
+        mime = str(doc.get("mime_type", ""))
+        return doc["file_id"], "photo" if mime.startswith("image/") else "document", doc.get("file_name", ""), mime
     return None
+
+
+def _photo_id(msg):
+    m = _media_of(msg)
+    return m[0] if m else None
 
 
 class BotWorker(threading.Thread):
@@ -546,22 +635,6 @@ class BotWorker(threading.Thread):
                 backoff = min(backoff * 2, 120)
 
 
-def cleanup_media(days):
-    root = media_dir()
-    if not root.exists():
-        return 0
-    cutoff = time.time() - days * 86400
-    removed = 0
-    for f in root.rglob("*"):
-        if f.is_file() and f.stat().st_mtime < cutoff:
-            try:
-                f.unlink()
-                removed += 1
-            except OSError:
-                pass
-    return removed
-
-
 def _history_thread(job_id):
     from .history import run_job
     close_old_connections()
@@ -605,7 +678,7 @@ def run_forever(poll=10):
                     history = threading.Thread(target=_history_thread, args=(job.id,), name="support-history", daemon=True)
                     history.start()
             if time.time() - last_cleanup > 86400:
-                cleanup_media(Settings.load().media_days)
+                vision.cleanup(Settings.load().media_days)
                 last_cleanup = time.time()
         except Exception:  # noqa: BLE001
             log.exception("runner loop error")

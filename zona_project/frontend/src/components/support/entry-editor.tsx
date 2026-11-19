@@ -12,8 +12,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
 
-import { supportApi, type Entry, type EntryKind } from "./api";
+import { supportApi, type Entry, type EntryKind, type MediaInfo } from "./api";
 import { EntryBadge, fmtDate, lines, unlines, useSupportMutation } from "./common";
+import { MediaThumb } from "./media";
 import { useSt, type SKey } from "./i18n";
 
 interface Draft {
@@ -56,10 +57,12 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
   const t = useSt();
   const can = useCan();
   const [d, setD] = useState<Draft>(initial);
+  const [files, setFiles] = useState<MediaInfo[]>(e?.attachments_info ?? []);
 
   const body = () => ({
     kind: d.kind, title: d.title.trim(), questions: lines(d.questions), triggers: lines(d.triggers), extract: lines(d.extract),
     answer: d.answer.trim(), answer_ru: d.answer_ru.trim(), ask_first: d.ask_first.trim(),
+    attachments: files.map((f) => f.id),
   });
   const save = useSupportMutation(
     (approve: boolean) => (e ? supportApi.updateEntry(e.id, body()).then((r) => (approve ? supportApi.approve(r.id) : r))
@@ -67,6 +70,8 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
     t("saved"),
   );
   const act = useSupportMutation((fn: () => Promise<unknown>) => fn(), t("saved"));
+  const upload = useSupportMutation((list: File[]) => supportApi.upload(list, { source: "answer" }));
+  const teach = useSupportMutation((list: File[]) => supportApi.upload(list, { label: e!.id, source: "seed" }), t("taught"));
   const set = (k: keyof Draft) => (v: string) => setD({ ...d, [k]: v });
   const valid = d.title.trim().length >= 2 && d.answer.trim().length >= 2;
   const waits = e?.status === "approved" && !can.edit;
@@ -114,6 +119,28 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
           <FormRow label={t("answer")} hint={t("answerHint")}>
             <Textarea rows={6} value={d.answer} onChange={(x) => set("answer")(x.target.value)} />
           </FormRow>
+          <FormRow label={t("attachments")} hint={t("attachmentsHint")}>
+            <div className="grid gap-2">
+              <div className="flex flex-wrap gap-2">
+                {files.map((f) => (
+                  <div key={f.id} className="relative">
+                    <MediaThumb m={f} />
+                    <button type="button" className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-destructive text-[10px] text-white"
+                      onClick={() => setFiles(files.filter((x) => x.id !== f.id))} aria-label={t("delete")}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <Input type="file" multiple accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" disabled={upload.isPending}
+                onChange={(x) => { const list = Array.from(x.target.files ?? []); x.target.value = "";
+                  if (list.length) upload.mutate(list, { onSuccess: (r) => setFiles([...files, ...r].slice(0, 10)) }); }} />
+            </div>
+          </FormRow>
+          {e && (
+            <FormRow label={t("examples")} hint={t("examplesHint", { n: e.image_examples_count ?? 0 })}>
+              <Input type="file" multiple accept="image/*" disabled={teach.isPending}
+                onChange={(x) => { const list = Array.from(x.target.files ?? []); x.target.value = ""; if (list.length) teach.mutate(list); }} />
+            </FormRow>
+          )}
           <FormRow label={t("answerRu")}>
             <Textarea rows={5} value={d.answer_ru} onChange={(x) => set("answer_ru")(x.target.value)} />
           </FormRow>

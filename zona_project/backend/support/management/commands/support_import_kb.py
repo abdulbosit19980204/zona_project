@@ -41,11 +41,14 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--no-routing", action="store_true", help="Qoidasiz (faqat mas'ul) savollarni qo'shmaslik")
-        parser.add_argument("--pack", choices=["distribution"], help="Tayyor to'plamni qo'shish (masalan: distribution)")
+        parser.add_argument("--pack", choices=["distribution", "protarget"], help="Tayyor to'plamni qo'shish")
 
     def pack_rows(self, name, existing):
-        from support.data.distribution_kb import PACK
+        import importlib
+
+        from support.runner import snapshot
         from zona.models import Member, Zone
+        PACK = importlib.import_module(f"support.data.{name}_kb").PACK
         members = {m.name: m for m in Member.objects.all()}
         zones = {z.name: z for z in Zone.objects.all()}
         rows = []
@@ -53,8 +56,34 @@ class Command(BaseCommand):
         # hali hech kim tegmagan to'plam yozuvlari: faqat yangi savol ko'rinishlari qo'shiladi (javob o'zgarmaydi)
         untouched = {e.title: e for e in Entry.objects.filter(author=author, status__in=[Entry.REVIEW, Entry.NEW],
                                                                pending__isnull=True, versions__isnull=True)}
-        self.extended = 0
+        self.extended = self.updated = 0
+        self.skipped = []
         for p in PACK:
+            status = p.get("status", "review")
+            approved = status == Entry.APPROVED
+            by = f"{name} ko'rsatmasi" if approved else ""
+            if p.get("update"):
+                # boshlang'ich shablonni yangilash — faqat uni hali hech kim tahrirlamagan bo'lsa
+                e = Entry.objects.filter(title=p["update"], versions__isnull=True, pending__isnull=True,
+                                         author__in=["seed", author]).first()
+                if not e:
+                    if Entry.objects.filter(title=p["update"]).exists():
+                        self.skipped.append(p["update"])
+                    continue
+                if e.answer != p["answer"] or e.status != status:
+                    if not self.dry:
+                        snapshot(e, by or author, f"{name} to'plami bilan yangilandi")
+                        e.answer, e.answer_ru = p["answer"], p.get("answer_ru", e.answer_ru)
+                        e.questions = _clean([*(e.questions or []), *p.get("questions", [])], 50)
+                        e.status, e.author = status, author
+                        e.responsible = members.get(p.get("who")) or e.responsible
+                        e.zone = zones.get(p.get("zone")) or e.zone
+                        if approved:
+                            e.approved_by, e.approved_at = by, timezone.now()
+                        e.save()
+                    self.updated += 1
+                existing.add(p["title"])
+                continue
             e = untouched.get(p["title"])
             if e:
                 merged = _clean([*(e.questions or []), *p["questions"]], 50)
@@ -65,9 +94,12 @@ class Command(BaseCommand):
                     self.extended += 1
             if p["title"] in existing:
                 continue
-            rows.append(Entry(kind=Entry.FAQ, title=p["title"][:200], questions=_clean(p["questions"]), answer=p["answer"],
-                              answer_ru=p["answer_ru"], responsible=members.get(p["who"]), zone=zones.get(p["zone"]),
-                              status=Entry.REVIEW, source="seed", author=f"{name} to'plami"))
+            rows.append(Entry(kind=p.get("kind", Entry.FAQ), title=p["title"][:200], questions=_clean(p["questions"]),
+                              triggers=p.get("triggers", []), extract=p.get("extract", []), answer=p["answer"],
+                              answer_ru=p.get("answer_ru", ""), ask_first=p.get("ask_first", ""),
+                              responsible=members.get(p.get("who")), zone=zones.get(p.get("zone")), status=status,
+                              source="seed", author=author, approved_by=by,
+                              approved_at=timezone.now() if approved else None))
             existing.add(p["title"])
         return rows
 
@@ -76,8 +108,9 @@ class Command(BaseCommand):
         if opts["pack"]:
             self.dry = opts["dry_run"]
             rows = self.pack_rows(opts["pack"], existing)
-            self.stdout.write(f"{opts['pack']} to'plami: qo'shiladi {len(rows)} (hammasi ko'rib chiqish uchun), "
-                              f"savol ko'rinishlari to'ldirildi: {self.extended}")
+            self.stdout.write(f"{opts['pack']} to'plami: qo'shiladi {len(rows)}, yangilandi {self.updated}, "
+                              f"savol ko'rinishlari to'ldirildi: {self.extended}"
+                              + (f", tegilmadi (xodim tahrirlagan): {self.skipped}" if self.skipped else ""))
             if not opts["dry_run"]:
                 with transaction.atomic():
                     Entry.objects.bulk_create(rows)

@@ -386,6 +386,15 @@ Shundan keyin ish **Bosqich 0/1** dan boshlanadi. Har bosqichda shu fayldagi hol
       paneldan ulash (telefon → kod → 2FA), muddat (kun), rasmlar (OCR), fon vazifasi va jonli holat
 - [x] Tahlil sahifasi (`/support/analytics`): xodimlar javoblari (soni, o'rtacha vaqt, aniqlashtirishlar, nomzod/tasdiqlangan),
       javobdan oldin eng ko'p so'raladigan ma'lumotlar, kunlar/guruhlar bo'yicha
+- [x] Rasmlarni o'rganish (ML): savol rasmlari va videolari serverda saqlanadi (`support_media`, sha256 bo'yicha bir marta);
+      har rasmdan vizual iz (dHash: butun + o'rta qism) olinadi va o'rgatilgan namunalarga eng yaqin qo'shni (kNN) bo'yicha
+      solishtiriladi — bir xil ekran boshqa ism/o'lcham bilan 0–5, boshqa ekran 23–37 masofada (chegara 10). Tanilgan rasmga
+      javob OCR'siz, bir zumda; OCR javobdan keyin. Namunalar: «Rasm turlari» sahifasida guruhni bir bosishda o'rgatish,
+      yozuvga skrinshot yuklash, xodim javobi va ishonchli moslikdan avtomatik. O'rgatilgan rasmlar o'chirilmaydi
+- [x] Javob biriktirmalari: rasm, video, hujjat (10 tagacha, albom bo'lib); Telegram `file_id` keshlanadi
+- [x] Pro-target ko'rsatmalari (`--pack protarget`, tasdiqlangan): vizitni boshlab bo'lmasa, geoteg o'zgartirish,
+      moderatsiya (9:00–18:00 da 5–10 daq, bosqichlar, navbat), bildirishnomalar (Profil → Bildirishnomalar);
+      tahlilda Pro-target bo'limi
 - [ ] Bosqich 3 — AI *(kod tayyor, o'chiq: Support → Sozlamalar → «AI javoblari»)*; mas'ulga uzatish ishlaydi
 - [ ] Bosqich 4 — jonli ishga tushirish (soya rejimida aniqlik o'lchangach, guruh bo'yicha yoqiladi)
 - [ ] Bosqich 5 — kengaytirish
