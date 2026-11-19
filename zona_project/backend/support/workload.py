@@ -3,6 +3,7 @@
 Asosiy o'lchov — "birinchi javob vaqti": savol berilgandan xodimning birinchi javobi yoki aniqlashtirishigacha
 (panel orqali javob ham hisoblanadi). Bot javob bergan savollar alohida sanaladi.
 """
+import os
 from collections import Counter, defaultdict
 from statistics import median
 
@@ -136,4 +137,51 @@ def workload(days=30):
         "types": pack(types, "type")[:40],
         "staff": staff, "week_keys": week_keys,
         "tasks": dict(tasks),
+    }
+
+
+SPEED_BUCKETS = [(2, "≤2s"), (5, "2–5s"), (10, "5–10s"), (30, "10–30s"), (10 ** 9, ">30s")]
+
+
+def speed(days=7):
+    """Bot tezligi: savol kelgandan bot javobi yuborilguncha (soniya). Qayerda vaqt ketadi — navbat, OCR, AI, yuborish."""
+    from .models import Settings
+    since = timezone.now() - timezone.timedelta(days=days)
+    rows = list(Message.objects.filter(kind=Message.QUESTION, created_at__gte=since, answered_by="bot", answered_at__isnull=False)
+                .values("id", "created_at", "answered_at", "stage", "photo_file_id", "group__title", "timing", "text"))
+    def secs(r):
+        return max(0.0, (r["answered_at"] - r["created_at"]).total_seconds())
+    all_s = [secs(r) for r in rows]
+    buckets = Counter(next(label for lim, label in SPEED_BUCKETS if v <= lim) for v in all_s)
+    by = lambda key: defaultdict(list)  # noqa: E731
+    stage, kind, group, hour, day = by(0), by(0), by(0), by(0), by(0)
+    parts = defaultdict(list)
+    for r, v in zip(rows, all_s):
+        stage[r["stage"] or "—"].append(v)
+        kind["photo" if r["photo_file_id"] else "text"].append(v)
+        group[r["group__title"] or "—"].append(v)
+        hour[timezone.localtime(r["created_at"]).hour].append(v)
+        day[timezone.localtime(r["created_at"]).date().isoformat()].append(v)
+        for k, ms in (r["timing"] or {}).items():
+            if isinstance(ms, (int, float)):
+                parts[k].append(ms / 1000)
+
+    def pack(d, name):
+        return sorted([{name: k, "n": len(v), "p50": _q(v, 0.5), "p90": _q(v, 0.9), "max": round(max(v), 1)} for k, v in d.items()],
+                      key=lambda x: -x["n"])
+    slow = sorted(zip(rows, all_s), key=lambda x: -x[1])[:15]
+    s = Settings.load()
+    return {
+        "days": days, "answered": len(rows), "p50": _q(all_s, 0.5), "p90": _q(all_s, 0.9), "p99": _q(all_s, 0.99),
+        "max": round(max(all_s), 1) if all_s else None,
+        "within_5": round(100 * sum(1 for v in all_s if v <= 5) / len(all_s)) if all_s else None,
+        "buckets": [{"label": label, "n": buckets.get(label, 0)} for _lim, label in SPEED_BUCKETS],
+        "by_stage": pack(stage, "stage"), "by_kind": pack(kind, "kind"), "by_group": pack(group, "group")[:20],
+        "by_hour": [{"hour": h, "n": len(hour.get(h, [])), "p50": _q(hour.get(h, []), 0.5), "p90": _q(hour.get(h, []), 0.9)} for h in range(24)],
+        "by_day": [{"date": k, "n": len(v), "p50": _q(v, 0.5), "p90": _q(v, 0.9)} for k, v in sorted(day.items())],
+        "parts": {k: {"avg": round(sum(v) / len(v), 2), "p90": _q(v, 0.9)} for k, v in parts.items() if v},
+        "slowest": [{"id": r["id"], "secs": round(v, 1), "stage": r["stage"], "photo": bool(r["photo_file_id"]),
+                     "group": r["group__title"] or "", "text": (r["text"] or "")[:80], "timing": r["timing"] or {},
+                     "at": r["created_at"]} for r, v in slow],
+        "workers": s.workers, "cpu": os.cpu_count(),
     }

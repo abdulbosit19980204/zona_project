@@ -62,17 +62,28 @@ export interface SupportSettings {
   ai_primary: boolean; ai_primary_below: number; album_window: number;
   tasks_enabled: boolean; task_bot: string; task_default_assignee: string; task_departments: number[]; task_members: number[];
   task_daily_limit: number; task_gap: number; task_attach: boolean;
-  task_mode: "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
+  task_mode: "command" | "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
   reason: string; reply: string; error: string; attempts: number; files: number; duplicates: number; created_at: string;
-  sent_at: string | null; created_by: string; message: number | null; asker: string; group: string; entry: number | null; entry_title: string;
+  sent_at: string | null; created_by: string; post_id?: number | null; message: number | null; asker: string; group: string; entry: number | null; entry_title: string;
 }
 export interface TasksPayload {
   tasks: SupportTaskInfo[]; counts: Record<string, number>; sent_today: number; entries_with_task: number;
   departments: { id: number; name: string }[];
   members: { id: number; name: string; department: string; telegram: string; is_team: boolean; level: string }[];
+}
+export interface SpeedRow { n: number; p50: number | null; p90: number | null; max: number }
+export interface Speed {
+  days: number; answered: number; p50: number | null; p90: number | null; p99: number | null; max: number | null; within_5: number | null;
+  buckets: { label: string; n: number }[];
+  by_stage: (SpeedRow & { stage: string })[]; by_kind: (SpeedRow & { kind: string })[]; by_group: (SpeedRow & { group: string })[];
+  by_hour: { hour: number; n: number; p50: number | null; p90: number | null }[];
+  by_day: { date: string; n: number; p50: number | null; p90: number | null }[];
+  parts: Record<string, { avg: number; p90: number | null }>;
+  slowest: { id: number; secs: number; stage: string; photo: boolean; group: string; text: string; timing: Record<string, number>; at: string }[];
+  workers: number; cpu: number | null;
 }
 export interface WorkloadRow { questions: number; bot: number; bot_rate: number; median: number | null; p90: number | null; unanswered?: number }
 export interface Workload {
@@ -191,6 +202,7 @@ export const supportApi = {
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),
   analytics: (days = 30) => get<Analytics>("analytics/", { days }),
   workload: (days = 30) => get<Workload>("analytics/workload/", { days }),
+  speed: (days = 7) => get<Speed>("analytics/speed/", { days }),
   tasks: (status = "all") => get<TasksPayload>("tasks/", { status }),
   taskAction: (id: number, action: "retry" | "skip", assignee?: string) => post<SupportTaskInfo>(`tasks/${id}/${action}/`, assignee ? { assignee } : {}),
   taskTest: (assignee: string) => post<SupportTaskInfo>("tasks/test/", { assignee }),

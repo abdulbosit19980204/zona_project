@@ -259,7 +259,7 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {field(t("albumWindow"), t("albumWindowHint"), <Input type="number" value={f.album_window} onChange={num("album_window")} />)}
           {field(t("mergeWindow"), t("mergeWindowHint"), <Input type="number" min={0} max={60} value={f.merge_window} onChange={num("merge_window")} />)}
           {field(t("ruleTh"), undefined, <Input type="number" value={f.route_threshold} onChange={num("route_threshold")} />)}
-          {field(t("workers"), t("workersHint"), <Input type="number" min={1} max={8} value={f.workers} onChange={num("workers")} />)}
+          {field(t("workers"), t("workersHint"), <Input type="number" min={1} max={24} value={f.workers} onChange={num("workers")} />)}
           {field(t("signature"), undefined, <Input value={f.signature} onChange={(e) => setF({ ...f, signature: e.target.value })} />)}
           <div>{saveBtn}</div>
         </Card>

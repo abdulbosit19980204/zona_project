@@ -738,6 +738,14 @@ def analytics_workload(request):
     return Response(workload(days))
 
 
+@zona_api(["GET"], [CanView])
+def analytics_speed(request):
+    """Bot tezligi: savoldan javobgacha soniyalar, bosqichlar, soatlar, eng sekin savollar."""
+    from .workload import speed
+    days = max(1, min(int(request.query_params.get("days") or 7), 90))
+    return Response(speed(days))
+
+
 def _askers(questions):
     """Savol beruvchilar: kim nechta savol bergan, bot nechtasiga javob bergan, eng ko'p savol turlari."""
     from collections import Counter, defaultdict
@@ -917,7 +925,7 @@ def _task_dict(t):
     return {"id": t.id, "status": t.status, "assignee": t.assignee, "title": t.title, "text": t.text, "link": t.link,
             "reason": t.reason, "reply": t.reply, "error": t.error, "attempts": t.attempts, "files": len(t.media_ids or []),
             "duplicates": len(t.duplicates or []), "created_at": t.created_at, "sent_at": t.sent_at, "created_by": t.created_by,
-            "message": m.id if m else None, "asker": (m.user.name if m and m.user else ""),
+            "post_id": t.post_id, "message": m.id if m else None, "asker": (m.user.name if m and m.user else ""),
             "group": (m.group.title if m and m.group_id else ""), "entry": t.entry_id, "entry_title": t.entry.title if t.entry_id else ""}
 
 

@@ -51,11 +51,11 @@ function TaskSettings({ s, d, t }: { s: SupportSettings; d: TasksPayload; t: ST 
   const [f, setF] = useState({
     tasks_enabled: s.tasks_enabled, task_bot: s.task_bot, task_default_assignee: s.task_default_assignee,
     task_departments: s.task_departments ?? [], task_members: s.task_members ?? [], task_daily_limit: s.task_daily_limit,
-    task_gap: s.task_gap, task_attach: s.task_attach, task_mode: s.task_mode ?? "remind",
+    task_gap: s.task_gap, task_attach: s.task_attach, task_mode: s.task_mode ?? "command",
     task_remind_group: s.task_remind_group ?? true, task_remind_dm: s.task_remind_dm ?? true,
   });
   const mode = f.tasks_enabled ? f.task_mode : "off";
-  const setMode = (v: string) => setF(v === "off" ? { ...f, tasks_enabled: false } : { ...f, tasks_enabled: true, task_mode: v as "remind" | "account" });
+  const setMode = (v: string) => setF(v === "off" ? { ...f, tasks_enabled: false } : { ...f, tasks_enabled: true, task_mode: v as "command" | "remind" | "account" });
   const [testTo, setTestTo] = useState(s.task_default_assignee || "");
   const [pick, setPick] = useState("");
   const save = useSupportMutation(() => supportApi.saveSettings({ ...f, task_bot: f.task_bot.replace(/^@/, ""),
@@ -79,12 +79,22 @@ function TaskSettings({ s, d, t }: { s: SupportSettings; d: TasksPayload; t: ST 
       <Panel title={t("tkMode")} icon={ListTodo} bodyClassName="grid gap-3">
         <Segmented value={mode} onChange={setMode} options={[
           { value: "off", label: t("tkModeOff") },
+          { value: "command", label: t("tkModeCommand") },
           { value: "remind", label: t("tkModeRemind") },
           { value: "account", label: t("tkModeAccount") },
         ]} />
         <p className={cn("rounded-lg p-3 text-sm", mode === "account" ? "border border-warning/40 bg-warning/10 text-warning" : "bg-muted/50 text-muted-foreground")}>
-          {t(mode === "off" ? "tkModeOffHint" : mode === "remind" ? "tkModeRemindHint" : "tkModeAccountHint")}
+          {t(mode === "off" ? "tkModeOffHint" : mode === "command" ? "tkModeCommandHint" : mode === "remind" ? "tkModeRemindHint" : "tkModeAccountHint")}
         </p>
+        {mode === "command" && (
+          <div className="grid gap-1.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+            <b>{t("tkCmdSetupTitle")}</b>
+            <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+              <li>{t("tkCmdSetup1")}</li><li>{t("tkCmdSetup2")}</li><li>{t("tkCmdSetup3")}</li>
+            </ol>
+            <code className="mt-1 rounded bg-background px-2 py-1 text-xs">/vazifa@{f.task_bot || "prbc_bot"} @StargroupSaid {t("tkCmdExample")}</code>
+          </div>
+        )}
         {mode === "remind" && (
           <div className="grid gap-0">
             <SettingRow label={t("tkRemindDm")} hint={t("tkRemindDmHint")}>
@@ -103,6 +113,11 @@ function TaskSettings({ s, d, t }: { s: SupportSettings; d: TasksPayload; t: ST 
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel title={t("tkHow")} hint={t(mode === "account" ? "tkHowHint" : "tkHowRemind")} icon={ListTodo} bodyClassName="grid gap-0">
+          {mode === "command" && (
+            <SettingRow label={t("tkBot")} hint={t("tkBotCmdHint")}>
+              <Input className="w-44" value={f.task_bot} placeholder="prbc_bot" onChange={(e) => setF({ ...f, task_bot: e.target.value })} />
+            </SettingRow>
+          )}
           {mode === "account" && (
             <>
               <SettingRow label={t("tkAttach")} hint={t("tkAttachHint")}>

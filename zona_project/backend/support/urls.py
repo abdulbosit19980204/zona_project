@@ -18,6 +18,7 @@ urlpatterns = [
     path("staff/", views.staff, name="staff"),
     path("analytics/", views.analytics, name="analytics"),
     path("analytics/workload/", views.analytics_workload, name="analytics-workload"),
+    path("analytics/speed/", views.analytics_speed, name="analytics-speed"),
     path("media/upload/", views.media_upload, name="media-upload"),
     path("media/<int:pk>/file/", views.media_file, name="media-file"),
     path("images/", views.image_types, name="images"),

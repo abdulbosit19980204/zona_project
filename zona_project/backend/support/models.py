@@ -35,7 +35,7 @@ class Settings(models.Model):
     ask_first_prompt = models.BooleanField("Jonli: kerakli ma'lumot yo'q bo'lsa avval uni so'rash", default=True)
     mention_asker = models.BooleanField("Jonli: javobda savol beruvchini belgilash", default=True)
     mention_supervisor = models.BooleanField("Jonli: supervayzer harakati kerak bo'lsa — savol beruvchining supervayzerini belgilash", default=True)
-    workers = models.PositiveIntegerField("Bir vaqtda qayta ishlanadigan savollar", default=3)
+    workers = models.PositiveIntegerField("Bir vaqtda qayta ishlanadigan savollar", default=10)
     contact_lookup = models.BooleanField("Kontakt qidiruvi (shaxsiy chatda, xodimlar va rahbarlar uchun)", default=True)
     ai_primary = models.BooleanField("AI asosiy javob beradi (bilim bazasi asosida javob tuzadi)", default=True)
     ai_primary_below = models.PositiveIntegerField("Bazadan moslik shundan past bo'lsa — javobni AI tuzadi (%)", default=95)
@@ -49,9 +49,10 @@ class Settings(models.Model):
     mtproto_pending_enc = models.TextField(blank=True)  # kod kutilmoqda: telefon, hash, vaqtinchalik seans
     # --- PRBC vazifalari: ulangan akkaunt PRBC botiga shaxsiy chatda "/vazifa @user matn" yuboradi (guruhda ko'rinmaydi) ---
     tasks_enabled = models.BooleanField("PRBC vazifalari yoqilgan", default=False)
-    # remind — bot o'zi mas'ul xodimga /vazifa bilan vazifa ochishni eslatadi (tavsiya, akkaunt ishlatilmaydi);
-    # account — ulangan Telegram akkaunt PRBC botiga /vazifa yuboradi (ban xavfi bor, tavsiya etilmaydi)
-    task_mode = models.CharField("Vazifa rejimi", max_length=8, default="remind", db_default="remind")
+    # command — bot savolga reply qilib "/vazifa@prbc_bot @ijrochi muammo" yozadi, PRBC vazifani o'zi yaratadi (tavsiya;
+    #           @BotFather'da Bot-to-Bot Communication Mode yoqilgan bo'lishi kerak);
+    # remind — bot mas'ul xodimga /vazifa ochishni eslatadi; account — ulangan akkaunt orqali (tavsiya etilmaydi)
+    task_mode = models.CharField("Vazifa rejimi", max_length=8, default="command", db_default="command")
     task_remind_group = models.BooleanField("Guruhda qisqa eslatma (@mas'ul)", default=True, db_default=True)
     task_remind_dm = models.BooleanField("Mas'ulga shaxsiy xabarda tafsilot", default=True, db_default=True)
     merge_window = models.PositiveIntegerField("Bir muallifning ketma-ket xabarlari bitta savol (soniya)", default=12,
@@ -280,6 +281,8 @@ class Message(models.Model):
     bot_reply_id = models.BigIntegerField(null=True, blank=True)
     question = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="staff_replies")
     feedback = models.SmallIntegerField(default=0)  # 1 / -1
+    # tezlik: {"recv": Telegram->bot, "queue": navbatda, "ocr", "decide", "send", "total"} (ms)
+    timing = models.JSONField(null=True, blank=True)
     error = models.CharField(max_length=300, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
@@ -404,6 +407,7 @@ class SupportTask(models.Model):
     status = models.CharField(max_length=8, default=QUEUED)
     attempts = models.PositiveSmallIntegerField(default=0)
     reply = models.TextField(blank=True)  # PRBC botining javobi (vazifa raqami/havolasi)
+    post_id = models.BigIntegerField(null=True, blank=True)  # guruhga yozilgan /vazifa xabari (PRBC javobini bog'lash)
     error = models.CharField(max_length=500, blank=True)
     duplicates = models.JSONField(default=list, blank=True)  # shu mavzudagi keyingi savollar (Message id)
     created_by = models.CharField(max_length=150, blank=True)

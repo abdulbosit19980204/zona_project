@@ -124,6 +124,8 @@ def maybe_create(q, d, tg=None):
             return prev
         title = (d.entry.title if d.entry is not None else (q.text or q.ocr_text or "Savol").strip().splitlines()[0])[:120]
         s = Settings.load()
+        if s.task_mode == "command":
+            return post_command(q, d, title, assignee, reason, tg, s)
         if s.task_mode != "account":
             return remind(q, d, title, assignee, reason, tg, s)
         if not assignee:
@@ -136,6 +138,59 @@ def maybe_create(q, d, tg=None):
     except Exception:  # noqa: BLE001 — vazifa xatosi javob berishni to'xtatmasin
         log.exception("task create failed for %s", q.pk)
         return None
+
+
+# ====================================================================== buyruq: bot guruhda /vazifa@prbc_bot yozadi
+TASK_OK = re.compile(r"(TASK-\d+|vazifa\w* yaratildi|задача .*создан)", re.I)
+
+
+def problem_text(q, title):
+    """Vazifa sarlavhasi — savol beruvchining muammosi (matn yoki rasm matni), bitta qatorda."""
+    body = " ".join(((q.text or "").strip() or (q.ocr_text or "").strip()[:200] or title).split())
+    return body[:250]
+
+
+def post_command(q, d, title, assignee, reason, tg, s):
+    """Savolga reply qilib "/vazifa@prbc_bot @ijrochi muammo" — PRBC vazifani yaratadi va savoldagi fayllarni o'zi oladi.
+    PRBC javobi ("TASK-123 yaratildi") botga reply bo'lib keladi va capture_reply() orqali shu yerga yoziladi."""
+    bot = (s.task_bot or "prbc_bot").lstrip("@")
+    link = q.group.message_link(q.message_id) if q.group_id else ""
+    text = f"/vazifa@{bot} @{assignee} {problem_text(q, title)}" if assignee else ""
+    t = SupportTask.objects.create(message=q, entry=d.entry, assignee=assignee, title=title, link=link, reason=reason,
+                                   text=text, status=SupportTask.QUEUED)
+    if not assignee or tg is None:
+        t.status, t.error = SupportTask.SKIPPED, ("" if assignee else "Ijrochi topilmadi (Sozlamalar → PRBC vazifalari).")
+        t.save(update_fields=["status", "error"])
+        return t
+    try:
+        sent = tg.send(q.chat_id, text, reply_to=q.message_id, html=False)
+        t.post_id = (sent or {}).get("message_id")
+        t.status, t.sent_at, t.reply = SupportTask.SENT, timezone.now(), "PRBC javobi kutilmoqda…"
+    except Exception as e:  # noqa: BLE001
+        t.status, t.error = SupportTask.FAILED, f"{type(e).__name__}: {e}"[:500]
+    t.save()
+    return t
+
+
+def capture_reply(msg):
+    """Guruhdagi bot xabari: PRBC botining bizning /vazifa xabarimizga javobi bo'lsa — natijani vazifaga yozamiz."""
+    s = Settings.load()
+    sender = (msg.get("from") or {}).get("username", "")
+    if not sender or sender.lower() != (s.task_bot or "prbc_bot").lstrip("@").lower():
+        return None
+    parent = (msg.get("reply_to_message") or {}).get("message_id")
+    if not parent:
+        return None
+    t = SupportTask.objects.filter(post_id=parent, message__chat_id=msg["chat"]["id"]).first()
+    if not t:
+        return None
+    reply = (msg.get("text") or msg.get("caption") or "").strip()
+    t.reply = reply[:2000]
+    ok = bool(TASK_OK.search(reply))
+    t.status = SupportTask.SENT if ok else SupportTask.FAILED
+    t.error = "" if ok else "PRBC vazifa yaratmadi — javobini ko'ring"
+    t.save(update_fields=["reply", "status", "error"])
+    return t
 
 
 # ====================================================================== eslatma (bot o'zi yozadi)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Bot, Clock3, HelpCircle, Image as ImageIcon, Inbox, ListChecks, MessageCircleQuestion, Tags, Target, UserRound, Users } from "lucide-react";
+import { BarChart3, Bot, Clock3, Zap, HelpCircle, Image as ImageIcon, Inbox, ListChecks, MessageCircleQuestion, Tags, Target, UserRound, Users } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,9 +12,10 @@ import { supportApi, type Analytics } from "./api";
 import { Initials, Metric, Panel, Segmented, stageLabel } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
+import { Speed } from "./speed";
 import { Workload } from "./workload";
 
-type Tab = "overview" | "workload" | "staff" | "askers" | "topics";
+type Tab = "overview" | "speed" | "workload" | "staff" | "askers" | "topics";
 
 /** Tahlil: savollar, bot ishi, xodimlar javoblari va javobdan oldin so'raladigan ma'lumotlar — bo'limlarga ajratilgan. */
 export function SupportAnalytics() {
@@ -43,6 +44,7 @@ export function SupportAnalytics() {
 
           <Segmented value={tab} onChange={setTab} options={[
             { value: "overview", label: t("anTabOverview"), icon: BarChart3 },
+            { value: "speed", label: t("anTabSpeed"), icon: Zap },
             { value: "workload", label: t("anTabWorkload"), icon: Clock3 },
             { value: "staff", label: t("anTabStaff"), icon: UserRound, count: a.staff.length },
             { value: "askers", label: t("anTabAskers"), icon: Users, count: a.askers.length },
@@ -50,6 +52,7 @@ export function SupportAnalytics() {
           ]} />
 
           {tab === "overview" && <Overview a={a} t={t} />}
+          {tab === "speed" && <Speed days={Number(days)} t={t} />}
           {tab === "workload" && <Workload days={Number(days)} t={t} />}
           {tab === "staff" && <StaffTable a={a} t={t} />}
           {tab === "askers" && <Askers a={a} t={t} />}

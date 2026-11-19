@@ -81,6 +81,9 @@ class Handler:
         chat = msg.get("chat") or {}
         sender = msg.get("from") or {}
         if sender.get("is_bot"):
+            if chat.get("type") in ("group", "supergroup"):
+                from . import tasks
+                tasks.capture_reply(msg)
             return None
         if chat.get("type") == "private":
             return self.on_private(msg)
@@ -249,7 +252,18 @@ class Handler:
             Message.objects.filter(pk=q.pk).update(created_at=q.created_at)
         if self.executor is not None:
             meta, data = getattr(self, "media_meta", None), self.photo_bytes.get(q.message_id)
-            self.executor.submit(self._process_async, q.pk, mode, meta, data)
+            # albom/izoh kutish — taymer bilan: worker uxlab o'tirmaydi, boshqa savollar shu vaqtda javob oladi
+            wait = 1.5 if mgid else 0.0
+            if not engine.substantive(text) and (self.settings.merge_window or 0):
+                wait = 3.5
+            recv = max(0, int((time.time() - (msg.get("date") or time.time())) * 1000))
+            meta_t = {"recv": recv, "wait": int(wait * 1000)}
+            if wait:
+                timer = threading.Timer(wait, self._submit, args=(q.pk, mode, meta, data, meta_t))
+                timer.daemon = True
+                timer.start()
+            else:
+                self.executor.submit(self._process_async, q.pk, mode, meta, data, {**meta_t, "queued": time.time()})
             return q
         self.process_question(q, mode)
         return q
@@ -291,16 +305,22 @@ class Handler:
             Message.objects.filter(pk=q.pk).update(text=(q.text + "\n" + text).strip()[:4000])
         return q
 
-    def _process_async(self, qid, mode, meta, data):
+    def _submit(self, qid, mode, meta, data, meta_t):
+        """Taymerdan keyin navbatga qo'yish. Pool yopilgan bo'lsa (bot oqimi qayta ishga tushdi) — savol yo'qolmasin."""
+        try:
+            self.executor.submit(self._process_async, qid, mode, meta, data, {**meta_t, "queued": time.time()})
+        except RuntimeError:
+            self._process_async(qid, mode, meta, data, {**meta_t, "queued": time.time()})
+
+    def _process_async(self, qid, mode, meta, data, timing=None):
         """Fon oqimida: alohida Handler (holat aralashmasin), o'z DB ulanishi."""
         close_old_connections()
         try:
-            first = Message.objects.filter(pk=qid).values("media_group_id", "text").first() or {}
-            if first.get("media_group_id"):
-                time.sleep(1.5)  # albomning qolgan rasmlari kelib ulgursin — bitta savolga bitta javob
-            if not engine.substantive(first.get("text", "")) and (Settings.load().merge_window or 0):
-                time.sleep(3.5)  # rasmdan keyin alohida izoh kelishi mumkin — kutib, bitta javob beramiz
             h = Handler(self.bot, self.tg)
+            t = dict(timing or {})
+            if "queued" in t:
+                t["queue"] = int((time.time() - t.pop("queued")) * 1000)  # bo'sh worker kutilgan vaqt
+            h.timing = t
             h.media_meta = meta
             if data is not None:
                 h.photo_bytes[0] = data
@@ -338,9 +358,28 @@ class Handler:
         return info
 
     def process_question(self, q, mode, skip_ask=False):
+        t0 = time.monotonic()
+        marks = {}
+        try:
+            return self._process_question(q, mode, skip_ask, marks)
+        finally:
+            marks["work"] = int((time.monotonic() - t0) * 1000)
+            try:
+                Message.objects.filter(pk=q.pk).update(timing={**getattr(self, "timing", {}), **marks})
+            except Exception:  # noqa: BLE001 — o'lchov javobni to'xtatmasin
+                pass
+
+    def _process_question(self, q, mode, skip_ask, marks):
         settings = self.settings
         unapproved = mode in (MODE_SHADOW, MODE_COLLECT)
         media, image, deferred_ocr = None, None, False
+        tick = time.monotonic()
+
+        def mark(name):
+            nonlocal tick
+            now = time.monotonic()
+            marks[name] = marks.get(name, 0) + int((now - tick) * 1000)
+            tick = now
         if q.photo_file_id:
             media = self._fetch_media(q)
         images, photos = [], []
@@ -356,6 +395,7 @@ class Handler:
                         best, media = (entry, dist), m
             if best:
                 image = (best[0], vision.confidence(best[1]))
+        mark("media")
         q.lang = engine.detect_lang(q.text or q.ocr_text)
         if mode == MODE_LIVE:
             self.tg.typing(q.chat_id)
@@ -366,8 +406,10 @@ class Handler:
                 # tez yo'l: aniq matnli savol yoki tanilgan ekran — OCR'ni kutmasdan javob, OCR keyin (tahlil uchun)
                 d = engine.decide(q.text or "", q.lang, allow_unapproved=unapproved, text=q.text, images=images, fast=True)
                 deferred_ocr = d is not None and mode == MODE_LIVE
+                mark("decide")
             if settings.ocr_enabled and not deferred_ocr:
                 self._ocr(q, media)
+                mark("ocr")
         if d is None:
             raw = "\n".join(x for x in (q.text, q.ocr_text) if x).strip()
             if not raw and not images:
@@ -377,10 +419,12 @@ class Handler:
             q.lang = engine.detect_lang(q.text or q.ocr_text)
             d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
                               asker=_asker(q))
+            mark("decide")
         if len(photos) <= 1:
             self._autolabel(media, d)
         try:
             res = self._respond(q, d, mode, skip_ask)
+            mark("send")
             if mode == MODE_LIVE and q.stage not in ("dup", "ask"):
                 from . import tasks
                 tasks.maybe_create(q, d, self.tg)  # PRBC vazifasi: mas'ulga eslatma (bot o'zi yozadi)
@@ -596,7 +640,8 @@ class Handler:
             data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
         except OSError:
             data = self.photo_bytes.get(q.message_id)
-        q.ocr_text = ocr.read_text(data or b"")
+        with _OCR_SLOTS:  # OCR protsessorni ko'p yeydi — bir vaqtda cheklangan son (qolgan ishlar to'xtamaydi)
+            q.ocr_text = ocr.read_text(data or b"")
         Media.objects.filter(pk=media.pk).update(ocr_text=q.ocr_text)
 
     def _autolabel(self, media, d):
@@ -769,6 +814,9 @@ def _full_name(u):
     return " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x)[:150]
 
 
+_OCR_SLOTS = threading.BoundedSemaphore(max(2, (os.cpu_count() or 4) - 2))
+
+
 def _asker(q):
     """Savol beruvchining roli (AI javobni roliga mos yozishi uchun): "Agent · MDLZ" yoki "Supervayzer · ..."."""
     u = q.user
@@ -824,9 +872,9 @@ class BotWorker(threading.Thread):
         self.stop_event = threading.Event()
 
     def run(self):
-        client = Client(self.token)
+        client = Client(self.token.split("|", 1)[0])
         backoff = 5
-        workers = max(1, min(Settings.load().workers or 3, 8))
+        workers = max(1, min(Settings.load().workers or 10, 24))
         pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f"support-q{self.bot_id}")
         while not self.stop_event.is_set():
             close_old_connections()
@@ -919,17 +967,18 @@ def run_forever(poll=10):
         close_old_connections()
         try:
             wanted = {}
+            nworkers = Settings.load().workers
             for b in Bot.objects.filter(enabled=True).exclude(token_enc=""):
                 token = decrypt(b.token_enc)
                 if token and b.mode != MODE_OFF:
-                    wanted[b.id] = token
+                    wanted[b.id] = f"{token}|{nworkers}"  # worker soni o'zgarsa — bot oqimi yangi pool bilan qayta ishga tushadi
             for bid, w in list(workers.items()):
                 if wanted.get(bid) != w.token or not w.is_alive():
                     w.stop_event.set()
                     workers.pop(bid)
             for bid, token in wanted.items():
                 if bid not in workers:
-                    w = BotWorker(bid, token)
+                    w = BotWorker(bid, token)  # token|workers
                     w.start()
                     workers[bid] = w
             if history is None or not history.is_alive():
