@@ -12,12 +12,11 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
 
 import { supportApi, type Entry } from "./api";
-import { EntryBadge, fmtDate, useSupportMutation } from "./common";
+import { EntryBadge, fmtDate, Segmented, useSupportMutation } from "./common";
 import { AISuggestions } from "./ai-suggestions";
 import { EntryEditor } from "./entry-editor";
 import { useSt, type SKey, type ST } from "./i18n";
@@ -44,14 +43,15 @@ function ReviewInner() {
 
   return (
     <SupportShell title={t("reviewTitle")} description={t("reviewDesc")}>
-      <Tabs value={view} onValueChange={(v) => setView(v as View)} className="mb-4">
-        <TabsList>
-          <TabsTrigger value="queue"><ListChecks className="size-4" />{t("viewQueue")} · {items.length}</TabsTrigger>
-          <TabsTrigger value="cards"><SquareStack className="size-4" />{t("viewCards")}</TabsTrigger>
-          <TabsTrigger value="clusters"><Layers className="size-4" />{t("viewClusters")}</TabsTrigger>
-          <TabsTrigger value="ai"><Sparkles className="size-4" />{t("viewAI")}</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Segmented value={view} onChange={setView} options={[
+          { value: "queue", label: t("viewQueue"), count: items.length, icon: ListChecks },
+          { value: "cards", label: t("viewCards"), icon: SquareStack },
+          { value: "clusters", label: t("viewClusters"), icon: Layers },
+          { value: "ai", label: t("viewAI"), icon: Sparkles },
+        ]} />
+        <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t(`viewHint_${view}` as SKey)}</p>
+      </div>
       {view === "ai" && <AISuggestions t={t} />}
       {view !== "ai" && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
       {view !== "ai" && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
@@ -102,7 +102,7 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
   return (
     <div className="grid gap-3">
       {can.edit && (
-        <Card className="sticky top-0 z-10 flex-row flex-wrap items-center gap-2 p-3 shadow-sm">
+        <Card className="sticky top-0 z-10 flex-row flex-wrap items-center gap-2 bg-card/95 p-2.5 shadow-sm backdrop-blur">
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={all ? true : sel.size ? "indeterminate" : false} onCheckedChange={() => setSel(all ? new Set() : new Set(items.map((e) => e.id)))} />
             {sel.size ? t("selected", { n: sel.size }) : t("selectAll", { n: items.length })}
@@ -116,15 +116,15 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
         </Card>
       )}
       {items.map((e) => (
-        <Card key={e.id} className="gap-2 p-4">
+        <Card key={e.id} className={`gap-2 p-4 transition-colors ${sel.has(e.id) ? "border-primary/50 bg-primary/[0.03]" : ""}`}>
           <div className="flex items-start gap-3">
             {can.edit && <Checkbox className="mt-1" checked={sel.has(e.id)} onCheckedChange={() => toggle(e.id)} />}
             <div className="grid min-w-0 flex-1 gap-2">
               <EntryHead e={e} t={t} />
-              <div className="font-medium">{e.pending?.title ?? e.title}</div>
+              <div className="font-semibold leading-snug">{e.pending?.title ?? e.title}</div>
               {(e.questions ?? []).length > 1 && <div className="text-xs text-muted-foreground">{e.questions.slice(1).join(" · ")}</div>}
               <Diff e={e} t={t} />
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 border-t pt-3">
                 {can.edit && <Button size="sm" onClick={() => one.mutate(() => supportApi.approve(e.id))}><Check className="size-4" />{t("approve")}</Button>}
                 {can.edit && <Button size="sm" variant="outline" onClick={() => one.mutate(() => supportApi.reject(e.id))}><X className="size-4" />{t("reject")}</Button>}
                 <Button size="sm" variant="ghost" onClick={() => onEdit(e.id)}><Pencil className="size-4" />{t("edit")}</Button>

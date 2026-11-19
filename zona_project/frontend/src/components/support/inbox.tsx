@@ -1,13 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bot, CheckCheck, ExternalLink, Image as ImageIcon, Inbox, MessageSquareReply, Search, Send, ThumbsDown, ThumbsUp, UserRound, X } from "lucide-react";
+import { ArrowLeft, Bot, BookOpen, CheckCheck, ExternalLink, Image as ImageIcon, Inbox, MessageSquareReply, Search, Send, Sparkles, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { EmptyState, StatCard } from "@/components/common/page";
+import { EmptyState } from "@/components/common/page";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -16,19 +15,18 @@ import { useCan } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
 
 import { supportApi, type MsgStatus, type SupportMessage } from "./api";
-import { fmtDate, MsgBadge, stageLabel, useSupportMutation } from "./common";
+import { fmtDate, Initials, Metric, MsgBadge, Segmented, stageLabel, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { MediaRow } from "./media";
 import { SupportShell } from "./shell";
 
 type Filter = "open" | MsgStatus | "all";
-const FILTERS: Filter[] = ["open", "escalated", "drafted", "answered", "closed", "all"];
 const STATUS_DOT: Record<MsgStatus, string> = {
   new: "bg-primary", escalated: "bg-warning", drafted: "bg-violet-500", answered: "bg-success", closed: "bg-muted-foreground/40",
   ignored: "bg-muted-foreground/40",
 };
 
-/** Guruh savollari: chapda ro'yxat (filtr, qidiruv), o'ngda suhbat ko'rinishidagi zanjir va javob yozish. */
+/** Guruh savollari: chapda ro'yxat, o'rtada suhbat va javob yozish, keng ekranda o'ngda tafsilotlar. */
 export function SupportInbox() {
   const t = useSt();
   const [filter, setFilter] = useState<Filter>("open");
@@ -42,59 +40,63 @@ export function SupportInbox() {
     refetchInterval: 15_000,
   });
   const s = stats.data;
+  const bs = s?.by_status ?? {};
   const botClosed = ["template", "faq", "rule", "ai", "image"].reduce((n, k) => n + (s?.by_stage[k] ?? 0), 0);
   const current = useMemo(() => list.data?.find((m) => m.id === selected) ?? null, [list.data, selected]);
+  const queue = (s?.entries.new ?? 0) + (s?.entries.review ?? 0) + (s?.pending_edits ?? 0);
 
   return (
-    <SupportShell title={t("inboxTitle")} description={t("inboxDesc2")}>
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label={t("kpiTotal")} value={s?.total ?? "—"} icon={Inbox} />
-        <StatCard label={t("kpiBot")} value={botClosed} icon={Bot} tone="success" />
-        <StatCard label={t("kpiHuman")} value={s?.by_status.escalated ?? 0} icon={UserRound} tone="warning" />
-        <Link href="/support/review" className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <StatCard label={t("kpiQueue")} value={(s?.entries.new ?? 0) + (s?.entries.review ?? 0) + (s?.pending_edits ?? 0)} icon={CheckCheck} />
+    <SupportShell title={t("inboxTitle")} description={t("inboxDesc2")} fill>
+      <div className="mb-4 grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
+        <Metric label={t("kpiTotal")} value={s?.total ?? "—"} hint={t("last7")} icon={Inbox} tone="primary" />
+        <Metric label={t("kpiBot")} value={botClosed} hint={s?.total ? `${Math.round((100 * botClosed) / s.total)}%` : undefined} icon={Bot} tone="success" />
+        <Metric label={t("kpiHuman")} value={bs.escalated ?? 0} icon={UserRound} tone="warning" />
+        <Link href="/support/review" className="rounded-xl outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring">
+          <Metric label={t("kpiQueue")} value={queue} hint={t("openReview")} icon={CheckCheck} />
         </Link>
       </div>
 
-      <Card className="grid min-h-[60vh] gap-0 overflow-hidden p-0 lg:h-[calc(100vh-330px)] lg:grid-cols-[minmax(300px,380px)_1fr]">
+      <div className="grid min-h-[560px] flex-1 overflow-hidden rounded-xl border bg-card shadow-xs lg:grid-cols-[minmax(300px,360px)_1fr] 2xl:grid-cols-[360px_1fr_300px]">
         {/* ro'yxat */}
         <div className={cn("flex min-h-0 flex-col border-r", current && "hidden lg:flex")}>
-          <div className="grid gap-2 border-b p-3">
+          <div className="grid gap-2.5 border-b p-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} className="h-9 pl-8" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} className="h-9 bg-muted/40 pl-8" />
             </div>
-            <div className="flex flex-wrap gap-1">
-              {FILTERS.map((f) => (
-                <button key={f} type="button" onClick={() => { setFilter(f); setSelected(null); }}
-                  className={cn("rounded-full border px-2.5 py-1 text-xs transition-colors",
-                    filter === f ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>
-                  {f === "open" ? t("needsAnswer") : f === "all" ? t("all") : t(`m_${f}` as SKey)}
-                </button>
-              ))}
-            </div>
+            <Segmented size="sm" value={filter} onChange={(f) => { setFilter(f); setSelected(null); }} className="w-full" options={[
+              { value: "open", label: t("needsAnswer"), count: (bs.escalated ?? 0) + (bs.drafted ?? 0) + (bs.new ?? 0) },
+              { value: "escalated", label: t("m_escalated"), count: bs.escalated },
+              { value: "drafted", label: t("m_drafted"), count: bs.drafted },
+              { value: "answered", label: t("m_answered") },
+              { value: "closed", label: t("m_closed") },
+              { value: "all", label: t("all") },
+            ]} />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {list.isLoading && <div className="grid gap-2 p-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-14" />)}</div>}
+            {list.isLoading && <div className="grid gap-2 p-3">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16" />)}</div>}
             {list.data?.length === 0 && <div className="p-6"><EmptyState icon={Inbox} title={t("inboxEmpty")} hint={t("inboxEmptyHint")} /></div>}
             {list.data?.map((m) => (
               <button key={m.id} type="button" onClick={() => setSelected(m.id)}
-                className={cn("flex w-full gap-3 border-b px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
-                  selected === m.id && "bg-primary/5")}>
-                <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold uppercase">
-                  {(m.user_name || "?").slice(0, 1)}
-                  <span className={cn("absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-card", STATUS_DOT[m.status])} />
+                className={cn("relative flex w-full gap-3 border-b px-3 py-3 text-left transition-colors hover:bg-muted/50",
+                  selected === m.id && "bg-primary/[0.06] before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary")}>
+                <span className="relative">
+                  <Initials name={m.user_name} />
+                  <span className={cn("absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-card", STATUS_DOT[m.status])} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2">
                     <span className="truncate text-sm font-medium">{m.user_name || "—"}</span>
-                    <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{fmtDate(m.created_at)}</span>
+                    <span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted-foreground">{fmtDate(m.created_at)}</span>
                   </span>
-                  <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                    {m.has_photo && <ImageIcon className="size-3 shrink-0" />}
-                    <span className="truncate">{m.text || m.ocr_text || t("photo")}</span>
+                  <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
+                    {m.has_photo && <ImageIcon className="mr-1 inline size-3 -translate-y-px" />}
+                    {m.text || m.ocr_text || t("photo")}
                   </span>
-                  <span className="block truncate text-[11px] text-muted-foreground/80">{m.group_title}</span>
+                  <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
+                    <Users className="size-3 shrink-0" /><span className="truncate">{m.group_title}</span>
+                    {m.stage && <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-px">{stageLabel(m.stage, t)}</span>}
+                  </span>
                 </span>
               </button>
             ))}
@@ -104,26 +106,72 @@ export function SupportInbox() {
         {/* suhbat */}
         <div className={cn("flex min-h-0 flex-col", !current && "hidden lg:flex")}>
           {current ? <Conversation key={current.id} m={current} t={t} onBack={() => setSelected(null)} />
-            : <div className="grid flex-1 place-items-center p-8 text-center text-sm text-muted-foreground">{t("pickQuestion")}</div>}
+            : (
+              <div className="grid flex-1 place-items-center p-8 text-center">
+                <div className="grid justify-items-center gap-3">
+                  <span className="grid size-14 place-items-center rounded-2xl bg-muted text-muted-foreground"><MessageSquareReply className="size-6" /></span>
+                  <p className="max-w-xs text-sm text-muted-foreground">{t("pickQuestion")}</p>
+                </div>
+              </div>
+            )}
         </div>
-      </Card>
+
+        {/* tafsilotlar */}
+        <aside className="hidden min-h-0 overflow-y-auto border-l bg-muted/20 2xl:block">
+          {current ? <Details m={current} t={t} /> : <div className="p-5 text-xs text-muted-foreground">{t("detailsEmpty")}</div>}
+        </aside>
+      </div>
     </SupportShell>
   );
 }
 
-function Bubble({ side, tone, who, at, children }: {
-  side: "left" | "right"; tone?: "bot" | "staff" | "clarify" | "info"; who: string; at?: string; children: ReactNode;
+function Details({ m, t }: { m: SupportMessage; t: ST }) {
+  const row = (label: string, value: ReactNode) => (
+    <div className="grid gap-0.5 border-b py-2.5 last:border-b-0">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-sm">{value || "—"}</div>
+    </div>
+  );
+  return (
+    <div className="p-4">
+      <div className="mb-3 flex items-center gap-3">
+        <Initials name={m.user_name} className="size-11 text-sm" />
+        <div className="min-w-0">
+          <div className="truncate font-medium">{m.user_name || "—"}</div>
+          {m.user_username && <a className="text-xs text-primary hover:underline" href={`https://t.me/${m.user_username}`} target="_blank" rel="noreferrer">@{m.user_username}</a>}
+        </div>
+      </div>
+      <div className="rounded-lg border bg-card px-3">
+        {row(t("dStatus"), <MsgBadge status={m.status} t={t} />)}
+        {row(t("dGroup"), m.group_title)}
+        {row(t("dAsked"), fmtDate(m.created_at))}
+        {m.answered_at && row(t("dAnswered"), `${fmtDate(m.answered_at)}${m.answered_by ? ` · ${m.answered_by}` : ""}`)}
+        {m.stage && row(t("dStage"), `${stageLabel(m.stage, t)}${m.confidence ? ` · ${m.confidence}%` : ""}`)}
+        {m.entry_title && row(t("dEntry"), <Link className="text-primary hover:underline" href={`/support/knowledge?entry=${m.entry}`}>{m.entry_title}</Link>)}
+        {m.staff_answers.length > 0 && row(t("staffAnswers"), m.staff_answers.length)}
+      </div>
+      {m.link && (
+        <Button variant="outline" size="sm" className="mt-3 w-full" asChild>
+          <a href={m.link} target="_blank" rel="noreferrer"><ExternalLink className="size-4" />{t("openInTelegram")}</a>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function Bubble({ side, tone, who, at, icon, children }: {
+  side: "left" | "right"; tone?: "bot" | "staff" | "clarify" | "info"; who: string; at?: string; icon?: ReactNode; children: ReactNode;
 }) {
   return (
     <div className={cn("flex", side === "right" ? "justify-end" : "justify-start")}>
-      <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm",
-        side === "left" ? "rounded-tl-sm bg-card" : "rounded-tr-sm",
-        tone === "bot" && "border border-primary/30 bg-primary/10",
-        tone === "staff" && "bg-success/15",
-        tone === "clarify" && "border border-warning/40 bg-warning/10",
+      <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-xs",
+        side === "left" ? "rounded-tl-md border bg-card" : "rounded-tr-md",
+        tone === "bot" && "border border-primary/25 bg-primary/[0.08]",
+        tone === "staff" && "border border-success/25 bg-success/10",
+        tone === "clarify" && "border border-warning/35 bg-warning/10",
         tone === "info" && "bg-card")}>
         <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="font-medium text-foreground/80">{who}</span>{at && <span>· {fmtDate(at)}</span>}
+          {icon}<span className="font-medium text-foreground/80">{who}</span>{at && <span>· {fmtDate(at)}</span>}
         </div>
         {children}
       </div>
@@ -144,24 +192,25 @@ function Conversation({ m, t, onBack }: { m: SupportMessage; t: ST; onBack: () =
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b px-4 py-3">
+      <div className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
         <Button size="icon" variant="ghost" className="lg:hidden" onClick={onBack} aria-label={t("back")}><ArrowLeft className="size-4" /></Button>
+        <Initials name={m.user_name} className="size-8 2xl:hidden" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{m.user_name}{m.user_username && <span className="font-normal text-muted-foreground"> · @{m.user_username}</span>}</div>
           <div className="truncate text-xs text-muted-foreground">{m.group_title}</div>
         </div>
-        {m.link && (
-          <Button size="sm" variant="ghost" asChild>
-            <a href={m.link} target="_blank" rel="noreferrer" title={t("openInTelegram")}><ExternalLink className="size-4" /><span className="hidden sm:inline">{t("openInTelegram")}</span></a>
-          </Button>
-        )}
-        <MsgBadge status={m.status} t={t} />
         {m.feedback === 1 && <ThumbsUp className="size-4 text-success" />}
         {m.feedback === -1 && <ThumbsDown className="size-4 text-destructive" />}
-        {!done && <Button size="sm" variant="ghost" disabled={close.isPending} onClick={() => close.mutate(undefined)}><X className="size-4" />{t("closeQ")}</Button>}
+        <MsgBadge status={m.status} t={t} />
+        {m.link && (
+          <Button size="icon" variant="ghost" className="2xl:hidden" asChild>
+            <a href={m.link} target="_blank" rel="noreferrer" title={t("openInTelegram")} aria-label={t("openInTelegram")}><ExternalLink className="size-4" /></a>
+          </Button>
+        )}
+        {!done && <Button size="sm" variant="ghost" disabled={close.isPending} onClick={() => close.mutate(undefined)}><X className="size-4" /><span className="hidden sm:inline">{t("closeQ")}</span></Button>}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-muted/30 p-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] bg-[length:18px_18px] p-4">
         <Bubble side="left" who={m.user_name || "—"} at={m.created_at}>
           {m.text && <p className="whitespace-pre-wrap">{m.text}</p>}
           <MediaRow items={m.media} />
@@ -175,11 +224,15 @@ function Conversation({ m, t, onBack }: { m: SupportMessage; t: ST; onBack: () =
           </Bubble>
         ))}
         {botSaid && (
-          <Bubble side="right" tone="bot"
+          <Bubble side="right" tone="bot" icon={<Sparkles className="size-3 text-primary" />}
             who={`${m.status === "answered" && m.answered_by === "bot" ? t("botAnswered") : t("botDraft")}${m.stage ? ` · ${stageLabel(m.stage, t)}` : ""}${m.confidence ? ` · ${m.confidence}%` : ""}`}>
             <p className="whitespace-pre-wrap">{m.answer_text}</p>
-            {m.entry_title && <Link className="mt-1 inline-block text-xs text-primary hover:underline" href={`/support/knowledge?entry=${m.entry}`}>{m.entry_title}</Link>}
-            {!done && <div className="mt-2"><Button size="sm" variant="outline" onClick={() => setText(m.answer_text)}>{t("useDraft")}</Button></div>}
+            {m.entry_title && (
+              <Link className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary hover:underline" href={`/support/knowledge?entry=${m.entry}`}>
+                <BookOpen className="size-3" />{m.entry_title}
+              </Link>
+            )}
+            {!done && <div className="mt-2"><Button size="sm" variant="outline" className="bg-background" onClick={() => setText(m.answer_text)}>{t("useDraft")}</Button></div>}
           </Bubble>
         )}
         {m.stage === "panel" && m.answer_text && (
@@ -190,20 +243,23 @@ function Conversation({ m, t, onBack }: { m: SupportMessage; t: ST; onBack: () =
       </div>
 
       {!done ? (
-        <div className="grid gap-2 border-t p-3">
-          <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder={t("answerPlaceholder")}
-            onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && text.trim().length > 1) send(); }} />
-          <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-xs"><Switch checked={save} onCheckedChange={setSave} />{t("saveToKb")}</label>
-            {can.edit && save && <label className="flex items-center gap-2 text-xs"><Switch checked={approve} onCheckedChange={setApprove} />{t("approveNow")}</label>}
-            <span className="hidden text-[11px] text-muted-foreground sm:inline">Ctrl + Enter</span>
-            <Button className="ml-auto" disabled={text.trim().length < 2 || answer.isPending} onClick={send}>
-              <Send className="size-4" />{t("send")}
-            </Button>
+        <div className="border-t bg-card p-3">
+          <div className="rounded-xl border bg-background focus-within:ring-2 focus-within:ring-ring/40">
+            <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder={t("answerPlaceholder")}
+              className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && text.trim().length > 1) send(); }} />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-3 py-2">
+              <label className="flex items-center gap-2 text-xs"><Switch checked={save} onCheckedChange={setSave} />{t("saveToKb")}</label>
+              {can.edit && save && <label className="flex items-center gap-2 text-xs"><Switch checked={approve} onCheckedChange={setApprove} />{t("approveNow")}</label>}
+              <span className="ml-auto hidden text-[11px] text-muted-foreground sm:inline">Ctrl + Enter</span>
+              <Button size="sm" disabled={text.trim().length < 2 || answer.isPending} onClick={send}>
+                <Send className="size-4" />{t("send")}
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 border-t p-3 text-xs text-muted-foreground"><MessageSquareReply className="size-4" />{t("threadDone")}</div>
+        <div className="flex items-center gap-2 border-t p-3 text-xs text-muted-foreground"><CheckCheck className="size-4 text-success" />{t("threadDone")}</div>
       )}
     </>
   );

@@ -13,10 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 
 import { supportApi, type EntryStatus, type TestResult } from "./api";
-import { EntryBadge, fmtDate, stageLabel, useSupportMutation } from "./common";
+import { EntryBadge, fmtDate, Segmented, stageLabel, useSupportMutation } from "./common";
 import { EntryEditor } from "./entry-editor";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
@@ -29,20 +28,7 @@ export function SupportKnowledge() {
   return <Suspense><KnowledgeInner /></Suspense>;
 }
 
-function Pills<T extends string>({ value, options, onChange, label }: { value: T; options: T[]; onChange: (v: T) => void; label: (v: T) => string }) {
-  return (
-    <div className="flex flex-wrap gap-1">
-      {options.map((o) => (
-        <button key={o} type="button" onClick={() => onChange(o)}
-          className={cn("rounded-full border px-2.5 py-1 text-xs transition-colors", value === o ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>
-          {label(o)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Bilim bazasi: kartochkalar, tezkor qidiruv va filtrlar; bosilsa — muharrir; «Sinab ko'rish» — alohida oynada. */
+/** Bilim bazasi: qidiruv va filtrlar paneli, kartochkalar; bosilsa — muharrir; «Sinab ko'rish» — alohida oynada. */
 function KnowledgeInner() {
   const t = useSt();
   const params = useSearchParams();
@@ -52,6 +38,8 @@ function KnowledgeInner() {
   const [editing, setEditing] = useState<number | null>(() => Number(params.get("entry")) || null);
   const [open, setOpen] = useState(() => !!Number(params.get("entry")));
   const [testing, setTesting] = useState(false);
+  const stats = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7) });
+  const counts = stats.data?.entries ?? {};
   const list = useQuery({
     queryKey: ["support", "entries", status, kind, q],
     queryFn: () => supportApi.entries({ status, ...(kind !== "any" ? { kind } : {}), ...(q ? { q } : {}) }),
@@ -62,51 +50,54 @@ function KnowledgeInner() {
     <SupportShell title={t("kbTitle")} description={t("kbDesc")}
       actions={(
         <>
-          <Button variant="outline" onClick={() => setTesting(true)}><FlaskConical className="size-4" />{t("testTitle")}</Button>
-          <Button onClick={() => edit(null)}><Plus className="size-4" />{t("newEntry")}</Button>
+          <Button size="sm" variant="outline" onClick={() => setTesting(true)}><FlaskConical className="size-4" />{t("testTitle")}</Button>
+          <Button size="sm" onClick={() => edit(null)}><Plus className="size-4" />{t("newEntry")}</Button>
         </>
       )}>
-      <div className="mb-4 grid gap-3 rounded-xl border bg-card p-3 md:grid-cols-[minmax(220px,1fr)_auto]">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("kbSearch")} className="h-9 pl-8" />
+      <div className="sticky top-0 z-10 -mx-1 mb-4 grid gap-2.5 rounded-xl border bg-card/95 p-3 shadow-xs backdrop-blur">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("kbSearch")} className="h-9 bg-muted/40 pl-8" />
+          </div>
+          <Segmented size="sm" value={kind} onChange={setKind} options={KINDS.map((k) => ({ value: k, label: k === "any" ? t("allKinds") : t(`k_${k}` as SKey) }))} />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Pills value={status} options={STATUSES} onChange={setStatus} label={(s) => (s === "all" ? t("all") : t(`e_${s}` as SKey))} />
-          <Pills value={kind} options={KINDS} onChange={setKind} label={(k) => (k === "any" ? t("allKinds") : t(`k_${k}` as SKey))} />
-        </div>
+        <Segmented size="sm" value={status} onChange={setStatus} className="w-full sm:w-auto"
+          options={STATUSES.map((x) => ({ value: x, label: x === "all" ? t("all") : t(`e_${x}` as SKey), count: x === "all" ? undefined : counts[x] }))} />
       </div>
 
-      {list.isLoading && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-36" />)}</div>}
+      {list.isLoading && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-40" />)}</div>}
       {list.data && list.data.length === 0 && (
         <EmptyState icon={BotMessageSquare} title={t("empty")} action={<Button onClick={() => edit(null)}><Plus className="size-4" />{t("newEntry")}</Button>} />
       )}
       {list.data && list.data.length > 0 && (
         <>
           <p className="mb-2 text-xs text-muted-foreground">{t("kbCount", { n: list.data.length })}</p>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {list.data.map((e) => (
               <button key={e.id} type="button" onClick={() => edit(e.id)}
-                className="group flex flex-col gap-2 rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-                <div className="flex items-start gap-2">
-                  {e.priority && <Star className="mt-0.5 size-4 shrink-0 fill-warning text-warning" />}
-                  <span className="line-clamp-2 flex-1 font-medium leading-snug">{e.title}</span>
+                className="group flex flex-col rounded-xl border bg-card text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+                <div className="flex flex-1 flex-col gap-2 p-4">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <EntryBadge status={e.status} t={t} />
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{t(`k_${e.kind}` as SKey)}</span>
+                    {e.pending && <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[11px] text-warning">{t("pendingEdit")}</span>}
+                    {e.priority && <Star className="ml-auto size-4 fill-warning text-warning" />}
+                  </div>
+                  <span className="line-clamp-2 font-medium leading-snug group-hover:text-primary">{e.title}</span>
+                  <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{e.answer}</p>
                 </div>
-                <p className="line-clamp-3 text-sm text-muted-foreground">{e.answer}</p>
-                <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1 text-xs">
-                  <EntryBadge status={e.status} t={t} />
-                  <Badge variant="outline" className="font-normal">{t(`k_${e.kind}` as SKey)}</Badge>
-                  {e.pending && <Badge variant="outline" className="border-warning/50 font-normal text-warning">{t("pendingEdit")}</Badge>}
-                  {(e.attachments?.length ?? 0) > 0 && <span className="inline-flex items-center gap-0.5 text-muted-foreground"><Paperclip className="size-3" />{e.attachments.length}</span>}
-                  {(e.image_examples_count ?? 0) > 0 && <span className="inline-flex items-center gap-0.5 text-muted-foreground"><Images className="size-3" />{e.image_examples_count}</span>}
-                  {e.ask_first && <span className="inline-flex items-center text-muted-foreground" title={t("askFirst")}><ListChecks className="size-3" /></span>}
-                  <span className="ml-auto inline-flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-3 border-t px-4 py-2 text-xs text-muted-foreground">
+                  {(e.attachments?.length ?? 0) > 0 && <span className="inline-flex items-center gap-0.5" title={t("attachments")}><Paperclip className="size-3" />{e.attachments.length}</span>}
+                  {(e.image_examples_count ?? 0) > 0 && <span className="inline-flex items-center gap-0.5"><Images className="size-3" />{e.image_examples_count}</span>}
+                  {e.ask_first && <span className="inline-flex items-center" title={t("askFirst")}><ListChecks className="size-3" /></span>}
+                  <span className="truncate">{e.author || "—"} · {fmtDate(e.updated_at, false)}</span>
+                  <span className="ml-auto inline-flex shrink-0 items-center gap-2 tabular-nums">
                     <span title={t("uses")}>{e.uses}×</span>
                     <span className="inline-flex items-center gap-0.5"><ThumbsUp className="size-3" />{e.likes}</span>
                     <span className="inline-flex items-center gap-0.5"><ThumbsDown className="size-3" />{e.dislikes}</span>
                   </span>
                 </div>
-                <div className="text-[11px] text-muted-foreground">{e.author || "—"} · {fmtDate(e.updated_at, false)}</div>
               </button>
             ))}
           </div>

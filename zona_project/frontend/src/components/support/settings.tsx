@@ -1,10 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bot, History, Link2, LogOut, Plus, Save, Search, Send, ShieldCheck, Trash2, Users, Wifi } from "lucide-react";
+import { Bot, History, Images, Link2, LogOut, MessageSquareText, Plus, Save, Search, Send, Settings2, ShieldCheck, Trash2, Users, Wifi, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 
-import { SectionTitle } from "@/components/common/page";
 import { ConfirmDialog, FormRow } from "@/components/qrdrive/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,39 +13,63 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type SupportSettings, type TgUserInfo } from "./api";
-import { fmtDate, ModeBadge, useSupportMutation } from "./common";
+import { fmtDate, ModeBadge, Segmented, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SettingRow, SupportShell } from "./shell";
 
 const MODES: Mode[] = ["collect", "shadow", "live", "off"];
 
 /** Botlar, guruhlar, umumiy sozlamalar va bot taniydigan xodimlar (faqat administrator). */
-const SETTING_TABS: { key: string; label: SKey }[] = [
-  { key: "bots", label: "stBots" }, { key: "groups", label: "stGroups" }, { key: "answering", label: "stAnswering" },
-  { key: "images", label: "stImages" }, { key: "history", label: "stHistory" }, { key: "people", label: "stPeople" },
-  { key: "general", label: "stGeneral" },
+const SETTING_TABS: { key: string; label: SKey; hint: SKey; icon: LucideIcon }[] = [
+  { key: "bots", label: "stBots", hint: "stBotsHint", icon: Bot },
+  { key: "groups", label: "stGroups", hint: "stGroupsHint", icon: Users },
+  { key: "answering", label: "stAnswering", hint: "stAnsweringHint", icon: MessageSquareText },
+  { key: "images", label: "stImages", hint: "stImagesHint", icon: Images },
+  { key: "history", label: "stHistory", hint: "stHistoryHint", icon: History },
+  { key: "people", label: "stPeople", hint: "stPeopleHint", icon: Link2 },
+  { key: "general", label: "stGeneral", hint: "stGeneralHint", icon: Settings2 },
 ];
 
 export function SupportSettingsPage() {
   const t = useSt();
+  const [tab, setTab] = useState("bots");
+  const cur = SETTING_TABS.find((x) => x.key === tab)!;
   return (
     <SupportShell title={t("setTitle")} description={t("setDesc")}>
-      <Tabs defaultValue="bots" className="gap-4">
-        <TabsList className="h-auto flex-wrap justify-start">
-          {SETTING_TABS.map((x) => <TabsTrigger key={x.key} value={x.key}>{t(x.label)}</TabsTrigger>)}
-        </TabsList>
-        <TabsContent value="bots"><BotsSection t={t} /></TabsContent>
-        <TabsContent value="groups"><GroupsSection t={t} /></TabsContent>
-        <TabsContent value="answering"><SettingsForm t={t} part="answering" /></TabsContent>
-        <TabsContent value="images"><SettingsForm t={t} part="images" /></TabsContent>
-        <TabsContent value="history"><HistorySection t={t} /></TabsContent>
-        <TabsContent value="people"><div className="grid gap-6"><TgUsersSection t={t} /><StaffSection t={t} /></div></TabsContent>
-        <TabsContent value="general"><SettingsForm t={t} part="general" /></TabsContent>
-      </Tabs>
+      <div className="grid gap-5 lg:grid-cols-[230px_1fr]">
+        <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:sticky lg:top-0 lg:mx-0 lg:flex-col lg:self-start lg:overflow-visible lg:px-0">
+          {SETTING_TABS.map((x) => {
+            const on = x.key === tab;
+            return (
+              <button key={x.key} type="button" onClick={() => setTab(x.key)}
+                className={cn("flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors",
+                  on ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+                <x.icon className="size-4 shrink-0" />{t(x.label)}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="min-w-0">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><cur.icon className="size-4" /></span>
+            <div className="min-w-0">
+              <h2 className="font-semibold leading-tight">{t(cur.label)}</h2>
+              <p className="text-xs text-muted-foreground">{t(cur.hint)}</p>
+            </div>
+          </div>
+          {tab === "bots" && <BotsSection t={t} />}
+          {tab === "groups" && <GroupsSection t={t} />}
+          {tab === "answering" && <SettingsForm t={t} part="answering" />}
+          {tab === "images" && <SettingsForm t={t} part="images" />}
+          {tab === "history" && <HistorySection t={t} />}
+          {tab === "people" && <div className="grid gap-6"><TgUsersSection t={t} /><StaffSection t={t} /></div>}
+          {tab === "general" && <SettingsForm t={t} part="general" />}
+        </div>
+      </div>
     </SupportShell>
   );
 }
@@ -60,10 +83,10 @@ function BotsSection({ t }: { t: ST }) {
   const create = useSupportMutation(() => supportApi.createBot({ name, token, mode: "shadow", enabled: true }), t("saved"));
   return (
     <section>
-      <SectionTitle actions={<Button size="sm" onClick={() => setAdding(!adding)}><Plus className="size-4" />{t("addBot")}</Button>}>
-        <span className="inline-flex items-center gap-1.5"><Bot className="size-4" />{t("bots")}</span>
-      </SectionTitle>
-      <p className="mb-3 text-xs text-muted-foreground">{t("privacyWarn")}</p>
+      <div className="mb-3 flex items-start gap-3">
+        <p className="flex-1 text-xs text-muted-foreground">{t("privacyWarn")}</p>
+        <Button size="sm" onClick={() => setAdding(!adding)}><Plus className="size-4" />{t("addBot")}</Button>
+      </div>
       {adding && (
         <Card className="mb-3 gap-3 p-4">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -140,48 +163,31 @@ function GroupsSection({ t }: { t: ST }) {
   const groups = useQuery({ queryKey: ["support", "groups"], queryFn: supportApi.groups, refetchInterval: 30_000 });
   const upd = useSupportMutation(({ id, mode }: { id: number; mode: SupportGroup["mode"] }) => supportApi.updateGroup(id, { mode }), t("saved"));
   return (
-    <section>
-      <SectionTitle><span className="inline-flex items-center gap-1.5"><Users className="size-4" />{t("groups")}</span></SectionTitle>
-      <p className="mb-3 text-xs text-muted-foreground">{t("groupsHint")}</p>
+    <section className="grid gap-3">
+      <p className="text-xs text-muted-foreground">{t("groupsHint")}</p>
+      {groups.isLoading && <Skeleton className="h-32" />}
       {groups.data && groups.data.length === 0 && <p className="text-sm text-muted-foreground">{t("empty")}</p>}
-      {groups.data && groups.data.length > 0 && (
-        <Card className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("groups")}</TableHead><TableHead>{t("bots")}</TableHead><TableHead>{t("mode")}</TableHead>
-                <TableHead className="text-right">{t("q7")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {groups.data.map((g) => (
-                <TableRow key={g.id} className={g.is_active ? "" : "opacity-50"}>
-                  <TableCell>
-                    <div className="font-medium">{g.title || g.chat_id}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {g.is_admin ? <span className="text-success"><ShieldCheck className="mr-0.5 inline size-3" />{t("botAdmin")}</span> : t("notAdmin")}
-                      {g.last_message_at && ` · ${fmtDate(g.last_message_at)}`}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs">{g.bot_name}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Select value={g.mode} onValueChange={(v) => upd.mutate({ id: g.id, mode: v as SupportGroup["mode"] })}>
-                        <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {(["inherit", ...MODES] as const).map((m) => <SelectItem key={m} value={m}>{t(`mode_${m}`)}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      {g.mode === "inherit" && <ModeBadge mode={g.effective_mode} t={t} />}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-xs">{g.questions_7d}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+      {groups.data?.map((g) => (
+        <Card key={g.id} className={cn("gap-3 p-4", !g.is_active && "opacity-60")}>
+          <div className="flex flex-wrap items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted"><Users className="size-4 text-muted-foreground" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">{g.title || g.chat_id}</div>
+              <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                {g.is_admin ? <span className="inline-flex items-center gap-0.5 text-success"><ShieldCheck className="size-3" />{t("botAdmin")}</span>
+                  : <span className="text-warning">{t("notAdmin")}</span>}
+                <span>· {g.bot_name}</span>
+                <span>· {t("q7")}: <b className="text-foreground">{g.questions_7d}</b></span>
+                {g.last_message_at && <span>· {fmtDate(g.last_message_at)}</span>}
+              </div>
+            </div>
+            {g.mode === "inherit" && <div className="flex items-center gap-1.5 text-xs text-muted-foreground">{t("nowActs")}: <ModeBadge mode={g.effective_mode} t={t} /></div>}
+          </div>
+          <Segmented size="sm" value={g.mode} className="w-full sm:w-auto"
+            onChange={(v) => upd.mutate({ id: g.id, mode: v as SupportGroup["mode"] })}
+            options={(["inherit", ...MODES] as const).map((m) => ({ value: m, label: t(`mode_${m}`) }))} />
         </Card>
-      )}
+      ))}
     </section>
   );
 }
@@ -300,9 +306,10 @@ function TgUsersSection({ t }: { t: ST }) {
   const users = useQuery({ queryKey: ["support", "tg-users", onlyUnlinked], queryFn: () => supportApi.tgUsers(onlyUnlinked) });
   return (
     <section>
-      <SectionTitle actions={<label className="flex items-center gap-2 text-xs"><Switch checked={onlyUnlinked} onCheckedChange={setOnlyUnlinked} />{t("tgUnlinked")}</label>}>
-        <span className="inline-flex items-center gap-1.5"><Link2 className="size-4" />{t("tgUsers")}</span>
-      </SectionTitle>
+      <div className="mb-2 flex items-center gap-3">
+        <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold"><Link2 className="size-4" />{t("tgUsers")}</h3>
+        <label className="ml-auto flex items-center gap-2 text-xs"><Switch checked={onlyUnlinked} onCheckedChange={setOnlyUnlinked} />{t("tgUnlinked")}</label>
+      </div>
       <p className="mb-3 text-xs text-muted-foreground">{t("tgUsersHint")}</p>
       <Card className="p-0">
         <Table>
@@ -366,7 +373,7 @@ function StaffSection({ t }: { t: ST }) {
   const q = useQuery({ queryKey: ["support", "staff"], queryFn: supportApi.staff });
   return (
     <section>
-      <SectionTitle>{t("staff")}</SectionTitle>
+      <h3 className="mb-2 text-sm font-semibold">{t("staff")}</h3>
       <p className="mb-3 text-xs text-muted-foreground">{t("staffHint")}</p>
       <Card className="p-0">
         <Table>
@@ -413,7 +420,6 @@ function HistorySection({ t }: { t: ST }) {
 
   return (
     <section>
-      <SectionTitle><span className="inline-flex items-center gap-1.5"><History className="size-4" />{t("history")}</span></SectionTitle>
       <p className="mb-3 text-xs text-muted-foreground">{t("historyHint")}</p>
       <Card className="gap-4 p-4">
         {!s.mtproto_available && <p className="text-sm text-warning">{t("mtNotInstalled")}</p>}
