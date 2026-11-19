@@ -26,7 +26,9 @@
       "system": "System",
       "qrMain": "Files & people",
       "qrReliability": "Monitoring",
-      "qrConfig": "Configuration"
+      "qrConfig": "Configuration",
+      "supMain": "Questions",
+      "supConfig": "Configuration"
     },
     "staff": "Contacts",
     "qrOverview": "Overview",
@@ -42,12 +44,17 @@
     "qrSetup": "Setup wizard",
     "modules": {
       "zona": "Responsibility platform",
-      "qrdrive": "QR Drive"
+      "qrdrive": "QR Drive",
+      "support": "Support bot"
     },
     "serviceDown": "Service unavailable",
     "qrAnalytics": "Analytics",
     "controlCenter": "Service center",
-    "controlCenterHint": "Start and monitor all services"
+    "controlCenterHint": "Start and monitor all services",
+    "supInbox": "Group questions",
+    "supReview": "Approval queue",
+    "supKnowledge": "Knowledge base",
+    "supSettings": "Bots & settings"
   },
   "top": {
     "search": "Search…",
@@ -631,14 +638,16 @@
       "person": "Employee analysis",
       "audit": "Structure audit",
       "translate": "Translation",
-      "workload": "Workload analysis"
+      "workload": "Workload analysis",
+      "support": "Support bot answers"
     },
     "taskHint": {
       "route": "“Who to ask?” — finds the owner from free text",
       "person": "Employee 360° — analyzes tasks, authorities and risks",
       "audit": "Reports — gaps and risks across the whole structure",
       "translate": "Automatically translates data into uz/ru/en — staff write in one language",
-      "workload": "Time-based overload, recommendations and time estimates for questions"
+      "workload": "Time-based overload, recommendations and time estimates for questions",
+      "support": "Drafts an answer to a Telegram group question from approved answers (only when enabled in Support → Settings)"
     },
     "translation": {
       "title": "Data translation",
@@ -1033,5 +1042,17 @@
     "sendToApproval": "Send for approval ({count})",
     "proposed": "Sent for approval: {created}, duplicate/invalid: {skipped}",
     "ruleReason": "{from} is overloaded: frees up ~{hours} h per week"
+  },
+  "teamContacts": {
+    "title": "Team members",
+    "hint": "Team work stays with the team — members are not split out in reports or workload; they share tasks as needed. The support bot recognizes them via Telegram.",
+    "empty": "No members yet",
+    "name": "Name",
+    "role": "Position",
+    "add": "Add",
+    "remove": "Remove",
+    "added": "Member added",
+    "removed": "Member removed",
+    "linked": "Telegram linked"
   }
 }

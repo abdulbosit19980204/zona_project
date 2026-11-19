@@ -5,7 +5,7 @@ import type {
   AIUsageSummary, AuditEvent, Authority, ChangeKind, ChangePayload, ChangeRequest, ChangeStatus, Department,
   EdgeCase, LoginResponse, Me, Member, OrgState, Process, ProcessRole, SearchResult, Synonym, SystemItem, Task, Team,
   StaffAssignBody, StaffDiff, StaffImportBody, StaffPerson, StaffProject, StaffState, TokenPair, TranslateStatus,
-  AIWorkload, BotAnswer, KnowledgeFormat, ProposalItem, Zone,
+  AIWorkload, BotAnswer, KnowledgeFormat, ProposalItem, TeamContact, Zone,
 } from "./types";
 
 const get = async <T>(url: string, params?: Record<string, string | number | boolean>) => (await api.get<T>(url, { params })).data;
@@ -40,6 +40,7 @@ export const orgApi = {
   departments: resource<Department>("departments"),
   teams: resource<Team>("teams"),
   members: resource<Member>("members"),
+  teamContacts: resource<TeamContact>("team-contacts"),
   authorities: resource<Authority>("authorities"),
   systems: resource<SystemItem>("systems"),
   zones: resource<Zone>("zones"),

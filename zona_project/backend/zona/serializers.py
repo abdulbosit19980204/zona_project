@@ -6,7 +6,7 @@ from rest_framework import serializers
 from . import translation
 from .crypto import decrypt, encrypt, mask
 from .models import (AIProvider, AITaskConfig, AIUsage, Authority, ChangeRequest, Department, EdgeCase, Event, Member,
-                     Process, ProcessRole, Profile, Synonym, System, Task, TaskFallback, Team, Zone)
+                     Process, ProcessRole, Profile, Synonym, System, Task, TaskFallback, Team, TeamContact, Zone)
 from .permissions import role_of
 
 User = get_user_model()
@@ -77,15 +77,33 @@ class TeamSerializer(I18nMixin, serializers.ModelSerializer):
         return _not_blank(value, "Jamoa nomi bo'sh bo'lmasin.")
 
 
+class TeamContactSerializer(serializers.ModelSerializer):
+    member = serializers.PrimaryKeyRelatedField(queryset=Member.objects.filter(is_team=True))
+
+    class Meta:
+        model = TeamContact
+        fields = ["id", "member", "name", "role", "phone", "telegram", "telegram_id", "note", "order"]
+        read_only_fields = ["order", "telegram_id"]
+
+    def validate_name(self, value):
+        return _not_blank(value, "Ism bo'sh bo'lmasin.")
+
+    def validate_telegram(self, value):
+        return value.strip().lstrip("@")
+
+
 class MemberSerializer(I18nMixin, serializers.ModelSerializer):
     department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all(), allow_null=True, required=False)
     team = serializers.PrimaryKeyRelatedField(queryset=Team.objects.all(), allow_null=True, required=False)
     manager = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all(), allow_null=True, required=False)
+    # jamoa a'zolari (faqat aloqa uchun; hisobotlarda jamoa bitta bo'lib qoladi)
+    contacts = TeamContactSerializer(many=True, read_only=True)
 
     class Meta:
         model = Member
         fields = ["id", "name", "role", "department", "team", "manager", "is_team", "trigger", "does", "excludes",
-                  "level", "duties", "escalation", "capacity", "email", "phone", "telegram", "location", "order"]
+                  "level", "duties", "escalation", "capacity", "email", "phone", "telegram", "location", "order",
+                  "contacts"]
         read_only_fields = ["order"]
 
     def validate_name(self, value):

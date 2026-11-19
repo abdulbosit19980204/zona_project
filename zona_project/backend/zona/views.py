@@ -13,13 +13,14 @@ from .ai import service as ai_service
 from .api import ZonaViewSet, zona_api
 from .exporter import workbook_bytes
 from .models import (Authority, ChangeRequest, Department, EdgeCase, Event, Member, Process, ProcessRole, Synonym,
-                     System, Task, TaskFallback, Team, Zone)
+                     System, Task, TaskFallback, Team, TeamContact, Zone)
 from .permissions import CanView, ReadOrEdit, role_of
 from .search import debug as search_debug
 from .search import search as run_search
 from .serializers import (AuthoritySerializer, DepartmentSerializer, EdgeCaseSerializer, EventSerializer,
                           MemberSerializer, ProcessRoleSerializer, ProcessSerializer, SynonymSerializer,
-                          SystemSerializer, TaskSerializer, TeamSerializer, ZoneSerializer, user_payload)
+                          SystemSerializer, TaskSerializer, TeamContactSerializer, TeamSerializer, ZoneSerializer,
+                          user_payload)
 
 UNASSIGNED = "Biriktirilmagan"
 
@@ -54,7 +55,7 @@ def state(request):
                                                 "anonymous": True},
         "departments": DepartmentSerializer(Department.objects.all(), many=True).data,
         "teams": TeamSerializer(Team.objects.all(), many=True).data,
-        "members": MemberSerializer(Member.objects.all(), many=True).data,
+        "members": MemberSerializer(Member.objects.prefetch_related("contacts"), many=True).data,
         "authorities": AuthoritySerializer(Authority.objects.all(), many=True).data,
         "zones": ZoneSerializer(Zone.objects.all(), many=True).data,
         "systems": SystemSerializer(System.objects.all(), many=True).data,
@@ -151,6 +152,25 @@ class MemberViewSet(ZonaViewSet):
         count = instance.tasks.count()
         log(self.request, Event.MEMBER, from_name=instance.name,
             text=f"Xodim o'chirildi, {count} ta vazifa \"{UNASSIGNED}\" bo'limiga tushdi")
+        instance.delete()
+
+
+class TeamContactViewSet(ZonaViewSet):
+    """Jamoa a'zolarining kontaktlari: jamoa ishlari bo'linmaydi, a'zolar faqat aloqa va bot uchun."""
+    queryset = TeamContact.objects.select_related("member")
+    serializer_class = TeamContactSerializer
+
+    def perform_create(self, serializer):
+        c = serializer.save(order=self.next_order())
+        log(self.request, Event.MEMBER, subject=c.member.name, to_name=c.name, text="Jamoaga a'zo (kontakt) qo'shildi")
+
+    def perform_update(self, serializer):
+        c = serializer.save()
+        log(self.request, Event.EDITED, subject=c.member.name, text=f"Jamoa a'zosi yangilandi: {c.name}")
+
+    def perform_destroy(self, instance):
+        log(self.request, Event.MEMBER, subject=instance.member.name, from_name=instance.name,
+            text="Jamoa a'zosi (kontakt) olib tashlandi")
         instance.delete()
 
 

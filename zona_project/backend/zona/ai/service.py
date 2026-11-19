@@ -19,6 +19,7 @@ DEFAULTS = {
     AITaskConfig.AUDIT: {"effort": "high", "max_tokens": 8000},
     AITaskConfig.TRANSLATE: {"effort": "low", "max_tokens": 8000},
     AITaskConfig.WORKLOAD: {"effort": "medium", "max_tokens": 8000},
+    AITaskConfig.SUPPORT: {"effort": "low", "max_tokens": 1500},
 }
 
 # Sinov uchun bepul standart: Google Gemini (AI Studio kaliti bepul, kredit karta shart emas).

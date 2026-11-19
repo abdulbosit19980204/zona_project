@@ -50,6 +50,20 @@ export interface Member {
   location: string;
   order: number;
   i18n?: I18n;
+  /** Jamoa a'zolari (faqat is_team): aloqa uchun, hisobotlarda jamoa bo'linmaydi. */
+  contacts?: TeamContact[];
+}
+
+export interface TeamContact {
+  id: number;
+  member: number;
+  name: string;
+  role: string;
+  phone: string;
+  telegram: string;
+  telegram_id: number | null;
+  note: string;
+  order: number;
 }
 
 export type MemberLevel = "L1" | "L2" | "L3" | "LEAD" | "BIZ" | "EXT";
@@ -179,7 +193,7 @@ export interface AnonymousMe {
 export interface Meta {
   company: string;
   title: string;
-  ai: { route: boolean; person: boolean; audit: boolean; translate: boolean; workload: boolean };
+  ai: { route: boolean; person: boolean; audit: boolean; translate: boolean; workload: boolean; support?: boolean };
   pending_approvals: number;
 }
 
@@ -341,7 +355,7 @@ export interface AIProviderKind {
   effort?: boolean;
 }
 
-export type AITaskKey = "route" | "person" | "audit" | "translate" | "workload";
+export type AITaskKey = "route" | "person" | "audit" | "translate" | "workload" | "support";
 export type Effort = "" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface AITaskConfig {

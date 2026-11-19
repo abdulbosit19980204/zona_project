@@ -55,6 +55,8 @@ done
 if ((${#need[@]})); then apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}"; fi
 # RAR/7z arxivlari uchun (bo'lmasa bsdtar yetarli)
 dpkg -s 7zip >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq 7zip >/dev/null 2>&1 || true
+# Support bot: rasmdagi matnni o'qish (OCR, ixtiyoriy — bo'lmasa bot rasmsiz ishlaydi)
+dpkg -s tesseract-ocr-uzb >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tesseract-ocr tesseract-ocr-rus tesseract-ocr-uzb tesseract-ocr-uzb-cyrl >/dev/null 2>&1 || true
 
 step "Foydalanuvchi va papkalar"
 id "$USR" >/dev/null 2>&1 || useradd --system --home "$DATA" --shell /usr/sbin/nologin "$USR"
@@ -153,7 +155,7 @@ cd "$SRC"
 step "systemd servislari"
 for f in "$HERE"/systemd/*; do sed "s|__SRC__|$SRC|g" "$f" > "/etc/systemd/system/$(basename "$f")"; done
 systemctl daemon-reload
-for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot; do
+for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot; do
   systemctl enable "$u" >/dev/null 2>&1; systemctl restart "$u"
 done
 systemctl enable --now foydali-backup.timer >/dev/null 2>&1
@@ -172,7 +174,7 @@ sed "s|__NODE_BIN__|$NODE_BIN|g" "$HERE/foydali-pm2.sh" > /usr/local/sbin/foydal
 chmod 755 /usr/local/sbin/foydali-pm2
 {
   echo "# Foydali boshqaruv markazi: faqat foydali-* servislarini boshqarish va jurnalini o'qish"
-  for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot; do
+  for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot; do
     for a in start stop restart; do echo "$USR ALL=(root) NOPASSWD: /usr/bin/systemctl $a $u"; done
     echo "$USR ALL=(root) NOPASSWD: /usr/bin/journalctl -u $u *"
   done
@@ -212,7 +214,7 @@ chk qrdrive-api  http://127.0.0.1:8120/qrdrive/health
 chk frontend     http://127.0.0.1:3020/login
 chk control      http://127.0.0.1:8920/
 chk "sayt (https)" "https://$DOMAIN/login"
-for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-control; do
+for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot foydali-control; do
   printf '  %-24s %s\n' "$u" "$(systemctl is-active "$u")"
 done
 echo

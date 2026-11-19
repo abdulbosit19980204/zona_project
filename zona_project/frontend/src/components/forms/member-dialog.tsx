@@ -12,6 +12,7 @@ import type { Member, MemberLevel } from "@/lib/api/types";
 
 import { CheckboxField, fromId, FormDialog, NONE, NumberField, Row, SelectField, TextareaField, TextField, toId } from "./form-kit";
 import { departmentOptions, memberOptions, teamOptions } from "./options";
+import { TeamContacts } from "./team-contacts";
 
 export const LEVELS: MemberLevel[] = ["L1", "L2", "L3", "LEAD", "BIZ", "EXT"];
 
@@ -103,6 +104,7 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
       </Row>
       <TextField control={form.control} name="email" label="Email" type="email" />
       <CheckboxField control={form.control} name="is_team" label={t("forms.member.isTeam")} />
+      {member?.is_team && <TeamContacts member={model.member.get(member.id) ?? member} />}
       <Row>
         <SelectField
           control={form.control} name="level" label={t("people.level")}

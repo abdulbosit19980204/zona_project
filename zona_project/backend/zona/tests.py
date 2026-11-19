@@ -139,7 +139,7 @@ class AdminTests(Base):
     def test_task_config_requires_model(self):
         self.login("admin")
         tasks = self.call("get", "admin/ai/tasks/").json()
-        self.assertEqual({t["task"] for t in tasks}, {"route", "person", "audit", "translate", "workload"})
+        self.assertEqual({t["task"] for t in tasks}, {"route", "person", "audit", "translate", "workload", "support"})
         r = self.call("patch", "admin/ai/tasks/route/", {"enabled": True, "provider": None, "model": ""})
         self.assertEqual(r.status_code, 400)
 
@@ -159,7 +159,7 @@ class StructureTests(Base):
         for key in ("departments", "members", "authorities", "processes", "roles", "tasks", "edge_cases"):
             self.assertTrue(data[key], key)
         self.assertEqual(data["me"]["username"], "viewer")
-        self.assertEqual(set(data["meta"]["ai"]), {"route", "person", "audit", "translate", "workload"})
+        self.assertEqual(set(data["meta"]["ai"]), {"route", "person", "audit", "translate", "workload", "support"})
 
     def test_member_contacts_and_authority(self):
         self.login("editor")

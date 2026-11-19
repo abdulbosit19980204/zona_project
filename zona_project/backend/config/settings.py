@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "channels",
     "zona",
+    "support",  # Telegram support bot (alohida jadvallar: support_*)
 ]
 
 ZONA = {

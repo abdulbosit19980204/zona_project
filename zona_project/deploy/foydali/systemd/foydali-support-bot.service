@@ -1,0 +1,19 @@
+[Unit]
+Description=Foydali — Support bot (Telegram guruhlaridagi savollarga avto-javob; botlar admin paneldan)
+After=network.target foydali-backend.service
+
+[Service]
+User=foydali
+Group=foydali
+WorkingDirectory=__SRC__/backend
+EnvironmentFile=/etc/foydali/foydali.env
+ExecStart=__SRC__/.venv/bin/python manage.py support_bot
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/foydali
+
+[Install]
+WantedBy=multi-user.target

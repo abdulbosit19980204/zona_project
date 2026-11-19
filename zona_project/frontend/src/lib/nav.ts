@@ -1,7 +1,7 @@
 import {
-  Activity, BadgeCheck, Bot, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
+  Activity, BadgeCheck, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
   LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert,
-  Signpost, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, type LucideIcon,
+  Inbox, Signpost, SlidersHorizontal, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -89,8 +89,24 @@ export const QR_NAV: NavGroup[] = [
   },
 ];
 
+/** Support bot: Telegram guruhlaridagi savollarga avto-javob, bilim bazasi va tasdiqlash. */
+export const SUPPORT_NAV: NavGroup[] = [
+  {
+    key: "supMain",
+    items: [
+      { href: "/support", key: "supInbox", icon: Inbox },
+      { href: "/support/review", key: "supReview", icon: BookOpenCheck },
+      { href: "/support/knowledge", key: "supKnowledge", icon: BotMessageSquare },
+    ],
+  },
+  {
+    key: "supConfig",
+    items: [{ href: "/support/settings", key: "supSettings", icon: SlidersHorizontal, perm: "admin" }],
+  },
+];
+
 export interface NavModule {
-  key: "zona" | "qrdrive"; // nav.modules.<key>
+  key: "zona" | "qrdrive" | "support"; // nav.modules.<key>
   icon: LucideIcon;
   groups: NavGroup[];
 }
@@ -99,6 +115,7 @@ export interface NavModule {
 export const MODULES: NavModule[] = [
   { key: "zona", icon: Orbit, groups: NAV },
   { key: "qrdrive", icon: QrCode, groups: QR_NAV },
+  { key: "support", icon: BotMessageSquare, groups: SUPPORT_NAV },
 ];
 
 export const ALL_NAV = MODULES.flatMap((m) => m.groups.flatMap((g) => g.items));
@@ -110,7 +127,9 @@ export function activeNav(pathname: string): NavItem | undefined {
 }
 
 export function moduleOf(pathname: string): NavModule {
-  return pathname === "/qr" || pathname.startsWith("/qr/") ? MODULES[1] : MODULES[0];
+  if (pathname === "/qr" || pathname.startsWith("/qr/")) return MODULES[1];
+  if (pathname === "/support" || pathname.startsWith("/support/")) return MODULES[2];
+  return MODULES[0];
 }
 
 export function groupOf(item: NavItem | undefined): { module: NavModule; group: NavGroup } | undefined {

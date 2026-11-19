@@ -26,7 +26,9 @@
       "system": "Tizim",
       "qrMain": "Fayllar va xodimlar",
       "qrReliability": "Nazorat",
-      "qrConfig": "Sozlash"
+      "qrConfig": "Sozlash",
+      "supMain": "Savollar",
+      "supConfig": "Sozlash"
     },
     "staff": "Kontaktlar",
     "qrOverview": "Bosh sahifa",
@@ -42,12 +44,17 @@
     "qrSetup": "Sozlash ustasi",
     "modules": {
       "zona": "Masʼuliyat platformasi",
-      "qrdrive": "QR Drive"
+      "qrdrive": "QR Drive",
+      "support": "Support bot"
     },
     "serviceDown": "Servis ishlamayapti",
     "qrAnalytics": "Analitika",
     "controlCenter": "Servislar markazi",
-    "controlCenterHint": "Barcha servislarni ishga tushirish va nazorat qilish"
+    "controlCenterHint": "Barcha servislarni ishga tushirish va nazorat qilish",
+    "supInbox": "Guruh savollari",
+    "supReview": "Tasdiqlash navbati",
+    "supKnowledge": "Bilim bazasi",
+    "supSettings": "Botlar va sozlamalar"
   },
   "top": {
     "search": "Qidirish…",
@@ -631,14 +638,16 @@
       "person": "Xodim tahlili",
       "audit": "Tuzilma auditi",
       "translate": "Tarjima",
-      "workload": "Yuklama tahlili"
+      "workload": "Yuklama tahlili",
+      "support": "Support bot javoblari"
     },
     "taskHint": {
       "route": "“Savol kimga?” — erkin matndan masʼulni topadi",
       "person": "Xodim 360° — vazifa, vakolat va xavflarni tahlil qiladi",
       "audit": "Hisobotlar — butun tuzilmadagi boʻshliq va xavflar",
       "translate": "Maʼlumotlarni uz/ru/en tillariga avtomatik tarjima qiladi — xodim bitta tilda yozadi",
-      "workload": "Vaqt asosida ortiqcha yuklama, tavsiyalar va savollarga vaqt taxmini"
+      "workload": "Vaqt asosida ortiqcha yuklama, tavsiyalar va savollarga vaqt taxmini",
+      "support": "Telegram guruhidagi savolga tasdiqlangan javoblar asosida javob tayyorlaydi (faqat Support → Sozlamalarda yoqilganda)"
     },
     "translation": {
       "title": "Maʼlumotlar tarjimasi",
@@ -1033,5 +1042,17 @@
     "sendToApproval": "Tasdiqlashga yuborish ({count})",
     "proposed": "Tasdiqlashga yuborildi: {created} ta, takror/yaroqsiz: {skipped} ta",
     "ruleReason": "{from} ortiqcha yuklangan: haftasiga ~{hours} soat bo'shaydi"
+  },
+  "teamContacts": {
+    "title": "Jamoa aʼzolari",
+    "hint": "Jamoaga biriktirilgan ishlar jamoada qoladi — aʼzolar hisobot va yuklamada alohida koʻrinmaydi, ishni vaziyatga qarab boʻlishadi. Support bot ularni Telegram orqali taniydi.",
+    "empty": "Aʼzolar qoʻshilmagan",
+    "name": "Ism",
+    "role": "Lavozim",
+    "add": "Qoʻshish",
+    "remove": "Olib tashlash",
+    "added": "Aʼzo qoʻshildi",
+    "removed": "Aʼzo olib tashlandi",
+    "linked": "Telegram bogʻlangan"
   }
 }

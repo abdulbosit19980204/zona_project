@@ -126,6 +126,33 @@ class Member(models.Model):
         return f"{self.name} ({self.role})"
 
 
+class TeamContact(models.Model):
+    """Jamoa (is_team=True xodim) a'zosining aloqa ma'lumoti.
+
+    Jamoaga biriktirilgan ishlar jamoaning o'zida qoladi: a'zolar alohida xodim emas, shuning uchun
+    hisobotlar, yuklama va yo'naltirishda bo'linmaydi — ular vaziyatga qarab ishni o'zaro bo'lishadi.
+    Support bot a'zolarni Telegram orqali taniydi (javoblaridan o'rganadi, tasdiqlashga ruxsat beradi).
+    """
+
+    member = models.ForeignKey(Member, verbose_name="Jamoa", on_delete=models.CASCADE, related_name="contacts")
+    name = models.CharField("Ism", max_length=120)
+    role = models.CharField("Lavozim", max_length=80, blank=True)
+    phone = models.CharField("Telefon", max_length=40, blank=True)
+    telegram = models.CharField("Telegram", max_length=64, blank=True)
+    telegram_id = models.BigIntegerField("Telegram ID", null=True, blank=True)
+    note = models.CharField("Izoh", max_length=255, blank=True)
+    order = models.PositiveIntegerField("Tartib", default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["member", "order", "id"]
+        verbose_name = "Jamoa a'zosi (kontakt)"
+        verbose_name_plural = "Jamoa a'zolari (kontaktlar)"
+
+    def __str__(self):
+        return f"{self.name} — {self.member.name}"
+
+
 class Process(models.Model):
     """Biznes jarayon: bir yo'nalishdagi vazifalar to'plami."""
 
@@ -413,13 +440,14 @@ class AIProvider(models.Model):
 class AITaskConfig(models.Model):
     """Har bir ish uchun alohida model sozlamasi."""
 
-    ROUTE, PERSON, AUDIT, TRANSLATE, WORKLOAD = "route", "person", "audit", "translate", "workload"
+    ROUTE, PERSON, AUDIT, TRANSLATE, WORKLOAD, SUPPORT = "route", "person", "audit", "translate", "workload", "support"
     TASKS = [
         (ROUTE, "Savol kimga: savolni mas'ulga yo'naltirish"),
         (PERSON, "Xodim tahlili: vazifa, vakolat va chegaralar"),
         (AUDIT, "Tashkilot auditi: bo'shliq va kesishmalar"),
         (TRANSLATE, "Tarjima: matnlarni uz/ru/en tillariga o'girish"),
         (WORKLOAD, "Yuklama tahlili: vaqt, ortiqcha yuklama va tavsiyalar"),
+        (SUPPORT, "Support bot: guruhdagi savolga javob tayyorlash"),
     ]
     EFFORTS = [("", "Standart"), ("low", "Past"), ("medium", "O'rta"), ("high", "Yuqori"),
                ("xhigh", "Juda yuqori"), ("max", "Maksimal")]
