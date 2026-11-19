@@ -267,6 +267,26 @@ class ApiTests(Base):
         self.assertEqual(r.json()["stage"], "template")
 
 
+class ImportKbTests(Base):
+    def test_import_from_question_base_is_idempotent_and_matches_examples(self):
+        from zona.models import Task
+        t = Task.objects.exclude(rule="").exclude(examples=[]).first() or Task.objects.first()
+        if not t.rule:
+            t.rule = "Supervayzerga yozing"
+        t.examples = ["klientni menga ulab bering iltimos"]
+        t.save()
+        call_command("support_import_kb", verbosity=0)
+        n = Entry.objects.count()
+        self.assertGreater(n, 0)
+        e = Entry.objects.get(title=" ".join(t.title.split())[:200])
+        self.assertEqual((e.status, e.source), (Entry.APPROVED, "seed"))
+        self.assertIn("klientni menga ulab bering iltimos", e.questions)
+        call_command("support_import_kb", verbosity=0)
+        self.assertEqual(Entry.objects.count(), n)  # qayta ishga tushirish dublikat yaratmaydi
+        d = engine.decide("klientni menga ulab bering iltimos", "uz")
+        self.assertEqual((d.stage, d.entry), ("faq", e))
+
+
 class TeamContactTests(Base):
     def test_contacts_crud_and_reports_keep_team_whole(self):
         from zona.timeload import member_load

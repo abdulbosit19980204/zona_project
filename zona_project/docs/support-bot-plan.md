@@ -364,7 +364,10 @@ Shundan keyin ish **Bosqich 0/1** dan boshlanadi. Har bosqichda shu fayldagi hol
   - [x] Bot tokeni (@savolbopbot) — bazada shifrlangan, soya rejimida
   - [ ] Botni support guruhlariga qo'shish va **admin qilish** (privacy mode yoqilgan — admin bo'lmasa xabarlarni ko'rmaydi)
   - [ ] Botga shaxsiy chatda `/start` (@uzdev7) — admin chat avtomatik belgilanadi
-  - [ ] Guruhlar tarixi eksporti (2–4 hafta)
+  - [x] Bilim bazasi boshlang'ich to'ldirildi (2026-11-19, `manage.py support_import_kb`): savollar bazasidan 335 yozuv —
+        66 tasdiqlangan (51 yozma qoida + aralash holatlar), 269 ko'rib chiqishda (qoidasi yo'q, faqat mas'ul belgilangan).
+        Agentlarning 210 ta savol turidagi haqiqiy so'rash misollari «savol ko'rinishlari» bo'ldi
+  - [ ] Guruhlar tarixi eksporti (2–4 hafta) — haqiqiy guruh savol-javoblari bilan bazani kengaytirish uchun
   - [ ] Namunaviy 3 shablon matnini tekshirib tasdiqlash (`/support/knowledge`, holati «Ko'rib chiqilmoqda»)
 - [x] Bosqich 1 — soya rejimi *(kod PROD'da, 2026-11-19)*
 - [x] Bosqich 2 — bilim bazasi, tasdiqlash tizimi, versiyalar, paneldan javob *(kod PROD'da)*
