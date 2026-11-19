@@ -22,6 +22,21 @@ class Settings(models.Model):
     ocr_enabled = models.BooleanField("Rasmdagi matnni o'qish (OCR)", default=True)
     media_days = models.PositiveIntegerField("Rasmlarni saqlash (kun)", default=30)
     signature = models.CharField("Javob imzosi", max_length=120, blank=True, default="🤖 Avto-javob")
+    # --- xatti-harakat (har biri yoqib/o'chiriladi) ---
+    drafts_to_admin = models.BooleanField("Soya rejimi: javob taklifini admin chatiga yuborish", default=True)
+    escalation_ack = models.BooleanField("Jonli: javob topilmasa guruhga «qabul qilindi» deb yozish", default=True)
+    mention_responsible = models.BooleanField("Jonli: mas'ulni @ bilan belgilash", default=True)
+    feedback_buttons = models.BooleanField("Jonli: javob ostida 👍/👎 tugmalari", default=True)
+    notify_candidates = models.BooleanField("Yangi javob nomzodini admin chatiga yuborish (✅/❌)", default=True)
+    learn_clarifications = models.BooleanField("Xodimning aniqlashtiruvchi savollarini javob deb olmaslik", default=True)
+    ask_first_prompt = models.BooleanField("Jonli: kerakli ma'lumot yo'q bo'lsa avval uni so'rash", default=True)
+    # --- guruh tarixini o'rganish (MTProto, egasining akkaunti orqali, faqat o'qish) ---
+    history_days = models.PositiveIntegerField("Tarix: necha kunlik", default=30)
+    history_photos = models.BooleanField("Tarix: rasmlarni ham o'qish (OCR)", default=True)
+    history_max = models.PositiveIntegerField("Tarix: bitta guruhdan ko'pi bilan xabar", default=5000)
+    mtproto_session_enc = models.TextField(blank=True)
+    mtproto_user = models.CharField("Ulangan akkaunt", max_length=150, blank=True)
+    mtproto_pending_enc = models.TextField(blank=True)  # kod kutilmoqda: telefon, hash, vaqtinchalik seans
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -34,8 +49,9 @@ class Settings(models.Model):
         return obj
 
 
-MODE_OFF, MODE_SHADOW, MODE_LIVE = "off", "shadow", "live"
-MODES = [(MODE_OFF, "O'chiq"), (MODE_SHADOW, "Soya rejimi (faqat admin chatiga)"), (MODE_LIVE, "Jonli (guruhga javob)")]
+MODE_OFF, MODE_COLLECT, MODE_SHADOW, MODE_LIVE = "off", "collect", "shadow", "live"
+MODES = [(MODE_OFF, "O'chiq"), (MODE_COLLECT, "Faqat yig'ish (hech kimga yozmaydi)"),
+         (MODE_SHADOW, "Soya rejimi (faqat admin chatiga)"), (MODE_LIVE, "Jonli (guruhga javob)")]
 
 
 class Bot(models.Model):
@@ -103,7 +119,8 @@ class Entry(models.Model):
     NEW, REVIEW, APPROVED, REJECTED, ARCHIVED = "new", "review", "approved", "rejected", "archived"
     STATUSES = [(NEW, "Yangi"), (REVIEW, "Ko'rib chiqilmoqda"), (APPROVED, "Tasdiqlangan"),
                 (REJECTED, "Rad etilgan"), (ARCHIVED, "Arxiv")]
-    SOURCES = [("manual", "Qo'lda"), ("staff", "Xodim javobi"), ("bot", "Bot yig'di"), ("seed", "Boshlang'ich"),
+    SOURCES = [("manual", "Qo'lda"), ("staff", "Xodim javobi"), ("history", "Guruh tarixi"), ("bot", "Bot yig'di"),
+               ("seed", "Boshlang'ich"),
                ("panel", "Paneldan javob")]
 
     kind = models.CharField(max_length=10, choices=KINDS, default=FAQ)
@@ -120,6 +137,8 @@ class Entry(models.Model):
     source = models.CharField(max_length=8, choices=SOURCES, default="manual")
     priority = models.BooleanField("Ustuvor (bot javobini xodim tuzatgan)", default=False)
     pending = models.JSONField("Tasdiq kutayotgan tahrir", null=True, blank=True)
+    ask_first = models.TextField("Javobdan oldin so'raladigan ma'lumot", blank=True,
+                                 help_text="Xodimlar odatda avval nimani so'raydi (masalan: STIR, skrinshot)")
     author = models.CharField(max_length=150, blank=True)
     approved_by = models.CharField(max_length=150, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
@@ -190,7 +209,7 @@ class TgUser(models.Model):
 class Message(models.Model):
     """Guruhga kelgan xabar (savol yoki xodim javobi) va bot nima qilgani."""
 
-    QUESTION, STAFF, OTHER = "question", "staff", "other"
+    QUESTION, STAFF, CLARIFY, INFO, OTHER = "question", "staff", "clarify", "info", "other"
     NEW, ANSWERED, DRAFTED, ESCALATED, IGNORED, CLOSED = "new", "answered", "drafted", "escalated", "ignored", "closed"
     STATUSES = [(NEW, "Yangi"), (ANSWERED, "Javob berildi"), (DRAFTED, "Qoralama (soya rejimi)"),
                 (ESCALATED, "Odamga uzatildi"), (IGNORED, "Savol emas"), (CLOSED, "Yopildi")]
@@ -209,6 +228,7 @@ class Message(models.Model):
     lang = models.CharField(max_length=5, blank=True)
     status = models.CharField(max_length=10, choices=STATUSES, default=NEW)
     stage = models.CharField(max_length=10, blank=True)  # template / faq / rule / ai / staff / panel
+    source = models.CharField(max_length=8, default="live")  # live / history
     entry = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="messages")
     confidence = models.PositiveIntegerField(default=0)
     answer_text = models.TextField(blank=True)
@@ -224,3 +244,22 @@ class Message(models.Model):
         ordering = ["-created_at", "-id"]
         constraints = [models.UniqueConstraint(fields=["bot", "chat_id", "message_id"], name="support_unique_message")]
         indexes = [models.Index(fields=["status", "created_at"])]
+
+
+class HistoryJob(models.Model):
+    """Guruh tarixini o'qib o'rganish vazifasi (bot jarayoni fonda bajaradi)."""
+
+    QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="history_jobs")
+    days = models.PositiveIntegerField(default=30)
+    photos = models.BooleanField(default=True)
+    status = models.CharField(max_length=8, default=QUEUED)
+    progress = models.JSONField(default=dict, blank=True)
+    error = models.CharField(max_length=500, blank=True)
+    created_by = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

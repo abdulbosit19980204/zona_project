@@ -18,9 +18,10 @@ import { useSt, type SKey } from "./i18n";
 
 interface Draft {
   kind: EntryKind; title: string; questions: string; triggers: string; extract: string; answer: string; answer_ru: string;
+  ask_first: string;
 }
 
-const blank: Draft = { kind: "faq", title: "", questions: "", triggers: "", extract: "", answer: "", answer_ru: "" };
+const blank: Draft = { kind: "faq", title: "", questions: "", triggers: "", extract: "", answer: "", answer_ru: "", ask_first: "" };
 
 function toDraft(e?: Entry): Draft {
   if (!e) return blank;
@@ -28,6 +29,7 @@ function toDraft(e?: Entry): Draft {
   return {
     kind: e.kind, title: p.title ?? e.title, questions: unlines(p.questions ?? e.questions), triggers: unlines(p.triggers ?? e.triggers),
     extract: unlines(p.extract ?? e.extract), answer: p.answer ?? e.answer, answer_ru: p.answer_ru ?? e.answer_ru,
+    ask_first: (p as { ask_first?: string }).ask_first ?? e.ask_first ?? "",
   };
 }
 
@@ -57,7 +59,7 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
 
   const body = () => ({
     kind: d.kind, title: d.title.trim(), questions: lines(d.questions), triggers: lines(d.triggers), extract: lines(d.extract),
-    answer: d.answer.trim(), answer_ru: d.answer_ru.trim(),
+    answer: d.answer.trim(), answer_ru: d.answer_ru.trim(), ask_first: d.ask_first.trim(),
   });
   const save = useSupportMutation(
     (approve: boolean) => (e ? supportApi.updateEntry(e.id, body()).then((r) => (approve ? supportApi.approve(r.id) : r))
@@ -106,6 +108,9 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
               </FormRow>
             </>
           )}
+          <FormRow label={t("askFirst")} hint={t("askFirstHint")}>
+            <Textarea rows={2} value={d.ask_first} onChange={(x) => set("ask_first")(x.target.value)} />
+          </FormRow>
           <FormRow label={t("answer")} hint={t("answerHint")}>
             <Textarea rows={6} value={d.answer} onChange={(x) => set("answer")(x.target.value)} />
           </FormRow>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Plus, Save, ShieldCheck, Trash2, Users, Wifi } from "lucide-react";
+import { Bot, History, LogOut, Plus, Save, Send, ShieldCheck, Trash2, Users, Wifi } from "lucide-react";
 import { useState } from "react";
 
 import { Page, PageHeader, SectionTitle } from "@/components/common/page";
@@ -16,11 +16,11 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
-import { supportApi, type Mode, type SupportBot, type SupportGroup, type SupportSettings } from "./api";
+import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type SupportSettings } from "./api";
 import { fmtDate, ModeBadge, useSupportMutation } from "./common";
 import { useSt, type ST } from "./i18n";
 
-const MODES: Mode[] = ["shadow", "live", "off"];
+const MODES: Mode[] = ["collect", "shadow", "live", "off"];
 
 /** Botlar, guruhlar, umumiy sozlamalar va bot taniydigan xodimlar (faqat administrator). */
 export function SupportSettingsPage() {
@@ -32,6 +32,7 @@ export function SupportSettingsPage() {
         <BotsSection t={t} />
         <GroupsSection t={t} />
         <GeneralSection t={t} />
+        <HistorySection t={t} />
         <StaffSection t={t} />
       </div>
     </Page>
@@ -95,7 +96,7 @@ function BotCard({ b, t }: { b: SupportBot; t: ST }) {
       {b.last_error && <p className="rounded-md bg-warning/10 p-2 text-xs text-warning">{b.last_error}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         <FormRow label={t("botName")}><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></FormRow>
-        <FormRow label={t("mode")} hint={t("modeHint")}>
+        <FormRow label={t("mode")} hint={`${t("modeHint2")} ${t("modeHint")}`}>
           <Select value={f.mode} onValueChange={(v) => setF({ ...f, mode: v as Mode })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{MODES.map((m) => <SelectItem key={m} value={m}>{t(`mode_${m}`)}</SelectItem>)}</SelectContent>
@@ -219,6 +220,17 @@ function GeneralForm({ s, t }: { s: SupportSettings; t: ST }) {
           <FormRow label={t("signature")}><Input value={f.signature} onChange={(e) => setF({ ...f, signature: e.target.value })} /></FormRow>
         </div>
         {sw("learn_from_staff", t("learn"), t("learnHint"))}
+        <div className="grid gap-3 rounded-lg border p-3">
+          <div className="text-sm font-medium">{t("behavior")}</div>
+          <p className="text-xs text-muted-foreground">{t("behaviorHint")}</p>
+          {sw("drafts_to_admin", t("t_drafts"))}
+          {sw("escalation_ack", t("t_escalation"))}
+          {sw("mention_responsible", t("t_mention"))}
+          {sw("feedback_buttons", t("t_feedback"))}
+          {sw("notify_candidates", t("t_candidates"))}
+          {sw("learn_clarifications", t("t_clarify"), t("t_clarifyHint"))}
+          {sw("ask_first_prompt", t("t_askFirst"))}
+        </div>
         {sw("ocr_enabled", t("ocrOn"), s.ocr_available ? t("ocrLangs", { l: s.ocr_languages }) : undefined,
           !s.ocr_available && <span className="block text-xs text-warning">{t("ocrMissing")}</span>)}
         <Button className="justify-self-start" disabled={save.isPending}
@@ -251,6 +263,115 @@ function StaffSection({ t }: { t: ST }) {
             ))}
           </TableBody>
         </Table>
+      </Card>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- guruh tarixi (MTProto, faqat o'qish) */
+function HistorySection({ t }: { t: ST }) {
+  const st = useQuery({ queryKey: ["support", "settings"], queryFn: supportApi.settings });
+  const groups = useQuery({ queryKey: ["support", "groups"], queryFn: supportApi.groups });
+  const jobs = useQuery({
+    queryKey: ["support", "history"], queryFn: supportApi.historyJobs,
+    refetchInterval: (q) => ((q.state.data ?? []).some((j: HistoryJob) => j.status === "queued" || j.status === "running") ? 4000 : 30_000),
+  });
+  const s = st.data;
+  const [phone, setPhone] = useState("+998");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [group, setGroup] = useState("");
+  const [days, setDays] = useState<number | null>(null);
+  const [photos, setPhotos] = useState<boolean | null>(null);
+  const send = useSupportMutation(() => supportApi.mtSendCode(phone), (r) => (r.need_password ? t("mtNeedPassword") : t("mtCodeSent", { p: r.mtproto_phone })));
+  const sign = useSupportMutation(() => supportApi.mtSignIn(code, password),
+    (r) => (r.need_password ? t("mtNeedPassword") : t("mtConnected", { u: r.mtproto_user })));
+  const out = useSupportMutation(() => supportApi.mtLogout(), t("saved"));
+  const start = useSupportMutation(() => supportApi.startHistory(Number(group), days ?? s?.history_days ?? 30, photos ?? s?.history_photos ?? true), t("saved"));
+  if (!s) return <Skeleton className="h-40" />;
+  const ready = !!s.api_id && s.has_api_hash;
+
+  return (
+    <section>
+      <SectionTitle><span className="inline-flex items-center gap-1.5"><History className="size-4" />{t("history")}</span></SectionTitle>
+      <p className="mb-3 text-xs text-muted-foreground">{t("historyHint")}</p>
+      <Card className="gap-4 p-4">
+        {!s.mtproto_available && <p className="text-sm text-warning">{t("mtNotInstalled")}</p>}
+        {!ready && <p className="text-sm text-warning">{t("mtNeedApi")}</p>}
+        {s.mtproto_connected ? (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="size-2 rounded-full bg-success" />{t("mtConnected", { u: s.mtproto_user })}
+            <Button size="sm" variant="ghost" className="text-destructive" disabled={out.isPending} onClick={() => out.mutate(undefined)}>
+              <LogOut className="size-4" />{t("mtLogout")}
+            </Button>
+          </div>
+        ) : ready && s.mtproto_available && (
+          <div className="grid gap-3">
+            <p className="text-sm text-muted-foreground">{t("mtNotConnected")}</p>
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <FormRow label={t("mtPhone")}><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></FormRow>
+              <Button variant="outline" className="self-end" disabled={phone.length < 10 || send.isPending} onClick={() => send.mutate(undefined)}>
+                <Send className="size-4" />{t("mtSendCode")}
+              </Button>
+            </div>
+            {s.mtproto_pending && (
+              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                <FormRow label={t("mtCode")} hint={t("mtCodeSent", { p: s.mtproto_phone })}>
+                  <Input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" />
+                </FormRow>
+                <FormRow label={t("mtPassword")} hint={s.mtproto_need_password ? t("mtNeedPassword") : undefined}>
+                  <Input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="off" />
+                </FormRow>
+                <Button className="self-end" disabled={(!code && !password) || sign.isPending} onClick={() => sign.mutate(undefined)}>{t("mtSignIn")}</Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {s.mtproto_connected && (
+          <div className="grid gap-3 sm:grid-cols-[2fr_1fr_auto_auto]">
+            <FormRow label={t("histGroup")}>
+              <Select value={group} onValueChange={setGroup}>
+                <SelectTrigger><SelectValue placeholder={t("histGroup")} /></SelectTrigger>
+                <SelectContent>{(groups.data ?? []).map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.title || g.chat_id}</SelectItem>)}</SelectContent>
+              </Select>
+            </FormRow>
+            <FormRow label={t("histDays")}>
+              <Input type="number" min={1} max={365} value={days ?? s.history_days} onChange={(e) => setDays(Number(e.target.value) || 1)} />
+            </FormRow>
+            <label className="flex items-center gap-2 self-end pb-2 text-sm">
+              <Switch checked={photos ?? s.history_photos} onCheckedChange={setPhotos} />{t("histPhotos")}
+            </label>
+            <Button className="self-end" disabled={!group || start.isPending} onClick={() => start.mutate(undefined)}>
+              <History className="size-4" />{t("histStart")}
+            </Button>
+          </div>
+        )}
+
+        {(jobs.data ?? []).length > 0 && (
+          <div className="grid gap-2">
+            <div className="text-sm font-medium">{t("histJobs")}</div>
+            {jobs.data!.map((j) => (
+              <div key={j.id} className="grid gap-1 rounded-lg border p-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className={j.status === "done" ? "border-success/50 text-success" : j.status === "failed" ? "border-destructive/50 text-destructive" : "border-warning/50 text-warning"}>
+                    {t(`j_${j.status}` as never)}
+                  </Badge>
+                  <span className="font-medium">{j.group_title}</span>
+                  <span className="text-muted-foreground">· {j.days} kun · {fmtDate(j.created_at)} · {j.created_by}</span>
+                </div>
+                <div className="text-muted-foreground">
+                  {[["messages", "jMsgs"], ["photos", "jPhotos"], ["questions", "jQuestions"], ["staff_answers", "jAnswers"],
+                    ["clarifications", "jClar"], ["candidates", "jCand"]]
+                    .filter(([k]) => j.progress[k as keyof HistoryJob["progress"]] != null)
+                    .map(([k, l]) => `${j.progress[k as keyof HistoryJob["progress"]]} ${t(l as never)}`).join(" · ")}
+                  {!!j.progress.flood_wait && ` · ${t("jWait", { n: j.progress.flood_wait })}`}
+                </div>
+                {j.error && <div className="text-destructive">{j.error}</div>}
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </section>
   );

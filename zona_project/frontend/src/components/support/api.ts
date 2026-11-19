@@ -1,7 +1,7 @@
 /** Support bot API (/api/support/...). */
 import { api } from "@/lib/api/client";
 
-export type Mode = "off" | "shadow" | "live";
+export type Mode = "off" | "collect" | "shadow" | "live";
 export type EntryStatus = "new" | "review" | "approved" | "rejected" | "archived";
 export type EntryKind = "template" | "faq";
 export type MsgStatus = "new" | "answered" | "drafted" | "escalated" | "ignored" | "closed";
@@ -26,7 +26,7 @@ export interface PendingEdit {
 }
 export interface Entry {
   id: number; kind: EntryKind; title: string; questions: string[]; triggers: string[]; extract: string[];
-  answer: string; answer_ru: string; zone: number | null; zone_name: string; responsible: number | null;
+  answer: string; answer_ru: string; ask_first: string; zone: number | null; zone_name: string; responsible: number | null;
   responsible_name: string; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
   author: string; approved_by: string; approved_at: string | null; uses: number; likes: number; dislikes: number;
   last_used_at: string | null; created_at: string; updated_at: string;
@@ -36,13 +36,34 @@ export interface SupportMessage {
   id: number; group: number | null; group_title: string; user_name: string; user_username: string; text: string;
   ocr_text: string; has_photo: boolean; lang: string; status: MsgStatus; stage: string; entry: number | null;
   entry_title: string; confidence: number; answer_text: string; answered_by: string; feedback: number;
-  created_at: string; answered_at: string | null; staff_answers: { by: string; text: string; at: string }[];
+  created_at: string; answered_at: string | null;
+  staff_answers: { by: string; text: string; at: string; kind: "staff" | "clarify" | "info"; ocr: string }[];
 }
 export interface SupportSettings {
   api_id: string; api_hash: string; has_api_hash: boolean; ai_enabled: boolean; ai_daily_limit: number;
   ai_min_confidence: number; faq_threshold: number; route_threshold: number; learn_from_staff: boolean;
   ocr_enabled: boolean; media_days: number; signature: string; ocr_available: boolean; ocr_languages: string;
   ai_ready: boolean; ai_quota_left: number;
+  drafts_to_admin: boolean; escalation_ack: boolean; mention_responsible: boolean; feedback_buttons: boolean;
+  notify_candidates: boolean; learn_clarifications: boolean; ask_first_prompt: boolean;
+  history_days: number; history_photos: boolean; history_max: number;
+  mtproto_available: boolean; mtproto_connected: boolean; mtproto_user: string; mtproto_pending: boolean;
+  mtproto_need_password: boolean; mtproto_phone: string;
+}
+export interface HistoryJob {
+  id: number; group: number; group_title: string; days: number; photos: boolean; status: "queued" | "running" | "done" | "failed";
+  progress: { stage?: string; messages?: number; photos?: number; processed?: number; questions?: number; staff_answers?: number;
+    clarifications?: number; candidates?: number; flood_wait?: number };
+  error: string; created_by: string; created_at: string; started_at: string | null; finished_at: string | null;
+}
+export interface Analytics {
+  days: number; questions: number; unanswered: number; with_photo: number; entries_with_ask_first: number;
+  by_source: Record<string, number>; by_stage: Record<string, number>;
+  staff: { name: string; answers: number; panel: number; clarifications: number; median_minutes: number | null; groups: string[];
+    candidates: number; approved: number; rejected: number }[];
+  top_asks: { text: string; count: number }[];
+  daily: { date: string; total: number; bot: number; staff: number }[];
+  groups: { title: string; n: number }[];
 }
 export interface SupportStats {
   total: number; by_status: Partial<Record<MsgStatus, number>>; by_stage: Record<string, number>;
@@ -92,4 +113,10 @@ export const supportApi = {
   answer: (id: number, text: string, save = true, approve = false) =>
     post<{ ok: boolean; entry: number | null }>(`messages/${id}/answer/`, { text, save, approve }),
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),
+  analytics: (days = 30) => get<Analytics>("analytics/", { days }),
+  historyJobs: () => get<HistoryJob[]>("history/"),
+  startHistory: (group: number, days: number, photos: boolean) => post<HistoryJob[]>("history/", { group, days, photos }),
+  mtSendCode: (phone: string) => post<SupportSettings & { need_password?: boolean }>("mtproto/send-code/", { phone }),
+  mtSignIn: (code: string, password = "") => post<SupportSettings & { need_password?: boolean }>("mtproto/sign-in/", { code, password }),
+  mtLogout: () => post<SupportSettings>("mtproto/logout/"),
 };

@@ -29,6 +29,7 @@ const ENTRY_TONE: Record<EntryStatus, string> = {
 };
 const MODE_TONE: Record<Mode | "inherit", string> = {
   off: "text-muted-foreground",
+  collect: "border-sky-500/50 text-sky-500",
   shadow: "border-violet-500/50 text-violet-500",
   live: "border-success/50 text-success",
   inherit: "text-muted-foreground",

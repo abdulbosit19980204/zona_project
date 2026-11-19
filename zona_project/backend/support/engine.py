@@ -64,6 +64,36 @@ def is_question(text, has_photo=False):
     return True
 
 
+CLARIFY_WORDS = re.compile(
+    r"\b(yuboring|yuboringchi|yuborib|tashlang|tashlab|tashlavoring|skrin\w*|skrinshot\w*|screen\w*|rasm\w*|foto\w*|"
+    r"stir\w*|inn|kod\w*|kodini|raqam\w*|nomer\w*|nomini|qaysi|qanaqa|qanday|qachon|qayer\w*|aniqroq|batafsil|"
+    r"ko'rsating|korsating|"
+    r"пришлите|отправьте|скиньте|скин\w*|скрин\w*|фото\w*|инн|код\w*|номер\w*|какой|какая|какие|когда|где|уточните|"
+    r"покажите)\b", re.IGNORECASE)
+ANSWER_HINT = re.compile(r"\b(qildim|qilindi|bo'ldi|boldi|tuzatildi|qo'shildi|qoshildi|ochildi|yopildi|o'tkazildi|"
+                         r"tayyor|hal qilindi|сделал|сделано|исправил|исправлено|добавил|готово|открыл)\b", re.IGNORECASE)
+
+
+def is_clarifying(text):
+    """Xodim javobi aslida aniqlashtiruvchi savolmi ("STIR yuboring", "skrin tashlang?") — bunday matn javob emas."""
+    t = (text or "").strip()
+    if not t or len(t) > 260 or ANSWER_HINT.search(t):
+        return False
+    return t.endswith("?") or bool(CLARIFY_WORDS.search(t))
+
+
+def tokens_text(text):
+    """Tahlil uchun: matnning tartiblangan o'zaklari (o'xshash so'rovlarni bitta deb sanash)."""
+    return " ".join(sorted(set(tokens(text or ""))))[:200]
+
+
+def ask_first_text(entry, lang):
+    if not entry or not entry.ask_first.strip():
+        return ""
+    head = "Чтобы помочь быстрее, пришлите, пожалуйста:" if lang == "ru" else "Tezroq yordam berishimiz uchun, iltimos, yuboring:"
+    return f"{head}\n{entry.ask_first.strip()}"
+
+
 def _norm_username(u):
     return (u or "").strip().lstrip("@").lower()
 
@@ -157,13 +187,18 @@ def similarity(a_text, b_text):
 
 
 def match_faq(raw, entries):
-    best, score = None, 0
+    """Eng o'xshash yozuv. Teng ballda — savolga so'zma-so'z mos ko'rinish, keyin umumiy so'zlari ko'pi ustun."""
+    target = " ".join(tokens(raw))
+    best, key = None, (0, 0, 0)
     for e in entries:
         for q in [e.title, *(e.questions or [])]:
             s = similarity(raw, q)
-            if s > score:
-                best, score = e, s
-    return best, score
+            if not s:
+                continue
+            k = (s, int(" ".join(tokens(q)) == target), len(set(tokens(q)) & set(tokens(raw))))
+            if k > key:
+                best, key = e, k
+    return best, key[0]
 
 
 # ------------------------------------------------------------------ 3. mavjud qoidalar

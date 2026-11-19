@@ -54,7 +54,8 @@
     "supInbox": "Вопросы из групп",
     "supReview": "Очередь на утверждение",
     "supKnowledge": "База знаний",
-    "supSettings": "Боты и настройки"
+    "supSettings": "Боты и настройки",
+    "supAnalytics": "Аналитика"
   },
   "top": {
     "search": "Поиск…",

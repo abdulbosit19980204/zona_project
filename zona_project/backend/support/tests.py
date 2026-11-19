@@ -287,6 +287,21 @@ class ImportKbTests(Base):
         self.assertEqual((d.stage, d.entry), ("faq", e))
 
 
+class DistributionPackTests(Base):
+    def test_pack_imports_once_for_review_and_matches_sales_questions(self):
+        call_command("support_import_kb", pack="distribution", verbosity=0)
+        n = Entry.objects.filter(author="distribution to'plami").count()
+        self.assertGreaterEqual(n, 30)
+        self.assertFalse(Entry.objects.filter(author="distribution to'plami").exclude(status=Entry.REVIEW).exists())
+        call_command("support_import_kb", pack="distribution", verbosity=0)
+        self.assertEqual(Entry.objects.filter(author="distribution to'plami").count(), n)
+        for q, expect in [("plan qolib ketyapti savdoni qanday oshiraman", "Planni"),
+                          ("клиент перестал брать товар", "Klient zakaz"),
+                          ("srok o'tgan tovarni qaytarish kerak", "Muddati")]:
+            d = engine.decide(q, engine.detect_lang(q), allow_unapproved=True)
+            self.assertTrue(d.entry and d.entry.title.startswith(expect), (q, d.stage, d.entry))
+
+
 class TeamContactTests(Base):
     def test_contacts_crud_and_reports_keep_team_whole(self):
         from zona.timeload import member_load
@@ -304,3 +319,23 @@ class TeamContactTests(Base):
         self.assertEqual(self.call("post", "team-contacts/", {"member": person.id, "name": "X"}).status_code, 400)
         self.login("viewer")
         self.assertEqual(self.call("post", "team-contacts/", {"member": team.id, "name": "Y"}).status_code, 403)
+
+
+class PackUpdateTests(Base):
+    def test_rerun_extends_questions_only_for_untouched_entries(self):
+        call_command("support_import_kb", pack="distribution", verbosity=0)
+        e = Entry.objects.get(title__startswith="Zakaz yetkazilmadi")
+        e.questions = e.questions[:2]
+        e.save()
+        edited = Entry.objects.get(title__startswith="Minimal zakaz")
+        edited.questions = ["x savol"]
+        edited.save()
+        from .runner import snapshot
+        snapshot(edited, "editor")  # xodim tahrirlagan — tegilmasligi kerak
+        call_command("support_import_kb", pack="distribution", verbosity=0)
+        e.refresh_from_db()
+        edited.refresh_from_db()
+        self.assertIn("nedovoz bo'ldi", e.questions)
+        self.assertEqual(edited.questions, ["x savol"])
+        d = engine.decide("Когда привезут заказ?", "ru", allow_unapproved=True)
+        self.assertTrue(d.entry.title.startswith("Zakaz qachon"), d.entry.title)

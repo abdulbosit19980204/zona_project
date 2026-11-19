@@ -367,10 +367,25 @@ Shundan keyin ish **Bosqich 0/1** dan boshlanadi. Har bosqichda shu fayldagi hol
   - [x] Bilim bazasi boshlang'ich to'ldirildi (2026-11-19, `manage.py support_import_kb`): savollar bazasidan 335 yozuv —
         66 tasdiqlangan (51 yozma qoida + aralash holatlar), 269 ko'rib chiqishda (qoidasi yo'q, faqat mas'ul belgilangan).
         Agentlarning 210 ta savol turidagi haqiqiy so'rash misollari «savol ko'rinishlari» bo'ldi
+  - [x] Distributsiya to'plami (2026-11-19, `support_import_kb --pack distribution`): agent va supervayzerlarning savdo
+        savollari — plan, AKB, SKU, savdoni oshirish, yetkazish, qarz/limit, to'lov, vozvrat/srok, aksiya/narx,
+        merchandayzing, tashrif, brendlar, jamoani boshqarish. 38 mavzu, 230+ savol ko'rinishi (uz/ru, agentlar
+        so'zlashuvi). Kompaniyaga xos raqamlar o'ylab topilmagan; hammasi ko'rib chiqishda. Manba fayl:
+        `backend/support/data/distribution_kb.py` (to'ldirib, qayta import qilsa — faqat tegilmagan yozuvlarga qo'shiladi)
   - [ ] Guruhlar tarixi eksporti (2–4 hafta) — haqiqiy guruh savol-javoblari bilan bazani kengaytirish uchun
   - [ ] Namunaviy 3 shablon matnini tekshirib tasdiqlash (`/support/knowledge`, holati «Ko'rib chiqilmoqda»)
 - [x] Bosqich 1 — soya rejimi *(kod PROD'da, 2026-11-19)*
 - [x] Bosqich 2 — bilim bazasi, tasdiqlash tizimi, versiyalar, paneldan javob *(kod PROD'da)*
+- [x] Bot boshqaruvi *(2026-11-19)*: rejimlar — O'chiq / **Faqat yig'ish** (hech kimga yozmaydi, yig'adi va o'rganadi) /
+      Soya / Jonli (bot va guruh bo'yicha); 7 ta yoqib-o'chiriladigan xatti-harakat (admin chatiga taklif, «qabul qilindi»,
+      @mas'ul, 👍/👎, nomzodlar, aniqlashtirishni ajratish, avval ma'lumot so'rash)
+- [x] Aniqlashtirish zanjiri: xodimning «STIR yuboring?» kabi savoli javob deb olinmaydi; savol → aniqlashtirish →
+      ma'lumot → yakuniy javob zanjiri saqlanadi; yozuvga «javobdan oldin so'raladigan ma'lumot» (`ask_first`) o'rganiladi,
+      jonli rejimda bot uni avval o'zi so'raydi. O'xshash nomzodlar bitta yozuvga birlashadi
+- [x] Guruh tarixini o'rganish: egasining Telegram akkaunti orqali FAQAT O'QISH (Telethon, API ID/hash, seans shifrlangan),
+      paneldan ulash (telefon → kod → 2FA), muddat (kun), rasmlar (OCR), fon vazifasi va jonli holat
+- [x] Tahlil sahifasi (`/support/analytics`): xodimlar javoblari (soni, o'rtacha vaqt, aniqlashtirishlar, nomzod/tasdiqlangan),
+      javobdan oldin eng ko'p so'raladigan ma'lumotlar, kunlar/guruhlar bo'yicha
 - [ ] Bosqich 3 — AI *(kod tayyor, o'chiq: Support → Sozlamalar → «AI javoblari»)*; mas'ulga uzatish ishlaydi
 - [ ] Bosqich 4 — jonli ishga tushirish (soya rejimida aniqlik o'lchangach, guruh bo'yicha yoqiladi)
 - [ ] Bosqich 5 — kengaytirish

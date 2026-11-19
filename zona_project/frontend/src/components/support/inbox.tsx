@@ -126,9 +126,14 @@ function MessageCard({ m, t }: { m: SupportMessage; t: ST }) {
         </div>
       )}
       {m.staff_answers.map((a, i) => (
-        <div key={i} className="rounded-lg border-l-2 border-success/60 bg-success/5 p-2 text-sm">
-          <div className="mb-1 text-xs text-muted-foreground"><MessageSquareReply className="mr-1 inline size-3.5" />{a.by} · {fmtDate(a.at)}</div>
+        <div key={i} className={`rounded-lg border-l-2 p-2 text-sm ${a.kind === "staff" ? "border-success/60 bg-success/5"
+          : a.kind === "clarify" ? "border-warning/60 bg-warning/5" : "border-muted-foreground/40 bg-muted/40"}`}>
+          <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <MessageSquareReply className="size-3.5" />
+            <Badge variant="outline" className="h-5 font-normal">{t(`k_${a.kind}`)}</Badge>{a.by} · {fmtDate(a.at)}
+          </div>
           <p className="whitespace-pre-wrap">{a.text}</p>
+          {a.ocr && <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">🖼 {a.ocr}</p>}
         </div>
       ))}
 

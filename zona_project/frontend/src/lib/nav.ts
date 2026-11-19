@@ -97,6 +97,7 @@ export const SUPPORT_NAV: NavGroup[] = [
       { href: "/support", key: "supInbox", icon: Inbox },
       { href: "/support/review", key: "supReview", icon: BookOpenCheck },
       { href: "/support/knowledge", key: "supKnowledge", icon: BotMessageSquare },
+      { href: "/support/analytics", key: "supAnalytics", icon: ChartColumn },
     ],
   },
   {

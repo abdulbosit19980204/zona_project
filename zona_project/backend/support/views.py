@@ -16,7 +16,7 @@ from zona.permissions import CanView, IsZonaAdmin, ReadOrEdit, has_role
 
 from . import ocr, runner
 from .engine import ai_quota_left, decide, detect_lang, to_html
-from .models import MODES, Bot, Entry, EntryVersion, Group, Message, Settings
+from .models import MODES, Bot, Entry, EntryVersion, Group, HistoryJob, Message, Settings, TgUser
 from .telegram import Client, TelegramError
 
 
@@ -35,14 +35,25 @@ class AdminOnly(IsZonaAdmin):
 
 # ====================================================================== sozlamalar
 SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence", "faq_threshold", "route_threshold",
-                   "learn_from_staff", "ocr_enabled", "media_days", "signature"]
+                   "learn_from_staff", "ocr_enabled", "media_days", "signature", "drafts_to_admin", "escalation_ack",
+                   "mention_responsible", "feedback_buttons", "notify_candidates", "learn_clarifications",
+                   "ask_first_prompt", "history_days", "history_photos", "history_max"]
 
 
 def _settings_payload(s):
+    import json
+
     from zona.ai import service as ai
+
+    from . import history
+    pending = json.loads(decrypt(s.mtproto_pending_enc) or "{}")
     return {**{f: getattr(s, f) for f in SETTINGS_FIELDS}, "api_hash": mask(decrypt(s.api_hash_enc)),
             "has_api_hash": bool(s.api_hash_enc), "ocr_available": ocr.available(), "ocr_languages": ocr.languages(),
-            "ai_ready": bool(ai.status().get("support")), "ai_quota_left": ai_quota_left(s)}
+            "ai_ready": bool(ai.status().get("support")), "ai_quota_left": ai_quota_left(s),
+            "mtproto_available": history.available(), "mtproto_connected": bool(s.mtproto_session_enc),
+            "mtproto_user": s.mtproto_user, "mtproto_pending": bool(pending),
+            "mtproto_need_password": bool(pending.get("need_password")),
+            "mtproto_phone": (pending.get("phone", "")[:5] + "•••" + pending.get("phone", "")[-2:]) if pending else ""}
 
 
 @zona_api(["GET", "PATCH"], [AdminOnly])
@@ -168,7 +179,8 @@ class EntrySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Entry
-        fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "zone", "zone_name",
+        fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first", "zone",
+                  "zone_name",
                   "responsible", "responsible_name", "status", "source", "priority", "pending", "author",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
         read_only_fields = ["status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",
@@ -196,7 +208,8 @@ class EntrySerializer(serializers.ModelSerializer):
         return attrs
 
 
-EDITABLE = ("title", "questions", "triggers", "extract", "answer", "answer_ru")
+VERSIONED = ("title", "questions", "triggers", "extract", "answer", "answer_ru")
+EDITABLE = (*VERSIONED, "ask_first")
 
 
 class EntryViewSet(ZonaViewSet):
@@ -285,7 +298,7 @@ class EntryViewSet(ZonaViewSet):
         if not v:
             return Response({"detail": "Versiya topilmadi"}, status=404)
         runner.snapshot(e, _actor(request), f"#{v.id} versiyaga qaytarildi")
-        for f in EDITABLE:
+        for f in VERSIONED:
             setattr(e, f, getattr(v, f))
         e.save()
         return Response(EntrySerializer(e).data)
@@ -358,8 +371,10 @@ class MessageSerializer(serializers.ModelSerializer):
         return bool(obj.photo_file_id)
 
     def get_staff_answers(self, obj):
-        return [{"by": (r.user.staff_name() if r.user else ""), "text": r.text[:1000], "at": r.created_at}
-                for r in obj.staff_replies.all()]
+        """Zanjir: aniqlashtirish (clarify), savol egasining ma'lumoti (info), xodimning yakuniy javobi (staff)."""
+        return [{"by": (r.user.staff_name() if r.user else ""), "text": r.text[:1000], "at": r.created_at, "kind": r.kind,
+                 "ocr": r.ocr_text[:500]}
+                for r in sorted(obj.staff_replies.all(), key=lambda r: r.created_at)]
 
 
 class MessageViewSet(ZonaViewSet):
@@ -408,12 +423,10 @@ class MessageViewSet(ZonaViewSet):
         q.save()
         entry = None
         if request.data.get("save", True):
-            entry = runner.learn(q, text, who)
-            if entry:
-                entry.source = "panel"
-                if _can_edit(request) and request.data.get("approve"):
-                    runner.approve(entry, who)
-                entry.save()
+            asks = "\n".join(q.staff_replies.filter(kind=Message.CLARIFY).values_list("text", flat=True))
+            entry, new = runner.learn(q, text, who, ask_first=asks, source="panel")
+            if entry and _can_edit(request) and request.data.get("approve") and entry.status != Entry.APPROVED:
+                runner.approve(entry, who)
         return Response({"ok": True, "entry": entry.id if entry else None})
 
     @action(detail=True, methods=["post"])
@@ -449,3 +462,139 @@ def staff(request):
              "telegram": c.telegram, "phone": c.phone, "team": c.member.name, "linked": bool(c.telegram_id)}
             for c in TeamContact.objects.select_related("member")]
     return Response(out)
+
+
+# ====================================================================== Telegram akkaunt (guruh tarixi uchun)
+def _mt_error(e):
+    from . import history
+    if isinstance(e, history.NeedPassword):
+        return Response({"need_password": True, "detail": "Akkauntda 2FA yoqilgan — parolni kiriting."}, status=200)
+    return Response({"detail": f"{type(e).__name__}: {e}"[:300]}, status=400)
+
+
+@zona_api(["POST"], [AdminOnly])
+def mtproto_send_code(request):
+    from . import history
+    phone = str(request.data.get("phone") or "").strip().replace(" ", "")
+    if not phone.startswith("+") or len(phone) < 10:
+        return Response({"detail": "Telefon raqamini +998... ko'rinishida kiriting."}, status=400)
+    try:
+        history.send_code(phone)
+    except Exception as e:  # noqa: BLE001
+        return _mt_error(e)
+    return Response(_settings_payload(Settings.load()))
+
+
+@zona_api(["POST"], [AdminOnly])
+def mtproto_sign_in(request):
+    from . import history
+    try:
+        history.sign_in(str(request.data.get("code") or "").strip(), str(request.data.get("password") or ""))
+    except Exception as e:  # noqa: BLE001
+        return _mt_error(e)
+    return Response(_settings_payload(Settings.load()))
+
+
+@zona_api(["POST"], [AdminOnly])
+def mtproto_logout(request):
+    from . import history
+    history.logout()
+    return Response(_settings_payload(Settings.load()))
+
+
+# ====================================================================== guruh tarixini o'rganish
+def _job(j):
+    return {"id": j.id, "group": j.group_id, "group_title": j.group.title, "days": j.days, "photos": j.photos,
+            "status": j.status, "progress": j.progress, "error": j.error, "created_by": j.created_by,
+            "created_at": j.created_at, "started_at": j.started_at, "finished_at": j.finished_at}
+
+
+@zona_api(["GET", "POST"], [AdminOnly])
+def history_jobs(request):
+    if request.method == "POST":
+        s = Settings.load()
+        if not s.mtproto_session_enc:
+            return Response({"detail": "Avval Telegram akkauntni ulang."}, status=400)
+        group = Group.objects.filter(pk=request.data.get("group")).first()
+        if not group:
+            return Response({"detail": "Guruhni tanlang."}, status=400)
+        if HistoryJob.objects.filter(group=group, status__in=[HistoryJob.QUEUED, HistoryJob.RUNNING]).exists():
+            return Response({"detail": "Bu guruh tarixi allaqachon o'qilmoqda."}, status=400)
+        days = max(1, min(int(request.data.get("days") or s.history_days), 365))
+        photos = bool(request.data.get("photos", s.history_photos))
+        HistoryJob.objects.create(group=group, days=days, photos=photos, created_by=_actor(request))
+    return Response([_job(j) for j in HistoryJob.objects.select_related("group")[:30]])
+
+
+# ====================================================================== tahlil: xodimlar javoblari va aniqlashtirishlar
+@zona_api(["GET"], [CanView])
+def analytics(request):
+    from collections import Counter, defaultdict
+    from statistics import median
+
+    from .engine import tokens_text
+    days = max(1, min(int(request.query_params.get("days") or 30), 365))
+    since = timezone.now() - timezone.timedelta(days=days)
+    msgs = Message.objects.filter(created_at__gte=since)
+    questions = msgs.filter(kind=Message.QUESTION)
+
+    # xodimlar
+    per = defaultdict(lambda: {"answers": 0, "clarifications": 0, "times": [], "groups": set()})
+    for r in (msgs.filter(kind__in=[Message.STAFF, Message.CLARIFY], user__isnull=False)
+              .select_related("user__member", "user__contact", "question", "group")):
+        name = r.user.staff_name()
+        row = per[name]
+        row["groups"].add(r.group.title if r.group else "")
+        if r.kind == Message.CLARIFY:
+            row["clarifications"] += 1
+        else:
+            row["answers"] += 1
+            if r.question_id:
+                row["times"].append(max(0.0, (r.created_at - r.question.created_at).total_seconds() / 60))
+    panel = Counter(questions.filter(stage="panel").values_list("answered_by", flat=True))
+    authored = defaultdict(Counter)
+    for author, st in Entry.objects.filter(source__in=["staff", "history", "panel"]).values_list("author", "status"):
+        authored[author][st] += 1
+    staff = []
+    for name in set(per) | set(panel):
+        r = per[name]
+        a = authored.get(name, Counter())
+        staff.append({"name": name, "answers": r["answers"] + panel.get(name, 0), "panel": panel.get(name, 0),
+                      "clarifications": r["clarifications"],
+                      "median_minutes": round(median(r["times"]), 1) if r["times"] else None,
+                      "groups": sorted(g for g in r["groups"] if g),
+                      "candidates": sum(a.values()), "approved": a.get(Entry.APPROVED, 0),
+                      "rejected": a.get(Entry.REJECTED, 0)})
+    staff.sort(key=lambda x: -x["answers"])
+
+    # qanday ma'lumot so'raladi (aniqlashtirishlar)
+    asks = Counter()
+    samples = {}
+    for t in msgs.filter(kind=Message.CLARIFY).values_list("text", flat=True):
+        key = tokens_text(t)
+        if key:
+            asks[key] += 1
+            samples.setdefault(key, t[:200])
+    top_asks = [{"text": samples[k], "count": c} for k, c in asks.most_common(15)]
+
+    # savollar: kunlar, guruhlar, bosqichlar, javobsizlar
+    daily = defaultdict(lambda: {"total": 0, "bot": 0, "staff": 0})
+    for created, stage in questions.values_list("created_at", "stage"):
+        d = daily[timezone.localtime(created).date().isoformat()]
+        d["total"] += 1
+        if stage in ("template", "faq", "rule", "ai"):
+            d["bot"] += 1
+        elif stage in ("staff", "panel"):
+            d["staff"] += 1
+    groups = list(questions.values("group__title").annotate(n=Count("id")).order_by("-n")[:15])
+    unanswered = questions.exclude(status__in=[Message.ANSWERED, Message.CLOSED, Message.IGNORED]).count()
+    return Response({
+        "days": days, "questions": questions.count(), "unanswered": unanswered,
+        "by_source": dict(questions.values_list("source").annotate(c=Count("id"))),
+        "by_stage": dict(questions.exclude(stage="").values_list("stage").annotate(c=Count("id"))),
+        "staff": staff, "top_asks": top_asks,
+        "daily": [{"date": k, **v} for k, v in sorted(daily.items())],
+        "groups": [{"title": g["group__title"] or "—", "n": g["n"]} for g in groups],
+        "with_photo": questions.exclude(photo_file_id="").count(),
+        "entries_with_ask_first": Entry.objects.exclude(ask_first="").count(),
+    })

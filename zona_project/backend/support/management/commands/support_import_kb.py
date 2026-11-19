@@ -41,9 +41,48 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--no-routing", action="store_true", help="Qoidasiz (faqat mas'ul) savollarni qo'shmaslik")
+        parser.add_argument("--pack", choices=["distribution"], help="Tayyor to'plamni qo'shish (masalan: distribution)")
+
+    def pack_rows(self, name, existing):
+        from support.data.distribution_kb import PACK
+        from zona.models import Member, Zone
+        members = {m.name: m for m in Member.objects.all()}
+        zones = {z.name: z for z in Zone.objects.all()}
+        rows = []
+        author = f"{name} to'plami"
+        # hali hech kim tegmagan to'plam yozuvlari: faqat yangi savol ko'rinishlari qo'shiladi (javob o'zgarmaydi)
+        untouched = {e.title: e for e in Entry.objects.filter(author=author, status__in=[Entry.REVIEW, Entry.NEW],
+                                                               pending__isnull=True, versions__isnull=True)}
+        self.extended = 0
+        for p in PACK:
+            e = untouched.get(p["title"])
+            if e:
+                merged = _clean([*(e.questions or []), *p["questions"]], 50)
+                if merged != e.questions:
+                    e.questions = merged
+                    if not self.dry:
+                        e.save(update_fields=["questions"])
+                    self.extended += 1
+            if p["title"] in existing:
+                continue
+            rows.append(Entry(kind=Entry.FAQ, title=p["title"][:200], questions=_clean(p["questions"]), answer=p["answer"],
+                              answer_ru=p["answer_ru"], responsible=members.get(p["who"]), zone=zones.get(p["zone"]),
+                              status=Entry.REVIEW, source="seed", author=f"{name} to'plami"))
+            existing.add(p["title"])
+        return rows
 
     def handle(self, *args, **opts):
         existing = set(Entry.objects.values_list("title", flat=True))
+        if opts["pack"]:
+            self.dry = opts["dry_run"]
+            rows = self.pack_rows(opts["pack"], existing)
+            self.stdout.write(f"{opts['pack']} to'plami: qo'shiladi {len(rows)} (hammasi ko'rib chiqish uchun), "
+                              f"savol ko'rinishlari to'ldirildi: {self.extended}")
+            if not opts["dry_run"]:
+                with transaction.atomic():
+                    Entry.objects.bulk_create(rows)
+                self.stdout.write(f"bilim bazasida jami: {Entry.objects.count()}")
+            return
         rows = []
 
         tasks = Task.objects.select_related("owner", "process__zone").prefetch_related("fallbacks__member")

@@ -16,5 +16,10 @@ urlpatterns = [
     path("settings/", views.settings_view, name="settings"),
     path("stats/", views.stats, name="stats"),
     path("staff/", views.staff, name="staff"),
+    path("analytics/", views.analytics, name="analytics"),
+    path("history/", views.history_jobs, name="history"),
+    path("mtproto/send-code/", views.mtproto_send_code, name="mtproto-send-code"),
+    path("mtproto/sign-in/", views.mtproto_sign_in, name="mtproto-sign-in"),
+    path("mtproto/logout/", views.mtproto_logout, name="mtproto-logout"),
     path("", include(router.urls)),
 ]

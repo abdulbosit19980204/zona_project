@@ -54,7 +54,8 @@
     "supInbox": "Group questions",
     "supReview": "Approval queue",
     "supKnowledge": "Knowledge base",
-    "supSettings": "Bots & settings"
+    "supSettings": "Bots & settings",
+    "supAnalytics": "Analytics"
   },
   "top": {
     "search": "Search…",

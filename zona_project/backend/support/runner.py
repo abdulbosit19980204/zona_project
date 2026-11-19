@@ -17,7 +17,8 @@ from zona import conf
 from zona.crypto import decrypt
 
 from . import engine, ocr
-from .models import MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, Message, Settings
+from .models import (MODE_COLLECT, MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, HistoryJob,
+                     Message, Settings)
 from .telegram import Client, TelegramError
 
 log = logging.getLogger("support")
@@ -35,10 +36,36 @@ def panel_url(path):
 
 
 # ====================================================================== bitta yangilanishni qayta ishlash
+class NullClient:
+    """Tarixni o'qishda: hech kimga hech narsa yuborilmaydi."""
+
+    def send(self, *a, **k):
+        return None
+
+    def typing(self, *a, **k):
+        pass
+
+    def edit_buttons(self, *a, **k):
+        pass
+
+    def answer_callback(self, *a, **k):
+        pass
+
+    def download(self, *a, **k):
+        raise TelegramError("tarix rejimida yuklab bo'lmaydi")
+
+
 class Handler:
-    def __init__(self, bot: Bot, client: Client):
+    def __init__(self, bot: Bot, client: Client, history=False):
         self.bot = bot
         self.tg = client
+        self.history = history       # guruh tarixi: faqat yig'ish va o'rganish, hech narsa yuborilmaydi
+        self.photo_bytes = {}        # tarixda oldindan yuklangan rasmlar: message_id -> bytes
+        self.settings = Settings.load()
+
+    @staticmethod
+    def when(msg):
+        return msg.get("_date") or timezone.now()
 
     # ---------------------------------------------------------------- kirish nuqtasi
     def handle(self, upd):
@@ -101,31 +128,71 @@ class Handler:
                                                      defaults={"title": chat.get("title", "")})
         if created or group.title != chat.get("title", group.title):
             group.title = chat.get("title", group.title)
-        group.last_message_at = timezone.now()
+        if not self.history:
+            group.last_message_at = timezone.now()
         group.save()
-        mode = group.effective_mode()
+        mode = MODE_COLLECT if self.history else group.effective_mode()
         user = engine.identify(sender["id"], sender.get("username", ""), _full_name(sender))
         text = (msg.get("text") or msg.get("caption") or "").strip()
-        photo = _photo_id(msg)
+        photo = _photo_id(msg) or ("history" if msg["message_id"] in self.photo_bytes else None)
         reply_to = (msg.get("reply_to_message") or {}).get("message_id")
-
+        if mode == MODE_OFF:
+            return None
         if user.is_staff:
             return self.on_staff(msg, group, user, text, reply_to)
-        if mode == MODE_OFF or not engine.is_question(text, bool(photo)):
-            return None
 
+        # savol egasining qo'shimcha ma'lumoti: xodimning aniqlashtiruvchi savoliga yoki botning so'roviga javob
+        if reply_to:
+            parent = Message.objects.filter(bot=self.bot, chat_id=chat["id"], message_id=reply_to).first()
+            q = None
+            if parent and parent.kind in (Message.CLARIFY, Message.INFO) and parent.question_id:
+                q = parent.question
+            elif not parent:
+                q = Message.objects.filter(bot=self.bot, chat_id=chat["id"], bot_reply_id=reply_to,
+                                           kind=Message.QUESTION).first()
+            if q:
+                return self.on_info(msg, group, user, text, photo, q, mode)
+
+        if not engine.is_question(text, bool(photo)):
+            return None
         q, created = Message.objects.get_or_create(
             bot=self.bot, chat_id=chat["id"], message_id=msg["message_id"],
             defaults={"group": group, "user": user, "text": text[:4000], "photo_file_id": photo or "",
-                      "reply_to_id": reply_to, "kind": Message.QUESTION})
+                      "reply_to_id": reply_to, "kind": Message.QUESTION,
+                      "source": "history" if self.history else "live"})
         if not created:
             return q  # takroriy yangilanish
+        if self.history:
+            q.created_at = self.when(msg)
+            Message.objects.filter(pk=q.pk).update(created_at=q.created_at)
         self.process_question(q, mode)
         return q
 
-    def process_question(self, q, mode):
-        settings = Settings.load()
-        if q.photo_file_id and settings.ocr_enabled:
+    def on_info(self, msg, group, user, text, photo, q, mode):
+        """Savol egasi so'ralgan ma'lumotni yubordi: zanjirga qo'shiladi; bot o'zi so'ragan bo'lsa — qayta javob beradi."""
+        info, created = Message.objects.get_or_create(
+            bot=self.bot, chat_id=msg["chat"]["id"], message_id=msg["message_id"],
+            defaults={"group": group, "user": user, "text": text[:4000], "photo_file_id": photo or "",
+                      "kind": Message.INFO, "question": q, "status": Message.CLOSED,
+                      "reply_to_id": (msg.get("reply_to_message") or {}).get("message_id"),
+                      "source": "history" if self.history else "live"})
+        if not created:
+            return info
+        if self.history:
+            info.created_at = self.when(msg)
+            Message.objects.filter(pk=info.pk).update(created_at=info.created_at)
+        if photo and self.settings.ocr_enabled:
+            self._read_photo(info)
+            info.save(update_fields=["photo_path", "ocr_text", "error"])
+        if q.stage == "ask" and mode == MODE_LIVE:
+            extra = "\n".join(x for x in (info.text, info.ocr_text) if x)
+            q.text = (q.text + "\n" + extra).strip()[:4000]
+            self.process_question(q, mode, skip_ask=True)
+        return info
+
+    def process_question(self, q, mode, skip_ask=False):
+        settings = self.settings
+        if q.photo_file_id and settings.ocr_enabled and not q.ocr_text:
             self._read_photo(q)
         raw = "\n".join(x for x in (q.text, q.ocr_text) if x).strip()
         q.lang = engine.detect_lang(q.text or q.ocr_text)
@@ -135,27 +202,42 @@ class Handler:
             return q
         if mode == MODE_LIVE:
             self.tg.typing(q.chat_id)
-        d = engine.decide(raw, q.lang, allow_unapproved=(mode == MODE_SHADOW))
+        d = engine.decide(raw, q.lang, allow_unapproved=(mode in (MODE_SHADOW, MODE_COLLECT)))
         q.stage, q.entry, q.confidence = d.stage, d.entry, d.confidence
         q.answer_text = d.text
         if d.entry:
             Entry.objects.filter(pk=d.entry.pk).update(uses=d.entry.uses + 1, last_used_at=timezone.now())
 
+        if mode == MODE_COLLECT:
+            q.status = Message.NEW  # faqat yig'ildi: javob taklifi tahlil uchun saqlanadi
+            q.save()
+            return q
         if mode == MODE_SHADOW:
             q.status = Message.DRAFTED
             q.save()
-            self._send_draft(q, d)
+            if settings.drafts_to_admin:
+                self._send_draft(q, d)
             return q
 
         # jonli rejim
+        ask = engine.ask_first_text(d.entry, q.lang)
+        if ask and settings.ask_first_prompt and not skip_ask and not q.photo_file_id and not d.needs_human:
+            # xodimlar odatda avval so'raydigan ma'lumotni bot o'zi so'raydi; javob kelgach qayta ishlanadi
+            sent = self._safe_send(q.chat_id, engine.to_html(ask), reply_to=q.message_id)
+            q.stage, q.status = "ask", Message.NEW
+            if sent:
+                q.bot_reply_id = sent.get("message_id")
+            q.save()
+            return q
         if not d.needs_human and d.text:
             body = d.text
             line = engine.responsible_line(d.responsible, q.lang) if d.stage == "rule" else ""
-            if line:
+            if line and settings.mention_responsible:
                 body += "\n\n" + line
+            buttons = ([[{"text": "👍", "callback_data": f"fb:{q.id}:1"}, {"text": "👎", "callback_data": f"fb:{q.id}:-1"}]]
+                       if settings.feedback_buttons else None)
             sent = self._safe_send(q.chat_id, engine.to_html(body, settings.signature), reply_to=q.message_id,
-                                   buttons=[[{"text": "👍", "callback_data": f"fb:{q.id}:1"},
-                                             {"text": "👎", "callback_data": f"fb:{q.id}:-1"}]])
+                                   buttons=buttons)
             if sent:
                 q.status, q.answered_by, q.answered_at = Message.ANSWERED, "bot", timezone.now()
                 q.bot_reply_id = sent.get("message_id")
@@ -164,38 +246,59 @@ class Handler:
 
         q.status = Message.ESCALATED
         q.save()
-        ack = ("Ваш вопрос принят." if q.lang == "ru" else "Savolingiz qabul qilindi.")
-        if d.responsible and d.responsible[0].get("telegram"):
-            tags = " ".join("@" + t for t in d.responsible[0]["telegram"][:3])
-            ack += (" Ответит: " if q.lang == "ru" else " Javob beradi: ") + tags
-        sent = self._safe_send(q.chat_id, engine.html.escape(ack), reply_to=q.message_id)
-        if sent:
-            Message.objects.filter(pk=q.pk).update(bot_reply_id=sent.get("message_id"))
-        self._send_draft(q, d, escalated=True)
+        if settings.escalation_ack:
+            ack = ("Ваш вопрос принят." if q.lang == "ru" else "Savolingiz qabul qilindi.")
+            if settings.mention_responsible and d.responsible and d.responsible[0].get("telegram"):
+                tags = " ".join("@" + t for t in d.responsible[0]["telegram"][:3])
+                ack += (" Ответит: " if q.lang == "ru" else " Javob beradi: ") + tags
+            sent = self._safe_send(q.chat_id, engine.html.escape(ack), reply_to=q.message_id)
+            if sent:
+                Message.objects.filter(pk=q.pk).update(bot_reply_id=sent.get("message_id"))
+        if settings.drafts_to_admin:
+            self._send_draft(q, d, escalated=True)
         return q
 
     # ---------------------------------------------------------------- xodim javobi -> o'rganish
     def on_staff(self, msg, group, user, text, reply_to):
+        """Xodim savolga (yoki savol egasining qo'shimcha ma'lumotiga) reply qildi.
+
+        Aniqlashtiruvchi savol ("STIR yuboring", "skrin tashlang?") javob deb olinmaydi — zanjirda saqlanadi va
+        keyin "javobdan oldin so'raladigan ma'lumot" sifatida o'rganiladi. Yakuniy javob — bilim bazasiga nomzod.
+        """
         if not text or not reply_to:
             return None
-        q = Message.objects.filter(bot=self.bot, chat_id=msg["chat"]["id"], message_id=reply_to,
-                                   kind=Message.QUESTION).first()
-        if not q:
+        parent = Message.objects.filter(bot=self.bot, chat_id=msg["chat"]["id"], message_id=reply_to).first()
+        if not parent:
             return None
+        q = parent if parent.kind == Message.QUESTION else parent.question
+        if not q or q.kind != Message.QUESTION:
+            return None
+        settings = self.settings
         staff_name = user.staff_name()
+        clarify = settings.learn_clarifications and engine.is_clarifying(text)
         a, created = Message.objects.get_or_create(
             bot=self.bot, chat_id=msg["chat"]["id"], message_id=msg["message_id"],
-            defaults={"group": group, "user": user, "text": text[:4000], "kind": Message.STAFF, "question": q,
-                      "reply_to_id": reply_to, "status": Message.CLOSED, "stage": "staff"})
+            defaults={"group": group, "user": user, "text": text[:4000], "question": q, "reply_to_id": reply_to,
+                      "kind": Message.CLARIFY if clarify else Message.STAFF, "status": Message.CLOSED,
+                      "stage": "clarify" if clarify else "staff", "source": "history" if self.history else "live"})
         if not created:
+            return a
+        when = self.when(msg)
+        if self.history:
+            a.created_at = when
+            Message.objects.filter(pk=a.pk).update(created_at=when)
+        if clarify:
             return a
         corrected = q.status == Message.ANSWERED and q.answered_by == "bot"
         if q.status != Message.ANSWERED or corrected:
-            q.status, q.stage, q.answered_by, q.answered_at = Message.ANSWERED, "staff", staff_name, timezone.now()
+            q.status, q.stage, q.answered_by, q.answered_at = Message.ANSWERED, "staff", staff_name, when
             q.save()
-        if Settings.load().learn_from_staff:
-            entry = learn(q, text, staff_name, priority=corrected)
-            self._send_candidate(entry, q, staff_name)
+        if settings.learn_from_staff:
+            asks = list(q.staff_replies.filter(kind=Message.CLARIFY).order_by("created_at").values_list("text", flat=True))
+            entry, new = learn(q, text, staff_name, priority=corrected, ask_first="\n".join(asks),
+                               source="history" if self.history else "staff")
+            if new and settings.notify_candidates and not self.history:
+                self._send_candidate(entry, q, staff_name)
         return a
 
     # ---------------------------------------------------------------- tugmalar
@@ -254,11 +357,13 @@ class Handler:
 
     # ---------------------------------------------------------------- yordamchilar
     def _read_photo(self, q):
-        try:
-            data = self.tg.download(q.photo_file_id)
-        except TelegramError as e:
-            q.error = f"Rasm olinmadi: {e}"[:300]
-            return
+        data = self.photo_bytes.get(q.message_id)
+        if data is None:
+            try:
+                data = self.tg.download(q.photo_file_id)
+            except TelegramError as e:
+                q.error = f"Rasm olinmadi: {e}"[:300]
+                return
         day = timezone.localdate().isoformat()
         folder = media_dir() / day
         try:
@@ -320,14 +425,31 @@ class Handler:
 
 
 # ====================================================================== bilim bazasi amallari
-def learn(q, answer, staff_name, priority=False):
-    """Xodim javobidan bilim bazasiga nomzod (status=new). Tasdiqlanmaguncha bot uni ishlatmaydi."""
+def learn(q, answer, staff_name, priority=False, ask_first="", source="staff"):
+    """Xodim javobidan bilim bazasiga nomzod (status=new). Tasdiqlanmaguncha bot uni ishlatmaydi.
+
+    Qaytaradi: (yozuv, yangimi). Juda o'xshash nomzod bor bo'lsa — yangisi ochilmaydi, savol ko'rinishi unga qo'shiladi;
+    tasdiqlangan javob allaqachon bor bo'lsa (va bot javobi tuzatilmagan bo'lsa) — nomzod kerak emas.
+    """
     question = q.text.strip() or q.ocr_text.strip()[:300]
     if not question or len(answer.strip()) < 3:
-        return None
+        return None, False
+    pool = list(Entry.objects.filter(kind=Entry.FAQ, status__in=[Entry.NEW, Entry.REVIEW, Entry.APPROVED]))
+    match, score = engine.match_faq(question, pool)
+    if match and score >= 88:
+        if match.status == Entry.APPROVED and not priority:
+            return match, False
+        if match.status in (Entry.NEW, Entry.REVIEW):
+            match.questions = list(dict.fromkeys([*(match.questions or []), question[:1000]]))[:50]
+            if ask_first and not match.ask_first:
+                match.ask_first = ask_first[:1000]
+            match.priority = match.priority or priority
+            match.save(update_fields=["questions", "ask_first", "priority", "updated_at"])
+            return match, False
     title = question.splitlines()[0][:190]
     return Entry.objects.create(kind=Entry.FAQ, title=title, questions=[question[:1000]], answer=answer.strip(),
-                                status=Entry.NEW, source="staff", author=staff_name, priority=priority)
+                                ask_first=ask_first[:1000], status=Entry.NEW, source=source, author=staff_name,
+                                priority=priority), True
 
 
 def snapshot(entry, editor, note=""):
@@ -341,7 +463,7 @@ def approve(entry, by):
     """Tasdiqlash. Kutayotgan tahrir bo'lsa — eski holat versiyaga yoziladi, tahrir qo'llanadi."""
     if entry.pending:
         snapshot(entry, by, "tahrir tasdiqlandi")
-        for f in ("title", "questions", "triggers", "extract", "answer", "answer_ru"):
+        for f in ("title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first"):
             if f in entry.pending:
                 setattr(entry, f, entry.pending[f])
         entry.pending = None
@@ -440,9 +562,25 @@ def cleanup_media(days):
     return removed
 
 
+def _history_thread(job_id):
+    from .history import run_job
+    close_old_connections()
+    try:
+        run_job(job_id)
+    except Exception as e:  # noqa: BLE001
+        log.exception("history job %s failed", job_id)
+        HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.FAILED, error=f"{type(e).__name__}: {e}"[:500],
+                                                    finished_at=timezone.now())
+    finally:
+        close_old_connections()
+
+
 def run_forever(poll=10):
     workers = {}
+    history = None
     last_cleanup = 0.0
+    # jarayon qayta ishga tushsa, chala qolgan vazifa qayta navbatga qo'yiladi
+    HistoryJob.objects.filter(status=HistoryJob.RUNNING).update(status=HistoryJob.QUEUED)
     log.info("support runner started; OCR: %s", ocr.languages() or "yo'q")
     while True:
         close_old_connections()
@@ -461,6 +599,11 @@ def run_forever(poll=10):
                     w = BotWorker(bid, token)
                     w.start()
                     workers[bid] = w
+            if history is None or not history.is_alive():
+                job = HistoryJob.objects.filter(status=HistoryJob.QUEUED).order_by("created_at").first()
+                if job:
+                    history = threading.Thread(target=_history_thread, args=(job.id,), name="support-history", daemon=True)
+                    history.start()
             if time.time() - last_cleanup > 86400:
                 cleanup_media(Settings.load().media_days)
                 last_cleanup = time.time()

@@ -134,7 +134,7 @@ fi
 step "Backend: Python muhiti"
 [[ -x "$SRC/.venv/bin/python" ]] || python3 -m venv "$SRC/.venv"
 "$SRC/.venv/bin/pip" install -q --upgrade pip wheel
-"$SRC/.venv/bin/pip" install -q -e "$SRC[ai,server]"
+"$SRC/.venv/bin/pip" install -q -e "$SRC[ai,server,support]"
 
 step "Backend: migratsiya va statik fayllar"
 manage() { bash -c "set -a; source $ETC/foydali.env; set +a; cd $SRC/backend && $*"; }
@@ -149,7 +149,10 @@ step "QR Drive: Python muhiti"
 step "Frontend: npm ci + build (BACKEND_URL/QRDRIVE_URL build paytida yoziladi)"
 cd "$SRC/frontend"
 npm ci --no-audit --no-fund --loglevel=error
-NEXT_TELEMETRY_DISABLED=1 BACKEND_URL=http://127.0.0.1:8020 QRDRIVE_URL=http://127.0.0.1:8120 npm run build
+# Next.js ba'zan yangilanish tavsiyasini ko'rsatish uchun buildni bir marta to'xtatadi (SecurityFatalError) —
+# shunda bir marta qayta urinamiz; ikkinchisi ham xato bo'lsa skript to'xtaydi.
+nbuild() { NEXT_TELEMETRY_DISABLED=1 BACKEND_URL=http://127.0.0.1:8020 QRDRIVE_URL=http://127.0.0.1:8120 npm run build; }
+nbuild || { echo "  build qayta urinilmoqda"; nbuild; }
 cd "$SRC"
 
 step "systemd servislari"

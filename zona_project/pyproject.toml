@@ -25,13 +25,14 @@ dependencies = [
 ai = ["anthropic>=2.8,<3"]                                        # Claude uchun rasmiy SDK
 server = ["daphne>=4.1", "whitenoise>=6.6",                      # ASGI server (HTTP + WebSocket)
           "gunicorn>=23; sys_platform != 'win32'", "uvicorn[standard]>=0.30", "uvicorn-worker>=0.2"]  # Ubuntu: gunicorn + uvicorn
+support = ["telethon>=1.36,<2"]                                   # support bot: guruh tarixini o'qish (MTProto)
 
 [tool.setuptools.package-dir]
 "" = "backend"
 
 [tool.setuptools.packages.find]
 where = ["backend"]
-include = ["zona*"]
+include = ["zona*", "support*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "zona.__version__" }
