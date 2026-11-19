@@ -19,7 +19,7 @@ class TaskTests(Base):
         self.dev = Member.objects.create(name="Dev", role="dasturchi", department=self.it, telegram="dev_user", level="L1")
         self.seller = Member.objects.create(name="Sotuvchi", role="savdo", department=self.sales, telegram="seller")
         s = Settings.load()
-        Settings.objects.filter(pk=s.pk).update(tasks_enabled=True, task_departments=[self.it.id], task_gap=0)
+        Settings.objects.filter(pk=s.pk).update(tasks_enabled=True, task_departments=[self.it.id], task_gap=0, task_mode="account")
         self.bot = Bot.objects.create(name="b", token_enc=encrypt("1:x"))
         self.g = Group.objects.create(bot=self.bot, chat_id=-1004410351675, title="VAZIFALAR")
         self.u = TgUser.objects.create(tg_id=5, name="Agent", username="agent1")

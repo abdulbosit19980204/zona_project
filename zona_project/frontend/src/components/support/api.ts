@@ -62,9 +62,10 @@ export interface SupportSettings {
   ai_primary: boolean; ai_primary_below: number; album_window: number;
   tasks_enabled: boolean; task_bot: string; task_default_assignee: string; task_departments: number[]; task_members: number[];
   task_daily_limit: number; task_gap: number; task_attach: boolean;
+  task_mode: "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
 }
 export interface SupportTaskInfo {
-  id: number; status: "queued" | "sent" | "failed" | "skipped"; assignee: string; title: string; text: string; link: string;
+  id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
   reason: string; reply: string; error: string; attempts: number; files: number; duplicates: number; created_at: string;
   sent_at: string | null; created_by: string; message: number | null; asker: string; group: string; entry: number | null; entry_title: string;
 }
@@ -182,7 +183,7 @@ export const supportApi = {
   archive: (id: number) => post<Entry>(`entries/${id}/archive/`),
   revert: (id: number, vid: number) => post<Entry>(`entries/${id}/revert/${vid}/`),
   merge: (id: number, target: number) => post<Entry>(`entries/${id}/merge/`, { target }),
-  bulk: (ids: number[], action: "approve" | "reject" | "archive") => post<{ done: number }>("entries/bulk/", { ids, action }),
+  bulk: (ids: number[], action: "approve" | "reject" | "archive" | "review") => post<{ done: number }>("entries/bulk/", { ids, action }),
   test: (text: string, all = true) => post<TestResult>("entries/test/", { text, all }),
   messages: (params: Record<string, string | number> = {}) => get<SupportMessage[]>("messages/", params),
   answer: (id: number, text: string, save = true, approve = false) =>

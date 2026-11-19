@@ -112,6 +112,11 @@ class Client:
         except TelegramError:
             pass
 
+    def copy(self, chat_id, from_chat_id, message_id):
+        """Xabarni (rasm/fayl bilan) boshqa chatga nusxalash — forward belgisisiz."""
+        self._throttle(chat_id)
+        return self.call("copyMessage", {"chat_id": chat_id, "from_chat_id": from_chat_id, "message_id": int(message_id)})
+
     def send_contact(self, chat_id, phone, first_name, last_name="", vcard="", reply_to=None):
         self._throttle(chat_id)
         params = {"chat_id": chat_id, "phone_number": phone, "first_name": first_name[:64], "last_name": last_name[:64] or None,

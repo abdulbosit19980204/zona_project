@@ -355,12 +355,95 @@ function TranslateSection() {
 function UsageSection() {
   const t = useTranslations();
   const locale = useLocale() as keyof typeof DATE_LOCALES;
-  const summary = useQuery({ queryKey: KEYS.summary, queryFn: adminApi.usage.summary });
+  const [days, setDays] = useState(30);
+  const summary = useQuery({ queryKey: [...KEYS.summary, days], queryFn: () => adminApi.usage.summary(days), refetchInterval: 60_000 });
   const usage = useQuery({ queryKey: KEYS.usage, queryFn: adminApi.usage.list });
-  const n = (v: number) => v.toLocaleString(locale === "en" ? "en-US" : "ru-RU");
+  const n = (v: number | null | undefined) => (v ?? 0).toLocaleString(locale === "en" ? "en-US" : "ru-RU");
+  const d = summary.data;
+  const maxDay = Math.max(1, ...(d?.daily ?? []).map((x) => x.calls));
+  const errRate = d?.totals?.calls ? Math.round((100 * (d.totals.errors ?? 0)) / d.totals.calls) : 0;
   return (
     <>
-      <SectionTitle>{t("ai.usage")}</SectionTitle>
+      <SectionTitle actions={(
+        <div className="flex gap-1 rounded-lg bg-muted p-0.5">
+          {[7, 30, 90].map((x) => (
+            <button key={x} type="button" onClick={() => setDays(x)}
+              className={cn("h-7 rounded-md px-2.5 text-xs font-medium", days === x ? "bg-background shadow-sm" : "text-muted-foreground")}>
+              {t("ai.u_days", { n: x })}
+            </button>
+          ))}
+        </div>
+      )}>{t("ai.u_title")}</SectionTitle>
+      {d && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="gap-1 p-4">
+            <div className="text-xs text-muted-foreground">{t("ai.u_today")}</div>
+            <div className="font-mono text-2xl font-semibold">{n(d.today?.calls)}</div>
+            <div className="text-xs text-muted-foreground">{t("ai.u_tokens")}: {n(d.today?.tokens)} · {t("ai.errors")}: {n(d.today?.errors)}</div>
+          </Card>
+          <Card className="gap-1 p-4">
+            <div className="text-xs text-muted-foreground">{t("ai.u_total", { n: days })}</div>
+            <div className="font-mono text-2xl font-semibold">{n(d.totals?.calls)}</div>
+            <div className="text-xs text-muted-foreground">{t("ai.u_tokens")}: {n((d.totals?.input_tokens ?? 0) + (d.totals?.output_tokens ?? 0))} · ⌀ {n(Math.round(d.totals?.latency ?? 0))} ms</div>
+          </Card>
+          <Card className="gap-1 p-4">
+            <div className="text-xs text-muted-foreground">{t("ai.u_errors")}</div>
+            <div className={cn("font-mono text-2xl font-semibold", errRate > 20 && "text-destructive")}>{errRate}%</div>
+            <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+              {(["limit", "busy", "key", "other"] as const).map((k) => <span key={k}>{t(`ai.u_err_${k}`)}: {n(d.error_kinds?.[k])}</span>)}
+            </div>
+          </Card>
+          <Card className="gap-1 p-4">
+            <div className="text-xs text-muted-foreground">{t("ai.u_support")}</div>
+            {d.support_limit ? (
+              <>
+                <div className="font-mono text-2xl font-semibold">{n(d.support_limit.left)}<span className="text-sm text-muted-foreground"> / {n(d.support_limit.limit)}</span></div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (100 * (d.support_limit.limit - d.support_limit.left)) / Math.max(1, d.support_limit.limit))}%` }} />
+                </div>
+                <div className="text-xs text-muted-foreground">{t("ai.u_supportHint")}</div>
+              </>
+            ) : <div className="text-sm text-muted-foreground">—</div>}
+          </Card>
+        </div>
+      )}
+      {d && (
+        <div className="mb-4 grid gap-4 xl:grid-cols-[1fr_320px]">
+          <Card className="gap-2 p-4">
+            <div className="text-sm font-medium">{t("ai.u_daily")}</div>
+            {(d.daily ?? []).length === 0 ? <p className="text-sm text-muted-foreground">{t("ai.noUsage")}</p> : (
+              <>
+                <div className="flex h-32 items-end gap-[2px] border-b">
+                  {(d.daily ?? []).map((x) => (
+                    <div key={x.date} className="group flex h-full flex-1 flex-col justify-end"
+                      title={`${x.date}: ${x.calls} · ${t("ai.errors")} ${x.errors} · ${t("ai.u_tokens")} ${x.tokens}`}>
+                      <div className="rounded-t-[3px] bg-primary group-hover:opacity-80" style={{ height: `${(100 * x.calls) / maxDay}%`, minHeight: x.calls ? 2 : 0 }} />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between text-[11px] text-muted-foreground"><span>{d.daily?.[0]?.date}</span><span>{d.daily?.[d.daily.length - 1]?.date}</span></div>
+              </>
+            )}
+          </Card>
+          <Card className="gap-2 p-4">
+            <div className="text-sm font-medium">{t("ai.u_busy")}</div>
+            {(d.busy_now ?? []).length === 0 ? <p className="text-sm text-success">{t("ai.u_busyNone")}</p>
+              : d.busy_now!.map((x) => (
+                <div key={`${x.provider}/${x.model}`} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-mono">{x.model}<span className="text-muted-foreground"> · {x.provider}</span></span>
+                  <Badge variant="outline" className="border-warning/50 text-warning">{x.n}</Badge>
+                </div>
+              ))}
+            <div className="mt-2 border-t pt-2 text-sm font-medium">{t("ai.u_byTask")}</div>
+            {d.tasks.map((x) => (
+              <div key={x.task} className="flex items-center justify-between gap-2 text-xs">
+                <Badge variant="outline" className="font-mono text-[10px]">{x.task}</Badge>
+                <span className="font-mono text-muted-foreground">{n(x.calls)} · {n(x.tokens)} tok{x.errors ? ` · ${n(x.errors)} ✕` : ""}</span>
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="gap-0 overflow-hidden p-0">
           <Table>
@@ -371,6 +454,7 @@ function UsageSection() {
                 <TableHead className="text-right">{t("ai.errors")}</TableHead>
                 <TableHead className="text-right">{t("ai.inTokens")}</TableHead>
                 <TableHead className="text-right">{t("ai.outTokens")}</TableHead>
+                <TableHead className="text-right">ms</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -381,10 +465,11 @@ function UsageSection() {
                   <TableCell className={cn("text-right font-mono", m.errors && "text-destructive")}>{n(m.errors)}</TableCell>
                   <TableCell className="text-right font-mono">{n(m.input_tokens)}</TableCell>
                   <TableCell className="text-right font-mono">{n(m.output_tokens)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs text-muted-foreground">{m.latency ? n(Math.round(m.latency)) : "—"}</TableCell>
                 </TableRow>
               ))}
               {summary.data && !summary.data.models.length && (
-                <TableRow><TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">{t("ai.noUsage")}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">{t("ai.noUsage")}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

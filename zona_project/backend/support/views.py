@@ -42,7 +42,8 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "image_threshold", "image_autolabel", "mention_asker", "mention_supervisor", "workers",
                    "contact_lookup", "ai_primary", "ai_primary_below", "album_window",
                    "tasks_enabled", "task_bot", "task_default_assignee", "task_departments", "task_members",
-                   "task_daily_limit", "task_gap", "task_attach"]
+                   "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
+                   "merge_window"]
 
 
 def _settings_payload(s):
@@ -249,6 +250,10 @@ class EntryViewSet(ZonaViewSet):
             qs = qs.filter(source=p["source"])
         if p.get("pending") == "1":
             qs = qs.filter(pending__isnull=False)
+        if p.get("approved_since"):  # oxirgi N soatda tasdiqlanganlar (qayta tekshirish uchun)
+            qs = qs.filter(approved_at__gte=timezone.now() - timezone.timedelta(hours=int(p["approved_since"])))
+        if p.get("approved_by"):
+            qs = qs.filter(approved_by=p["approved_by"])
         if p.get("q"):
             q = p["q"]
             qs = qs.filter(Q(title__icontains=q) | Q(answer__icontains=q) | Q(questions__icontains=q))
@@ -406,6 +411,11 @@ class EntryViewSet(ZonaViewSet):
                 runner.reject(e, _actor(request))
             elif act == "archive":
                 e.status = Entry.ARCHIVED
+                e.save(update_fields=["status", "updated_at"])
+            elif act == "review":  # tasdiqni bekor qilish: bot ishlatmaydi, tasdiqlash navbatiga qaytadi
+                if e.status != Entry.APPROVED:
+                    continue
+                e.status = Entry.REVIEW
                 e.save(update_fields=["status", "updated_at"])
             else:
                 continue
@@ -1037,7 +1047,7 @@ def ai_jobs(request):
         if AIJob.objects.filter(status__in=[AIJob.QUEUED, AIJob.RUNNING]).exists():
             return Response({"detail": "AI tahlili allaqachon bajarilmoqda."}, status=400)
         AIJob.objects.create(kind=kind, created_by=_actor(request),
-                             params={k: request.data[k] for k in ("scope", "limit", "days", "threshold", "auto") if k in request.data})
+                             params={k: request.data[k] for k in ("scope", "limit", "days", "threshold", "auto", "ids") if k in request.data})
     return Response([{"id": j.id, "kind": j.kind, "status": j.status, "progress": j.progress, "error": j.error,
                       "created_by": j.created_by, "created_at": j.created_at, "finished_at": j.finished_at}
                      for j in AIJob.objects.all()[:20]])

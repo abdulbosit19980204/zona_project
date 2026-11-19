@@ -135,7 +135,7 @@ export const adminApi = {
   },
   usage: {
     list: () => get<AIUsage[]>("admin/ai/usage/"),
-    summary: () => get<AIUsageSummary>("admin/ai/usage/summary/"),
+    summary: (days = 30) => get<AIUsageSummary>("admin/ai/usage/summary/", { days }),
   },
   translate: {
     status: () => get<TranslateStatus>("admin/ai/translate/"),

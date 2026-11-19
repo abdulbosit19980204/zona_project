@@ -85,6 +85,10 @@ def review_entries(job):
     qs = Entry.objects.filter(status__in=[Entry.APPROVED, Entry.REVIEW]).exclude(suggestions__status=Suggestion.PENDING)
     if scope == "disliked":
         qs = qs.filter(dislikes__gt=0)
+    ids_param = [int(x) for x in (job.params or {}).get("ids") or []][:200]
+    if ids_param:  # tanlangan yozuvlar (masalan, ko'rmasdan tasdiqlanganlarni qayta tekshirish)
+        qs = Entry.objects.filter(pk__in=ids_param)
+        limit = len(ids_param)
     entries = sorted(qs, key=lambda e: (-(e.dislikes * 5), -e.uses, len(e.questions or []), -e.id))[:limit]
     ids = {e.id for e in Entry.objects.filter(status__in=[Entry.APPROVED, Entry.REVIEW])}
     titles = "\n".join(f"{e.id}: {e.title}" for e in Entry.objects.filter(status=Entry.APPROVED).only("id", "title")[:400])

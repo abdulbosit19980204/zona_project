@@ -134,14 +134,51 @@ class AIUsageViewSet(AdminMixin, mixins.ListModelMixin, viewsets.GenericViewSet)
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
-        since = timezone.now() - timedelta(days=30)
-        rows = (AIUsage.objects.filter(at__gte=since).values("provider", "model")
+        """AI sarfi: modellar, vazifalar, kunlar bo'yicha; xatolar turi; hozir band modellar; support kunlik limiti."""
+        from collections import defaultdict
+
+        from django.db.models import Avg
+        days = max(1, min(int(request.query_params.get("days") or 30), 365))
+        since = timezone.now() - timedelta(days=days)
+        qs = AIUsage.objects.filter(at__gte=since)
+        rows = (qs.values("provider", "model")
                 .annotate(calls=Count("id"), errors=Count("id", filter=Q(ok=False)),
-                          input_tokens=Sum("input_tokens"), output_tokens=Sum("output_tokens"))
+                          input_tokens=Sum("input_tokens"), output_tokens=Sum("output_tokens"), latency=Avg("latency_ms"))
                 .order_by("-calls"))
-        by_task = (AIUsage.objects.filter(at__gte=since).values("task")
-                   .annotate(calls=Count("id"), tokens=Sum("input_tokens") + Sum("output_tokens")).order_by("task"))
-        return Response({"since": since, "models": list(rows), "tasks": list(by_task)})
+        by_task = (qs.values("task").annotate(calls=Count("id"), errors=Count("id", filter=Q(ok=False)),
+                                              tokens=Sum("input_tokens") + Sum("output_tokens")).order_by("-calls"))
+        daily = defaultdict(lambda: {"calls": 0, "errors": 0, "tokens": 0})
+        kinds = defaultdict(int)
+        for at, ok, err, tin, tout in qs.values_list("at", "ok", "error", "input_tokens", "output_tokens"):
+            d = daily[timezone.localtime(at).date().isoformat()]
+            d["calls"] += 1
+            d["tokens"] += (tin or 0) + (tout or 0)
+            if not ok:
+                d["errors"] += 1
+                e = (err or "").lower()
+                kinds["limit" if ("429" in e or "rate" in e or "quota" in e) else "busy" if ("503" in e or "demand" in e or "overload" in e)
+                      else "key" if ("401" in e or "403" in e or "kalit" in e or "api key" in e) else "other"] += 1
+        recent = timezone.now() - timedelta(minutes=10)
+        busy = list(AIUsage.objects.filter(at__gte=recent, ok=False).values("provider", "model").annotate(n=Count("id")).order_by("-n")[:10])
+        today = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+        support_limit = None
+        try:
+            from support.engine import ai_quota_left
+            from support.models import Settings as SupportSettings
+            ss = SupportSettings.load()
+            support_limit = {"limit": ss.ai_daily_limit, "left": ai_quota_left(ss), "enabled": ss.ai_enabled}
+        except Exception:  # noqa: BLE001 — support ilovasi bo'lmasa ham ishlasin
+            pass
+        return Response({
+            "since": since, "days": days, "models": list(rows), "tasks": list(by_task),
+            "daily": [{"date": k, **v} for k, v in sorted(daily.items())],
+            "error_kinds": dict(kinds), "busy_now": busy,
+            "today": qs.filter(at__gte=today).aggregate(calls=Count("id"), errors=Count("id", filter=Q(ok=False)),
+                                                        tokens=Sum("input_tokens") + Sum("output_tokens")),
+            "totals": qs.aggregate(calls=Count("id"), errors=Count("id", filter=Q(ok=False)), input_tokens=Sum("input_tokens"),
+                                   output_tokens=Sum("output_tokens"), latency=Avg("latency_ms")),
+            "support_limit": support_limit,
+        })
 
 
 @zona_api(["GET", "POST"], [IsZonaAdmin])

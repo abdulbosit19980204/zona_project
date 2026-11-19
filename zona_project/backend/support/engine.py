@@ -65,6 +65,10 @@ def is_question(text, has_photo=False, forwarded=False):
         return True
     if len(t) < 6:
         return False
+    # "iltimos", "yordam bering", "добавьте пжл" kabi faqat umumiy so'zlar — savol emas (rasm bilan kelsa birlashtiriladi)
+    m = meaningful(t)
+    if not m or (len(m) == 1 and "?" not in t):
+        return False
     words = re.findall(r"[\w'ʻʼ’]+", t.lower())
     if not words:
         return False
@@ -393,6 +397,10 @@ Qoidalar:
 - Savol o'zbek lotin/kirill, yangi alifbo (ş, ç, ō) yoki ruscha bo'lishi mumkin; imlo xatolarini tushun.
 - Eng yaqin tasdiqlangan javob savolga mos kelsa — o'shani asos qilib, savolga moslab tushunarli javob yoz.
 - Ma'lumot yetarli bo'lmasa yoki shaxsiy/moliyaviy qaror kerak bo'lsa: needs_human=true, confidence past.
+- Kim hal qilishini aytsang — faqat MAS'ULLAR ro'yxatidagi odam/jamoa nomini ayt. Ro'yxatda yo'q rol yoki bo'limni
+  ("operator", "menejer", "buxgalteriya" va h.k.) O'YLAB TOPMA; bilmasang — mas'ulni aytma, needs_human=true.
+- SAVOL BERUVCHI rolini hisobga ol: agentga — "supervayzeringizga murojaat qiling" kabi; supervayzer yoki rahbarning
+  o'ziga "supervayzeringizga yozing" dema — u bajaradigan amalni ayt.
 - confidence: 0..1 — javob aynan shu savolga to'g'ri ekaniga ishonching."""
 
 
@@ -402,7 +410,23 @@ def ai_quota_left(settings):
     return max(0, settings.ai_daily_limit - used)
 
 
-def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=()):
+_PEOPLE = {"at": 0.0, "text": ""}
+
+
+def people_text():
+    """Mas'ullar ro'yxati (zona): ism, lavozim, bo'lim, qaysi savollar — AI rolni to'g'ri aytishi uchun (10 daqiqa kesh)."""
+    import time as _t
+    if _t.monotonic() - _PEOPLE["at"] < 600 and _PEOPLE["text"]:
+        return _PEOPLE["text"]
+    rows = []
+    for m in Member.objects.select_related("department").exclude(level="EXT").order_by("name")[:40]:
+        bits = [m.role, m.department.name if m.department_id else "", f"savollar: {m.trigger}" if m.trigger else ""]
+        rows.append(f"- {m.name}{' (jamoa)' if m.is_team else ''}: " + "; ".join(b for b in bits if b))
+    _PEOPLE.update(at=_t.monotonic(), text="\n".join(rows))
+    return _PEOPLE["text"]
+
+
+def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=(), asker=""):
     """AI javobi o'zimizning ma'lumotlarga tayanadi: bilim bazasidagi eng yaqin javoblar, rasmdan tanilgan ekranlar,
     xodimlarning o'xshash savollarga bergan haqiqiy javoblari (misol sifatida) va qoida."""
     from zona import conf
@@ -422,8 +446,13 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
     if rule_task is not None and rule_task.rule:
         ctx.append(f"- QOIDA ({rule_task.title}): {rule_task.rule[:600]}")
     examples = staff_examples(raw)
+    people = people_text()
     system = AI_SYSTEM.format(company=conf.get("COMPANY_NAME")) + "\n\nTASDIQLANGAN JAVOBLAR VA QOIDALAR:\n" + (
         "\n".join(ctx) or "(hozircha yo'q)")
+    if people:
+        system += "\n\nMAS'ULLAR (faqat shulardan ayt):\n" + people
+    if asker:
+        system += f"\n\nSAVOL BERUVCHI: {asker}"
     if examples:
         system += ("\n\nXODIMLARIMIZNING O'XSHASH SAVOLLARGA BERGAN HAQIQIY JAVOBLARI (uslub va mazmun uchun namuna; "
                    "kompaniya amaliyotini shulardan o'rgan):\n" + "\n".join(f"- SAVOL: {q}\n  XODIM JAVOBI: {a}" for q, a in examples))
@@ -440,7 +469,8 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
 
 
 # ------------------------------------------------------------------ yig'ish
-def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False):  # noqa: C901
+def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False,  # noqa: C901
+           asker=""):
     """Savol -> Decision. allow_unapproved: soya rejimida ko'rib chiqilayotgan shablonlar ham.
 
     image: (yozuv, ishonch) yoki images: [(yozuv, ishonch, rasm_tartibi), ...] — rasm turi o'rgatilgan namunadan tanilgan.
@@ -517,7 +547,7 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
     if ai_first:
         # AI asosiy: javobni bilim bazasidagi eng yaqin javoblar va qoidaga tayanib tuzadi (Claude; zaxira — Gemini)
         ai = ai_answer(qtext, lang, approved_ctx, task, settings, ocr=ocr if strong_text else "",
-                       image_entries=[d[0] for d in distinct])
+                       image_entries=[d[0] for d in distinct], asker=asker)
         if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
             top = e if faq_ok else None
             return Decision("ai", top, ai["confidence"], ai["text"], False, own(top) if top else resp, note=ai["reason"])
@@ -527,7 +557,7 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
         return Decision("rule", None, rule_conf, rule_text(task, lang), False, resp, note=f"task:{task.id}")
     if ai is None:
         ai = ai_answer(qtext, lang, approved_ctx, task, settings, ocr=ocr if strong_text else "",
-                       image_entries=[d[0] for d in distinct])
+                       image_entries=[d[0] for d in distinct], asker=asker)
         if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
             return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])
     d = Decision("", None, max(score, rule_conf), "", True, resp)
@@ -539,16 +569,23 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
 
 FILLER_TEXT = ("korib bering ko'rib ber iltimos yordam bering qiling qilib shu bu mana nima qilay qilish kerak qanday "
                "savol rasm skrin screenshot qarab qara bering beringlar aka opa uka brat pomogite posmotrite pojaluysta "
-               "eto vot chto delat kak help please tekshirib tekshiring muammo problema oshibka xato xatolik")
+               "eto vot chto delat kak help please tekshirib tekshiring muammo problema oshibka xato xatolik "
+               "dobavte dobavit pjl pls plz pozhaluysta pojalusta srochno tezroq tez iltimos qarang qarab bering "
+               "sdelayte sdelat proverte reshite hal qiling qilvoring qilib bering qivoring")
 _FILLER: set = set()
+
+
+def meaningful(text):
+    """Mazmunli so'zlar (umumiy/iltimos so'zlari, salomlashuv va raqamlarsiz)."""
+    if not _FILLER:
+        _FILLER.update(toks(FILLER_TEXT))
+        _FILLER.update(toks(" ".join(GREETING)))
+    return [w for w in dict.fromkeys(toks(text or "")) if w not in _FILLER and len(w) >= 2 and not w.isdigit()]
 
 
 def substantive(text):
     """Xodim aniq savol yozganmi (kamida 2 ta mazmunli so'z), yoki faqat "ko'rib bering" kabi umumiy so'zlarmi."""
-    if not _FILLER:
-        _FILLER.update(toks(FILLER_TEXT))
-    words = [w for w in dict.fromkeys(toks(text or "")) if w not in _FILLER and len(w) >= 3 and not w.isdigit()]
-    return len(words) >= 2
+    return len(meaningful(text)) >= 2
 
 
 _STAFF = {"key": None, "rows": []}

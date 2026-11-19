@@ -18,7 +18,7 @@ import type { SKey, ST } from "./i18n";
 import { SettingRow } from "./shell";
 
 const TONE: Record<SupportTaskInfo["status"], string> = {
-  queued: "border-warning/40 text-warning", sent: "border-success/40 text-success",
+  queued: "border-warning/40 text-warning", sent: "border-success/40 text-success", reminded: "border-primary/40 text-primary",
   failed: "border-destructive/40 text-destructive", skipped: "text-muted-foreground",
 };
 
@@ -36,6 +36,7 @@ export function TasksPanel({ t }: { t: ST }) {
           { value: "all", label: t("all") },
           { value: "queued", label: t("ts_queued"), count: data.data.counts.queued },
           { value: "sent", label: t("ts_sent") },
+          { value: "reminded", label: t("ts_reminded") },
           { value: "failed", label: t("ts_failed"), count: data.data.counts.failed },
           { value: "skipped", label: t("ts_skipped") },
         ]} />}>
@@ -50,8 +51,11 @@ function TaskSettings({ s, d, t }: { s: SupportSettings; d: TasksPayload; t: ST 
   const [f, setF] = useState({
     tasks_enabled: s.tasks_enabled, task_bot: s.task_bot, task_default_assignee: s.task_default_assignee,
     task_departments: s.task_departments ?? [], task_members: s.task_members ?? [], task_daily_limit: s.task_daily_limit,
-    task_gap: s.task_gap, task_attach: s.task_attach,
+    task_gap: s.task_gap, task_attach: s.task_attach, task_mode: s.task_mode ?? "remind",
+    task_remind_group: s.task_remind_group ?? true, task_remind_dm: s.task_remind_dm ?? true,
   });
+  const mode = f.tasks_enabled ? f.task_mode : "off";
+  const setMode = (v: string) => setF(v === "off" ? { ...f, tasks_enabled: false } : { ...f, tasks_enabled: true, task_mode: v as "remind" | "account" });
   const [testTo, setTestTo] = useState(s.task_default_assignee || "");
   const [pick, setPick] = useState("");
   const save = useSupportMutation(() => supportApi.saveSettings({ ...f, task_bot: f.task_bot.replace(/^@/, ""),
@@ -72,30 +76,54 @@ function TaskSettings({ s, d, t }: { s: SupportSettings; d: TasksPayload; t: ST 
         </Link>
       </div>
 
-      {!s.mtproto_connected && (
+      <Panel title={t("tkMode")} icon={ListTodo} bodyClassName="grid gap-3">
+        <Segmented value={mode} onChange={setMode} options={[
+          { value: "off", label: t("tkModeOff") },
+          { value: "remind", label: t("tkModeRemind") },
+          { value: "account", label: t("tkModeAccount") },
+        ]} />
+        <p className={cn("rounded-lg p-3 text-sm", mode === "account" ? "border border-warning/40 bg-warning/10 text-warning" : "bg-muted/50 text-muted-foreground")}>
+          {t(mode === "off" ? "tkModeOffHint" : mode === "remind" ? "tkModeRemindHint" : "tkModeAccountHint")}
+        </p>
+        {mode === "remind" && (
+          <div className="grid gap-0">
+            <SettingRow label={t("tkRemindDm")} hint={t("tkRemindDmHint")}>
+              <Switch checked={f.task_remind_dm} onCheckedChange={(v) => setF({ ...f, task_remind_dm: v })} />
+            </SettingRow>
+            <SettingRow label={t("tkRemindGroup")} hint={t("tkRemindGroupHint")}>
+              <Switch checked={f.task_remind_group} onCheckedChange={(v) => setF({ ...f, task_remind_group: v })} />
+            </SettingRow>
+          </div>
+        )}
+      </Panel>
+
+      {mode === "account" && !s.mtproto_connected && (
         <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">{t("tkNeedAccount")}</p>
       )}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title={t("tkHow")} hint={t("tkHowHint")} icon={ListTodo} bodyClassName="grid gap-0">
-          <SettingRow label={t("tkEnabled")} hint={t("tkEnabledHint")}>
-            <Switch checked={f.tasks_enabled} onCheckedChange={(v) => setF({ ...f, tasks_enabled: v })} />
-          </SettingRow>
-          <SettingRow label={t("tkAttach")} hint={t("tkAttachHint")}>
-            <Switch checked={f.task_attach} onCheckedChange={(v) => setF({ ...f, task_attach: v })} />
-          </SettingRow>
-          <SettingRow label={t("tkBot")} hint={t("tkBotHint")}>
-            <Input className="w-44" value={f.task_bot} placeholder="prbc_bot" onChange={(e) => setF({ ...f, task_bot: e.target.value })} />
-          </SettingRow>
+        <Panel title={t("tkHow")} hint={t(mode === "account" ? "tkHowHint" : "tkHowRemind")} icon={ListTodo} bodyClassName="grid gap-0">
+          {mode === "account" && (
+            <>
+              <SettingRow label={t("tkAttach")} hint={t("tkAttachHint")}>
+                <Switch checked={f.task_attach} onCheckedChange={(v) => setF({ ...f, task_attach: v })} />
+              </SettingRow>
+              <SettingRow label={t("tkBot")} hint={t("tkBotHint")}>
+                <Input className="w-44" value={f.task_bot} placeholder="prbc_bot" onChange={(e) => setF({ ...f, task_bot: e.target.value })} />
+              </SettingRow>
+            </>
+          )}
           <SettingRow label={t("tkDefault")} hint={t("tkDefaultHint")}>
             <Input className="w-44" value={f.task_default_assignee} placeholder="@username" onChange={(e) => setF({ ...f, task_default_assignee: e.target.value })} />
           </SettingRow>
-          <SettingRow label={t("tkDaily")} hint={t("tkGapHint", { n: f.task_gap })}>
-            <div className="flex gap-2">
-              <Input className="w-20" type="number" min={1} value={f.task_daily_limit} onChange={(e) => setF({ ...f, task_daily_limit: Number(e.target.value) || 1 })} />
-              <Input className="w-20" type="number" min={5} value={f.task_gap} onChange={(e) => setF({ ...f, task_gap: Number(e.target.value) || 5 })} />
-            </div>
-          </SettingRow>
+          {mode === "account" && (
+            <SettingRow label={t("tkDaily")} hint={t("tkGapHint", { n: f.task_gap })}>
+              <div className="flex gap-2">
+                <Input className="w-20" type="number" min={1} value={f.task_daily_limit} onChange={(e) => setF({ ...f, task_daily_limit: Number(e.target.value) || 1 })} />
+                <Input className="w-20" type="number" min={5} value={f.task_gap} onChange={(e) => setF({ ...f, task_gap: Number(e.target.value) || 5 })} />
+              </div>
+            </SettingRow>
+          )}
         </Panel>
 
         <Panel title={t("tkWhom")} hint={t("tkWhomHint")} icon={ListTodo} bodyClassName="grid gap-4">
@@ -135,13 +163,13 @@ function TaskSettings({ s, d, t }: { s: SupportSettings; d: TasksPayload; t: ST 
 
       <div className="flex flex-wrap items-end gap-2">
         <Button disabled={save.isPending} onClick={() => save.mutate(undefined)}><Save className="size-4" />{t("save")}</Button>
-        <div className="ml-auto flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
+        {mode === "account" && <div className="ml-auto flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
           <span className="text-xs text-muted-foreground">{t("tkTest")}</span>
           <Input className="h-8 w-40" value={testTo} placeholder="@username" onChange={(e) => setTestTo(e.target.value)} />
           <Button size="sm" variant="outline" disabled={!testTo.trim() || test.isPending || !s.mtproto_connected} onClick={() => test.mutate(undefined)}>
             <FlaskConical className="size-4" />{t("tkTestBtn")}
           </Button>
-        </div>
+        </div>}
       </div>
     </>
   );

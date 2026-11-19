@@ -48,7 +48,14 @@ class Settings(models.Model):
     mtproto_user = models.CharField("Ulangan akkaunt", max_length=150, blank=True)
     mtproto_pending_enc = models.TextField(blank=True)  # kod kutilmoqda: telefon, hash, vaqtinchalik seans
     # --- PRBC vazifalari: ulangan akkaunt PRBC botiga shaxsiy chatda "/vazifa @user matn" yuboradi (guruhda ko'rinmaydi) ---
-    tasks_enabled = models.BooleanField("PRBC vazifalari yaratilsin", default=False)
+    tasks_enabled = models.BooleanField("PRBC vazifalari yoqilgan", default=False)
+    # remind — bot o'zi mas'ul xodimga /vazifa bilan vazifa ochishni eslatadi (tavsiya, akkaunt ishlatilmaydi);
+    # account — ulangan Telegram akkaunt PRBC botiga /vazifa yuboradi (ban xavfi bor, tavsiya etilmaydi)
+    task_mode = models.CharField("Vazifa rejimi", max_length=8, default="remind", db_default="remind")
+    task_remind_group = models.BooleanField("Guruhda qisqa eslatma (@mas'ul)", default=True, db_default=True)
+    task_remind_dm = models.BooleanField("Mas'ulga shaxsiy xabarda tafsilot", default=True, db_default=True)
+    merge_window = models.PositiveIntegerField("Bir muallifning ketma-ket xabarlari bitta savol (soniya)", default=12,
+                                               db_default=12)
     task_bot = models.CharField("PRBC bot (username)", max_length=64, blank=True)
     task_default_assignee = models.CharField("Jamoa savollari uchun ijrochi (username)", max_length=64, blank=True)
     task_departments = models.JSONField("Vazifa yaratiladigan bo'limlar (zona Department id)", default=list, blank=True)
@@ -165,8 +172,9 @@ class Entry(models.Model):
     priority = models.BooleanField("Ustuvor (bot javobini xodim tuzatgan)", default=False)
     pending = models.JSONField("Tasdiq kutayotgan tahrir", null=True, blank=True)
     attachments = models.JSONField("Javob bilan yuboriladigan fayllar (Media id)", default=list, blank=True)
-    creates_task = models.BooleanField("Bu turdagi savolga PRBC vazifa yaratiladi", default=False)
-    task_assignee = models.CharField("Vazifa ijrochisi (username, bo'sh — mas'ul)", max_length=64, blank=True)
+    creates_task = models.BooleanField("Bu turdagi savolga PRBC vazifa yaratiladi", default=False, db_default=False)
+    task_assignee = models.CharField("Vazifa ijrochisi (username, bo'sh — mas'ul)", max_length=64, blank=True, default="",
+                                     db_default="")
     ask_first = models.TextField("Javobdan oldin so'raladigan ma'lumot", blank=True,
                                  help_text="Xodimlar odatda avval nimani so'raydi (masalan: STIR, skrinshot)")
     author = models.CharField(max_length=150, blank=True)
@@ -328,7 +336,7 @@ class Media(models.Model):
     label_auto = models.BooleanField(default=False)
     label_by = models.CharField(max_length=150, blank=True)
     # noto'g'ri yuborilgan / keraksiz rasm: tanilmaganlar ro'yxatida ko'rinmaydi va avtomatik o'rgatilmaydi (qaytarsa bo'ladi)
-    ignored = models.BooleanField(default=False)
+    ignored = models.BooleanField(default=False, db_default=False)
     tg_file_ids = models.JSONField(default=dict, blank=True)  # {bot_id: file_id} — qayta yuklamasdan yuborish
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -384,7 +392,7 @@ class SupportTask(models.Model):
     """PRBC vazifasi (navbat). Bitta mavzuga bitta vazifa: savolga bog'lanadi; shu odamning shu mavzudagi takror
     savollari mavjud vazifaga bog'lanadi (yangisi yaratilmaydi). Savol beruvchilarga ko'rsatilmaydi."""
 
-    QUEUED, SENT, FAILED, SKIPPED = "queued", "sent", "failed", "skipped"
+    QUEUED, SENT, FAILED, SKIPPED, REMINDED = "queued", "sent", "failed", "skipped", "reminded"
     message = models.OneToOneField(Message, null=True, blank=True, on_delete=models.SET_NULL, related_name="task")
     entry = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks")
     assignee = models.CharField(max_length=64, blank=True)

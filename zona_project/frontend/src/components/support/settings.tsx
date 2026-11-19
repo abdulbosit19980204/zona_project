@@ -257,6 +257,7 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {field(t("aiPrimaryBelow"), t("aiPrimaryBelowHint"), <Input type="number" value={f.ai_primary_below} onChange={num("ai_primary_below")} />)}
           {field(t("faqTh"), t("faqThHint"), <Input type="number" value={f.faq_threshold} onChange={num("faq_threshold")} />)}
           {field(t("albumWindow"), t("albumWindowHint"), <Input type="number" value={f.album_window} onChange={num("album_window")} />)}
+          {field(t("mergeWindow"), t("mergeWindowHint"), <Input type="number" min={0} max={60} value={f.merge_window} onChange={num("merge_window")} />)}
           {field(t("ruleTh"), undefined, <Input type="number" value={f.route_threshold} onChange={num("route_threshold")} />)}
           {field(t("workers"), t("workersHint"), <Input type="number" min={1} max={8} value={f.workers} onChange={num("workers")} />)}
           {field(t("signature"), undefined, <Input value={f.signature} onChange={(e) => setF({ ...f, signature: e.target.value })} />)}

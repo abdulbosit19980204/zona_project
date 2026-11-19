@@ -392,8 +392,15 @@ export interface AIUsage {
 
 export interface AIUsageSummary {
   since: string;
-  models: { provider: string; model: string; calls: number; errors: number; input_tokens: number; output_tokens: number }[];
-  tasks: { task: string; calls: number; tokens: number }[];
+  days?: number;
+  models: { provider: string; model: string; calls: number; errors: number; input_tokens: number; output_tokens: number; latency?: number | null }[];
+  tasks: { task: string; calls: number; tokens: number; errors?: number }[];
+  daily?: { date: string; calls: number; errors: number; tokens: number }[];
+  error_kinds?: Partial<Record<"limit" | "busy" | "key" | "other", number>>;
+  busy_now?: { provider: string; model: string; n: number }[];
+  today?: { calls: number; errors: number; tokens: number | null };
+  totals?: { calls: number; errors: number; input_tokens: number | null; output_tokens: number | null; latency: number | null };
+  support_limit?: { limit: number; left: number; enabled: boolean } | null;
 }
 
 export type AITestResult =

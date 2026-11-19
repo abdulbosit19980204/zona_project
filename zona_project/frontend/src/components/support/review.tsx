@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, Copy, GitMerge, Layers, ListChecks, Pencil, Sparkles, SquareStack, Star, X } from "lucide-react";
+import { Check, ChevronRight, Copy, RotateCcw, GitMerge, Layers, ListChecks, Pencil, Sparkles, SquareStack, Star, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -18,11 +18,12 @@ import { supportApi, type Entry } from "./api";
 import { EntryBadge, EntryPicker, fmtDate, Segmented, useSupportMutation } from "./common";
 import { AISuggestions } from "./ai-suggestions";
 import { Duplicates } from "./duplicates";
+import { Recheck } from "./recheck";
 import { EntryEditor } from "./entry-editor";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 
-type View = "queue" | "cards" | "clusters" | "dups" | "ai";
+type View = "queue" | "cards" | "clusters" | "dups" | "recheck" | "ai";
 
 export function SupportReview() {
   return <Suspense><ReviewInner /></Suspense>;
@@ -49,14 +50,16 @@ function ReviewInner() {
           { value: "cards", label: t("viewCards"), icon: SquareStack },
           { value: "clusters", label: t("viewClusters"), icon: Layers },
           { value: "dups", label: t("viewDups"), icon: Copy },
+          { value: "recheck", label: t("viewRecheck"), icon: RotateCcw },
           { value: "ai", label: t("viewAI"), icon: Sparkles },
         ]} />
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t(`viewHint_${view}` as SKey)}</p>
       </div>
       {view === "ai" && <AISuggestions t={t} />}
       {view === "dups" && <Duplicates t={t} />}
-      {view !== "ai" && view !== "dups" && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
-      {view !== "ai" && view !== "dups" && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
+      {view === "recheck" && <Recheck t={t} onEdit={edit} />}
+      {!["ai", "dups", "recheck"].includes(view) && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
+      {!["ai", "dups", "recheck"].includes(view) && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
       {items.length > 0 && view === "queue" && <QueueView items={items} t={t} onEdit={edit} />}
       {items.length > 0 && view === "cards" && <CardsView items={items} t={t} />}
       {items.length > 0 && view === "clusters" && <ClustersView items={items.filter((e) => !e.pending)} t={t} onEdit={edit} />}

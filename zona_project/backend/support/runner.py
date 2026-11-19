@@ -226,8 +226,17 @@ class Handler:
             first = Message.objects.filter(bot=self.bot, chat_id=chat["id"], media_group_id=mgid, kind=Message.QUESTION).first()
             if first:  # albomning keyingi rasmi — o'sha savolga qo'shiladi, alohida javob bo'lmaydi
                 return self._album_part(first, msg, text)
+        merged = self._merge_recent(chat, user, msg, text, photo)
+        if merged is not None:  # skrinshot va alohida izoh (bir muallif, bir necha soniya) — bitta savol, bitta javob
+            return merged
         if not engine.is_question(text, bool(photo)):
+            if text and not photo and not self.history:
+                Handler._recent_text[(chat["id"], user.pk)] = (time.time(), text)  # keyingi rasmga izoh bo'lishi mumkin
             return None
+        if photo and not text and not self.history:
+            prev_text = Handler._recent_text.pop((chat["id"], user.pk), None)
+            if prev_text and time.time() - prev_text[0] <= (self.settings.merge_window or 0):
+                text = prev_text[1]
         q, created = Message.objects.get_or_create(
             bot=self.bot, chat_id=chat["id"], message_id=msg["message_id"],
             defaults={"group": group, "user": user, "text": text[:4000], "photo_file_id": photo or "",
@@ -244,6 +253,30 @@ class Handler:
             return q
         self.process_question(q, mode)
         return q
+
+    _recent_text: dict = {}  # (chat, user) -> (vaqt, matn): savol deb olinmagan qisqa izoh (keyin rasm kelishi mumkin)
+
+    def _merge_recent(self, chat, user, msg, text, photo):
+        """Shu muallifning bir necha soniya oldingi savoli bilan birlashtirish: rasm + keyin izoh yoki matn + keyin rasm."""
+        win = self.settings.merge_window or 0
+        if not win or self.history or msg.get("media_group_id"):
+            return None
+        prev = (Message.objects.filter(bot=self.bot, chat_id=chat["id"], user=user, kind=Message.QUESTION,
+                                       created_at__gte=timezone.now() - timezone.timedelta(seconds=win)).order_by("-id").first())
+        if prev is None:
+            return None
+        if text and not photo and prev.photo_file_id and not engine.substantive(prev.text):
+            if prev.status != Message.NEW and engine.substantive(text):
+                return None  # rasmga javob berib bo'lingan, bu esa aniq yangi savol — alohida javob beriladi
+            Message.objects.filter(pk=prev.pk).update(text=(prev.text + "\n" + text).strip()[:4000])
+            return prev
+        if photo and not prev.photo_file_id and not engine.substantive(text):
+            if not Message.objects.filter(pk=prev.pk, status=Message.NEW, stage="").update(photo_file_id=photo):
+                self._album_part(prev, msg, text)  # savolga javob berilgan — rasm faqat saqlanadi (ikkinchi javob yo'q)
+            elif text:
+                Message.objects.filter(pk=prev.pk).update(text=(prev.text + "\n" + text).strip()[:4000])
+            return prev
+        return None
 
     def _album_part(self, q, msg, text):
         """Albom (bir vaqtda yuborilgan bir nechta rasm/video): fayl o'sha savolga biriktiriladi, izoh matnga qo'shiladi."""
@@ -262,8 +295,11 @@ class Handler:
         """Fon oqimida: alohida Handler (holat aralashmasin), o'z DB ulanishi."""
         close_old_connections()
         try:
-            if Message.objects.filter(pk=qid).exclude(media_group_id="").exists():
+            first = Message.objects.filter(pk=qid).values("media_group_id", "text").first() or {}
+            if first.get("media_group_id"):
                 time.sleep(1.5)  # albomning qolgan rasmlari kelib ulgursin — bitta savolga bitta javob
+            if not engine.substantive(first.get("text", "")) and (Settings.load().merge_window or 0):
+                time.sleep(3.5)  # rasmdan keyin alohida izoh kelishi mumkin — kutib, bitta javob beramiz
             h = Handler(self.bot, self.tg)
             h.media_meta = meta
             if data is not None:
@@ -339,14 +375,15 @@ class Handler:
                 q.save()
                 return q
             q.lang = engine.detect_lang(q.text or q.ocr_text)
-            d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images)
+            d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
+                              asker=_asker(q))
         if len(photos) <= 1:
             self._autolabel(media, d)
         try:
             res = self._respond(q, d, mode, skip_ask)
             if mode == MODE_LIVE and q.stage not in ("dup", "ask"):
                 from . import tasks
-                tasks.maybe_create(q, d)  # PRBC vazifasi (kerak bo'lsa) — navbatga, guruhda ko'rinmaydi
+                tasks.maybe_create(q, d, self.tg)  # PRBC vazifasi: mas'ulga eslatma (bot o'zi yozadi)
             return res
         finally:
             if deferred_ocr and settings.ocr_enabled:
@@ -730,6 +767,20 @@ def reject(entry, by):
 # ====================================================================== oqimlar
 def _full_name(u):
     return " ".join(x for x in (u.get("first_name"), u.get("last_name")) if x)[:150]
+
+
+def _asker(q):
+    """Savol beruvchining roli (AI javobni roliga mos yozishi uchun): "Agent · MDLZ" yoki "Supervayzer · ..."."""
+    u = q.user
+    if not u:
+        return ""
+    if u.is_staff:
+        return f"xodim (IT/support): {u.staff_name()}"
+    sp = getattr(u, "staff_person", None)
+    if sp is None:
+        return ""
+    bits = [sp.get_role_display(), sp.project.name if sp.project_id else "", getattr(sp, "territory", "") or ""]
+    return " · ".join(b for b in bits if b)
 
 
 def _album_order(m):

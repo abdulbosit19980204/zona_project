@@ -1,7 +1,11 @@
-"""PRBC vazifalari: haqiqiy savollardan PRBC'da vazifa yaratish.
+"""PRBC vazifalari: haqiqiy savollar bo'yicha vazifa ochilishini ta'minlash.
 
-Yo'l: ulangan Telegram akkaunt (egasi, MTProto) PRBC botiga SHAXSIY chatda "/vazifa @ijrochi matn" yuboradi — guruhda
-hech narsa ko'rinmaydi. Savoldagi fayllar shu xabarga biriktiriladi, xabar havolasi matnda bo'ladi.
+Ikki rejim (Settings.task_mode):
+- remind (standart, tavsiya): bot O'ZI mas'ul xodimga eslatadi — shaxsiy xabarda savol tafsiloti, havola va tayyor
+  "/vazifa ..." buyrug'i; guruhda esa qisqa "@mas'ul, vazifa oching" eslatma. Vazifani xodim guruhda savolga reply qilib
+  "/vazifa Sarlavha" yozib ochadi (PRBC boti guruhda ishlaydi). Hech kimning akkaunti ishlatilmaydi.
+- account: ulangan Telegram akkaunt PRBC botiga "/vazifa @ijrochi matn" yuboradi (ban xavfi bor; PRBC boti bu buyruqni
+  faqat guruhda qabul qiladi — shuning uchun tavsiya etilmaydi).
 
 Qachon: jonli guruhdagi haqiqiy savol (aniqlashtirish/qo'shimcha ma'lumot/takror emas) va
   - bilim bazasidagi javob turida "vazifa yaratiladi" belgilangan, yoki
@@ -106,8 +110,8 @@ def build_text(q, title, assignee):
     return "\n".join(lines)[:3900], link
 
 
-def maybe_create(q, d):
-    """Javobdan keyin chaqiriladi (jonli rejim). Navbatga qo'yadi; yuborish — fon oqimida."""
+def maybe_create(q, d, tg=None):
+    """Javobdan keyin chaqiriladi (jonli rejim). remind — darhol eslatadi (tg — bot klienti); account — navbatga qo'yadi."""
     try:
         need, assignee, reason = decide_task(q, d)
         if not need:
@@ -119,6 +123,9 @@ def maybe_create(q, d):
             SupportTask.objects.filter(pk=prev.pk).update(duplicates=[*prev.duplicates, q.pk][-50:])
             return prev
         title = (d.entry.title if d.entry is not None else (q.text or q.ocr_text or "Savol").strip().splitlines()[0])[:120]
+        s = Settings.load()
+        if s.task_mode != "account":
+            return remind(q, d, title, assignee, reason, tg, s)
         if not assignee:
             return SupportTask.objects.create(message=q, entry=d.entry, title=title, reason=reason, status=SupportTask.SKIPPED,
                                               error="Ijrochi topilmadi: Sozlamalar → PRBC vazifalari → standart ijrochini kiriting.")
@@ -131,7 +138,87 @@ def maybe_create(q, d):
         return None
 
 
-# ====================================================================== yuborish (MTProto)
+# ====================================================================== eslatma (bot o'zi yozadi)
+def _esc(x):
+    import html
+    return html.escape(x or "", quote=False)
+
+
+def staff_chat_id(username):
+    """Xodimning Telegram ID'si (bot unga shaxsiy yoza olishi uchun): guruhda yozgan bo'lsa yoki kontaktda saqlangan."""
+    from zona.models import TeamContact
+
+    from .models import TgUser
+    u = (username or "").lstrip("@")
+    if not u:
+        return None
+    tg = TgUser.objects.filter(username__iexact=u).values_list("tg_id", flat=True).first()
+    if tg:
+        return tg
+    return TeamContact.objects.filter(telegram__iexact=u).exclude(telegram_id=None).values_list("telegram_id", flat=True).first()
+
+
+def dm_text(q, title, assignee, link):
+    who = _esc(q.user.name if q.user else "")
+    if q.user and q.user.username:
+        who += f" (@{_esc(q.user.username)})"
+    body = _esc(((q.text or "").strip() or (q.ocr_text or "").strip())[:900])
+    lines = ["🗂 <b>Vazifa ochish kerak</b>", "", f"<b>Mavzu:</b> {_esc(title)}", f"<b>Kimdan:</b> {who}"]
+    if q.group_id:
+        lines.append(f"<b>Guruh:</b> {_esc(q.group.title)}")
+    if body:
+        lines += ["", f"<blockquote>{body}</blockquote>"]
+    lines += ["", "<b>Qanday ochiladi</b> — guruhdagi savolga <i>reply</i> qilib yozing:",
+              f"<code>/vazifa {_esc(title)}</code>", "Bir nechta ijrochi bilan:",
+              f"<code>/vazifa @{_esc(assignee)} @boshqa {_esc(title)}</code>"]
+    if q.answer_text and q.status == Message.ANSWERED:
+        lines += ["", f"<i>Bot javob bergan: {_esc(q.answer_text[:200])}…</i>"]
+    return "\n".join(lines)
+
+
+def group_hint(assignee, lang):
+    if lang == "ru":
+        return (f"🗂 <b>@{_esc(assignee)}</b>, по этому вопросу создайте задачу: ответьте на вопрос командой "
+                f"<code>/vazifa Заголовок</code>")
+    return (f"🗂 <b>@{_esc(assignee)}</b>, bu savol bo'yicha vazifa oching: savolga <i>reply</i> qilib "
+            f"<code>/vazifa Sarlavha</code> yozing")
+
+
+def remind(q, d, title, assignee, reason, tg, s):
+    """Bir mavzuga bir marta: mas'ulga shaxsiy xabar (tafsilot + havola + rasm nusxasi) va guruhda qisqa eslatma."""
+    link = q.group.message_link(q.message_id) if q.group_id else ""
+    t = SupportTask.objects.create(message=q, entry=d.entry, assignee=assignee, title=title, link=link, reason=reason,
+                                   status=SupportTask.REMINDED, text=dm_text(q, title, assignee, link) if assignee else "")
+    if not assignee or tg is None:
+        t.error = "" if assignee else "Ijrochi topilmadi (Sozlamalar → PRBC vazifalari → jamoa savollari ijrochisi)."
+        t.save(update_fields=["error"])
+        return t
+    notes = []
+    if s.task_remind_dm:
+        chat = staff_chat_id(assignee)
+        try:
+            if not chat:
+                raise ValueError("xodim Telegram ID'si noma'lum")
+            buttons = [[{"text": "↗ Savolga o'tish", "url": link}]] if link else None
+            tg.send(chat, t.text, buttons=buttons)
+            if q.photo_file_id and hasattr(tg, "copy"):
+                tg.copy(chat, q.chat_id, q.message_id)
+            notes.append("shaxsiy xabar yuborildi")
+        except Exception as e:  # noqa: BLE001 — xodim botni ochmagan bo'lishi mumkin (403)
+            notes.append(f"shaxsiy xabar yuborilmadi: {str(e)[:120]}")
+    if s.task_remind_group:
+        try:
+            tg.send(q.chat_id, group_hint(assignee, q.lang), reply_to=q.message_id)
+            notes.append("guruhda eslatildi")
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"guruh eslatmasi yuborilmadi: {str(e)[:120]}")
+    t.reply = "; ".join(notes)
+    t.sent_at = timezone.now()
+    t.save(update_fields=["reply", "sent_at"])
+    return t
+
+
+# ====================================================================== yuborish (MTProto, "account" rejimi)
 def _paths(ids):
     from .runner import media_dir
     root = media_dir()
@@ -184,7 +271,8 @@ async def _send(session, api_id, api_hash, bot_username, text, files):
         await c.disconnect()
 
 
-FAIL_RE = re.compile(r"(xato|topilmadi|noto.g.ri|ruxsat|error|not found|не найден|ошибк|нет доступа|unknown|usage)", re.I)
+FAIL_RE = re.compile(r"(xato|topilmadi|noto.g.ri|ruxsat|error|not found|не найден|ошибк|нет доступа|unknown|usage|"
+                     r"works in your team|only in|guruhda ishlaydi|группе)", re.I)
 
 
 def send_one(t):
@@ -204,6 +292,8 @@ def process_queue():
     """Navbatdagi bitta vazifani yuborish (runner oqimi chaqiradi). Qaytaradi: yuborildi/yo'q."""
     s = Settings.load()
     pending = SupportTask.objects.filter(status=SupportTask.QUEUED, attempts__lt=3)
+    if s.task_mode != "account":
+        return False  # eslatma rejimida akkaunt orqali hech narsa yuborilmaydi
     if not s.tasks_enabled:
         pending = pending.filter(reason="test")  # o'chiq bo'lsa ham sinov vazifasi yuboriladi
     since = timezone.now() - timezone.timedelta(days=1)
