@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Check, Images, Sparkles } from "lucide-react";
-import { SupportShell } from "./shell";
 import { useState } from "react";
 
 import { EmptyState, SectionTitle } from "@/components/common/page";
@@ -17,6 +16,7 @@ import { supportApi, type ImageTypes } from "./api";
 import { EntryBadge, useSupportMutation } from "./common";
 import { useSt, type ST } from "./i18n";
 import { MediaThumb } from "./media";
+import { SupportShell } from "./shell";
 
 /** Rasm turlari: bot qaysi ekranlarni taniydi (o'rgatilgan namunalar) va hali tanimaydigan rasmlar guruhlari. */
 export function SupportImages() {

@@ -84,17 +84,36 @@ def match(media_or_feats, threshold, include_unapproved=False):
     """Eng yaqin o'rgatilgan namuna: (yozuv, masofa, namuna) yoki (None, 64, None)."""
     if not _h(media_or_feats, "dhash"):
         return None, 64, None
-    statuses = [Entry.APPROVED, Entry.REVIEW, Entry.NEW] if include_unapproved else [Entry.APPROVED]
-    best, best_d, best_m = None, 65, None
-    for m in Media.objects.filter(kind=Media.PHOTO, label__status__in=statuses).exclude(dhash="").select_related("label"):
-        if getattr(media_or_feats, "pk", None) == m.pk:
+    statuses = (Entry.APPROVED, Entry.REVIEW, Entry.NEW) if include_unapproved else (Entry.APPROVED,)
+    a_full, a_mid = int(_h(media_or_feats, "dhash") or "0", 16), int(_h(media_or_feats, "dhash_mid") or "0", 16)
+    own = getattr(media_or_feats, "pk", None)
+    best_d, best = 65, None
+    for mid, full, middle, eid, status in _examples():
+        if mid == own or status not in statuses:
             continue
-        d = distance(media_or_feats, m)
+        f = bin(a_full ^ full).count("1")
+        m = bin(a_mid ^ middle).count("1")
+        d = min(m, (f + m) / 2)
         if d < best_d:
-            best, best_d, best_m = m.label, d, m
-    if best is not None and best_d <= threshold:
-        return best, best_d, best_m
+            best_d, best = d, (mid, eid)
+    if best and best_d <= threshold:
+        return Entry.objects.filter(pk=best[1]).first(), best_d, Media.objects.filter(pk=best[0]).first()
     return None, best_d, None
+
+
+_CACHE = {"key": None, "rows": []}
+
+
+def _examples():
+    """O'rgatilgan rasmlar izlari xotirada (butun son sifatida) — har savolda bazadan qayta o'qilmaydi."""
+    from django.db.models import Count, Max
+    agg = Media.objects.filter(label__isnull=False).aggregate(n=Count("id"), m=Max("id"), e=Max("label__updated_at"))
+    key = (agg["n"], agg["m"], str(agg["e"]))
+    if _CACHE["key"] != key:
+        _CACHE["rows"] = [(m.id, int(m.dhash, 16), int(m.dhash_mid or m.dhash, 16), m.label_id, m.label.status)
+                          for m in Media.objects.filter(kind=Media.PHOTO, label__isnull=False).exclude(dhash="").select_related("label")]
+        _CACHE["key"] = key
+    return _CACHE["rows"]
 
 
 def confidence(dist):
@@ -110,6 +129,7 @@ def label(media_qs, entry, by="", auto=False):
         m.label, m.label_auto, m.label_by = entry, auto, by[:150]
         m.save(update_fields=["label", "label_auto", "label_by"])
         n += 1
+    _CACHE["key"] = None
     return n
 
 

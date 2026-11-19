@@ -20,8 +20,8 @@ import { supportApi, type Entry } from "./api";
 import { EntryBadge, fmtDate, useSupportMutation } from "./common";
 import { AISuggestions } from "./ai-suggestions";
 import { EntryEditor } from "./entry-editor";
-import { SupportShell } from "./shell";
 import { useSt, type SKey, type ST } from "./i18n";
+import { SupportShell } from "./shell";
 
 type View = "queue" | "cards" | "clusters" | "ai";
 

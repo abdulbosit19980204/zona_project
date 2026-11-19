@@ -177,6 +177,8 @@ class Handler:
                                                      defaults={"title": chat.get("title", "")})
         if created or group.title != chat.get("title", group.title):
             group.title = chat.get("title", group.title)
+        if chat.get("username") and group.username != chat["username"]:
+            group.username = chat["username"]
         if not self.history:
             group.last_message_at = timezone.now()
         group.save()
@@ -209,13 +211,17 @@ class Handler:
             if q:
                 return self.on_info(msg, group, user, text, photo, q, mode)
 
-        forwarded = bool(msg.get("forward_origin") or msg.get("forward_date") or msg.get("forward_from"))
-        if not engine.is_question(text, bool(photo), forwarded=forwarded):
+        mgid = str(msg.get("media_group_id") or "")
+        if mgid:
+            first = Message.objects.filter(bot=self.bot, chat_id=chat["id"], media_group_id=mgid, kind=Message.QUESTION).first()
+            if first:  # albomning keyingi rasmi — o'sha savolga qo'shiladi, alohida javob bo'lmaydi
+                return self._album_part(first, msg, text)
+        if not engine.is_question(text, bool(photo)):
             return None
         q, created = Message.objects.get_or_create(
             bot=self.bot, chat_id=chat["id"], message_id=msg["message_id"],
             defaults={"group": group, "user": user, "text": text[:4000], "photo_file_id": photo or "",
-                      "reply_to_id": reply_to, "kind": Message.QUESTION,
+                      "reply_to_id": reply_to, "kind": Message.QUESTION, "media_group_id": mgid,
                       "source": "history" if self.history else "live"})
         if not created:
             return q  # takroriy yangilanish
@@ -229,10 +235,25 @@ class Handler:
         self.process_question(q, mode)
         return q
 
+    def _album_part(self, q, msg, text):
+        """Albom (bir vaqtda yuborilgan bir nechta rasm/video): fayl o'sha savolga biriktiriladi, izoh matnga qo'shiladi."""
+        meta = _media_of(msg)
+        if meta and not Media.objects.filter(message=q, kind=meta[1]).filter(name=f"album:{msg['message_id']}").exists():
+            try:
+                data = self.photo_bytes.get(msg["message_id"]) or self.tg.download(meta[0], max_bytes=(8 if meta[1] == "photo" else 20) * 1024 * 1024)
+                vision.store(data, kind=meta[1], name=f"album:{msg['message_id']}", mime=meta[3], source=q.source, message=q)
+            except TelegramError as e:
+                log.warning("album part failed: %s", e)
+        if text and text not in q.text:
+            Message.objects.filter(pk=q.pk).update(text=(q.text + "\n" + text).strip()[:4000])
+        return q
+
     def _process_async(self, qid, mode, meta, data):
         """Fon oqimida: alohida Handler (holat aralashmasin), o'z DB ulanishi."""
         close_old_connections()
         try:
+            if Message.objects.filter(pk=qid).exclude(media_group_id="").exists():
+                time.sleep(1.5)  # albomning qolgan rasmlari kelib ulgursin — bitta savolga bitta javob
             h = Handler(self.bot, self.tg)
             h.media_meta = meta
             if data is not None:
@@ -276,11 +297,15 @@ class Handler:
         media, image, deferred_ocr = None, None, False
         if q.photo_file_id:
             media = self._fetch_media(q)
+        if media and settings.image_match:
+            best = None
+            for m in Media.objects.filter(message=q, kind=Media.PHOTO).exclude(dhash="")[:10]:
+                entry, dist, _ex = vision.match(m, settings.image_threshold, include_unapproved=unapproved)
+                if entry and (best is None or dist < best[1]):
+                    best, media = (entry, dist), m
+            if best:
+                image = (best[0], vision.confidence(best[1]))
         if media and media.kind == Media.PHOTO:
-            if settings.image_match:
-                entry, dist, _ex = vision.match(media, settings.image_threshold, include_unapproved=unapproved)
-                if entry:
-                    image = (entry, vision.confidence(dist))
             # rasm turi tanilgan va yozuv rasmdan maydon olmaydi -> OCR javobdan keyin (tezlik uchun)
             deferred_ocr = bool(image) and not image[0].extract and mode == MODE_LIVE
             if settings.ocr_enabled and not q.ocr_text and not deferred_ocr:
@@ -302,8 +327,29 @@ class Handler:
                 self._ocr(q, media)
                 Message.objects.filter(pk=q.pk).update(ocr_text=q.ocr_text)
 
+    def _duplicate_of(self, q, d):
+        """Shu xodim qisqa vaqt ichida (album_window) shu savolni yuborgan va javob olgan/uzatilgan bo'lsa — takror."""
+        if not q.user_id or self.history:
+            return None
+        since = q.created_at - timezone.timedelta(seconds=self.settings.album_window or 90)
+        prev = (Message.objects.filter(bot=self.bot, chat_id=q.chat_id, user_id=q.user_id, kind=Message.QUESTION,
+                                       created_at__gte=since).exclude(pk=q.pk).order_by("-created_at").first())
+        if not prev:
+            return None
+        if d.entry and prev.entry_id == d.entry.id and prev.status == Message.ANSWERED:
+            return prev
+        if not (q.text or "").strip() and prev.status in (Message.ESCALATED, Message.ANSWERED, Message.NEW):
+            return prev  # matnsiz qo'shimcha rasm — oldingi savolning davomi
+        return None
+
     def _respond(self, q, d, mode, skip_ask):
         settings = self.settings
+        if mode == MODE_LIVE:
+            prev = self._duplicate_of(q, d)
+            if prev:
+                q.status, q.stage, q.question = Message.CLOSED, "dup", prev
+                q.save()
+                return q
         q.stage, q.entry, q.confidence = d.stage, d.entry, d.confidence
         q.answer_text = d.text
         if d.entry:
@@ -662,7 +708,11 @@ def _full_name(u):
 def _media_of(msg):
     """Xabardagi fayl: (file_id, tur, nomi, mime) yoki None. Rasm-hujjat ham rasm sifatida (iz va OCR uchun)."""
     if msg.get("photo"):
-        return msg["photo"][-1]["file_id"], "photo", "", "image/jpeg"  # eng katta o'lcham
+        sizes = msg["photo"]
+        side = lambda x: max(x.get("width", 0), x.get("height", 0))  # noqa: E731
+        fit = [x for x in sizes if side(x) <= 1600]
+        pick = max(fit, key=side) if fit else min(sizes, key=side)
+        return pick["file_id"], "photo", "", "image/jpeg"  # ~1600px: tanish va OCR uchun yetarli, ancha tez
     for kind in ("video", "video_note", "animation"):
         v = msg.get(kind)
         if v:

@@ -247,7 +247,10 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
         </Card>
         <Card className="gap-0 p-4 lg:col-span-2">
           <div className="mb-1 text-sm font-semibold">{t("grpPrecision")}</div>
+          {sw("ai_primary", t("t_aiPrimary"), t("t_aiPrimaryHint"))}
+          {field(t("aiPrimaryBelow"), t("aiPrimaryBelowHint"), <Input type="number" value={f.ai_primary_below} onChange={num("ai_primary_below")} />)}
           {field(t("faqTh"), t("faqThHint"), <Input type="number" value={f.faq_threshold} onChange={num("faq_threshold")} />)}
+          {field(t("albumWindow"), t("albumWindowHint"), <Input type="number" value={f.album_window} onChange={num("album_window")} />)}
           {field(t("ruleTh"), undefined, <Input type="number" value={f.route_threshold} onChange={num("route_threshold")} />)}
           {field(t("workers"), t("workersHint"), <Input type="number" min={1} max={8} value={f.workers} onChange={num("workers")} />)}
           {field(t("signature"), undefined, <Input value={f.signature} onChange={(e) => setF({ ...f, signature: e.target.value })} />)}

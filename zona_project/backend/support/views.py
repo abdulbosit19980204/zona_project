@@ -381,13 +381,17 @@ class MessageSerializer(serializers.ModelSerializer):
     has_photo = serializers.SerializerMethodField()
     staff_answers = serializers.SerializerMethodField()
     media = serializers.SerializerMethodField()
+    link = serializers.SerializerMethodField()
 
     def get_media(self, obj):
         return [media_dict(m) for m in obj.media.all()]
 
+    def get_link(self, obj):
+        return obj.group.message_link(obj.message_id) if obj.group_id else ""
+
     class Meta:
         model = Message
-        fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "media", "lang",
+        fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "media", "link", "lang",
                   "status", "stage", "entry", "entry_title", "confidence", "answer_text", "answered_by", "feedback",
                   "created_at", "answered_at", "staff_answers"]
 
@@ -407,7 +411,7 @@ class MessageViewSet(ZonaViewSet):
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        qs = (Message.objects.filter(kind=Message.QUESTION)
+        qs = (Message.objects.filter(kind=Message.QUESTION).exclude(stage="dup")
               .select_related("group", "user", "entry").prefetch_related("media", "staff_replies__media",
                                                                           "staff_replies__user__member",
                                                                           "staff_replies__user__contact"))
@@ -631,12 +635,38 @@ def analytics(request):
         "with_photo": questions.exclude(photo_file_id="").count(),
         "entries_with_ask_first": Entry.objects.exclude(ask_first="").count(),
         "zones": _zones(questions),
+        "askers": _askers(questions),
+        "top_types": [{"entry": r["entry"], "title": r["entry__title"], "n": r["n"]} for r in
+                      questions.filter(entry__isnull=False).values("entry", "entry__title").annotate(n=Count("id")).order_by("-n")[:20]],
         "protarget": _protarget(questions, since),
         "images": {"total": Media.objects.filter(kind=Media.PHOTO).count(),
                    "labeled": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).count(),
                    "types": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).values("label").distinct().count(),
                    "by_image": questions.filter(stage="image").count()},
     })
+
+
+def _askers(questions):
+    """Savol beruvchilar: kim nechta savol bergan, bot nechtasiga javob bergan, eng ko'p savol turlari."""
+    from collections import Counter, defaultdict
+    rows = defaultdict(lambda: {"questions": 0, "bot": 0, "escalated": 0, "types": Counter(), "groups": set(), "last": None})
+    for uid, name, uname, sp, stage, status, title, group, at in questions.filter(user__isnull=False).values_list(
+            "user_id", "user__name", "user__username", "user__staff_person__name", "stage", "status", "entry__title",
+            "group__title", "created_at"):
+        r = rows[uid]
+        r.update(name=name, username=uname, staff=sp or "")
+        r["questions"] += 1
+        r["bot"] += stage in ("template", "faq", "rule", "ai", "image")
+        r["escalated"] += status == Message.ESCALATED
+        if title:
+            r["types"][title] += 1
+        if group:
+            r["groups"].add(group)
+        r["last"] = max(r["last"], at) if r["last"] else at
+    out = [{"user": uid, "name": r["name"], "username": r["username"], "staff_person": r["staff"], "questions": r["questions"],
+            "bot": r["bot"], "escalated": r["escalated"], "groups": sorted(r["groups"]), "last": r["last"],
+            "top_types": [{"title": t, "n": n} for t, n in r["types"].most_common(3)]} for uid, r in rows.items()]
+    return sorted(out, key=lambda x: -x["questions"])[:100]
 
 
 def _zones(questions):

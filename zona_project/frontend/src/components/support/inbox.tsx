@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bot, CheckCheck, Image as ImageIcon, Inbox, MessageSquareReply, Search, Send, ThumbsDown, ThumbsUp, UserRound, X } from "lucide-react";
+import { ArrowLeft, Bot, CheckCheck, ExternalLink, Image as ImageIcon, Inbox, MessageSquareReply, Search, Send, ThumbsDown, ThumbsUp, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -150,6 +150,11 @@ function Conversation({ m, t, onBack }: { m: SupportMessage; t: ST; onBack: () =
           <div className="truncate text-sm font-medium">{m.user_name}{m.user_username && <span className="font-normal text-muted-foreground"> · @{m.user_username}</span>}</div>
           <div className="truncate text-xs text-muted-foreground">{m.group_title}</div>
         </div>
+        {m.link && (
+          <Button size="sm" variant="ghost" asChild>
+            <a href={m.link} target="_blank" rel="noreferrer" title={t("openInTelegram")}><ExternalLink className="size-4" /><span className="hidden sm:inline">{t("openInTelegram")}</span></a>
+          </Button>
+        )}
         <MsgBadge status={m.status} t={t} />
         {m.feedback === 1 && <ThumbsUp className="size-4 text-success" />}
         {m.feedback === -1 && <ThumbsDown className="size-4 text-destructive" />}

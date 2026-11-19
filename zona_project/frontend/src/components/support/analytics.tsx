@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Bot, HelpCircle, Image as ImageIcon, Inbox, ListChecks, UserRound } from "lucide-react";
-import { SupportShell } from "./shell";
 import { useState } from "react";
 
 import { SectionTitle, StatCard } from "@/components/common/page";
@@ -15,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supportApi } from "./api";
 import { stageLabel } from "./common";
 import { useSt, type SKey } from "./i18n";
+import { SupportShell } from "./shell";
 
 /** Tahlil: savollar, bot ishi, xodimlar javoblari va javobdan oldin so'raladigan ma'lumotlar. */
 export function SupportAnalytics() {
@@ -84,6 +84,49 @@ export function SupportAnalytics() {
                 {Object.entries(a.zones).sort((x, y) => y[1] - x[1]).map(([z, n]) => (
                   <div key={z} className="flex justify-between gap-2 text-xs"><span className="truncate">{z}</span><span className="font-mono">{n}</span></div>
                 ))}
+              </Card>
+            </section>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section>
+              <SectionTitle>{t("anTopTypes")}</SectionTitle>
+              <p className="mb-2 text-xs text-muted-foreground">{t("anTopTypesHint")}</p>
+              <Card className="gap-2 p-3">
+                {a.top_types.length === 0 && <p className="text-sm text-muted-foreground">{t("empty")}</p>}
+                {a.top_types.map((x) => (
+                  <div key={x.entry} className="grid gap-1 text-sm">
+                    <div className="flex justify-between gap-2"><span className="truncate">{x.title}</span><span className="font-mono">{x.n}</span></div>
+                    <div className="h-1.5 rounded-full bg-muted"><div className="h-1.5 rounded-full bg-primary" style={{ width: `${(100 * x.n) / Math.max(1, a.top_types[0]?.n ?? 1)}%` }} /></div>
+                  </div>
+                ))}
+              </Card>
+            </section>
+            <section>
+              <SectionTitle>{t("anAskers")}</SectionTitle>
+              <p className="mb-2 text-xs text-muted-foreground">{t("anAskersHint")}</p>
+              <Card className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>{t("anAsker")}</TableHead><TableHead className="text-right">{t("anQuestions")}</TableHead>
+                      <TableHead className="text-right">{t("kpiBot")}</TableHead><TableHead className="text-right">{t("kpiHuman")}</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {a.askers.length === 0 && <TableRow><TableCell colSpan={4} className="text-muted-foreground">{t("empty")}</TableCell></TableRow>}
+                    {a.askers.slice(0, 30).map((u) => (
+                      <TableRow key={u.user}>
+                        <TableCell>
+                          <div className="font-medium">{u.name || "—"}{u.username && <span className="font-normal text-muted-foreground"> @{u.username}</span>}</div>
+                          {u.staff_person && <div className="text-xs text-muted-foreground">{u.staff_person}</div>}
+                          {u.top_types.length > 0 && <div className="truncate text-xs text-muted-foreground">{u.top_types.map((x) => `${x.title} (${x.n})`).join(" · ")}</div>}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">{u.questions}</TableCell>
+                        <TableCell className="text-right font-mono">{u.bot}</TableCell>
+                        <TableCell className="text-right font-mono">{u.escalated}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </Card>
             </section>
           </div>

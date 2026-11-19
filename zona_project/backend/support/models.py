@@ -37,6 +37,9 @@ class Settings(models.Model):
     mention_supervisor = models.BooleanField("Jonli: supervayzer harakati kerak bo'lsa — savol beruvchining supervayzerini belgilash", default=True)
     workers = models.PositiveIntegerField("Bir vaqtda qayta ishlanadigan savollar", default=3)
     contact_lookup = models.BooleanField("Kontakt qidiruvi (shaxsiy chatda, xodimlar va rahbarlar uchun)", default=True)
+    ai_primary = models.BooleanField("AI asosiy javob beradi (bilim bazasi asosida javob tuzadi)", default=True)
+    ai_primary_below = models.PositiveIntegerField("Bazadan moslik shundan past bo'lsa — javobni AI tuzadi (%)", default=95)
+    album_window = models.PositiveIntegerField("Bir xodimning ketma-ket rasmlari bitta savol (soniya)", default=90)
     # --- guruh tarixini o'rganish (MTProto, egasining akkaunti orqali, faqat o'qish) ---
     history_days = models.PositiveIntegerField("Tarix: necha kunlik", default=30)
     history_photos = models.BooleanField("Tarix: rasmlarni ham o'qish (OCR)", default=True)
@@ -95,11 +98,19 @@ class Group(models.Model):
     bot = models.ForeignKey(Bot, on_delete=models.CASCADE, related_name="groups")
     chat_id = models.BigIntegerField()
     title = models.CharField(max_length=200, blank=True)
+    username = models.CharField(max_length=64, blank=True)  # ochiq guruh: t.me/<username>/<id>
     mode = models.CharField(max_length=8, choices=[(INHERIT, "Bot rejimi"), *MODES], default=INHERIT)
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField("Bot guruhda admin", default=False)
     joined_at = models.DateTimeField(auto_now_add=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
+
+    def message_link(self, message_id):
+        """Telegram'dagi aniq manzil: ochiq guruh — t.me/<username>/<id>, yopiq superguruh — t.me/c/<ichki_id>/<id>."""
+        if self.username:
+            return f"https://t.me/{self.username}/{message_id}"
+        cid = str(self.chat_id)
+        return f"https://t.me/c/{cid[4:]}/{message_id}" if cid.startswith("-100") else ""
 
     class Meta:
         ordering = ["title", "id"]
@@ -240,6 +251,7 @@ class Message(models.Model):
     status = models.CharField(max_length=10, choices=STATUSES, default=NEW)
     stage = models.CharField(max_length=10, blank=True)  # template / faq / rule / ai / staff / panel
     source = models.CharField(max_length=8, default="live")  # live / history
+    media_group_id = models.CharField(max_length=64, blank=True, db_index=True)  # albom: bir nechta rasm — bitta savol
     entry = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="messages")
     confidence = models.PositiveIntegerField(default=0)
     answer_text = models.TextField(blank=True)

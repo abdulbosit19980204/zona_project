@@ -40,7 +40,7 @@ export interface Entry {
 }
 export interface SupportMessage {
   id: number; group: number | null; group_title: string; user_name: string; user_username: string; text: string;
-  ocr_text: string; has_photo: boolean; media: MediaInfo[]; lang: string; status: MsgStatus; stage: string; entry: number | null;
+  ocr_text: string; has_photo: boolean; media: MediaInfo[]; link: string; lang: string; status: MsgStatus; stage: string; entry: number | null;
   entry_title: string; confidence: number; answer_text: string; answered_by: string; feedback: number;
   created_at: string; answered_at: string | null;
   staff_answers: { by: string; text: string; at: string; kind: "staff" | "clarify" | "info"; ocr: string; media: MediaInfo[] }[];
@@ -57,6 +57,7 @@ export interface SupportSettings {
   mtproto_need_password: boolean; mtproto_phone: string;
   image_match: boolean; image_threshold: number; image_autolabel: boolean;
   mention_asker: boolean; mention_supervisor: boolean; workers: number; contact_lookup: boolean;
+  ai_primary: boolean; ai_primary_below: number; album_window: number;
 }
 export interface AIJobInfo {
   id: number; kind: "entries" | "unanswered"; status: "queued" | "running" | "done" | "failed";
@@ -98,6 +99,9 @@ export interface Analytics {
   protarget: { questions: number; by_bot: number; unanswered: number; types: { title: string; n: number }[];
     team_answers: number; team_median_minutes: number | null };
   images: { total: number; labeled: number; types: number; by_image: number };
+  askers: { user: number; name: string; username: string; staff_person: string; questions: number; bot: number; escalated: number;
+    groups: string[]; last: string; top_types: { title: string; n: number }[] }[];
+  top_types: { entry: number; title: string; n: number }[];
 }
 export interface SupportStats {
   total: number; by_status: Partial<Record<MsgStatus, number>>; by_stage: Record<string, number>;

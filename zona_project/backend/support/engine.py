@@ -390,6 +390,8 @@ Qoidalar:
 - Javob qisqa, aniq, xushmuomala; 2-6 qator; kerak bo'lsa raqamlangan qadamlar.
 - Savol tilida javob ber (o'zbekcha savolga o'zbek lotin, ruscha savolga rus).
 - Rasm matni (OCR) xato o'qilgan bo'lishi mumkin — faqat aniq ko'ringan kod/holatlarga tayan.
+- Savol o'zbek lotin/kirill, yangi alifbo (ş, ç, ō) yoki ruscha bo'lishi mumkin; imlo xatolarini tushun.
+- Eng yaqin tasdiqlangan javob savolga mos kelsa — o'shani asos qilib, savolga moslab tushunarli javob yoz.
 - Ma'lumot yetarli bo'lmasa yoki shaxsiy/moliyaviy qaror kerak bo'lsa: needs_human=true, confidence past.
 - confidence: 0..1 — javob aynan shu savolga to'g'ri ekaniga ishonching."""
 
@@ -449,22 +451,34 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None):
                         e.status != Entry.APPROVED)
 
     e, score = match_faq(raw, faqs)
-    if e and score >= settings.faq_threshold:
+    faq_ok = bool(e) and score >= settings.faq_threshold
+    ai_first = settings.ai_enabled and settings.ai_primary and not (faq_ok and score >= settings.ai_primary_below)
+    if faq_ok and not ai_first:
         return Decision("faq", e, score, render_answer(e, {}, lang), False, own(e), {}, e.status != Entry.APPROVED)
 
     # qidiruvga faqat savolning boshi (uzun rasm matni qidiruvni sekinlashtiradi, mas'ulni aniqlashga qo'shmaydi)
     query = raw.strip()[:200]
     task, rule_conf, resp = rule_answer(query, lang) if query else (None, 0, [])
-
-    if task is not None and task.rule and rule_conf >= settings.route_threshold:
-        return Decision("rule", None, rule_conf, rule_text(task, lang), False, resp, note=f"task:{task.id}")
-
     raw_t = list(dict.fromkeys(toks(raw)))[:MAX_TOKENS]
     index = _entry_tokens(faqs)
     ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
-    ai = ai_answer(raw, lang, [x for x in ranked if x.status == Entry.APPROVED], task, settings)
-    if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
-        return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])
+    approved_ctx = [x for x in ranked if x.status == Entry.APPROVED]
+
+    ai = None
+    if ai_first:
+        # AI asosiy: javobni bilim bazasidagi eng yaqin javoblar va qoidaga tayanib tuzadi (Claude; zaxira — Gemini)
+        ai = ai_answer(raw, lang, approved_ctx, task, settings)
+        if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
+            top = e if faq_ok else None
+            return Decision("ai", top, ai["confidence"], ai["text"], False, own(top) if top else resp, note=ai["reason"])
+    if faq_ok:
+        return Decision("faq", e, score, render_answer(e, {}, lang), False, own(e), {}, e.status != Entry.APPROVED)
+    if task is not None and task.rule and rule_conf >= settings.route_threshold:
+        return Decision("rule", None, rule_conf, rule_text(task, lang), False, resp, note=f"task:{task.id}")
+    if ai is None:
+        ai = ai_answer(raw, lang, approved_ctx, task, settings)
+        if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
+            return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])
     d = Decision("", None, max(score, rule_conf), "", True, resp)
     if ai:
         d.note = f"AI ishonchi past ({ai['confidence']}%): {ai['reason']}"

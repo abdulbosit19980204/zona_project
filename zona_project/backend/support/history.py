@@ -145,6 +145,25 @@ def _peer(chat_id):
     return PeerChat(abs(int(chat_id)))
 
 
+def _plain_id(chat_id):
+    text = str(chat_id)
+    return int(text[4:]) if text.startswith("-100") else abs(int(chat_id))
+
+
+async def _resolve(c, chat_id):
+    """Guruhni topish. Yangi seansda Telethon keshida guruh bo'lmaydi ("Could not find the input entity") — shunda
+    akkauntning dialoglari ko'rib chiqiladi (bu keshni ham to'ldiradi). Akkaunt guruhda bo'lmasa — tushunarli xato."""
+    try:
+        return await c.get_entity(_peer(chat_id))
+    except (ValueError, TypeError):
+        pass
+    want = _plain_id(chat_id)
+    async for d in c.iter_dialogs():
+        if getattr(d.entity, "id", None) == want:
+            return d.entity
+    raise ValueError("Ulangan Telegram akkaunt bu guruhda emas (yoki guruh ko'rinmaydi). Akkauntni guruhga qo'shing va qayta urining.")
+
+
 async def fetch(session, api_id, api_hash, chat_id, since, limit, photos, progress):
     """Guruh xabarlarini (eskidan yangiga) va kerakli rasmlarni oladi. Faqat o'qish."""
     from telethon.errors import FloodWaitError
@@ -155,7 +174,7 @@ async def fetch(session, api_id, api_hash, chat_id, since, limit, photos, progre
         raise ValueError("Telegram akkaunt seansi tugagan — paneldan qayta ulaning.")
     out, photo_count = [], 0
     try:
-        entity = await c.get_entity(_peer(chat_id))
+        entity = await _resolve(c, chat_id)
         senders = {}
         while True:
             try:

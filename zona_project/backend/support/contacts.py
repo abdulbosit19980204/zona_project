@@ -4,6 +4,7 @@ Manba — mas'uliyat platformasidagi Kontaktlar (dala tuzilmasi: brend, yo'nalis
 Ma'lumotlar ruscha kirill, o'zbek lotin/kirill va yangi alifboda bo'lishi mumkin — hammasi bir xil ko'rinishga keltiriladi,
 shahar va rollar uchun sinonimlar ishlatiladi. Telefon raqamlari faqat ruxsat etilgan xodimlarga (shaxsiy chatda) beriladi.
 """
+import functools
 import html
 import re
 from dataclasses import dataclass, field
@@ -46,19 +47,35 @@ PLACE = {
 }
 
 
+@functools.lru_cache(maxsize=16384)
 def _norm(word):
     w = fold(word).replace("dzh", "j").replace("dj", "j")
     return re.sub(r"[^a-z0-9]", "", w)
 
 
-def _lookup(table, token):
+_TABLES = {}
+
+
+def _aliases(name):
+    """Sinonimlar bir marta normallashtiriladi (har so'rovda qayta emas)."""
+    if name not in _TABLES:
+        table = {"ROLE": ROLE, "BRAND": BRAND, "PLACE": PLACE}[name]
+        _TABLES[name] = [(_norm(w), key) for key, words in table.items() for w in words]
+    return _TABLES[name]
+
+
+@functools.lru_cache(maxsize=16384)
+def _lookup_named(name, token):
     t = _norm(token)
-    for key, words in table.items():
-        for w in words:
-            n = _norm(w)
-            if t == n or (len(t) >= 5 and len(n) >= 5 and _damerau1(t, n)) or (len(t) >= 4 and n.startswith(t) and len(n) - len(t) <= 4):
-                return key
+    for n, key in _aliases(name):
+        if t == n or (len(t) >= 5 and len(n) >= 5 and _damerau1(t, n)) or (len(t) >= 4 and n.startswith(t) and len(n) - len(t) <= 4):
+            return key
     return None
+
+
+def _lookup(table, token):
+    name = "ROLE" if table is ROLE else "BRAND" if table is BRAND else "PLACE"
+    return _lookup_named(name, token)
 
 
 @dataclass
@@ -108,6 +125,7 @@ def parse(text):
     return q
 
 
+@functools.lru_cache(maxsize=8192)
 def _place_keys(*values):
     keys = set()
     for v in values:
