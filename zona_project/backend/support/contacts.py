@@ -140,15 +140,56 @@ def search(text):
             continue
         out.append({"kind": "staff", "name": p.name, "role": p.get_role_display(), "role_code": p.role, "brand": p.project.name,
                     "unit": p.unit.title if p.unit_id else "", "place": ", ".join(x for x in (p.city, p.territory) if x),
-                    "phone": p.phone, "telegram": p.telegram.lstrip("@"), "manager": p.manager.name if p.manager_id else ""})
+                    "phone": p.phone, "telegram": p.telegram.lstrip("@"), "manager": p.manager.name if p.manager_id else "",
+                    "via": ""})
     if q.names and not (q.roles or q.brands or q.places):
         for m in Member.objects.filter(is_team=False):
             if _name_ok(q.names, m.name):
                 out.append({"kind": "member", "name": m.name, "role": m.role, "role_code": "", "brand": "StarGroup", "unit": "",
-                            "place": m.location, "phone": m.phone, "telegram": m.telegram.lstrip("@"), "manager": ""})
+                            "place": m.location, "phone": m.phone, "telegram": m.telegram.lstrip("@"), "manager": "", "via": ""})
+    if not out and q.roles & MANAGERS and not q.names:  # tanilmagan so'z (masalan, MDLZ) bo'lsa — taxmin qilmaymiz
+        out = _fallback(q)
     order = {"ROP": 0, "RSM": 1, "ASM": 2, "KAM": 3, "SVR": 4, "MER": 5, "TP": 6, "": 7}
     out.sort(key=lambda r: (order.get(r["role_code"], 7), r["brand"], r["name"]))
     return out, q
+
+
+MANAGERS = {"ROP", "RSM", "ASM", "KAM", "SVR"}
+LEVEL = {"ROP": 0, "RSM": 1, "ASM": 2, "KAM": 3, "SVR": 4}
+
+
+def _row(p, via=""):
+    return {"kind": "staff", "name": p.name, "role": p.get_role_display(), "role_code": p.role, "brand": p.project.name,
+            "unit": p.unit.title if p.unit_id else "", "place": ", ".join(x for x in (p.city, p.territory) if x),
+            "phone": p.phone, "telegram": p.telegram.lstrip("@"), "manager": p.manager.name if p.manager_id else "", "via": via}
+
+
+def _fallback(q):
+    """To'g'ridan-to'g'ri topilmasa: 1) hududdagi xodimlarning rahbari (Jizzax supervayzeri = Jizzaxdagi agentlarning SVR'i);
+    2) brendda so'ralgan lavozim yo'q bo'lsa — o'sha brenddagi eng yuqori rahbarlar (masalan, ROP o'rniga RSM/ASM)."""
+    people = list(StaffPerson.objects.filter(is_vacancy=False).exclude(name="").select_related("project", "unit", "manager__manager__manager"))
+    found = {}
+    if q.places:
+        for p in people:
+            if q.brands and p.project.name not in q.brands:
+                continue
+            if not q.places <= _place_keys(p.unit.title if p.unit_id else "", p.region, p.city, p.territory):
+                continue
+            cur, seen = p.manager, set()
+            while cur and cur.pk not in seen:
+                if cur.role in q.roles and cur.name:
+                    found[cur.pk] = _row(cur, "hudud")
+                    break
+                seen.add(cur.pk)
+                cur = cur.manager
+    if not found and q.brands and not q.places:
+        brand_people = [p for p in people if p.project.name in q.brands and p.role in MANAGERS]
+        if brand_people:
+            top = min(LEVEL[p.role] for p in brand_people)
+            for p in brand_people:
+                if LEVEL[p.role] == top:
+                    found[p.pk] = _row(p, "yuqori")
+    return list(found.values())
 
 
 def card_html(r):
@@ -162,6 +203,10 @@ def card_html(r):
         lines.append(f"✈️ @{esc(r['telegram'])}")
     if r["manager"]:
         lines.append(f"👔 Rahbari: {esc(r['manager'])}")
+    if r.get("via") == "hudud":
+        lines.append("<i>ℹ️ Shu hududdagi xodimlarning rahbari</i>")
+    elif r.get("via") == "yuqori":
+        lines.append("<i>ℹ️ So'ralgan lavozim bu brendda yo'q — eng yuqori rahbar</i>")
     return "\n".join(lines)
 
 

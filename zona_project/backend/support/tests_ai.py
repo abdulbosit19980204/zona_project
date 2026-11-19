@@ -49,6 +49,16 @@ class ContactSearchTests(Base):
         for q in ["Jizzax supervayzeri nomerini topib ber", "Jizzax SVR", "Джиззак супервайзер", "jizzax svr heinz"]:
             res, _ = contacts.search(q)
             self.assertEqual([r["name"] for r in res], ["Karimov Anvar"], q)
+        # hududda SVR'ning o'zi yozilmagan bo'lsa — o'sha hududdagi agentlarning supervayzeri
+        self.svr.city = "Самарканд"
+        self.svr.save()
+        res, _ = contacts.search("Jizzax supervayzeri")
+        self.assertEqual([(r["name"], r["via"]) for r in res], [("Karimov Anvar", "hudud")])
+        # brendda ROP yo'q — eng yuqori rahbar
+        res, _ = contacts.search("Heinz ROP")
+        self.assertEqual([(r["name"], r["via"]) for r in res], [("Karimov Anvar", "yuqori")])
+        self.svr.city = "Джиззак"
+        self.svr.save()
         res, q = contacts.search("Jizzax SVR MDLZ")
         self.assertIn("mdlz", q.names)  # MDLZ loyihasi kontaktlarda yo'q — topilmaydi
         self.assertEqual(res, [])
