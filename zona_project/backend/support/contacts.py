@@ -23,7 +23,7 @@ ROLE = {
     "ROP": {"rop", "rahbar", "rahbari", "rahbarini", "boshliq", "boshlig", "head", "rukovoditel", "руководитель", "роп"},
     "RSM": {"rsm", "рсм"}, "ASM": {"asm", "асм"}, "KAM": {"kam", "кам"},
     "SVR": {"svr", "sv", "supervayzer", "supervayzeri", "supervayzerini", "supervizor", "supervisor", "supervaizer",
-            "супервайзер", "супервайзера", "свр", "сврлар", "supervayzerlar"},
+            "супервайзер", "супервайзера", "свр", "сврлар", "supervayzerlar", "nazoratchi", "nazoratchisi"},
     "TP": {"tp", "agent", "agenti", "agentlar", "torgoviy", "torgovy", "тп", "агент", "торговый", "savdo", "vakil", "vakili"},
     "MER": {"mer", "merch", "merchandayzer", "merchendayzer", "мерч", "мерчендайзер", "мрч"},
 }
@@ -287,7 +287,9 @@ def _ai_parse(text, timeout):
     from zona.models import AITaskConfig, StaffProject
     brands = list(StaffProject.objects.values_list("name", flat=True))
     system = ("Sen kontakt qidiruv so'rovini tahlil qilasan. Faqat quyidagi qiymatlardan tanla, boshqasini qo'shma:\n"
-              f"brands: {brands}\nroles: {sorted(ROLE)} (ROP-bo'lim rahbari, RSM/ASM-hudud menejeri, SVR-supervayzer, "
+              f"brands: {brands} (mahsulotlari: Heinz — ketchup, sous, mayonez; BIC — ruchka, zajigalka, britva; "
+              f"JJ — Johnson's, bolalar gigienasi, shampun; L'Oréal — kosmetika, Garnier, Maybelline, soch bo'yog'i)\n"
+              f"roles: {sorted(ROLE)} (ROP-bo'lim rahbari, RSM/ASM-hudud menejeri, SVR-supervayzer, "
               f"TP-agent/savdo vakili, MER-merchandayzer, KAM-kalit mijozlar)\nplaces: {sorted(PLACE)}\n"
               "names — so'rovdagi odam ismi/familiyasi (lotin), bo'lmasa bo'sh. So'rov o'zbek (lotin/kirill), rus yoki aralash.")
 
