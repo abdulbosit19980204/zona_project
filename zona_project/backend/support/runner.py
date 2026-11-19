@@ -307,29 +307,41 @@ class Handler:
         media, image, deferred_ocr = None, None, False
         if q.photo_file_id:
             media = self._fetch_media(q)
+        images, photos = [], []
         if media and settings.image_match:
+            # albomdagi HAR BIR rasm alohida tanib olinadi (turli mavzudagi ekranlar bo'lishi mumkin)
+            photos = list(Media.objects.filter(message=q, kind=Media.PHOTO).exclude(dhash="").order_by("id")[:10])
             best = None
-            for m in Media.objects.filter(message=q, kind=Media.PHOTO).exclude(dhash="")[:10]:
+            for idx, m in enumerate(photos):
                 entry, dist, _ex = vision.match(m, settings.image_threshold, include_unapproved=unapproved)
-                if entry and (best is None or dist < best[1]):
-                    best, media = (entry, dist), m
+                if entry:
+                    images.append((entry, vision.confidence(dist), idx))
+                    if best is None or dist < best[1]:
+                        best, media = (entry, dist), m
             if best:
                 image = (best[0], vision.confidence(best[1]))
-        if media and media.kind == Media.PHOTO:
-            # rasm turi tanilgan va yozuv rasmdan maydon olmaydi -> OCR javobdan keyin (tezlik uchun)
-            deferred_ocr = bool(image) and not image[0].extract and mode == MODE_LIVE
-            if settings.ocr_enabled and not q.ocr_text and not deferred_ocr:
-                self._ocr(q, media)
-        raw = "\n".join(x for x in (q.text, q.ocr_text) if x).strip()
         q.lang = engine.detect_lang(q.text or q.ocr_text)
-        if not raw and not image:
-            q.status = Message.IGNORED
-            q.save()
-            return q
         if mode == MODE_LIVE:
             self.tg.typing(q.chat_id)
-        d = engine.decide(raw, q.lang, allow_unapproved=unapproved, image=image)
-        self._autolabel(media, d)
+        d = None
+        if media and media.kind == Media.PHOTO and not q.ocr_text:
+            strong = engine.substantive(q.text)
+            if strong or (image and not image[0].extract and len({e.pk for e, _c, _i in images}) == 1):
+                # tez yo'l: aniq matnli savol yoki tanilgan ekran — OCR'ni kutmasdan javob, OCR keyin (tahlil uchun)
+                d = engine.decide(q.text or "", q.lang, allow_unapproved=unapproved, text=q.text, images=images, fast=True)
+                deferred_ocr = d is not None and mode == MODE_LIVE
+            if settings.ocr_enabled and not deferred_ocr:
+                self._ocr(q, media)
+        if d is None:
+            raw = "\n".join(x for x in (q.text, q.ocr_text) if x).strip()
+            if not raw and not images:
+                q.status = Message.IGNORED
+                q.save()
+                return q
+            q.lang = engine.detect_lang(q.text or q.ocr_text)
+            d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images)
+        if len(photos) <= 1:
+            self._autolabel(media, d)
         try:
             return self._respond(q, d, mode, skip_ask)
         finally:

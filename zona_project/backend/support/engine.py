@@ -402,23 +402,36 @@ def ai_quota_left(settings):
     return max(0, settings.ai_daily_limit - used)
 
 
-def ai_answer(raw, lang, context_entries, rule_task, settings):
+def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=()):
+    """AI javobi o'zimizning ma'lumotlarga tayanadi: bilim bazasidagi eng yaqin javoblar, rasmdan tanilgan ekranlar,
+    xodimlarning o'xshash savollarga bergan haqiqiy javoblari (misol sifatida) va qoida."""
     from zona import conf
     from zona.ai import service as ai
     from zona.ai.providers import AIError
 
     if not settings.ai_enabled or ai_quota_left(settings) <= 0:
         return None
-    ctx = []
-    for e in context_entries[:5]:
+    ctx, seen = [], set()
+    for e in [*image_entries, *context_entries][:6]:
+        if e.pk in seen:
+            continue
+        seen.add(e.pk)
         ans = e.answer_ru if lang == "ru" and e.answer_ru else e.answer
-        ctx.append(f"- SAVOL: {e.title}\n  JAVOB: {ans[:800]}")
+        tag = " (RASMDAN TANILGAN EKRAN)" if e in image_entries else ""
+        ctx.append(f"- SAVOL{tag}: {e.title}\n  JAVOB: {ans[:800]}")
     if rule_task is not None and rule_task.rule:
         ctx.append(f"- QOIDA ({rule_task.title}): {rule_task.rule[:600]}")
+    examples = staff_examples(raw)
     system = AI_SYSTEM.format(company=conf.get("COMPANY_NAME")) + "\n\nTASDIQLANGAN JAVOBLAR VA QOIDALAR:\n" + (
         "\n".join(ctx) or "(hozircha yo'q)")
+    if examples:
+        system += ("\n\nXODIMLARIMIZNING O'XSHASH SAVOLLARGA BERGAN HAQIQIY JAVOBLARI (uslub va mazmun uchun namuna; "
+                   "kompaniya amaliyotini shulardan o'rgan):\n" + "\n".join(f"- SAVOL: {q}\n  XODIM JAVOBI: {a}" for q, a in examples))
+    message = f"SAVOL:\n{raw[:2000]}"
+    if ocr:
+        message += f"\n\nRASMDAGI MATN (OCR, xato o'qilgan bo'lishi mumkin):\n{ocr[:1500]}"
     try:
-        data, meta = ai.run(AITaskConfig.SUPPORT, None, raw[:200], system, f"SAVOL:\n{raw[:3000]}", AI_SCHEMA)
+        data, meta = ai.run(AITaskConfig.SUPPORT, None, raw[:200], system, message, AI_SCHEMA)
     except AIError:
         return None
     conf_pct = round(100 * max(0.0, min(1.0, float(data.get("confidence") or 0))))
@@ -427,10 +440,19 @@ def ai_answer(raw, lang, context_entries, rule_task, settings):
 
 
 # ------------------------------------------------------------------ yig'ish
-def decide(raw, lang="uz", allow_unapproved=False, image=None):
-    """Savol matni (+ rasm matni) -> Decision. allow_unapproved: soya rejimida ko'rib chiqilayotgan shablonlar ham.
-    image: (yozuv, ishonch) — rasm turi o'rgatilgan namunadan tanilgan bo'lsa, eng birinchi va eng tez bosqich."""
+def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False):  # noqa: C901
+    """Savol -> Decision. allow_unapproved: soya rejimida ko'rib chiqilayotgan shablonlar ham.
+
+    image: (yozuv, ishonch) yoki images: [(yozuv, ishonch, rasm_tartibi), ...] — rasm turi o'rgatilgan namunadan tanilgan.
+    text/ocr: savol matni va rasm matni alohida. Xodim aniq savol yozgan bo'lsa (substantive) — javob MATN bo'yicha tanlanadi
+    (rasm bilan ham, rasmsiz ham bir xil javob), rasm va OCR qo'shimcha kontekst bo'ladi. Matn bo'sh/umumiy bo'lsa
+    ("ko'rib bering") — rasm hal qiladi; albomda turli ekranlar bo'lsa — har biriga javob.
+    fast=True — AI'gacha bo'lgan bosqichlarda topilmasa None qaytaradi (OCR'siz tez urinish uchun)."""
     settings = Settings.load()
+    if text is None:
+        text = raw
+    strong_text = substantive(text)
+    imgs = list(images or ([(image[0], image[1], 0)] if image and image[0] is not None else []))
     statuses = [Entry.APPROVED, Entry.REVIEW, Entry.NEW] if allow_unapproved else [Entry.APPROVED]
     entries = list(Entry.objects.filter(status__in=statuses))
     templates = [e for e in entries if e.kind == Entry.TEMPLATE]
@@ -439,27 +461,54 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None):
     def own(e):
         return [_person(e.responsible)] if e.responsible_id else []
 
-    if image and image[0] is not None:
-        e = image[0]
+    def image_decision(e, conf_):
         fields = extract_fields(e, raw)
-        return Decision("image", e, image[1], render_answer(e, fields, lang), False, own(e), fields,
-                        e.status != Entry.APPROVED)
+        return Decision("image", e, conf_, render_answer(e, fields, lang), False, own(e), fields, e.status != Entry.APPROVED)
 
-    e, fields, conf = match_template(raw, templates)
+    distinct = []
+    for e, c, idx in sorted(imgs, key=lambda x: -x[1]):
+        if e is not None and all(e.pk != d[0].pk for d in distinct):
+            distinct.append((e, c, idx))
+    if distinct:
+        if strong_text:
+            # matn hal qiladi: shu matnga eng mos tanilgan ekran yoki (agar matn boshqa narsani so'rasa) matn bo'yicha javob
+            rel = sorted(((max(similarity(text, q) for q in [e.title, *(e.questions or [])]), e, c) for e, c, _i in distinct),
+                         key=lambda x: -x[0])
+            t_e, t_score = match_faq(text, faqs)
+            t_score = t_score if t_e else 0
+            if rel[0][0] >= 40 and rel[0][0] + 5 >= t_score:
+                return image_decision(rel[0][1], rel[0][2])
+        elif len(distinct) == 1:
+            return image_decision(distinct[0][0], distinct[0][1])
+        else:
+            parts = []
+            for e, c, idx in sorted(distinct, key=lambda x: x[2]):
+                head = f"🖼 Фото {idx + 1} — {e.title}" if lang == "ru" else f"🖼 {idx + 1}-rasm — {e.title}"
+                parts.append(f"{head}\n{render_answer(e, extract_fields(e, raw), lang)}")
+            best = distinct[0]
+            return Decision("image", best[0], min(c for _e, c, _i in distinct), "\n\n".join(parts), False, own(best[0]), {},
+                            any(e.status != Entry.APPROVED for e, _c, _i in distinct),
+                            note="albom: " + ", ".join(f"{i + 1}-rasm→#{e.pk}" for e, _c, i in distinct))
+
+    # aniq matnli savolda shablon va bazadan qidiruv faqat matn bo'yicha (uzun rasm matni javobni chalg'itmasin)
+    qtext = text if strong_text else raw
+    e, fields, conf = match_template(qtext, templates)
     if e:
         return Decision("template", e, conf, render_answer(e, fields, lang), False, own(e), fields,
                         e.status != Entry.APPROVED)
 
-    e, score = match_faq(raw, faqs)
+    e, score = match_faq(qtext, faqs)
     faq_ok = bool(e) and score >= settings.faq_threshold
     ai_first = settings.ai_enabled and settings.ai_primary and not (faq_ok and score >= settings.ai_primary_below)
     if faq_ok and not ai_first:
         return Decision("faq", e, score, render_answer(e, {}, lang), False, own(e), {}, e.status != Entry.APPROVED)
+    if fast:
+        return None
 
     # qidiruvga faqat savolning boshi (uzun rasm matni qidiruvni sekinlashtiradi, mas'ulni aniqlashga qo'shmaydi)
-    query = raw.strip()[:200]
+    query = qtext.strip()[:200]
     task, rule_conf, resp = rule_answer(query, lang) if query else (None, 0, [])
-    raw_t = list(dict.fromkeys(toks(raw)))[:MAX_TOKENS]
+    raw_t = list(dict.fromkeys(toks(qtext)))[:MAX_TOKENS]
     index = _entry_tokens(faqs)
     ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
     approved_ctx = [x for x in ranked if x.status == Entry.APPROVED]
@@ -467,7 +516,8 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None):
     ai = None
     if ai_first:
         # AI asosiy: javobni bilim bazasidagi eng yaqin javoblar va qoidaga tayanib tuzadi (Claude; zaxira — Gemini)
-        ai = ai_answer(raw, lang, approved_ctx, task, settings)
+        ai = ai_answer(qtext, lang, approved_ctx, task, settings, ocr=ocr if strong_text else "",
+                       image_entries=[d[0] for d in distinct])
         if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
             top = e if faq_ok else None
             return Decision("ai", top, ai["confidence"], ai["text"], False, own(top) if top else resp, note=ai["reason"])
@@ -476,7 +526,8 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None):
     if task is not None and task.rule and rule_conf >= settings.route_threshold:
         return Decision("rule", None, rule_conf, rule_text(task, lang), False, resp, note=f"task:{task.id}")
     if ai is None:
-        ai = ai_answer(raw, lang, approved_ctx, task, settings)
+        ai = ai_answer(qtext, lang, approved_ctx, task, settings, ocr=ocr if strong_text else "",
+                       image_entries=[d[0] for d in distinct])
         if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
             return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])
     d = Decision("", None, max(score, rule_conf), "", True, resp)
@@ -484,6 +535,54 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None):
         d.note = f"AI ishonchi past ({ai['confidence']}%): {ai['reason']}"
         d.text = ai["text"]  # admin uchun qoralama sifatida ko'rsatiladi
     return d
+
+
+FILLER_TEXT = ("korib bering ko'rib ber iltimos yordam bering qiling qilib shu bu mana nima qilay qilish kerak qanday "
+               "savol rasm skrin screenshot qarab qara bering beringlar aka opa uka brat pomogite posmotrite pojaluysta "
+               "eto vot chto delat kak help please tekshirib tekshiring muammo problema oshibka xato xatolik")
+_FILLER: set = set()
+
+
+def substantive(text):
+    """Xodim aniq savol yozganmi (kamida 2 ta mazmunli so'z), yoki faqat "ko'rib bering" kabi umumiy so'zlarmi."""
+    if not _FILLER:
+        _FILLER.update(toks(FILLER_TEXT))
+    words = [w for w in dict.fromkeys(toks(text or "")) if w not in _FILLER and len(w) >= 3 and not w.isdigit()]
+    return len(words) >= 2
+
+
+_STAFF = {"key": None, "rows": []}
+
+
+def staff_examples(query, k=3, min_score=35):
+    """Xodimlarning o'xshash savollarga bergan haqiqiy javoblari (oxirgi 1500 ta) — AI'ga namuna sifatida.
+    Kesh: yangi xodim javobi kelmaguncha qayta o'qilmaydi."""
+    from django.db.models import Count, Max
+
+    from .models import Message
+    agg = Message.objects.filter(kind=Message.STAFF, question__isnull=False).aggregate(n=Count("id"), m=Max("id"))
+    key = (agg["n"], agg["m"])
+    if _STAFF["key"] != key:
+        rows = []
+        for m in (Message.objects.filter(kind=Message.STAFF, question__isnull=False, question__kind=Message.QUESTION)
+                  .select_related("question").order_by("-id")[:1500]):
+            qt = (m.question.text or m.question.ocr_text[:300]).strip()
+            if len(m.text.strip()) < 12 or not qt:
+                continue
+            rows.append((list(dict.fromkeys(toks(qt)))[:MAX_TOKENS], qt[:300], m.text.strip()[:500]))
+        _STAFF["rows"], _STAFF["key"] = rows, key
+    qt = list(dict.fromkeys(toks(query or "")))[:MAX_TOKENS]
+    if not qt:
+        return []
+    scored = sorted(((_dice(qt, t), q, a) for t, q, a in _STAFF["rows"]), key=lambda x: -x[0])
+    out, seen = [], set()
+    for s, q, a in scored:
+        if s < min_score or len(out) >= k:
+            break
+        if a not in seen:
+            seen.add(a)
+            out.append((q, a))
+    return out
 
 
 def render_answer(entry, fields, lang):
