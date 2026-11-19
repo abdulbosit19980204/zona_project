@@ -152,6 +152,8 @@ function Details({ m, t }: { m: SupportMessage; t: ST }) {
         {m.stage && row(t("dStage"), `${stageLabel(m.stage, t)}${m.confidence ? ` · ${m.confidence}%` : ""}`)}
         {m.entry_title && row(t("dEntry"), <Link className="text-primary hover:underline" href={`/support/knowledge?entry=${m.entry}`}>{m.entry_title}</Link>)}
         {m.staff_answers.length > 0 && row(t("staffAnswers"), m.staff_answers.length)}
+        {m.task && row(t("dTask"), <span className={m.task.status === "sent" ? "text-success" : m.task.status === "failed" ? "text-destructive" : "text-muted-foreground"}>
+          {t(`ts_${m.task.status}` as SKey)} · @{m.task.assignee}{m.task.reply ? ` · ${m.task.reply.slice(0, 80)}` : ""}</span>)}
       </div>
       {m.link && (
         <Button variant="outline" size="sm" className="mt-3 w-full" asChild>

@@ -7,23 +7,25 @@ import { useState } from "react";
 import { FormRow } from "@/components/qrdrive/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
+import { cn } from "@/lib/utils";
 
 import { supportApi, type Entry, type EntryKind, type MediaInfo } from "./api";
-import { EntryBadge, fmtDate, lines, unlines, useSupportMutation } from "./common";
+import { EntryBadge, fmtDate, lines, Segmented, unlines, useSupportMutation } from "./common";
 import { MediaThumb } from "./media";
 import { useSt, type SKey } from "./i18n";
 
 interface Draft {
   kind: EntryKind; title: string; questions: string; triggers: string; extract: string; answer: string; answer_ru: string;
-  ask_first: string;
+  ask_first: string; creates_task: boolean; task_assignee: string;
 }
 
-const blank: Draft = { kind: "faq", title: "", questions: "", triggers: "", extract: "", answer: "", answer_ru: "", ask_first: "" };
+const blank: Draft = { kind: "faq", title: "", questions: "", triggers: "", extract: "", answer: "", answer_ru: "", ask_first: "",
+  creates_task: false, task_assignee: "" };
 
 function toDraft(e?: Entry): Draft {
   if (!e) return blank;
@@ -32,6 +34,7 @@ function toDraft(e?: Entry): Draft {
     kind: e.kind, title: p.title ?? e.title, questions: unlines(p.questions ?? e.questions), triggers: unlines(p.triggers ?? e.triggers),
     extract: unlines(p.extract ?? e.extract), answer: p.answer ?? e.answer, answer_ru: p.answer_ru ?? e.answer_ru,
     ask_first: (p as { ask_first?: string }).ask_first ?? e.ask_first ?? "",
+    creates_task: !!e.creates_task, task_assignee: e.task_assignee ?? "",
   };
 }
 
@@ -63,6 +66,7 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
   const body = () => ({
     kind: d.kind, title: d.title.trim(), questions: lines(d.questions), triggers: lines(d.triggers), extract: lines(d.extract),
     answer: d.answer.trim(), answer_ru: d.answer_ru.trim(), ask_first: d.ask_first.trim(),
+    creates_task: d.creates_task, task_assignee: d.task_assignee.trim().replace(/^@/, ""),
     attachments: files.map((f) => f.id),
   });
   const save = useSupportMutation(
@@ -111,17 +115,24 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
             <FormRow label={t("askFirst")} hint={t("askFirstHint")}>
               <Textarea rows={2} value={d.ask_first} onChange={(x) => set("ask_first")(x.target.value)} />
             </FormRow>
+            <div className={cn("grid gap-2 rounded-lg border p-3", d.creates_task && "border-primary/40 bg-primary/[0.04]")}>
+              <label className="flex items-start gap-3 text-sm">
+                <Switch checked={d.creates_task} onCheckedChange={(v) => setD({ ...d, creates_task: v })} className="mt-0.5" />
+                <span><span className="font-medium">{t("edCreatesTask")}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{t("edCreatesTaskHint")}</span></span>
+              </label>
+              {d.creates_task && (
+                <FormRow label={t("edTaskAssignee")} hint={t("edTaskAssigneeHint")}>
+                  <Input value={d.task_assignee} placeholder="@username" onChange={(x) => set("task_assignee")(x.target.value)} />
+                </FormRow>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="questions" className="grid gap-3">
             <FormRow label={t("kind")}>
-              <Select value={d.kind} onValueChange={(v) => set("kind")(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="faq">{t("k_faq")}</SelectItem>
-                  <SelectItem value="template">{t("k_template")}</SelectItem>
-                </SelectContent>
-              </Select>
+              <Segmented size="sm" value={d.kind} onChange={(v) => setD({ ...d, kind: v })}
+                options={[{ value: "faq" as EntryKind, label: t("k_faq") }, { value: "template" as EntryKind, label: t("k_template") }]} />
             </FormRow>
             <FormRow label={t("questions")} hint={t("questionsHint")}>
               <Textarea rows={8} value={d.questions} onChange={(x) => set("questions")(x.target.value)} />

@@ -87,11 +87,34 @@ def status():
 AUTO_BACKUP = {
     "gemini": ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
     "anthropic": ["claude-haiku-5-5", "claude-sonnet-5-5"],
-    "openai": ["gpt-5-mini"], "groq": ["llama-3.3-70b-versatile"], "deepseek": ["deepseek-chat"],
+    "openai": ["gpt-5-mini"], "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"], "deepseek": ["deepseek-chat"],
     "mistral": ["mistral-small-latest"], "openrouter": ["openrouter/auto"],
 }
 COOLDOWN = 120  # "band" degan model shuncha soniya zanjir oxiriga suriladi
 _cool = {}
+
+
+_FREE = {}  # provider.id -> (vaqt, [model, ...]) — bepul modellar ro'yxati keshi (6 soat)
+FREE_PREFER = ("llama-3.3-70b", "deepseek", "qwen", "gemini", "gpt-oss", "mistral", "llama")
+
+
+def _free_models(p):
+    """OpenRouter — ":free" bilan tugaydigan modellar; Cerebras — barcha modellar (bepul tarif). Tarmoq xatosida bo'sh."""
+    if p.kind not in ("openrouter", "cerebras"):
+        return []
+    now = time.monotonic()
+    hit = _FREE.get(p.id)
+    if hit and now - hit[0] < (6 * 3600 if hit[1] else 600):
+        return hit[1]
+    try:
+        ids = providers.list_models(p)
+    except Exception:  # noqa: BLE001
+        ids = []
+    if p.kind == "openrouter":
+        ids = [m for m in ids if m.endswith(":free")]
+    ids.sort(key=lambda m: next((i for i, k in enumerate(FREE_PREFER) if k in m.lower()), 99))
+    _FREE[p.id] = (now, ids[:4])
+    return ids[:4]
 
 
 def _chain(cfg):
@@ -114,6 +137,8 @@ def _chain(cfg):
                                                                         if p not in (cfg.provider, cfg.fallback_provider)]
     for p in ordered:
         for model in AUTO_BACKUP.get(p.kind, []):
+            add(p, model)
+        for model in _free_models(p):
             add(p, model)
     now = time.monotonic()
     return [x for x in chain if _cool.get((x[0].id, x[1]), 0) <= now] + [x for x in chain if _cool.get((x[0].id, x[1]), 0) > now]

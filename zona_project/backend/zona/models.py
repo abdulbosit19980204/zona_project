@@ -410,6 +410,7 @@ class AIProvider(models.Model):
         ("mistral", "Mistral"),
         ("groq", "Groq"),
         ("openrouter", "OpenRouter"),
+        ("cerebras", "Cerebras"),
         ("azure_openai", "Azure OpenAI"),
         ("ollama", "Ollama (lokal)"),
         ("openai_compatible", "OpenAI-mos (boshqa)"),

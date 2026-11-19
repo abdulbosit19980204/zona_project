@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BotMessageSquare, FlaskConical, Images, ListChecks, Paperclip, Plus, Search, Star, ThumbsDown, ThumbsUp } from "lucide-react";
+import { BotMessageSquare, FlaskConical, Images, ListChecks, ListTodo, Paperclip, Plus, Search, Star, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -46,8 +46,9 @@ function KnowledgeInner() {
     queryFn: () => supportApi.entries({ status, ...(kind !== "any" ? { kind } : {}) }),
   });
   // smart qidiruv: kirill/lotin, apostrof va imlo xatosiga chidamli; eng mos yozuv birinchi
-  const shown = useMemo(() => (list.data ? smartFilter(list.data, q, (e) => `${e.title} ${(e.questions ?? []).join(" ")} ${e.answer}`) : undefined),
-    [list.data, q]);
+  const [onlyTask, setOnlyTask] = useState(false);
+  const shown = useMemo(() => (list.data ? smartFilter(list.data.filter((e) => !onlyTask || e.creates_task), q,
+    (e) => `${e.title} ${(e.questions ?? []).join(" ")} ${e.answer}`) : undefined), [list.data, q, onlyTask]);
   const edit = (id: number | null) => { setEditing(id); setOpen(true); };
 
   return (
@@ -65,6 +66,10 @@ function KnowledgeInner() {
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("kbSearch")} className="h-9 bg-muted/40 pl-8" />
           </div>
           <Segmented size="sm" value={kind} onChange={setKind} options={KINDS.map((k) => ({ value: k, label: k === "any" ? t("allKinds") : t(`k_${k}` as SKey) }))} />
+          <button type="button" onClick={() => setOnlyTask(!onlyTask)}
+            className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors ${onlyTask ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+            <ListTodo className="size-3.5" />{t("kbOnlyTask")}
+          </button>
         </div>
         <Segmented size="sm" value={status} onChange={setStatus} className="w-full sm:w-auto"
           options={STATUSES.map((x) => ({ value: x, label: x === "all" ? t("all") : t(`e_${x}` as SKey), count: x === "all" ? undefined : counts[x] }))} />
@@ -86,6 +91,7 @@ function KnowledgeInner() {
                     <EntryBadge status={e.status} t={t} />
                     <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{t(`k_${e.kind}` as SKey)}</span>
                     {e.pending && <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[11px] text-warning">{t("pendingEdit")}</span>}
+                    {e.creates_task && <span className="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary"><ListTodo className="size-3" />{t("kbTask")}</span>}
                     {e.priority && <Star className="ml-auto size-4 fill-warning text-warning" />}
                   </div>
                   <span className="line-clamp-2 font-medium leading-snug group-hover:text-primary">{e.title}</span>

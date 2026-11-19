@@ -32,6 +32,7 @@ export interface PendingEdit {
 export interface Entry {
   id: number; kind: EntryKind; title: string; questions: string[]; triggers: string[]; extract: string[];
   answer: string; answer_ru: string; ask_first: string; attachments: number[]; attachments_info?: MediaInfo[];
+  creates_task?: boolean; task_assignee?: string;
   image_examples_count?: number; zone: number | null; zone_name: string; responsible: number | null;
   responsible_name: string; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
   author: string; approved_by: string; approved_at: string | null; uses: number; likes: number; dislikes: number;
@@ -44,6 +45,7 @@ export interface SupportMessage {
   entry_title: string; confidence: number; answer_text: string; answered_by: string; feedback: number;
   created_at: string; answered_at: string | null;
   staff_answers: { by: string; text: string; at: string; kind: "staff" | "clarify" | "info"; ocr: string; media: MediaInfo[] }[];
+  task?: { id: number; status: string; assignee: string; reply: string; error: string } | null;
 }
 export interface SupportSettings {
   api_id: string; api_hash: string; has_api_hash: boolean; ai_enabled: boolean; ai_daily_limit: number;
@@ -58,6 +60,30 @@ export interface SupportSettings {
   image_match: boolean; image_threshold: number; image_autolabel: boolean;
   mention_asker: boolean; mention_supervisor: boolean; workers: number; contact_lookup: boolean;
   ai_primary: boolean; ai_primary_below: number; album_window: number;
+  tasks_enabled: boolean; task_bot: string; task_default_assignee: string; task_departments: number[]; task_members: number[];
+  task_daily_limit: number; task_gap: number; task_attach: boolean;
+}
+export interface SupportTaskInfo {
+  id: number; status: "queued" | "sent" | "failed" | "skipped"; assignee: string; title: string; text: string; link: string;
+  reason: string; reply: string; error: string; attempts: number; files: number; duplicates: number; created_at: string;
+  sent_at: string | null; created_by: string; message: number | null; asker: string; group: string; entry: number | null; entry_title: string;
+}
+export interface TasksPayload {
+  tasks: SupportTaskInfo[]; counts: Record<string, number>; sent_today: number; entries_with_task: number;
+  departments: { id: number; name: string }[];
+  members: { id: number; name: string; department: string; telegram: string; is_team: boolean; level: string }[];
+}
+export interface WorkloadRow { questions: number; bot: number; bot_rate: number; median: number | null; p90: number | null; unanswered?: number }
+export interface Workload {
+  days: number; questions: number; answered_by_human: number; first_median: number | null; first_p90: number | null;
+  within_15: number | null; heatmap: number[][]; by_weekday: number[]; busiest_dates: { date: string; n: number }[];
+  buckets: { label: string; n: number }[];
+  weeks: { week: string; questions: number; bot: number; human: number; unanswered: number; median: number | null }[];
+  groups: (WorkloadRow & { group: string })[]; types: (WorkloadRow & { type: string })[];
+  staff: { name: string; answers: number; clarifications: number; active_days: number; per_day: number; per_week: number;
+    active_hours_avg: number; first_answers: number; first_median: number | null; first_p90: number | null; within_15: number | null;
+    hours: number[]; weekdays: number[]; weeks: number[]; peak_hour: number | null }[];
+  week_keys: string[]; tasks: Record<string, number>;
 }
 export interface DupRow {
   id: number; title: string; answer: string; status: EntryStatus; uses: number; likes: number; dislikes: number; author: string;
@@ -77,7 +103,7 @@ export interface AISuggestion {
     keep?: number; merge?: number[] };
   group?: { id: number; title: string; answer: string; status: EntryStatus }[];
   entry: number | null; entry_title: string; current: { answer: string; answer_ru: string; ask_first: string; questions: string[] } | null;
-  target: number | null; target_title: string; question_ids: number[]; decided_by: string; created_at: string;
+  target: number | null; target_title: string; target_answer?: string; question_ids: number[]; decided_by: string; created_at: string;
 }
 export interface TgUserInfo {
   id: number; name: string; username: string; is_staff: boolean; staff_name: string; staff_person: number | null;
@@ -163,6 +189,10 @@ export const supportApi = {
     post<{ ok: boolean; entry: number | null }>(`messages/${id}/answer/`, { text, save, approve }),
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),
   analytics: (days = 30) => get<Analytics>("analytics/", { days }),
+  workload: (days = 30) => get<Workload>("analytics/workload/", { days }),
+  tasks: (status = "all") => get<TasksPayload>("tasks/", { status }),
+  taskAction: (id: number, action: "retry" | "skip", assignee?: string) => post<SupportTaskInfo>(`tasks/${id}/${action}/`, assignee ? { assignee } : {}),
+  taskTest: (assignee: string) => post<SupportTaskInfo>("tasks/test/", { assignee }),
   historyJobs: () => get<HistoryJob[]>("history/"),
   startHistory: (group: number, days: number, photos: boolean) => post<HistoryJob[]>("history/", { group, days, photos }),
   mtSendCode: (phone: string) => post<SupportSettings & { need_password?: boolean }>("mtproto/send-code/", { phone, confirm: true }),

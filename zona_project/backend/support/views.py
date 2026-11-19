@@ -40,7 +40,9 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "mention_responsible", "feedback_buttons", "notify_candidates", "learn_clarifications",
                    "ask_first_prompt", "history_days", "history_photos", "history_max", "image_match",
                    "image_threshold", "image_autolabel", "mention_asker", "mention_supervisor", "workers",
-                   "contact_lookup"]
+                   "contact_lookup", "ai_primary", "ai_primary_below", "album_window",
+                   "tasks_enabled", "task_bot", "task_default_assignee", "task_departments", "task_members",
+                   "task_daily_limit", "task_gap", "task_attach"]
 
 
 def _settings_payload(s):
@@ -200,7 +202,7 @@ class EntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Entry
         fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first",
-                  "attachments", "attachments_info", "image_examples_count", "zone", "zone_name",
+                  "attachments", "attachments_info", "image_examples_count", "zone", "zone_name", "creates_task", "task_assignee",
                   "responsible", "responsible_name", "status", "source", "priority", "pending", "author",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
         read_only_fields = ["status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",
@@ -434,6 +436,11 @@ class MessageSerializer(serializers.ModelSerializer):
     staff_answers = serializers.SerializerMethodField()
     media = serializers.SerializerMethodField()
     link = serializers.SerializerMethodField()
+    task = serializers.SerializerMethodField()
+
+    def get_task(self, obj):
+        t = getattr(obj, "task", None)
+        return {"id": t.id, "status": t.status, "assignee": t.assignee, "reply": t.reply[:300], "error": t.error} if t else None
 
     def get_media(self, obj):
         return [media_dict(m) for m in obj.media.all()]
@@ -445,7 +452,7 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "media", "link", "lang",
                   "status", "stage", "entry", "entry_title", "confidence", "answer_text", "answered_by", "feedback",
-                  "created_at", "answered_at", "staff_answers"]
+                  "created_at", "answered_at", "staff_answers", "task"]
 
     def get_has_photo(self, obj):
         return bool(obj.photo_file_id)
@@ -713,6 +720,14 @@ def analytics(request):
     })
 
 
+@zona_api(["GET"], [CanView])
+def analytics_workload(request):
+    """Ish yuklamasi: soat × hafta kuni, haftalar, guruhlar, savol turlari, xodimlarning ish soatlari va javob tezligi."""
+    from .workload import workload
+    days = max(1, min(int(request.query_params.get("days") or 30), 365))
+    return Response(workload(days))
+
+
 def _askers(questions):
     """Savol beruvchilar: kim nechta savol bergan, bot nechtasiga javob bergan, eng ko'p savol turlari."""
     from collections import Counter, defaultdict
@@ -886,6 +901,68 @@ def image_ignore(request):
     return Response({"done": n})
 
 
+# ====================================================================== PRBC vazifalari
+def _task_dict(t):
+    m = t.message
+    return {"id": t.id, "status": t.status, "assignee": t.assignee, "title": t.title, "text": t.text, "link": t.link,
+            "reason": t.reason, "reply": t.reply, "error": t.error, "attempts": t.attempts, "files": len(t.media_ids or []),
+            "duplicates": len(t.duplicates or []), "created_at": t.created_at, "sent_at": t.sent_at, "created_by": t.created_by,
+            "message": m.id if m else None, "asker": (m.user.name if m and m.user else ""),
+            "group": (m.group.title if m and m.group_id else ""), "entry": t.entry_id, "entry_title": t.entry.title if t.entry_id else ""}
+
+
+@zona_api(["GET"], [AdminOnly])
+def support_tasks(request):
+    from zona.models import Department, Member
+
+    from .models import SupportTask
+    qs = SupportTask.objects.select_related("message__user", "message__group", "entry")
+    st = request.query_params.get("status")
+    if st and st != "all":
+        qs = qs.filter(status=st)
+    since = timezone.now() - timezone.timedelta(days=1)
+    return Response({
+        "tasks": [_task_dict(t) for t in qs[:200]],
+        "counts": {k: SupportTask.objects.filter(status=k).count() for k in ("queued", "sent", "failed", "skipped")},
+        "sent_today": SupportTask.objects.filter(status="sent", sent_at__gte=since).count(),
+        "entries_with_task": Entry.objects.filter(creates_task=True).count(),
+        "departments": [{"id": d.id, "name": d.name} for d in Department.objects.order_by("name")],
+        "members": [{"id": m.id, "name": m.name, "department": m.department.name if m.department_id else "", "telegram": m.telegram,
+                     "is_team": m.is_team, "level": m.level} for m in Member.objects.select_related("department").order_by("name")],
+    })
+
+
+@zona_api(["POST"], [AdminOnly])
+def support_task_action(request, pk, action):
+    from .models import SupportTask
+    t = SupportTask.objects.filter(pk=pk).first()
+    if not t:
+        return Response({"detail": "Topilmadi"}, status=404)
+    if action == "retry":
+        if request.data.get("assignee"):
+            new = str(request.data["assignee"]).lstrip("@").strip()[:64]
+            t.text = t.text.replace(f"/vazifa @{t.assignee}", f"/vazifa @{new}", 1) if t.assignee else f"/vazifa @{new} {t.title}"
+            t.assignee = new
+        t.status, t.attempts, t.error = SupportTask.QUEUED, 0, ""
+        t.save()
+    elif action == "skip":
+        t.status = SupportTask.SKIPPED
+        t.save(update_fields=["status"])
+    else:
+        return Response({"detail": "Noma'lum amal"}, status=400)
+    return Response(_task_dict(t))
+
+
+@zona_api(["POST"], [AdminOnly])
+def support_task_test(request):
+    from . import tasks
+    try:
+        t = tasks.test_task(_actor(request), request.data.get("assignee", ""))
+    except ValueError as e:
+        return Response({"detail": str(e)}, status=400)
+    return Response(_task_dict(t))
+
+
 # ====================================================================== Telegram foydalanuvchilar <-> kontaktlar
 def _tg_user(u):
     from .engine import supervisor_of
@@ -942,6 +1019,7 @@ def _sugg(x):
             "current": {"answer": e.answer, "answer_ru": e.answer_ru, "ask_first": e.ask_first,
                         "questions": e.questions} if e else None,
             "target": x.target_id, "target_title": x.target.title if x.target_id else "",
+            "target_answer": x.target.answer[:800] if x.target_id else "",
             "question_ids": x.question_ids, "decided_by": x.decided_by, "created_at": x.created_at,
             "group": [{"id": g.id, "title": g.title, "answer": g.answer[:600], "status": g.status}
                       for g in Entry.objects.filter(pk__in=(x.payload or {}).get("merge") or [])] if x.kind == Suggestion.DEDUPE else []}

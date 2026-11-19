@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bot, History, Images, Link2, LogOut, MessageSquareText, Plus, Save, Search, Send, Settings2, ShieldCheck, Trash2, Users, Wifi, type LucideIcon } from "lucide-react";
+import { Bot, History, Images, Link2, ListTodo, LogOut, MessageSquareText, Plus, Save, Search, Send, Settings2, ShieldCheck, Trash2, Users, Wifi, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog, FormRow } from "@/components/qrdrive/common";
@@ -19,6 +19,7 @@ import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGr
 import { fmtDate, ModeBadge, SearchPicker, Segmented, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SettingRow, SupportShell } from "./shell";
+import { TasksPanel } from "./tasks-panel";
 
 const MODES: Mode[] = ["collect", "shadow", "live", "off"];
 
@@ -29,6 +30,7 @@ const SETTING_TABS: { key: string; label: SKey; hint: SKey; icon: LucideIcon }[]
   { key: "answering", label: "stAnswering", hint: "stAnsweringHint", icon: MessageSquareText },
   { key: "images", label: "stImages", hint: "stImagesHint", icon: Images },
   { key: "history", label: "stHistory", hint: "stHistoryHint", icon: History },
+  { key: "tasks", label: "stTasks", hint: "stTasksHint", icon: ListTodo },
   { key: "people", label: "stPeople", hint: "stPeopleHint", icon: Link2 },
   { key: "general", label: "stGeneral", hint: "stGeneralHint", icon: Settings2 },
 ];
@@ -65,6 +67,7 @@ export function SupportSettingsPage() {
           {tab === "answering" && <SettingsForm t={t} part="answering" />}
           {tab === "images" && <SettingsForm t={t} part="images" />}
           {tab === "history" && <HistorySection t={t} />}
+          {tab === "tasks" && <TasksPanel t={t} />}
           {tab === "people" && <div className="grid gap-6"><TgUsersSection t={t} /><StaffSection t={t} /></div>}
           {tab === "general" && <SettingsForm t={t} part="general" />}
         </div>

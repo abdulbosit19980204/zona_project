@@ -56,9 +56,20 @@ Qoidalar:
 
 
 def _run(label, system, message, schema):
+    """AI chaqiruvi. Barcha modellar band bo'lsa (503) — 20/60 soniya kutib yana urinadi (tahlil to'xtab qolmasin)."""
+    import time
+
     from zona.ai import service as ai
-    data, _meta = ai.run(AITaskConfig.SUPPORT, None, label, system, message, schema)
-    return data
+    system += "\n\nreason va boshqa izohlarni O'ZBEK tilida (lotin) yoz."
+    for wait in (20, 60, None):
+        try:
+            data, _meta = ai.run(AITaskConfig.SUPPORT, None, label, system, message, schema)
+            return data
+        except Exception as e:  # noqa: BLE001
+            busy = any(x in str(e) for x in ("503", "429", "high demand", "band", "overloaded", "Rate limit"))
+            if not busy or wait is None:
+                raise
+            time.sleep(wait)
 
 
 def _entry_text(e):

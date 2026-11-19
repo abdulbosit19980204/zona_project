@@ -343,7 +343,11 @@ class Handler:
         if len(photos) <= 1:
             self._autolabel(media, d)
         try:
-            return self._respond(q, d, mode, skip_ask)
+            res = self._respond(q, d, mode, skip_ask)
+            if mode == MODE_LIVE and q.stage not in ("dup", "ask"):
+                from . import tasks
+                tasks.maybe_create(q, d)  # PRBC vazifasi (kerak bo'lsa) — navbatga, guruhda ko'rinmaydi
+            return res
         finally:
             if deferred_ocr and settings.ocr_enabled:
                 self._ocr(q, media)
@@ -838,11 +842,23 @@ def _ai_thread(job_id):
         close_old_connections()
 
 
+def _task_thread():
+    from . import tasks
+    close_old_connections()
+    try:
+        tasks.process_queue()
+    except Exception:  # noqa: BLE001
+        log.exception("task sender failed")
+    finally:
+        close_old_connections()
+
+
 def run_forever(poll=10):
-    from .models import AIJob
+    from .models import AIJob, SupportTask
     workers = {}
     history = None
     ai_worker = None
+    task_worker = None
     AIJob.objects.filter(status=AIJob.RUNNING).update(status=AIJob.QUEUED)
     last_cleanup = 0.0
     # jarayon qayta ishga tushsa, chala qolgan vazifa qayta navbatga qo'yiladi
@@ -875,6 +891,9 @@ def run_forever(poll=10):
                 if aj:
                     ai_worker = threading.Thread(target=_ai_thread, args=(aj.id,), name="support-ai", daemon=True)
                     ai_worker.start()
+            if (task_worker is None or not task_worker.is_alive()) and SupportTask.objects.filter(status=SupportTask.QUEUED).exists():
+                task_worker = threading.Thread(target=_task_thread, name="support-tasks", daemon=True)
+                task_worker.start()
             if time.time() - last_cleanup > 86400:
                 vision.cleanup(Settings.load().media_days)
                 last_cleanup = time.time()

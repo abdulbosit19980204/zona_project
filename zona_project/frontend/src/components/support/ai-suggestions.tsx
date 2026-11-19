@@ -111,6 +111,18 @@ function SuggestionCard({ s, t }: { s: AISuggestion; t: ST }) {
       {s.kind === "new" && (s.payload.questions ?? []).length > 0 && (
         <p className="text-xs text-muted-foreground">{t("questions")}: {s.payload.questions!.join(" · ")}</p>
       )}
+      {s.kind === "merge" && s.current && (
+        <div className="grid gap-2 md:grid-cols-2">
+          <div className="rounded-lg border border-dashed p-2 text-sm">
+            <div className="mb-1 text-xs text-muted-foreground">{t("sgMergeFrom")}: {s.entry_title}</div>
+            <p className="line-clamp-5 whitespace-pre-wrap">{s.current.answer}</p>
+          </div>
+          <div className="rounded-lg border border-success/30 bg-success/5 p-2 text-sm">
+            <div className="mb-1 text-xs text-muted-foreground">{t("sgMergeInto")}: {s.target_title}</div>
+            <p className="line-clamp-5 whitespace-pre-wrap">{s.target_answer}</p>
+          </div>
+        </div>
+      )}
       {s.kind === "questions" && (
         <div className="flex flex-wrap gap-1.5">{(s.payload.questions ?? []).map((q) => <Badge key={q} variant="outline" className="font-normal">+ {q}</Badge>)}</div>
       )}

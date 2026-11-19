@@ -47,6 +47,15 @@ class Settings(models.Model):
     mtproto_session_enc = models.TextField(blank=True)
     mtproto_user = models.CharField("Ulangan akkaunt", max_length=150, blank=True)
     mtproto_pending_enc = models.TextField(blank=True)  # kod kutilmoqda: telefon, hash, vaqtinchalik seans
+    # --- PRBC vazifalari: ulangan akkaunt PRBC botiga shaxsiy chatda "/vazifa @user matn" yuboradi (guruhda ko'rinmaydi) ---
+    tasks_enabled = models.BooleanField("PRBC vazifalari yaratilsin", default=False)
+    task_bot = models.CharField("PRBC bot (username)", max_length=64, blank=True)
+    task_default_assignee = models.CharField("Jamoa savollari uchun ijrochi (username)", max_length=64, blank=True)
+    task_departments = models.JSONField("Vazifa yaratiladigan bo'limlar (zona Department id)", default=list, blank=True)
+    task_members = models.JSONField("Vazifa yaratiladigan xodimlar (zona Member id)", default=list, blank=True)
+    task_daily_limit = models.PositiveIntegerField("Kuniga ko'pi bilan vazifa", default=40)
+    task_gap = models.PositiveIntegerField("Vazifalar orasidagi tanaffus (soniya)", default=20)
+    task_attach = models.BooleanField("Savoldagi fayllarni vazifaga biriktirish", default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -156,6 +165,8 @@ class Entry(models.Model):
     priority = models.BooleanField("Ustuvor (bot javobini xodim tuzatgan)", default=False)
     pending = models.JSONField("Tasdiq kutayotgan tahrir", null=True, blank=True)
     attachments = models.JSONField("Javob bilan yuboriladigan fayllar (Media id)", default=list, blank=True)
+    creates_task = models.BooleanField("Bu turdagi savolga PRBC vazifa yaratiladi", default=False)
+    task_assignee = models.CharField("Vazifa ijrochisi (username, bo'sh — mas'ul)", max_length=64, blank=True)
     ask_first = models.TextField("Javobdan oldin so'raladigan ma'lumot", blank=True,
                                  help_text="Xodimlar odatda avval nimani so'raydi (masalan: STIR, skrinshot)")
     author = models.CharField(max_length=150, blank=True)
@@ -364,6 +375,32 @@ class Suggestion(models.Model):
     decided_by = models.CharField(max_length=150, blank=True)
     decided_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
+class SupportTask(models.Model):
+    """PRBC vazifasi (navbat). Bitta mavzuga bitta vazifa: savolga bog'lanadi; shu odamning shu mavzudagi takror
+    savollari mavjud vazifaga bog'lanadi (yangisi yaratilmaydi). Savol beruvchilarga ko'rsatilmaydi."""
+
+    QUEUED, SENT, FAILED, SKIPPED = "queued", "sent", "failed", "skipped"
+    message = models.OneToOneField(Message, null=True, blank=True, on_delete=models.SET_NULL, related_name="task")
+    entry = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks")
+    assignee = models.CharField(max_length=64, blank=True)
+    title = models.CharField(max_length=255, blank=True)
+    text = models.TextField(blank=True)
+    link = models.CharField(max_length=300, blank=True)
+    media_ids = models.JSONField(default=list, blank=True)
+    reason = models.CharField(max_length=200, blank=True)  # nega yaratildi: "entry" / "responsible:<nom>" / "test"
+    status = models.CharField(max_length=8, default=QUEUED)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    reply = models.TextField(blank=True)  # PRBC botining javobi (vazifa raqami/havolasi)
+    error = models.CharField(max_length=500, blank=True)
+    duplicates = models.JSONField(default=list, blank=True)  # shu mavzudagi keyingi savollar (Message id)
+    created_by = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
