@@ -248,7 +248,10 @@ TYPOS = {"kilent": "klient", "kliyent": "klient", "klent": "klient", "kilient": 
          "kilyent": "klient", "magazn": "magazin", "magazen": "magazin", "zakas": "zakaz", "zakazl": "zakaz",
          "prbs": "prbc", "protagret": "protarget", "protaget": "protarget", "protargit": "protarget",
          "marshurt": "marshrut", "marshirut": "marshrut", "aksya": "aksiya", "aktsiya": "aksiya", "skitka": "skidka",
-         "xal": "hal", "korinma": "korin", "korinmay": "korin", "chiqma": "chiq", "chiqmay": "chiq"}
+         "xal": "hal", "korinma": "korin", "korinmay": "korin", "chiqma": "chiq", "chiqmay": "chiq",
+         # o/u almashishi va sinonimlar: tochka = nuqta, qushish = qoshish
+         "qush": "qosh", "kushish": "qoshish", "koshish": "qoshish", "tochka": "nuqta", "tochk": "nuqta",
+         "ttochka": "nuqta", "torgoviy": "nuqta", "torgovaya": "nuqta"}
 TYPO_RE = re.compile(r"\b(" + "|".join(sorted(map(re.escape, TYPOS), key=len, reverse=True)) + r")", re.IGNORECASE)
 
 
@@ -292,10 +295,19 @@ def _tok_eq(a, b):
     return n >= 5
 
 
+MAX_TOKENS = 60  # uzun rasm matni (OCR) solishtirishni sekinlashtirmasin
+
+
 def _dice(a, b):
     if not a or not b:
         return 0
-    common = sum(1 for x in a if any(_tok_eq(x, y) for y in b))
+    bset = set(b)
+    common = 0
+    for x in a:
+        if x in bset:
+            common += 1
+        elif any(y[:1] == x[:1] and _tok_eq(x, y) for y in b):  # imlo farqi — faqat bosh harfi bir xil so'zlar orasida
+            common += 1
     return round(100 * 2 * common / (len(a) + len(b)))
 
 
@@ -318,7 +330,7 @@ def _entry_tokens(entries):
 
 def match_faq(raw, entries):
     """Eng o'xshash yozuv. Teng ballda — savolga so'zma-so'z mos ko'rinish, keyin umumiy so'zlari ko'pi ustun."""
-    raw_t = list(dict.fromkeys(toks(raw)))
+    raw_t = list(dict.fromkeys(toks(raw)))[:MAX_TOKENS]
     target, raw_set = " ".join(raw_t), set(raw_t)
     index = _entry_tokens(entries)
     best, key = None, (0, 0, 0)
@@ -422,29 +434,32 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None):
     templates = [e for e in entries if e.kind == Entry.TEMPLATE]
     faqs = [e for e in entries if e.kind == Entry.FAQ]
 
-    task, rule_conf, resp = rule_answer(raw, lang) if raw else (None, 0, [])
+    def own(e):
+        return [_person(e.responsible)] if e.responsible_id else []
 
     if image and image[0] is not None:
         e = image[0]
         fields = extract_fields(e, raw)
-        if e.responsible_id:
-            resp = [_person(e.responsible)] + [r for r in resp if r.get("id") != e.responsible_id]
-        return Decision("image", e, image[1], render_answer(e, fields, lang), False, resp, fields,
+        return Decision("image", e, image[1], render_answer(e, fields, lang), False, own(e), fields,
                         e.status != Entry.APPROVED)
 
     e, fields, conf = match_template(raw, templates)
     if e:
-        return Decision("template", e, conf, render_answer(e, fields, lang), False, resp, fields,
+        return Decision("template", e, conf, render_answer(e, fields, lang), False, own(e), fields,
                         e.status != Entry.APPROVED)
 
     e, score = match_faq(raw, faqs)
     if e and score >= settings.faq_threshold:
-        return Decision("faq", e, score, render_answer(e, {}, lang), False, resp, {}, e.status != Entry.APPROVED)
+        return Decision("faq", e, score, render_answer(e, {}, lang), False, own(e), {}, e.status != Entry.APPROVED)
+
+    # qidiruvga faqat savolning boshi (uzun rasm matni qidiruvni sekinlashtiradi, mas'ulni aniqlashga qo'shmaydi)
+    query = raw.strip()[:200]
+    task, rule_conf, resp = rule_answer(query, lang) if query else (None, 0, [])
 
     if task is not None and task.rule and rule_conf >= settings.route_threshold:
         return Decision("rule", None, rule_conf, rule_text(task, lang), False, resp, note=f"task:{task.id}")
 
-    raw_t = list(dict.fromkeys(toks(raw)))
+    raw_t = list(dict.fromkeys(toks(raw)))[:MAX_TOKENS]
     index = _entry_tokens(faqs)
     ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
     ai = ai_answer(raw, lang, [x for x in ranked if x.status == Entry.APPROVED], task, settings)
