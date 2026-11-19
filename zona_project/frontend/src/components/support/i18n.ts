@@ -544,6 +544,14 @@ const uz = {
   tkCmdSetup3: "Natijani «Yaratilgan vazifalar»da koʻring: PRBC javobi avtomatik yoziladi.",
   tkCmdExample: "Perechisleniya oʻtmayapti",
   tkBotCmdHint: "Buyruq shu botga atab yoziladi: /vazifa@bot",
+  t_selfLearn: "Oʻz-oʻzini oʻqitish",
+  t_selfLearnHint: "Bot chatlardan oʻrganadi: eʼtirozsiz javoblardagi savol yozilishlarini bazaga qoʻshadi (keyingi safar AIʼsiz, darhol topadi), xodim tuzatishini AI orqali javobga qoʻshadi, har kuni bazani AI bilan koʻrib chiqadi. Eski holat har doim versiyada qoladi.",
+  t_autoLevel: "Xodim tuzatishi darhol qoʻllanadi",
+  t_autoLevelHint: "Shu darajadagi xodimlarning javobi va tuzatishi tasdiqlashsiz bazaga tushadi; qolganlariniki — «Tasdiqlash»ga.",
+  lvl_off: "Hech kim",
+  lvl_lead: "L3 va rahbar",
+  lvl_l2: "L2 va yuqori",
+  lvl_all: "Barcha xodimlar",
 };
 
 export type SKey = keyof typeof uz;
@@ -1081,6 +1089,14 @@ const ru: Record<SKey, string> = {
   tkCmdSetup3: "Результат — в «Созданные задачи»: ответ PRBC записывается автоматически.",
   tkCmdExample: "Перечисление не проходит",
   tkBotCmdHint: "Команда адресуется этому боту: /vazifa@bot",
+  t_selfLearn: "Самообучение",
+  t_selfLearnHint: "Бот учится на чатах: добавляет формулировки вопросов без возражений (в следующий раз находит сразу, без AI), через AI вносит исправления сотрудников в ответ, ежедневно проверяет базу с AI. Прежнее состояние всегда в версиях.",
+  t_autoLevel: "Исправления сотрудников применяются сразу",
+  t_autoLevelHint: "Ответы и исправления сотрудников этого уровня попадают в базу без утверждения; остальных — в «Утверждение».",
+  lvl_off: "Никто",
+  lvl_lead: "L3 и руководитель",
+  lvl_l2: "L2 и выше",
+  lvl_all: "Все сотрудники",
 };
 
 const en: Record<SKey, string> = {
@@ -1616,6 +1632,14 @@ const en: Record<SKey, string> = {
   tkCmdSetup3: "See the result under Created tasks: PRBC's answer is recorded automatically.",
   tkCmdExample: "Transfer is not going through",
   tkBotCmdHint: "The command is addressed to this bot: /vazifa@bot",
+  t_selfLearn: "Self-learning",
+  t_selfLearnHint: "The bot learns from chats: adds undisputed question phrasings (found instantly next time, no AI), merges staff corrections into answers via AI, reviews the base daily with AI. The old state is always kept in versions.",
+  t_autoLevel: "Staff corrections apply immediately",
+  t_autoLevelHint: "Answers and corrections from staff at this level go into the base without approval; others go to Approvals.",
+  lvl_off: "Nobody",
+  lvl_lead: "L3 and lead",
+  lvl_l2: "L2 and above",
+  lvl_all: "All staff",
 };
 
 const DICT: Record<Locale, Record<SKey, string>> = { uz, ru, en };

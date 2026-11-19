@@ -85,6 +85,9 @@ def review_entries(job):
     qs = Entry.objects.filter(status__in=[Entry.APPROVED, Entry.REVIEW]).exclude(suggestions__status=Suggestion.PENDING)
     if scope == "disliked":
         qs = qs.filter(dislikes__gt=0)
+    correction = (job.params or {}).get("correction")
+    auto = bool((job.params or {}).get("auto"))
+    auto_safe = bool((job.params or {}).get("auto_safe"))
     ids_param = [int(x) for x in (job.params or {}).get("ids") or []][:200]
     if ids_param:  # tanlangan yozuvlar (masalan, ko'rmasdan tasdiqlanganlarni qayta tekshirish)
         qs = Entry.objects.filter(pk__in=ids_param)
@@ -99,9 +102,15 @@ def review_entries(job):
                   "answer/answer_ru ber; questions — faqat yangi savol ko'rinishlari kerak bo'lsa; merge — boshqa yozuv bilan "
                   "deyarli bir xil bo'lsa merge_into=o'sha id; archive — eskirgan/foydasiz bo'lsa; ok — o'zgartirish shart emas. "
                   "Ishlatilmaydigan maydonlarni bo'sh qoldir (merge_into=0).\n\nBAZADAGI BOSHQA YOZUVLAR (id: sarlavha):\n" + titles)
+        message = "\n\n".join(_entry_text(e) for e in chunk)
+        if correction:
+            system += ("\n\nXODIM TUZATISHI: bot shu yozuv bilan javob berdi, xodim esa boshqacha javob yozdi. Xodim javobidagi "
+                       "to'g'ri va foydali ma'lumotni javobga qo'shib kind=improve qaytar (xodim javobi aniq bir holatga xos "
+                       "bo'lsa — umumiy qoidani yoz; foydali narsa bo'lmasa — ok). Savolni add_questions'ga ham qo'sh.")
+            message += (f"\n\nSAVOL: {correction.get('question', '')}\nBOT JAVOBI: {correction.get('bot', '')}\n"
+                        f"XODIM ({correction.get('by', '')}) JAVOBI: {correction.get('staff', '')}")
         try:
-            data = _run(f"Support: bilim bazasi tahlili ({len(chunk)} ta yozuv)", system,
-                        "\n\n".join(_entry_text(e) for e in chunk), REVIEW_SCHEMA)
+            data = _run(f"Support: bilim bazasi tahlili ({len(chunk)} ta yozuv)", system, message, REVIEW_SCHEMA)
         except Exception as e:  # noqa: BLE001 — bitta bo'lak yiqilsa keyingisiga o'tamiz, topilgan takliflar saqlanadi
             job.error = f"{type(e).__name__}: {e}"[:500]
             job.progress = {**(job.progress or {}), "failed_chunks": (job.progress or {}).get("failed_chunks", 0) + 1}
@@ -126,9 +135,14 @@ def review_entries(job):
                 payload = {}
             else:
                 continue
-            Suggestion.objects.create(job=job, kind=kind, entry=entry, payload=payload, reason=s.get("reason", "")[:2000],
-                                      target_id=payload.get("merge_into"))
+            sg = Suggestion.objects.create(job=job, kind=kind, entry=entry, payload=payload, reason=s.get("reason", "")[:2000],
+                                           target_id=payload.get("merge_into"))
             created += 1
+            if (auto and kind in ("improve", "questions")) or (auto_safe and kind == "questions"):
+                try:
+                    apply(sg, job.created_by or "avto")  # o'z-o'zini o'qitish: eski holat versiyada qoladi
+                except Exception:  # noqa: BLE001
+                    log.exception("auto apply failed")
         job.progress = {"done": min(i + CHUNK, len(entries)), "total": len(entries), "suggestions": created}
         job.save(update_fields=["progress", "error"])
     return created

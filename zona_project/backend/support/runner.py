@@ -293,14 +293,24 @@ class Handler:
         return None
 
     def _album_part(self, q, msg, text):
-        """Albom (bir vaqtda yuborilgan bir nechta rasm/video): fayl o'sha savolga biriktiriladi, izoh matnga qo'shiladi."""
+        """Albom (bir vaqtda yuborilgan bir nechta rasm/video): fayl o'sha savolga biriktiriladi, izoh matnga qo'shiladi.
+        Yuklash fon oqimida — asosiy sikl (yangi xabarlarni qabul qilish) hech qachon kutib qolmaydi."""
         meta = _media_of(msg)
         if meta and not Media.objects.filter(message=q, kind=meta[1]).filter(name=f"album:{msg['message_id']}").exists():
-            try:
-                data = self.photo_bytes.get(msg["message_id"]) or self.tg.download(meta[0], max_bytes=(8 if meta[1] == "photo" else 20) * 1024 * 1024)
-                vision.store(data, kind=meta[1], name=f"album:{msg['message_id']}", mime=meta[3], source=q.source, message=q)
-            except TelegramError as e:
-                log.warning("album part failed: %s", e)
+            def fetch():
+                close_old_connections()
+                try:
+                    data = self.photo_bytes.get(msg["message_id"]) or self.tg.download(meta[0], max_bytes=(8 if meta[1] == "photo" else 20) * 1024 * 1024)
+                    vision.store(data, kind=meta[1], name=f"album:{msg['message_id']}", mime=meta[3], source=q.source, message=q)
+                except TelegramError as e:
+                    log.warning("album part failed: %s", e)
+                finally:
+                    if self.executor is not None:
+                        close_old_connections()
+            if self.executor is not None and not self.history:
+                threading.Thread(target=fetch, name="support-album", daemon=True).start()
+            else:
+                fetch()
         if text and text not in q.text:
             Message.objects.filter(pk=q.pk).update(text=(q.text + "\n" + text).strip()[:4000])
         return q
@@ -546,10 +556,19 @@ class Handler:
         if q.status != Message.ANSWERED or corrected:
             q.status, q.stage, q.answered_by, q.answered_at = Message.ANSWERED, "staff", staff_name, when
             q.save()
+        if settings.learn_from_staff and corrected and q.entry_id and not self.history and len(text.strip()) >= 15:
+            from . import selflearn
+            if selflearn.on_correction(q, user, text):  # AI yozuvni xodim tuzatishi bilan yaxshilaydi
+                return a
         if settings.learn_from_staff:
             asks = list(q.staff_replies.filter(kind=Message.CLARIFY).order_by("created_at").values_list("text", flat=True))
             entry, new = learn(q, text, staff_name, priority=corrected, ask_first="\n".join(asks),
                                source="history" if self.history else "staff")
+            if new and not self.history and len(text.strip()) >= 25 and not engine.ANSWER_HINT.fullmatch(text.strip()):
+                from . import selflearn
+                if selflearn.trusted(user, settings):  # ishonchli xodim — darhol tasdiqlanadi (bot keyingi safar o'zi javob beradi)
+                    approve(entry, f"avto: {staff_name}")
+                    new = False
             if new and settings.notify_candidates and not self.history:
                 self._send_candidate(entry, q, staff_name)
             if entry and settings.image_autolabel:
@@ -574,6 +593,9 @@ class Handler:
                 if q.entry_id:
                     field = "likes" if q.feedback > 0 else "dislikes"
                     Entry.objects.filter(pk=q.entry_id).update(**{field: getattr(q.entry, field) + 1})
+                if q.feedback > 0:
+                    from . import selflearn
+                    selflearn.on_feedback(q)
                 if q.feedback < 0 and self.bot.admin_chat_id:
                     self._safe_send(self.bot.admin_chat_id, f"👎 Javob yoqmadi:\n❓ {engine.html.escape(q.text[:300])}\n"
                                                             f"💬 {engine.html.escape(q.answer_text[:500])}")
@@ -960,6 +982,7 @@ def run_forever(poll=10):
     task_worker = None
     AIJob.objects.filter(status=AIJob.RUNNING).update(status=AIJob.QUEUED)
     last_cleanup = 0.0
+    last_learn = time.time() - 3000  # ishga tushgandan ~10 daqiqa o'tib birinchi o'qitish
     # jarayon qayta ishga tushsa, chala qolgan vazifa qayta navbatga qo'yiladi
     HistoryJob.objects.filter(status=HistoryJob.RUNNING).update(status=HistoryJob.QUEUED)
     log.info("support runner started; OCR: %s", ocr.languages() or "yo'q")
@@ -994,6 +1017,16 @@ def run_forever(poll=10):
             if (task_worker is None or not task_worker.is_alive()) and SupportTask.objects.filter(status=SupportTask.QUEUED).exists():
                 task_worker = threading.Thread(target=_task_thread, name="support-tasks", daemon=True)
                 task_worker.start()
+            if time.time() - last_learn > 3600:  # o'z-o'zini o'qitish: soatlik savol ko'rinishlari, kunlik AI tahlili
+                last_learn = time.time()
+                try:
+                    from . import selflearn
+                    n = selflearn.tick()
+                    selflearn.daily_review()
+                    if n:
+                        log.info("self-learning: %s new question variants", n)
+                except Exception:  # noqa: BLE001
+                    log.exception("self-learning tick failed")
             if time.time() - last_cleanup > 86400:
                 vision.cleanup(Settings.load().media_days)
                 last_cleanup = time.time()

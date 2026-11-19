@@ -157,6 +157,9 @@ class BotFlowTests(Base):
         self.assertTrue(Group.objects.filter(chat_id=-100, bot=self.bot).exists())
 
     def test_staff_reply_creates_candidate_and_telegram_approval(self):
+        Settings.load()
+        Settings.objects.update(auto_approve_level="off")  # nomzod -> tasdiqlash oqimi (avto-tasdiq alohida tekshiriladi)
+        self.h.settings = Settings.load()
         self.h.handle(group_msg(20, 1, "Agentga yangi marshrut qanday biriktiriladi?"))
         self.h.handle(group_msg(21, 77, "1C'da Marshrutlar → agentni tanlab → Saqlash", "stargroupUlugbek", reply_to=20))
         e = Entry.objects.get(source="staff")

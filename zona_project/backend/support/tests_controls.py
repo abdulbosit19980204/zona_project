@@ -60,6 +60,8 @@ class ClarifyTests(ControlsBase):
         self.assertIn("STIR", e.ask_first)
 
     def test_similar_candidates_are_merged(self):
+        Settings.load()
+        Settings.objects.update(auto_approve_level="off")  # nomzod -> tasdiqlash oqimi (avto-tasdiq alohida tekshiriladi)
         h = self.handler()
         h.handle(group_msg(1, 10, "Klientni boshqa agentga o'tkazish kerak"))
         h.handle(group_msg(2, 77, "Supervayzer o'tkazadi, unga yozing", "op_saida", reply_to=1))

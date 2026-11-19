@@ -65,12 +65,12 @@ class Client:
     def _throttle(self, chat_id):
         with self._lock:
             now = time.monotonic()
-            wait = max(self._last_chat.get(chat_id, 0) + CHAT_GAP - now, self._last_any + GLOBAL_GAP - now, 0)
-            if wait:
-                time.sleep(wait)
-            now = time.monotonic()
-            self._last_chat[chat_id] = now
-            self._last_any = now
+            slot = max(self._last_any + GLOBAL_GAP, now)  # umumiy oraliq (Telegram limiti) — chatlardan mustaqil
+            at = max(self._last_chat.get(chat_id, 0) + CHAT_GAP, slot)
+            self._last_chat[chat_id] = at
+            self._last_any = slot
+        if at > now:
+            time.sleep(at - now)
 
     # ------------------------------------------------------------ yuqori daraja
     def get_me(self):
@@ -200,9 +200,30 @@ class Client:
         return ids
 
     def download(self, file_id, max_bytes=8 * 1024 * 1024):
+        """Faylni yuklash. Hajm getFile'dan ma'lum — aynan shuncha bayt o'qiladi (server ulanishni yopishini kutmaymiz:
+        aks holda Telegram ba'zan 60 soniya ushlab turadi). Qotib qolsa — qisqa kutishdan keyin qayta urinadi."""
         info = self.call("getFile", {"file_id": file_id})
-        if (info.get("file_size") or 0) > max_bytes:
+        size = int(info.get("file_size") or 0)
+        if size > max_bytes:
             raise TelegramError("Fayl juda katta")
         url = f"{self.base}/file/bot{self.token}/{urllib.parse.quote(info['file_path'])}"
-        with urllib.request.urlopen(url, timeout=60) as r:
-            return r.read(max_bytes + 1)[:max_bytes]
+        last = None
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, headers={"Connection": "close"})
+                with urllib.request.urlopen(req, timeout=12) as r:
+                    if size:
+                        buf = bytearray()
+                        while len(buf) < size:
+                            chunk = r.read(min(65536, size - len(buf)))
+                            if not chunk:
+                                break
+                            buf.extend(chunk)
+                        if len(buf) >= size:
+                            return bytes(buf)
+                        raise TimeoutError("fayl to'liq kelmadi")
+                    return r.read(max_bytes + 1)[:max_bytes]
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                last = e
+                time.sleep(0.5 * (attempt + 1))
+        raise TelegramError(f"Faylni yuklab bo'lmadi: {last}")

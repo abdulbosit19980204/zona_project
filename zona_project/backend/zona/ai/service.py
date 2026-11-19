@@ -91,6 +91,7 @@ AUTO_BACKUP = {
     "mistral": ["mistral-small-latest"], "openrouter": ["openrouter/auto"],
 }
 COOLDOWN = 120  # "band" degan model shuncha soniya zanjir oxiriga suriladi
+QUOTA_COOLDOWN = 1800  # limit tugagan (429) model — 30 daqiqa
 _cool = {}
 
 
@@ -169,7 +170,8 @@ def run(task, user, label, system, message, schema):
             last = e
             tried.append(f"{provider.name}/{model}")
             if getattr(e, "status", None) in providers.RETRY_STATUS or "vaqt tugadi" in str(e) or "ulanib" in str(e):
-                _cool[(provider.id, model)] = time.monotonic() + COOLDOWN  # band — keyingi so'rovlarda oxirga
+                quota = getattr(e, "status", None) == 429 or "quota" in str(e).lower() or "limit" in str(e).lower()
+                _cool[(provider.id, model)] = time.monotonic() + (QUOTA_COOLDOWN if quota else COOLDOWN)  # oxirga suriladi
             _log(task, provider, model, user, label, t0, error=str(e))
             continue
         ms = _log(task, provider, model, user, label, t0, res=res)

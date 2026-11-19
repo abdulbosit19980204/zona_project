@@ -246,6 +246,12 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
         <Card className="gap-0 p-4">
           <div className="mb-1 text-sm font-semibold">{t("grpLearn")}</div>
           <p className="mb-2 text-xs text-muted-foreground">{t("grpLearnHint")}</p>
+          {sw("self_learning", t("t_selfLearn"), t("t_selfLearnHint"))}
+          <SettingRow label={t("t_autoLevel")} hint={t("t_autoLevelHint")}>
+            <Segmented size="sm" value={f.auto_approve_level}
+              onChange={(v) => { setF({ ...f, auto_approve_level: v }); toggle.mutate({ auto_approve_level: v }); }}
+              options={(["off", "lead", "l2", "all"] as const).map((v) => ({ value: v, label: t(`lvl_${v}` as SKey) }))} />
+          </SettingRow>
           {sw("learn_from_staff", t("learn"), t("learnHint"))}
           {sw("learn_clarifications", t("t_clarify"), t("t_clarifyHint"))}
           {sw("notify_candidates", t("t_candidates"))}

@@ -55,6 +55,9 @@ class Settings(models.Model):
     task_mode = models.CharField("Vazifa rejimi", max_length=8, default="command", db_default="command")
     task_remind_group = models.BooleanField("Guruhda qisqa eslatma (@mas'ul)", default=True, db_default=True)
     task_remind_dm = models.BooleanField("Mas'ulga shaxsiy xabarda tafsilot", default=True, db_default=True)
+    self_learning = models.BooleanField("O'z-o'zini o'qitish (chatlardan o'rganish)", default=True, db_default=True)
+    auto_approve_level = models.CharField("Xodim tuzatishi darhol qo'llanadigan daraja", max_length=4, default="l2",
+                                          db_default="l2")  # off / lead / l2 / all
     merge_window = models.PositiveIntegerField("Bir muallifning ketma-ket xabarlari bitta savol (soniya)", default=12,
                                                db_default=12)
     task_bot = models.CharField("PRBC bot (username)", max_length=64, blank=True)
@@ -283,6 +286,7 @@ class Message(models.Model):
     feedback = models.SmallIntegerField(default=0)  # 1 / -1
     # tezlik: {"recv": Telegram->bot, "queue": navbatda, "ocr", "decide", "send", "total"} (ms)
     timing = models.JSONField(null=True, blank=True)
+    learned = models.BooleanField(default=False, db_default=False)  # o'z-o'zini o'qitishda ko'rib chiqilgan
     error = models.CharField(max_length=300, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
