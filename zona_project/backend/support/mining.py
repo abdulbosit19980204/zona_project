@@ -76,26 +76,36 @@ def mine(entry_ids=None, apply=False, per_entry=3):
             continue
         others = [d for k, ds in docs.items() if k != e.id for d in ds]
         cands = Counter()
-        for d in own:
-            for g in set(_ngrams(d.split())):
-                cands[g] += 1
+        statistical = len(own) >= 5 and not e.triggers  # kam namunada tasodifiy so'zlar (ism, manzil) xos bo'lib ko'rinadi
+        if statistical:
+            for d in own:
+                for g in set(_ngrams(d.split())):
+                    cands[g] += 1
         title_phrases = []
         for q in QUOTED.findall(e.title) + QUOTED.findall(e.answer or ""):
             for part in re.split(r"[—…\.]", q):
                 w = norm(part).split()
+                if len(w) == 1 and len(w[0]) >= 10:
+                    title_phrases.append(w[0])  # uzun yagona so'z (masalan, «Синхронизировать»)
                 for g in _ngrams(w, 2, min(6, len(w))):
                     title_phrases.append(g)
+        other_bigrams = {" ".join(x.split()[i:i + 2]) for x in others for i in range(len(x.split()) - 1)}
         scored = []
         for g in set(cands) | set(title_phrases):
+            from_title = g in title_phrases
             own_hits = sum(1 for d in own if g in d)
-            if not own_hits or own_hits / len(own) < 0.5 or len(g) < 10:
+            need = 0.5 if from_title else 0.6
+            if not own_hits or own_hits / len(own) < need or len(g) < 10:
                 continue
             if any(g in d for d in others):
                 continue
+            words = g.split()
+            if not from_title and any(" ".join(words[i:i + 2]) in other_bigrams for i in range(len(words) - 1)):
+                continue  # umumiy UI matni (boshqa ekranlarda ham bor) — xos emas
             noise_hits = sum(1 for d in noise if g in d)
             if noise_hits > 2:
                 continue
-            score = 10 * own_hits / len(own) + (3 if g in title_phrases else 0) + 0.5 * len(g.split()) - noise_hits
+            score = 10 * own_hits / len(own) + (3 if from_title else 0) + 0.5 * len(words) - noise_hits
             scored.append((score, g))
         chosen = []
         for _s, g in sorted(scored, key=lambda x: -x[0]):

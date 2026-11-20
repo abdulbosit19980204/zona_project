@@ -54,7 +54,7 @@ class TaskQualityTests(FlowBase):
 class MiningTests(FlowBase):
     def test_mines_distinctive_phrases_and_skips_shared_ones(self):
         a = Entry.objects.create(kind=Entry.TEMPLATE, title="ProTarget: «Inactive user account»", answer="x", status=Entry.APPROVED)
-        b = Entry.objects.create(kind=Entry.TEMPLATE, title="Ochiq vizit", answer="y", status=Entry.APPROVED)
+        b = Entry.objects.create(kind=Entry.TEMPLATE, title="ProTarget: «User already has an active visit»", answer="y", status=Entry.APPROVED)
         for i, txt in enumerate(["Визиты Подключения Inactive user account Попробовать снова", "Визиты Inactive user account Попробовать снова 14.11"]):
             Media.objects.create(kind=Media.PHOTO, path=f"a{i}", label=a, ocr_text=txt)
         Media.objects.create(kind=Media.PHOTO, path="b0", label=b, ocr_text="Визиты Подключения User already has an active visit Начать визит")
