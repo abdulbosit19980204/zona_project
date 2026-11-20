@@ -55,6 +55,11 @@ def _tg_of(m, s):
     return c.telegram.lstrip("@") if c else ""
 
 
+CMD_RE = re.compile(r"^/\w+(@\w+)?\s*(@\w+\s*)*")
+CODE_RE = re.compile(r"\bUZ-\d{6,}\b")
+ORDER_RE = re.compile(r"(?:№|N[o°]?\s?|zakaz\s*|заказ[:\s]*№?\s*)(\d{5,})", re.I)
+
+
 def decide_task(q, d, s=None):
     """(kerakmi, ijrochi, sabab). d — engine.Decision."""
     s = s or Settings.load()
@@ -69,6 +74,9 @@ def decide_task(q, d, s=None):
         return False, "", ""
     if not (d.needs_human or d.stage == "rule"):
         return False, "", ""
+    from .engine import substantive
+    if e is None and not substantive(CMD_RE.sub("", q.text or "")):
+        return False, "", ""  # aniq savol ham, tanilgan holat ham yo'q (salomlashuv, suhbat) — vazifa ochilmaydi
     ids = [r.get("id") for r in d.responsible or [] if r.get("id")]
     if e is not None and e.responsible_id:
         ids.insert(0, e.responsible_id)
@@ -144,10 +152,30 @@ def maybe_create(q, d, tg=None):
 TASK_OK = re.compile(r"(TASK-\d+|vazifa\w* yaratildi|задача .*создан)", re.I)
 
 
-def problem_text(q, title):
-    """Vazifa sarlavhasi — savol beruvchining muammosi (matn yoki rasm matni), bitta qatorda."""
-    body = " ".join(((q.text or "").strip() or (q.ocr_text or "").strip()[:200] or title).split())
-    return body[:250]
+def problem_text(q, title, entry=None):
+    """Vazifa sarlavhasi: aniq yozilgan savol matni; bo'lmasa — tanilgan holat nomi (xom OCR emas). Oxirida — kimdan,
+    rasmda topilgan UZ-kod va zakaz raqami (ijrochi tez topishi uchun)."""
+    from .engine import substantive
+    text = " ".join(CMD_RE.sub("", (q.text or "").strip()).split())
+    if substantive(text):
+        body = text
+    elif entry is not None:
+        body = entry.title + (f" — {text}" if text else "")
+    else:
+        body = text or ("Rasmli savol" if q.photo_file_id else title)
+    if len(body) > 160:
+        body = body[:160].rsplit(" ", 1)[0] + "…"
+    extra = []
+    src = f"{q.text or ''} {q.ocr_text or ''}"
+    code = CODE_RE.search(src)
+    if code:
+        extra.append(code.group(0))
+    order = ORDER_RE.search(src)
+    if order:
+        extra.append(f"zakaz №{order.group(1)}")
+    if q.user:
+        extra.append(q.user.name[:40])
+    return body + (f" ({', '.join(extra)})" if extra else "")
 
 
 def post_command(q, d, title, assignee, reason, tg, s):
@@ -155,7 +183,7 @@ def post_command(q, d, title, assignee, reason, tg, s):
     PRBC javobi ("TASK-123 yaratildi") botga reply bo'lib keladi va capture_reply() orqali shu yerga yoziladi."""
     bot = (s.task_bot or "prbc_bot").lstrip("@")
     link = q.group.message_link(q.message_id) if q.group_id else ""
-    text = f"/vazifa@{bot} @{assignee} {problem_text(q, title)}" if assignee else ""
+    text = f"/vazifa@{bot} @{assignee} {problem_text(q, title, d.entry)}" if assignee else ""
     t = SupportTask.objects.create(message=q, entry=d.entry, assignee=assignee, title=title, link=link, reason=reason,
                                    text=text, status=SupportTask.QUEUED)
     if not assignee or tg is None:
@@ -170,6 +198,28 @@ def post_command(q, d, title, assignee, reason, tg, s):
         t.status, t.error = SupportTask.FAILED, f"{type(e).__name__}: {e}"[:500]
     t.save()
     return t
+
+
+def check_unanswered(tg, wait=120):
+    """PRBC bot buyrug'imizga javob bermasa (bot-to-bot o'chiq yoki botdan buyruq qabul qilmaydi) — xabarimiz mas'ulga
+    ko'rsatmaga aylanadi: tayyor buyruq bilan, u savolga reply qilib yuboradi va vazifa ochiladi."""
+    since = timezone.now() - timezone.timedelta(seconds=wait)
+    for t in SupportTask.objects.filter(status=SupportTask.SENT, post_id__isnull=False, reply="PRBC javobi kutilmoqda…",
+                                        sent_at__lte=since).select_related("message")[:5]:
+        q = t.message
+        if q is None:
+            continue
+        cmd = CMD_RE.sub("", t.text or "").strip() or t.title
+        html_text = (f"🗂 <b>@{_esc(t.assignee)}</b>, bu savol bo'yicha vazifa oching — savolga <i>reply</i> qilib yuboring:\n"
+                     f"<code>/vazifa {_esc(cmd)}</code>")
+        try:
+            tg.edit_text(q.chat_id, t.post_id, html_text)
+            t.reply = "PRBC bot buyrug'iga javob bermadi — xabar mas'ulga ko'rsatmaga aylantirildi"
+        except Exception as e:  # noqa: BLE001
+            t.reply = f"PRBC javob bermadi; xabarni o'zgartirib bo'lmadi: {str(e)[:120]}"
+        t.status = SupportTask.REMINDED
+        t.error = "PRBC javob bermadi: @BotFather → @savolbopbot → Bot-to-Bot Communication Mode yoqilganini tekshiring"
+        t.save(update_fields=["reply", "status", "error"])
 
 
 def capture_reply(msg):

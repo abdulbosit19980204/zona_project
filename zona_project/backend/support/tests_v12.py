@@ -28,7 +28,7 @@ class CommandModeTests(FlowBase):
                                    text="Perechisleniya   o'tmayapti,\n tekshirib bering")
         t = tasks.maybe_create(q, Decision("", None, 0, "", True, [{"id": self.said.id}]), self.tg)
         sent = self.tg.sent[-1]
-        self.assertEqual(sent["text"], "/vazifa@prbc_bot @StargroupSaid Perechisleniya o'tmayapti, tekshirib bering")
+        self.assertEqual(sent["text"], "/vazifa@prbc_bot @StargroupSaid Perechisleniya o'tmayapti, tekshirib bering (Agent)")
         self.assertEqual((sent["chat"], sent["reply_to"]), (self.g.chat_id, 40))  # savolga reply — fayllarni PRBC oladi
         self.assertEqual(t.post_id, 1000 + len(self.tg.sent))
         # PRBC botining javobi bot xabari sifatida keladi

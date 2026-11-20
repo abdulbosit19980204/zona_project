@@ -1099,6 +1099,11 @@ class BotWorker(threading.Thread):
                     handler.bot.last_update_id = upd["update_id"]
                 Bot.objects.filter(pk=bot.pk).update(last_ok_at=timezone.now(), last_error="")
                 backoff = 5
+                try:  # PRBC javob bermagan /vazifa xabarlari -> mas'ulga ko'rsatma
+                    from . import tasks as _tasks
+                    _tasks.check_unanswered(client)
+                except Exception:  # noqa: BLE001
+                    log.exception("task check failed")
                 if time.time() - self.last_warm > 600:
                     self.last_warm = time.time()
                     threading.Thread(target=self._warm, args=(bot, client), name="support-warm", daemon=True).start()

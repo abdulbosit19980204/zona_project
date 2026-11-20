@@ -58,6 +58,8 @@ def is_question(text, has_photo=False, forwarded=False):
     if forwarded:
         return False
     t = (text or "").strip()
+    if t.startswith("/"):
+        return False  # bot buyruqlari (/vazifa, /start...) — savol emas
     lines = [x for x in t.splitlines() if x.strip()]
     if t and "?" not in t and (REPORT_START.match(t) and len(lines) >= 2 or len(lines) >= 8):
         return False
@@ -209,7 +211,16 @@ def supervisor_line(user, lang):
 
 
 # ------------------------------------------------------------------ 1. shablon
-def _trigger_hit(trigger, folded, raw):
+_WORDS = re.compile(r"\w+", re.UNICODE)
+
+
+def _norm_words(text):
+    return " ".join(_WORDS.findall(text or ""))
+
+
+def _trigger_hit(trigger, folded, raw, folded_norm=None):
+    """Shart: "re:..." — regex (asl matnda); oddiy ibora — lotinga o'girilgan matnda (tinish belgilariga chidamli);
+    "a && b" — ikkalasi ham bo'lishi kerak."""
     trigger = (trigger or "").strip()
     if not trigger:
         return False
@@ -218,8 +229,10 @@ def _trigger_hit(trigger, folded, raw):
             return bool(re.search(trigger[3:], raw, re.IGNORECASE | re.MULTILINE))
         except re.error:
             return False
-    return all(TYPO_RE.sub(lambda m: TYPOS[m.group(1).lower()], fold(part)).strip() in folded
-               for part in trigger.split("&&") if part.strip())
+    def hit(part):
+        p = TYPO_RE.sub(lambda m: TYPOS[m.group(1).lower()], fold(part)).strip()
+        return p in folded or (folded_norm is not None and _norm_words(p) in folded_norm)
+    return all(hit(part) for part in trigger.split("&&") if part.strip())
 
 
 def extract_fields(entry, raw):
@@ -236,9 +249,10 @@ def extract_fields(entry, raw):
 
 def match_template(raw, entries):
     folded = TYPO_RE.sub(lambda m: TYPOS[m.group(1).lower()], fold(raw))
+    folded_norm = _norm_words(folded)
     best, best_hits = None, 0
     for e in entries:
-        hits = sum(1 for t in e.triggers or [] if _trigger_hit(t, folded, raw))
+        hits = sum(1 for t in e.triggers or [] if _trigger_hit(t, folded, raw, folded_norm))
         if hits > best_hits:
             best, best_hits = e, hits
     if not best:
