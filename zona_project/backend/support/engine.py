@@ -486,7 +486,8 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
     statuses = [Entry.APPROVED, Entry.REVIEW, Entry.NEW] if allow_unapproved else [Entry.APPROVED]
     entries = list(Entry.objects.filter(status__in=statuses))
     templates = [e for e in entries if e.kind == Entry.TEMPLATE]
-    faqs = [e for e in entries if e.kind == Entry.FAQ]
+    # standart holatlar savol ko'rinishlari bo'yicha ham topiladi (shartlari bo'lmasa ham)
+    faqs = [e for e in entries if e.kind == Entry.FAQ or (e.kind == Entry.TEMPLATE and e.questions)]
 
     def own(e):
         return [_person(e.responsible)] if e.responsible_id else []
@@ -620,6 +621,23 @@ def staff_examples(query, k=3, min_score=35):
             seen.add(a)
             out.append((q, a))
     return out
+
+
+def allowed(d, settings):
+    """Bot bu javobni chatga yozadimi (aks holda — o'rganish rejimi: "qabul qilindi", xodim javob beradi).
+    Yozuvdagi answer_mode umumiy sozlamadan ustun: on — har doim, off — hech qachon."""
+    e = d.entry
+    if e is not None and e.answer_mode == "on":
+        return True
+    if e is not None and e.answer_mode == "off":
+        return False
+    policy = getattr(settings, "answer_policy", "all")
+    if policy == "all":
+        return True
+    known = e is not None and d.stage in ("image", "template", "faq")
+    if policy == "kb":
+        return known
+    return known and e.kind == Entry.TEMPLATE  # standard
 
 
 def render_answer(entry, fields, lang):

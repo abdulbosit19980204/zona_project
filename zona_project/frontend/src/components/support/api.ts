@@ -32,6 +32,7 @@ export interface PendingEdit {
 export interface Entry {
   id: number; kind: EntryKind; title: string; questions: string[]; triggers: string[]; extract: string[];
   answer: string; answer_ru: string; ask_first: string; attachments: number[]; attachments_info?: MediaInfo[];
+  answer_mode?: "" | "on" | "off";
   creates_task?: boolean; task_assignee?: string; variants?: { uz: string; ru: string }[] | null;
   image_examples_count?: number; zone: number | null; zone_name: string; responsible: number | null;
   responsible_name: string; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
@@ -64,6 +65,7 @@ export interface SupportSettings {
   task_daily_limit: number; task_gap: number; task_attach: boolean;
   task_mode: "command" | "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
   self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all"; answer_variety: boolean; progress_messages: boolean;
+  answer_policy: "standard" | "kb" | "all";
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
@@ -196,7 +198,7 @@ export const supportApi = {
   archive: (id: number) => post<Entry>(`entries/${id}/archive/`),
   revert: (id: number, vid: number) => post<Entry>(`entries/${id}/revert/${vid}/`),
   merge: (id: number, target: number) => post<Entry>(`entries/${id}/merge/`, { target }),
-  bulk: (ids: number[], action: "approve" | "reject" | "archive" | "review") => post<{ done: number }>("entries/bulk/", { ids, action }),
+  bulk: (ids: number[], action: "approve" | "reject" | "archive" | "review" | "kind_template" | "kind_faq" | "mode_auto" | "mode_on" | "mode_off") => post<{ done: number }>("entries/bulk/", { ids, action }),
   test: (text: string, all = true) => post<TestResult>("entries/test/", { text, all }),
   messages: (params: Record<string, string | number> = {}) => get<SupportMessage[]>("messages/", params),
   answer: (id: number, text: string, save = true, approve = false) =>

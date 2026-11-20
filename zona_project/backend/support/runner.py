@@ -382,6 +382,9 @@ class Handler:
         try:
             return self._process_question(q, mode, skip_ask, marks)
         finally:
+            pg = getattr(self, "progress", None)
+            if pg is not None:
+                pg.stop()
             marks["work"] = int((time.monotonic() - t0) * 1000)
             try:
                 Message.objects.filter(pk=q.pk).update(timing={**getattr(self, "timing", {}), **marks})
@@ -395,6 +398,9 @@ class Handler:
         tick = time.monotonic()
         pg = self.progress = Progress(self.tg, q, mode == MODE_LIVE and settings.progress_messages and not self.history,
                                       existing=(q.timing or {}).get("ph"))
+        if pg.enabled:
+            q.lang = engine.detect_lang(q.text) if (q.text or "").strip() else (q.lang or "uz")
+            pg.begin()  # har bir savolga darhol reply va animatsiya
 
         def mark(name):
             nonlocal tick
@@ -402,6 +408,7 @@ class Handler:
             marks[name] = marks.get(name, 0) + int((now - tick) * 1000)
             tick = now
         if q.photo_file_id:
+            pg.phase("photo")
             media = self._fetch_media(q)
         images, photos = [], []
         if media and settings.image_match:
@@ -419,7 +426,7 @@ class Handler:
         mark("media")
         if (not (q.text or "").strip() and media is not None and not images and (settings.merge_window or 0)
                 and mode == MODE_LIVE and getattr(self, "defer", None) and not q.media_group_id):
-            pg.show("photo")  # kutish zerikarli bo'lmasin: darhol "rasmni ko'ryapman…"
+            pg.stop()  # izoh kutilyapti — xabar turibdi, qayta ishlashda davom etadi
             marks["ph"] = pg.id
             self.defer()  # ekran tanilmadi — izoh kelishini 3 s kutamiz (worker band bo'lmaydi), keyin qayta ishlanadi
             marks["deferred"] = 1
@@ -436,21 +443,22 @@ class Handler:
                 deferred_ocr = d is not None and mode == MODE_LIVE
                 mark("decide")
             if settings.ocr_enabled and not deferred_ocr:
-                pg.show("photo")
+                pg.phase("photo")
                 self._ocr(q, media)
                 mark("ocr")
         if d is None:
             raw = "\n".join(x for x in (q.text, q.ocr_text) if x).strip()
             if not raw and not images:
+                pg.drop()
                 q.status = Message.IGNORED
                 q.save()
                 return q
             q.lang = engine.detect_lang(q.text or q.ocr_text)
+            pg.phase("think")
             d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
-                              asker=_asker(q), fast=True)  # avval tez (shablon/baza) — topilsa oraliq xabar kerak emas
+                              asker=_asker(q), fast=True)  # avval tez (shablon/baza)
             if d is None:
-                pg.show("think")
-                pg.tick("think")  # AI kutilayotganda matn almashib turadi
+                pg.phase("write")  # AI kutilayotganda matn almashib turadi
                 try:
                     d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
                                       asker=_asker(q))
@@ -521,6 +529,23 @@ class Handler:
             if sent:
                 q.bot_reply_id = sent.get("message_id")
             q.save()
+            return q
+        if not d.needs_human and d.text and not engine.allowed(d, settings):
+            # o'rganish rejimi: bot taklifi saqlanadi (panelda va admin chatida), guruhga faqat "qabul qilindi"
+            q.status = Message.DRAFTED
+            q.save()
+            ack = ("Ваш вопрос принят — ответит специалист 🙌" if q.lang == "ru" else "Savolingiz qabul qilindi — mutaxassis javob beradi 🙌")
+            if settings.mention_responsible and d.responsible and d.responsible[0].get("telegram"):
+                ack += " " + " ".join("@" + t for t in d.responsible[0]["telegram"][:3])
+            if settings.escalation_ack:
+                sent = self._pg().finish(engine.html.escape(ack)) or self._safe_send(q.chat_id, engine.html.escape(ack), reply_to=q.message_id)
+                if sent:
+                    Message.objects.filter(pk=q.pk).update(bot_reply_id=sent.get("message_id"))
+            else:
+                self._pg().drop()
+            if settings.drafts_to_admin:
+                self._send_draft(q, d)
+            d.needs_human = True  # PRBC vazifasi va tahlil uchun — odam javob beradi
             return q
         if not d.needs_human and d.text:
             body = self._script(q, engine.vary(d, q.lang, settings))
@@ -883,63 +908,80 @@ def _full_name(u):
 
 
 PROGRESS = {
-    "uz": {"start": ["🔎 Savolingizni ko'ryapman, hozir yordam beraman…", "👀 Ko'rib chiqyapman, bir daqiqa…", "⏳ Hozir javob tayyorlayman…"],
-           "photo": ["🖼 Skrinshotni o'qiyapman…", "🖼 Rasmdagi ma'lumotni tekshiryapman…", "🔍 Ekrandagi xabarni aniqlayapman…"],
-           "think": ["📚 Bilim bazasidan javob qidiryapman…", "🧩 O'xshash holatlarni tekshiryapman…", "✍️ Javobni yozyapman…",
-                     "⏳ Deyarli tayyor…"]},
-    "ru": {"start": ["🔎 Смотрю ваш вопрос, сейчас помогу…", "👀 Разбираюсь, минутку…", "⏳ Сейчас подготовлю ответ…"],
-           "photo": ["🖼 Читаю скриншот…", "🖼 Проверяю данные на изображении…", "🔍 Разбираю сообщение на экране…"],
-           "think": ["📚 Ищу ответ в базе знаний…", "🧩 Проверяю похожие случаи…", "✍️ Пишу ответ…", "⏳ Почти готово…"]},
+    "uz": {"start": ["🔎 Savolingizni ko'ryapman", "👀 Ko'rib chiqyapman", "⏳ Hozir yordam beraman"],
+           "photo": ["🖼 Skrinshotni tekshiryapman", "🔍 Ekrandagi xabarni aniqlayapman", "🖼 Rasmni o'qiyapman"],
+           "think": ["📚 Bilim bazasidan qidiryapman", "🧩 O'xshash holatlarni solishtiryapman"],
+           "write": ["✍️ Javobni yozyapman", "⏳ Deyarli tayyor"]},
+    "ru": {"start": ["🔎 Смотрю ваш вопрос", "👀 Разбираюсь", "⏳ Сейчас помогу"],
+           "photo": ["🖼 Проверяю скриншот", "🔍 Разбираю сообщение на экране", "🖼 Читаю изображение"],
+           "think": ["📚 Ищу в базе знаний", "🧩 Сравниваю похожие случаи"],
+           "write": ["✍️ Пишу ответ", "⏳ Почти готово"]},
 }
+DOTS = [".", "..", "...", "…"]
 
 
 class Progress:
-    """Oraliq xabar: sekin javobda (OCR, AI) savolga darhol reply qilinadi, kutish davomida matn almashib turadi va oxirida
-    shu xabar tahrirlanib haqiqiy javobga aylanadi (chatda ortiqcha xabar qolmaydi). Tez javobda umuman chiqmaydi."""
+    """Oraliq xabar: har bir savolga darhol reply ("🔎 ko'ryapman…"), keyin har soniyada bosqich va nuqtalar almashadi
+    (jarayon ketayotgani ko'rinib turadi, ustida Telegram'ning "yozmoqda…" belgisi), oxirida shu xabar tahrirlanib haqiqiy
+    javobga aylanadi — chatda ortiqcha xabar qolmaydi."""
 
-    def __init__(self, tg, q, enabled, existing=None):
+    def __init__(self, tg, q, enabled, existing=None, every=1.0, max_frames=10):
         import random
         self.tg, self.q, self.enabled, self.id = tg, q, enabled, existing
         self.rnd = random.Random(q.pk)
+        self.key, self.every, self.max_frames = "start", every, max_frames
         self._stop = threading.Event()
         self._thread = None
-        self._last = 0.0
 
-    def _text(self, key):
-        lang = "ru" if self.q.lang == "ru" else "uz"
-        return self.rnd.choice(PROGRESS[lang][key])
+    def _lang(self):
+        return "ru" if self.q.lang == "ru" else "uz"
 
-    def show(self, key):
+    def _frame(self, i):
+        base = PROGRESS[self._lang()][self.key]
+        return f"{base[(i // 3) % len(base)]}{DOTS[i % len(DOTS)]}"
+
+    def begin(self):
+        """Darhol reply va animatsiya (bir marta)."""
         if not self.enabled:
             return
         try:
             if self.id is None:
-                sent = self.tg.send(self.q.chat_id, engine.html.escape(self._text("start" if key == "think" else key)),
-                                    reply_to=self.q.message_id)
+                sent = self.tg.send(self.q.chat_id, engine.html.escape(self._frame(0)), reply_to=self.q.message_id)
                 self.id = (sent or {}).get("message_id")
-            elif time.monotonic() - self._last > 1.2 and hasattr(self.tg, "edit_text"):
-                self.tg.edit_text(self.q.chat_id, self.id, engine.html.escape(self._text(key)))
-            self._last = time.monotonic()
         except Exception as e:  # noqa: BLE001 — oraliq xabar javobni to'xtatmasin
             log.warning("progress failed: %s", e)
+        if self.id is not None and self._thread is None and hasattr(self.tg, "edit_text"):
+            self._thread = threading.Thread(target=self._run, name="support-progress", daemon=True)
+            self._thread.start()
 
-    def tick(self, key="think", every=3.0, times=5):
-        """Uzoq kutishda (AI) matn har bir necha soniyada almashadi."""
-        if not self.enabled or self.id is None or self._thread:
-            return
+    def phase(self, key):
+        self.key = key
 
-        def run():
-            for _ in range(times):
-                if self._stop.wait(every):
+    def show(self, key):  # eski chaqiruvlar bilan moslik
+        self.phase(key)
+        self.begin()
+
+    def _run(self):
+        last_typing = 0.0
+        for i in range(1, self.max_frames + 1):
+            if self._stop.wait(self.every):
+                return
+            try:
+                if time.monotonic() - last_typing > 4:
+                    self.tg.typing(self.q.chat_id)
+                    last_typing = time.monotonic()
+                self.tg.edit_text(self.q.chat_id, self.id, engine.html.escape(self._frame(i)), quiet=True)
+            except Exception as e:  # noqa: BLE001 — limitga tushsa animatsiya to'xtaydi, javob esa ketadi
+                if "429" in str(e) or "Too Many" in str(e):
                     return
-                self.show(key)
-        self._thread = threading.Thread(target=run, name="support-progress", daemon=True)
-        self._thread.start()
+
+    def tick(self, *a, **k):  # eski nom
+        self.begin()
 
     def stop(self):
         self._stop.set()
         if self._thread:
-            self._thread.join(0.5)
+            self._thread.join(0.6)
 
     def finish(self, html_text, buttons=None):
         """Oraliq xabarni javobga aylantirish. Bo'lmasa — None (chaqiruvchi oddiy xabar yuboradi)."""

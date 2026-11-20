@@ -35,9 +35,12 @@ class FakeClient:
     def edit_buttons(self, chat_id, message_id, buttons=None):
         self.edited.append(message_id)
 
-    def edit_text(self, chat_id, message_id, text, buttons=None, html=True):
+    def edit_text(self, chat_id, message_id, text, buttons=None, html=True, quiet=False):
         self.edits = getattr(self, "edits", [])
         self.edits.append({"chat": chat_id, "id": message_id, "text": text, "buttons": buttons})
+        i = int(message_id) - 1001  # Telegram'dagidek: xabar matni almashadi
+        if 0 <= i < len(self.sent):
+            self.sent[i] = {**self.sent[i], "text": text, "buttons": buttons, "placeholder": self.sent[i].get("placeholder", self.sent[i]["text"])}
         return {"message_id": message_id}
 
     def delete(self, chat_id, message_id):

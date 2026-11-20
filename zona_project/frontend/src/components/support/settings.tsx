@@ -232,6 +232,16 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
   if (part === "answering") {
     return (
       <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="gap-3 p-4 lg:col-span-2">
+          <div>
+            <div className="text-sm font-semibold">{t("polTitle")}</div>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("polHint")}</p>
+          </div>
+          <Segmented value={f.answer_policy ?? "all"} className="w-full sm:w-auto"
+            onChange={(v) => { setF({ ...f, answer_policy: v }); toggle.mutate({ answer_policy: v }); }}
+            options={(["standard", "kb", "all"] as const).map((v) => ({ value: v, label: t(`pol_${v}` as SKey) }))} />
+          <p className="rounded-lg bg-muted/50 p-2.5 text-xs leading-relaxed">{t(`pol_${f.answer_policy ?? "all"}_h` as SKey)}</p>
+        </Card>
         <Card className="gap-0 p-4">
           <div className="mb-1 text-sm font-semibold">{t("grpReply")}</div>
           <p className="mb-2 text-xs text-muted-foreground">{t("behaviorHint")}</p>

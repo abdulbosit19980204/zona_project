@@ -44,7 +44,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "tasks_enabled", "task_bot", "task_default_assignee", "task_departments", "task_members",
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
-                   "progress_messages"]
+                   "progress_messages", "answer_policy"]
 
 
 def _settings_payload(s):
@@ -204,7 +204,7 @@ class EntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Entry
         fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first",
-                  "attachments", "attachments_info", "image_examples_count", "zone", "zone_name", "creates_task", "task_assignee", "variants",
+                  "attachments", "attachments_info", "image_examples_count", "zone", "zone_name", "creates_task", "task_assignee", "variants", "answer_mode",
                   "responsible", "responsible_name", "status", "source", "priority", "pending", "author",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
         read_only_fields = ["status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",
@@ -413,6 +413,12 @@ class EntryViewSet(ZonaViewSet):
             elif act == "archive":
                 e.status = Entry.ARCHIVED
                 e.save(update_fields=["status", "updated_at"])
+            elif act in ("kind_template", "kind_faq"):  # turini o'zgartirish (matn o'zgarmaydi)
+                e.kind = Entry.TEMPLATE if act == "kind_template" else Entry.FAQ
+                e.save(update_fields=["kind", "updated_at"])
+            elif act in ("mode_auto", "mode_on", "mode_off"):  # chatda javob: umumiy / har doim / faqat o'rganish
+                e.answer_mode = {"mode_auto": "", "mode_on": "on", "mode_off": "off"}[act]
+                e.save(update_fields=["answer_mode", "updated_at"])
             elif act == "review":  # tasdiqni bekor qilish: bot ishlatmaydi, tasdiqlash navbatiga qaytadi
                 if e.status != Entry.APPROVED:
                     continue

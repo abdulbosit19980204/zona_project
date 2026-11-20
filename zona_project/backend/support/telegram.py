@@ -24,6 +24,9 @@ class TelegramError(Exception):
         self.retry_after = retry_after
 
 
+EDIT_GAP = 0.45  # bir xabarni tahrirlash oralig'i (animatsiya)
+
+
 class Client:
     def __init__(self, token, base=API, timeout=35):
         self.token = token
@@ -31,6 +34,7 @@ class Client:
         self.timeout = timeout
         self._lock = threading.Lock()
         self._last_chat = {}
+        self._last_edit = {}
         self._last_any = 0.0
 
     # ------------------------------------------------------------ past daraja
@@ -112,14 +116,20 @@ class Client:
         except TelegramError:
             pass
 
-    def edit_text(self, chat_id, message_id, text, buttons=None, html=True):
-        """Xabar matnini almashtirish (oraliq "ko'ryapman…" xabari -> haqiqiy javob)."""
-        self._throttle(chat_id)
+    def edit_text(self, chat_id, message_id, text, buttons=None, html=True, quiet=False):
+        """Xabar matnini almashtirish (oraliq "ko'ryapman…" xabari -> haqiqiy javob). quiet — animatsiya kadri:
+        qayta urinilmaydi (limitga tushsa — tashlab ketiladi, yakuniy javobni kechiktirmaydi)."""
+        with self._lock:  # tahrirlar o'z oralig'i bilan (yangi xabarlar navbatini band qilmaydi)
+            now = time.monotonic()
+            at = max(self._last_edit.get((chat_id, message_id), 0) + EDIT_GAP, now)
+            self._last_edit[(chat_id, message_id)] = at
+        if at > now:
+            time.sleep(at - now)
         params = {"chat_id": chat_id, "message_id": int(message_id), "text": text[:4096], "disable_web_page_preview": True,
                   "parse_mode": "HTML" if html else None}
         if buttons:
             params["reply_markup"] = {"inline_keyboard": buttons}
-        return self.call("editMessageText", params, retries=1)
+        return self.call("editMessageText", params, retries=0 if quiet else 1)
 
     def delete(self, chat_id, message_id):
         try:

@@ -55,6 +55,9 @@ class Settings(models.Model):
     task_mode = models.CharField("Vazifa rejimi", max_length=8, default="command", db_default="command")
     task_remind_group = models.BooleanField("Guruhda qisqa eslatma (@mas'ul)", default=True, db_default=True)
     task_remind_dm = models.BooleanField("Mas'ulga shaxsiy xabarda tafsilot", default=True, db_default=True)
+    # standard — faqat "Standart holat" javoblari; kb — standart + tasdiqlangan savol-javoblar; all — hammasi (AI ham).
+    # Doiradan tashqari savolga bot javob yozmaydi ("qabul qilindi") va xodim javobidan o'rganadi.
+    answer_policy = models.CharField("Bot chatda javob beradigan savollar", max_length=8, default="all", db_default="all")
     progress_messages = models.BooleanField("Sekin javobda oraliq xabar (\"ko'ryapman…\") va kutish davomida yangilanib turish",
                                             default=True, db_default=True)
     answer_variety = models.BooleanField("Javoblarni har safar biroz boshqacha (mazmuni o'zgarmagan holda) yozish",
@@ -180,6 +183,8 @@ class Entry(models.Model):
     priority = models.BooleanField("Ustuvor (bot javobini xodim tuzatgan)", default=False)
     pending = models.JSONField("Tasdiq kutayotgan tahrir", null=True, blank=True)
     attachments = models.JSONField("Javob bilan yuboriladigan fayllar (Media id)", default=list, blank=True)
+    answer_mode = models.CharField("Chatda javob: '' — umumiy sozlama, on — har doim, off — faqat o'rganish",
+                                   max_length=3, blank=True, default="", db_default="")
     variants = models.JSONField("Javobning qayta yozilgan variantlari (AI, mazmuni bir xil)", null=True, blank=True)
     creates_task = models.BooleanField("Bu turdagi savolga PRBC vazifa yaratiladi", default=False, db_default=False)
     task_assignee = models.CharField("Vazifa ijrochisi (username, bo'sh — mas'ul)", max_length=64, blank=True, default="",

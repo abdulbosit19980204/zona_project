@@ -104,7 +104,6 @@ class ProgressTests(FlowBase):
     def test_slow_answer_shows_progress_then_becomes_the_answer(self):
         Settings.load()
         slow = Decision("ai", None, 90, "AI javobi: supervayzer marshrutga qo'shadi.", False)
-        real = engine.decide
 
         def fake(*a, **k):
             return None if k.get("fast") else slow
@@ -112,17 +111,58 @@ class ProgressTests(FlowBase):
             self.h().handle(group_msg(1, 10, "klientim agentda ko'rinmayapti nima qilay"))
         group = [x for x in self.tg.sent if x["chat"] == -100]
         self.assertEqual(len(group), 1)  # bitta xabar: avval "ko'ryapman…", keyin shu xabar javobga aylandi
-        self.assertTrue(group[0]["text"].startswith(("🔎", "👀", "⏳")))
-        self.assertIn("supervayzer marshrutga", self.tg.edits[-1]["text"])
+        self.assertTrue(group[0]["placeholder"].startswith(("🔎", "👀", "⏳")))
+        self.assertEqual(group[0]["reply_to"], 1)
+        self.assertIn("supervayzer marshrutga", group[0]["text"])
         self.assertEqual(Message.objects.get(message_id=1).status, Message.ANSWERED)
-        _ = real
 
-    def test_fast_answer_has_no_progress(self):
+    def test_fast_answer_also_starts_with_reply_and_becomes_answer(self):
         Entry.objects.create(kind=Entry.FAQ, title="Parol", answer="Profil → Parolni tiklash.",
                              questions=["parolni qanday tiklayman"], status=Entry.APPROVED)
         Settings.objects.update(ai_primary=False, ai_enabled=False)
         self.h().handle(group_msg(2, 10, "parolni qanday tiklayman"))
         group = [x for x in self.tg.sent if x["chat"] == -100]
         self.assertEqual(len(group), 1)
+        self.assertEqual(group[0]["reply_to"], 2)
         self.assertIn("Parolni tiklash", group[0]["text"])
-        self.assertFalse(getattr(self.tg, "edits", []))
+
+
+class PolicyTests(FlowBase):
+    def setUp(self):
+        super().setUp()
+        Settings.load()
+        self.std = Entry.objects.create(kind=Entry.TEMPLATE, title="Planshet qotdi", answer="Planshetni 10 soniya bosib qayta yoqing.",
+                                        questions=["planshet ekrani qotib qoldi nima qilay"], status=Entry.APPROVED)
+        self.faq = Entry.objects.create(kind=Entry.FAQ, title="Kassa", answer="Kassani qayta yoqing.",
+                                        questions=["kassa apparati chek chiqarmayapti"], status=Entry.APPROVED)
+        Settings.objects.update(ai_primary=False, ai_enabled=False, answer_policy="standard")
+
+    def test_standard_policy_answers_templates_and_learns_the_rest(self):
+        h = self.h()
+        h.handle(group_msg(1, 10, "planshet ekrani qotib qoldi nima qilay"))
+        h.handle(group_msg(2, 11, "kassa apparati chek chiqarmayapti"))
+        a = Message.objects.get(message_id=1)
+        b = Message.objects.get(message_id=2)
+        self.assertEqual(a.status, Message.ANSWERED)
+        self.assertEqual((b.status, b.entry_id), (Message.DRAFTED, self.faq.id))  # o'rganish rejimi, taklif saqlandi
+        texts = [x["text"] for x in self.tg.sent if x["chat"] == -100]
+        self.assertIn("Planshetni 10 soniya bosib qayta yoqing.", " | ".join(texts))
+        self.assertNotIn("Kassani qayta yoqing", " | ".join(texts))
+        self.assertTrue(any("qabul qilindi" in t for t in texts))
+
+    def test_entry_override_wins(self):
+        Entry.objects.filter(pk=self.faq.pk).update(answer_mode="on")
+        Entry.objects.filter(pk=self.std.pk).update(answer_mode="off")
+        h = self.h()
+        h.handle(group_msg(1, 10, "planshet ekrani qotib qoldi nima qilay"))
+        h.handle(group_msg(2, 11, "kassa apparati chek chiqarmayapti"))
+        self.assertEqual(Message.objects.get(message_id=1).status, Message.DRAFTED)
+        self.assertEqual(Message.objects.get(message_id=2).status, Message.ANSWERED)
+
+    def test_template_found_by_questions_and_bulk_kind_change(self):
+        self.login("editor")
+        r = self.call("post", "support/entries/bulk/", {"ids": [self.faq.id], "action": "kind_template"})
+        self.assertEqual(r.json()["done"], 1)
+        self.assertEqual(Entry.objects.get(pk=self.faq.pk).kind, Entry.TEMPLATE)
+        # standart holatga o'tgan yozuv shartlari bo'lmasa ham savol ko'rinishi bo'yicha topiladi
+        self.assertEqual(engine.decide("kassa apparati chek chiqarmayapti").entry, Entry.objects.get(pk=self.faq.pk))

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BotMessageSquare, FlaskConical, Images, ListChecks, ListTodo, Paperclip, Plus, Route, Search, Shuffle, Star, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { BotMessageSquare, Check, CheckSquare, FlaskConical, Images, ListChecks, ListTodo, Paperclip, Plus, Route, Search, Shuffle, Star, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -72,6 +72,11 @@ function KnowledgeInner() {
       ? (e: (typeof rows)[number]) => -(e.image_examples_count ?? 0) : (e: (typeof rows)[number]) => -new Date(e.updated_at).getTime();
     return [...rows].sort((a, b) => key(a) - key(b));
   }, [list.data, q, resp, zone, flags, sort]);
+  const [selecting, setSelecting] = useState(false);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const bulk = useSupportMutation((a: "kind_template" | "kind_faq" | "mode_auto" | "mode_on" | "mode_off") => supportApi.bulk([...sel], a),
+    (r) => t("bulkDone", { n: r.done }));
+  const toggleSel = (id: number) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const routingCount = useMemo(() => (list.data ?? []).filter((e) => isRouting(e.answer)).length, [list.data]);
   const edit = (id: number | null) => { setEditing(id); setOpen(true); };
 
@@ -90,7 +95,22 @@ function KnowledgeInner() {
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("kbSearch")} className="h-9 bg-muted/40 pl-8" />
           </div>
           <Segmented size="sm" value={kind} onChange={setKind} options={KINDS.map((k) => ({ value: k, label: k === "any" ? t("allKinds") : t(`k_${k}` as SKey) }))} />
+          <Button size="sm" variant={selecting ? "default" : "outline"} className="h-8"
+            onClick={() => { setSelecting(!selecting); setSel(new Set()); }}><CheckSquare className="size-4" />{t("kbSelect")}</Button>
         </div>
+        {selecting && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
+            <span className="text-xs font-medium">{t("selected", { n: sel.size })}</span>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSel(new Set((shown ?? []).map((e) => e.id)))}>{t("kbSelectAll")}</Button>
+            <span className="mx-1 h-4 w-px bg-border" />
+            <Button size="sm" className="h-7 text-xs" disabled={!sel.size || bulk.isPending} onClick={() => bulk.mutate("kind_template")}>{t("kbToTemplate")}</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!sel.size || bulk.isPending} onClick={() => bulk.mutate("kind_faq")}>{t("kbToFaq")}</Button>
+            <span className="mx-1 h-4 w-px bg-border" />
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!sel.size || bulk.isPending} onClick={() => bulk.mutate("mode_on")}>{t("mode_on")}</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!sel.size || bulk.isPending} onClick={() => bulk.mutate("mode_off")}>{t("mode_offL")}</Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={!sel.size || bulk.isPending} onClick={() => bulk.mutate("mode_auto")}>{t("mode_auto")}</Button>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Segmented size="sm" value={status} onChange={setStatus}
             options={STATUSES.map((x) => ({ value: x, label: x === "all" ? t("all") : t(`e_${x}` as SKey), count: x === "all" ? undefined : counts[x] }))} />
@@ -129,13 +149,16 @@ function KnowledgeInner() {
           <p className="mb-2 text-xs text-muted-foreground">{t("kbCount", { n: shown.length })}</p>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {shown.map((e) => (
-              <button key={e.id} type="button" onClick={() => edit(e.id)}
-                className="group flex flex-col rounded-xl border bg-card text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+              <button key={e.id} type="button" onClick={() => (selecting ? toggleSel(e.id) : edit(e.id))}
+                className={`group flex flex-col rounded-xl border bg-card text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${selecting && sel.has(e.id) ? "border-primary ring-2 ring-primary/30" : ""}`}>
                 <div className="flex flex-1 flex-col gap-2 p-4">
                   <div className="flex items-center gap-1.5 text-xs">
                     <EntryBadge status={e.status} t={t} />
                     <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{t(`k_${e.kind}` as SKey)}</span>
                     {e.pending && <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[11px] text-warning">{t("pendingEdit")}</span>}
+                    {selecting && <span className={`grid size-4 place-items-center rounded border ${sel.has(e.id) ? "border-primary bg-primary text-primary-foreground" : ""}`}>{sel.has(e.id) && <Check className="size-3" />}</span>}
+                    {e.answer_mode === "on" && <span className="rounded bg-success/10 px-1.5 py-0.5 text-[11px] text-success">{t("mode_on")}</span>}
+                    {e.answer_mode === "off" && <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[11px] text-warning">{t("mode_offL")}</span>}
                     {e.creates_task && <span className="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary"><ListTodo className="size-3" />{t("kbTask")}</span>}
                     {e.priority && <Star className="ml-auto size-4 fill-warning text-warning" />}
                   </div>
