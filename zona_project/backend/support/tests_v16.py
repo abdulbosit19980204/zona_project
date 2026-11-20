@@ -72,3 +72,10 @@ class MiningTests(FlowBase):
                                  triggers=["inn pinfl uje est v 1s"])
         found, _f, _c = engine.match_template("Этот ИНН/ПИНФЛ уже есть в 1С как контрагент", [e])
         self.assertEqual(found, e)
+
+
+class ExtractTests(FlowBase):
+    def test_multiline_name_is_joined(self):
+        e = Entry(extract=[r"(?:Торговая точка\s+)+(?P<nom>[^\"»”]{3,90}?)\s+отправлена"])
+        f = engine.extract_fields(e, "Новая торговая точка\nТорговая точка ALIYEV VALI\nTESTOVICH отправлена на\nмодерацию!")
+        self.assertEqual(f["nom"], "ALIYEV VALI TESTOVICH")

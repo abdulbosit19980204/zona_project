@@ -244,7 +244,7 @@ def extract_fields(entry, raw):
         except re.error:
             continue
         if m:
-            out.update({k: v.strip() for k, v in m.groupdict().items() if v and k not in out})
+            out.update({k: " ".join(v.split()) for k, v in m.groupdict().items() if v and v.strip() and k not in out})
     return out
 
 
