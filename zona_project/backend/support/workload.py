@@ -1,18 +1,51 @@
 """Ish yuklamasi tahlili: qachon ko'p savol tushadi, qaysi guruhdan, xodimlar qancha tez va qancha vaqt ishlaydi.
 
-Asosiy o'lchov — "birinchi javob vaqti": savol berilgandan xodimning birinchi javobi yoki aniqlashtirishigacha
-(panel orqali javob ham hisoblanadi). Bot javob bergan savollar alohida sanaladi.
+Vaqtlar soniyada va aniq: savol Telegram'da yuborilgan paytdan (created_at) javob yuborilgan paytgacha.
+"Birinchi javob" — kim bo'lishidan qat'i nazar (bot, xodim, aniqlashtirish yoki panel) birinchi javob;
+"xodim javobi" — bot yopmagan savollarga xodimning birinchi javobi. Kunlar Toshkent vaqti (GMT+5) bilan 00:00 dan.
 """
 import os
 from collections import Counter, defaultdict
-from statistics import median
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
 from .models import Message, SupportTask
 
 BOT_STAGES = ("template", "faq", "rule", "ai", "image")
-BUCKETS = [(5, "≤5"), (15, "5–15"), (60, "15–60"), (240, "1–4h"), (10 ** 9, ">4h")]
+BUCKETS = [(10, "≤10s"), (60, "10s–1m"), (300, "1–5m"), (900, "5–15m"), (3600, "15–60m"), (14400, "1–4h"), (10 ** 9, ">4h")]
+TZ = ZoneInfo("Asia/Tashkent")
+
+
+def local(dt):
+    return dt.astimezone(TZ)
+
+
+def period(params, default_days=30, max_days=366):
+    """So'rov parametrlaridan davr: from/to (YYYY-MM-DD, ikkalasi ham kiradi) yoki days (bugun ham to'liq kiradi).
+    Chegaralar Toshkent vaqti bilan 00:00. Qaytaradi: (boshlanish, tugash, ma'lumot)."""
+    today = timezone.now().astimezone(TZ).date()
+    try:
+        d_from = date.fromisoformat(params.get("from")) if params.get("from") else None
+        d_to = date.fromisoformat(params.get("to")) if params.get("to") else None
+    except ValueError:
+        d_from = d_to = None
+    if d_from or d_to:
+        d_to = min(d_to or today, today)
+        d_from = d_from or d_to
+        if d_from > d_to:
+            d_from, d_to = d_to, d_from
+        d_from = max(d_from, d_to - timedelta(days=max_days - 1))
+    else:
+        try:
+            days = max(1, min(int(params.get("days") or default_days), max_days))
+        except ValueError:
+            days = default_days
+        d_to, d_from = today, today - timedelta(days=days - 1)
+    start = datetime.combine(d_from, time.min, TZ)
+    end = datetime.combine(d_to + timedelta(days=1), time.min, TZ)
+    return start, end, {"from": d_from.isoformat(), "to": d_to.isoformat(), "days": (d_to - d_from).days + 1, "tz": "Asia/Tashkent"}
 
 
 def _q(values, p):
@@ -22,18 +55,18 @@ def _q(values, p):
     return round(v[min(len(v) - 1, int(p * (len(v) - 1) + 0.5))], 1)
 
 
-def workload(days=30):
-    since = timezone.now() - timezone.timedelta(days=days)
-    questions = list(Message.objects.filter(kind=Message.QUESTION, created_at__gte=since)
+def workload(start, end, info=None):
+    questions = list(Message.objects.filter(kind=Message.QUESTION, created_at__gte=start, created_at__lt=end)
                      .exclude(status=Message.IGNORED).exclude(stage="dup")
                      .values("id", "created_at", "stage", "status", "group__title", "entry__title", "entry__zone__name",
                              "answered_at", "answered_by"))
     qids = {q["id"] for q in questions}
-    first = {}  # savol -> (vaqt, xodim)
-    staff_msgs = list(Message.objects.filter(kind__in=[Message.STAFF, Message.CLARIFY], created_at__gte=since, user__isnull=False)
+    first = {}  # savol -> (vaqt, xodim): xodimning birinchi javobi yoki aniqlashtirishi
+    # davr oxirida berilgan savolga keyinroq yozilgan javob ham hisobga olinadi
+    staff_msgs = list(Message.objects.filter(kind__in=[Message.STAFF, Message.CLARIFY], question_id__in=qids, user__isnull=False)
                       .select_related("user__member", "user__contact").order_by("created_at"))
     for r in staff_msgs:
-        if r.question_id in qids and r.question_id not in first:
+        if r.question_id not in first:
             first[r.question_id] = (r.created_at, r.user.staff_name())
     for q in questions:  # panel orqali javob
         if q["stage"] == "panel" and q["answered_at"] and (q["id"] not in first or q["answered_at"] < first[q["id"]][0]):
@@ -46,9 +79,9 @@ def workload(days=30):
     groups = defaultdict(lambda: {"questions": 0, "bot": 0, "unanswered": 0, "times": []})
     types = defaultdict(lambda: {"questions": 0, "bot": 0, "times": []})
     buckets = Counter()
-    all_times = []
+    all_times, any_times, human_need = [], [], []
     for q in questions:
-        lt = timezone.localtime(q["created_at"])
+        lt = local(q["created_at"])
         heat[lt.weekday()][lt.hour] += 1
         by_weekday[lt.weekday()] += 1
         by_date[lt.date().isoformat()] += 1
@@ -64,13 +97,22 @@ def workload(days=30):
             wk["bot"] += 1
             g["bot"] += 1
             tp["bot"] += 1
+        cands = []  # birinchi javob: bot yoki xodim — qaysi biri oldin
+        if bot and q["answered_at"]:
+            cands.append(q["answered_at"])
         if q["id"] in first:
-            mins = max(0.0, (first[q["id"]][0] - q["created_at"]).total_seconds() / 60)
-            all_times.append(mins)
+            cands.append(first[q["id"]][0])
+            secs_h = max(0.0, (first[q["id"]][0] - q["created_at"]).total_seconds())
+            all_times.append(secs_h)
             wk["human"] += 1
+            if not bot:
+                human_need.append(secs_h)
+        if cands:
+            secs = max(0.0, (min(cands) - q["created_at"]).total_seconds())
+            any_times.append(secs)
             for row in (wk, g, tp):
-                row["times"].append(mins)
-            buckets[next(label for lim, label in BUCKETS if mins <= lim)] += 1
+                row["times"].append(secs)
+            buckets[next(label for lim, label in BUCKETS if secs <= lim)] += 1
         elif not bot and q["status"] not in (Message.ANSWERED, Message.CLOSED):
             wk["unanswered"] += 1
             g["unanswered"] += 1
@@ -80,7 +122,7 @@ def workload(days=30):
                                "first_times": [], "weeks": Counter()})
     for r in staff_msgs:
         name = r.user.staff_name()
-        lt = timezone.localtime(r.created_at)
+        lt = local(r.created_at)
         p = per[name]
         p["hours"][lt.hour] += 1
         p["weekdays"][lt.weekday()] += 1
@@ -95,7 +137,7 @@ def workload(days=30):
     for qid, (at, name) in first.items():
         q_at = qtime.get(qid)
         if q_at and name in per:
-            per[name]["first_times"].append(max(0.0, (at - q_at).total_seconds() / 60))
+            per[name]["first_times"].append(max(0.0, (at - q_at).total_seconds()))
     week_keys = sorted(weeks)[-12:]
     staff = []
     for name, p in per.items():
@@ -107,7 +149,7 @@ def workload(days=30):
             "per_week": round((p["answers"] + p["clar"]) / max(1, len(p["weeks"])), 1),
             "active_hours_avg": round(sum(spans) / len(spans), 1) if spans else 0,
             "first_answers": len(ft), "first_median": _q(ft, 0.5), "first_p90": _q(ft, 0.9),
-            "within_15": round(100 * sum(1 for x in ft if x <= 15) / len(ft)) if ft else None,
+            "within_15": round(100 * sum(1 for x in ft if x <= 900) / len(ft)) if ft else None,
             "hours": p["hours"], "weekdays": p["weekdays"],
             "weeks": [p["weeks"].get(k, 0) for k in week_keys],
             "peak_hour": max(range(24), key=lambda h: p["hours"][h]) if any(p["hours"]) else None,
@@ -123,11 +165,14 @@ def workload(days=30):
                         **({"unanswered": v["unanswered"]} if "unanswered" in v else {})})
         return sorted(out, key=lambda x: -x["questions"])
 
-    tasks = Counter(SupportTask.objects.filter(created_at__gte=since).values_list("status", flat=True))
+    tasks = Counter(SupportTask.objects.filter(created_at__gte=start, created_at__lt=end).values_list("status", flat=True))
     return {
-        "days": days, "questions": len(questions), "answered_by_human": len(first),
-        "first_median": _q(all_times, 0.5), "first_p90": _q(all_times, 0.9),
-        "within_15": round(100 * sum(1 for x in all_times if x <= 15) / len(all_times)) if all_times else None,
+        **(info or {}), "unit": "s", "questions": len(questions), "answered_by_human": len(first), "answered_any": len(any_times),
+        "first_median": _q(any_times, 0.5), "first_p90": _q(any_times, 0.9),
+        "within_15": round(100 * sum(1 for x in any_times if x <= 900) / len(any_times)) if any_times else None,
+        "within_60s": round(100 * sum(1 for x in any_times if x <= 60) / len(any_times)) if any_times else None,
+        "human_median": _q(human_need, 0.5), "human_p90": _q(human_need, 0.9), "human_needed": len(human_need),
+        "staff_median": _q(all_times, 0.5),
         "heatmap": heat, "by_weekday": by_weekday,
         "busiest_dates": [{"date": d, "n": n} for d, n in by_date.most_common(7)],
         "buckets": [{"label": label, "n": buckets.get(label, 0)} for _lim, label in BUCKETS],
@@ -143,11 +188,11 @@ def workload(days=30):
 SPEED_BUCKETS = [(2, "≤2s"), (5, "2–5s"), (10, "5–10s"), (30, "10–30s"), (10 ** 9, ">30s")]
 
 
-def speed(days=7):
-    """Bot tezligi: savol kelgandan bot javobi yuborilguncha (soniya). Qayerda vaqt ketadi — navbat, OCR, AI, yuborish."""
+def speed(start, end, info=None):
+    """Bot tezligi: savol Telegram'da yuborilgandan bot javobi yuborilguncha (soniya). Qayerda vaqt ketadi — navbat, OCR, AI, yuborish."""
     from .models import Settings
-    since = timezone.now() - timezone.timedelta(days=days)
-    rows = list(Message.objects.filter(kind=Message.QUESTION, created_at__gte=since, answered_by="bot", answered_at__isnull=False)
+    rows = list(Message.objects.filter(kind=Message.QUESTION, created_at__gte=start, created_at__lt=end, answered_by="bot",
+                                       answered_at__isnull=False)
                 .values("id", "created_at", "answered_at", "stage", "photo_file_id", "group__title", "timing", "text"))
     def secs(r):
         return max(0.0, (r["answered_at"] - r["created_at"]).total_seconds())
@@ -160,8 +205,8 @@ def speed(days=7):
         stage[r["stage"] or "—"].append(v)
         kind["photo" if r["photo_file_id"] else "text"].append(v)
         group[r["group__title"] or "—"].append(v)
-        hour[timezone.localtime(r["created_at"]).hour].append(v)
-        day[timezone.localtime(r["created_at"]).date().isoformat()].append(v)
+        hour[local(r["created_at"]).hour].append(v)
+        day[local(r["created_at"]).date().isoformat()].append(v)
         for k, ms in (r["timing"] or {}).items():
             if isinstance(ms, (int, float)):
                 parts[k].append(ms / 1000)
@@ -172,7 +217,7 @@ def speed(days=7):
     slow = sorted(zip(rows, all_s), key=lambda x: -x[1])[:15]
     s = Settings.load()
     return {
-        "days": days, "answered": len(rows), "p50": _q(all_s, 0.5), "p90": _q(all_s, 0.9), "p99": _q(all_s, 0.99),
+        **(info or {}), "answered": len(rows), "p50": _q(all_s, 0.5), "p90": _q(all_s, 0.9), "p99": _q(all_s, 0.99),
         "max": round(max(all_s), 1) if all_s else None,
         "within_5": round(100 * sum(1 for v in all_s if v <= 5) / len(all_s)) if all_s else None,
         "within_3": round(100 * sum(1 for v in all_s if v <= 3) / len(all_s)) if all_s else None,

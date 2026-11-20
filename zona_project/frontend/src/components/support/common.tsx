@@ -71,6 +71,15 @@ export function useSupportMutation<V, R>(fn: (v: V) => Promise<R>, success?: str
 }
 
 /** Ko'p qatorli matn <-> ro'yxat. */
+/** Davomiylik (soniyadan): 12 s · 3.5 daq · 1.6 soat · 2.1 kun — aniq va o'qilishi oson. */
+export function fmtDur(t: ST, secs: number | null | undefined) {
+  if (secs == null) return "—";
+  if (secs < 60) return t("durS", { n: secs < 10 ? secs.toFixed(1).replace(/\.0$/, "") : Math.round(secs) });
+  if (secs < 3600) return t("anMin", { n: +(secs / 60).toFixed(1) });
+  if (secs < 86400) return t("wlHours", { n: +(secs / 3600).toFixed(1) });
+  return t("durD", { n: +(secs / 86400).toFixed(1) });
+}
+
 export const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 export const unlines = (a: string[] | undefined) => (a ?? []).join("\n");
 

@@ -69,6 +69,19 @@ class Handler:
     def when(msg):
         return msg.get("_date") or timezone.now()
 
+    def _stamp(self, obj, msg):
+        """Aniq vaqt: xabar Telegram'da yuborilgan payt (bot uni qachon qayta ishlaganidan qat'i nazar).
+        Javob tezligi shu paytdan hisoblanadi — tarmoq yoki navbat kechikishi ham hisobga kiradi."""
+        sent = msg.get("date")
+        if self.history or not sent:
+            return
+        import datetime as _dt
+        at = _dt.datetime.fromtimestamp(int(sent), tz=_dt.timezone.utc)
+        lag = (obj.created_at - at).total_seconds() if obj.created_at else 0
+        if 0 < lag < 2 * 86400:
+            Message.objects.filter(pk=obj.pk).update(created_at=at)
+            obj.created_at = at
+
     # ---------------------------------------------------------------- kirish nuqtasi
     def handle(self, upd):
         if "my_chat_member" in upd:
@@ -247,6 +260,7 @@ class Handler:
                       "source": "history" if self.history else "live"})
         if not created:
             return q  # takroriy yangilanish
+        self._stamp(q, msg)
         if self.history:
             q.created_at = self.when(msg)
             Message.objects.filter(pk=q.pk).update(created_at=q.created_at)
@@ -362,6 +376,7 @@ class Handler:
                       "source": "history" if self.history else "live"})
         if not created:
             return info
+        self._stamp(info, msg)
         if self.history:
             info.created_at = self.when(msg)
             Message.objects.filter(pk=info.pk).update(created_at=info.created_at)
@@ -619,7 +634,8 @@ class Handler:
                       "stage": "clarify" if clarify else "staff", "source": "history" if self.history else "live"})
         if not created:
             return a
-        when = self.when(msg)
+        self._stamp(a, msg)
+        when = self.when(msg) if self.history else a.created_at  # xodim javobi Telegram vaqti bilan
         if self.history:
             a.created_at = when
             Message.objects.filter(pk=a.pk).update(created_at=when)

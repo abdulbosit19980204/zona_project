@@ -6,7 +6,7 @@ import { Cpu, Gauge, Image as ImageIcon, Timer, Turtle, Zap } from "lucide-react
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { supportApi } from "./api";
+import { supportApi, type Range } from "./api";
 import { fmtDate, Metric, Panel, stageLabel } from "./common";
 import type { SKey, ST } from "./i18n";
 
@@ -14,8 +14,8 @@ const sec = (v: number | null | undefined) => (v == null ? "—" : `${v} s`);
 const PART_KEYS = ["recv", "wait", "queue", "media", "ocr", "decide", "send", "work"] as const;
 
 /** Bot tezligi: savol kelgandan javob yuborilguncha. Qayerda vaqt ketyapti — navbat, OCR, AI yoki yuborish. */
-export function Speed({ days, t }: { days: number; t: ST }) {
-  const q = useQuery({ queryKey: ["support", "speed", days], queryFn: () => supportApi.speed(Math.min(days, 90)), refetchInterval: 60_000 });
+export function Speed({ range, t }: { range: Range; t: ST }) {
+  const q = useQuery({ queryKey: ["support", "speed", range], queryFn: () => supportApi.speed(range), refetchInterval: 60_000 });
   const d = q.data;
   if (!d) return <Skeleton className="h-96" />;
   const maxB = Math.max(1, ...d.buckets.map((b) => b.n));

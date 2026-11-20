@@ -7,8 +7,10 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { supportApi, type Analytics } from "./api";
-import { Initials, Metric, Panel, Segmented, stageLabel } from "./common";
+import { supportApi, type Analytics, type Range } from "./api";
+import { Input } from "@/components/ui/input";
+
+import { fmtDur, Initials, Metric, Panel, Segmented, stageLabel } from "./common";
 import { DataTable, type Column } from "./data-table";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
@@ -20,17 +22,34 @@ type Tab = "overview" | "speed" | "workload" | "staff" | "askers" | "topics";
 /** Tahlil: savollar, bot ishi, xodimlar javoblari va javobdan oldin so'raladigan ma'lumotlar — bo'limlarga ajratilgan. */
 export function SupportAnalytics() {
   const t = useSt();
-  const [days, setDays] = useState("30");
+  const [preset, setPreset] = useState("30");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [tab, setTab] = useState<Tab>("overview");
-  const q = useQuery({ queryKey: ["support", "analytics", days], queryFn: () => supportApi.analytics(Number(days)), refetchInterval: 60_000 });
+  const range: Range = preset === "custom" ? { from: from || to, to: to || from } : { days: Number(preset) };
+  const ready = preset !== "custom" || Boolean(from || to);
+  const q = useQuery({ queryKey: ["support", "analytics", range], queryFn: () => supportApi.analytics(range), refetchInterval: 60_000, enabled: ready });
   const a = q.data;
   const botClosed = a ? ["template", "faq", "rule", "ai", "image"].reduce((s, k) => s + (a.by_stage[k] ?? 0), 0) : 0;
 
   return (
     <SupportShell title={t("anTitle")} description={t("anDesc")}
-      actions={<Segmented size="sm" value={days} onChange={setDays} options={[
-        { value: "7", label: t("days7") }, { value: "30", label: t("days30") }, { value: "90", label: t("days90") },
-      ]} />}>
+      actions={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Segmented size="sm" value={preset} onChange={setPreset} options={[
+            { value: "1", label: t("daysToday") }, { value: "7", label: t("days7") }, { value: "30", label: t("days30") },
+            { value: "90", label: t("days90") }, { value: "custom", label: t("daysCustom") },
+          ]} />
+          {preset === "custom" && (
+            <div className="flex items-center gap-1.5">
+              <Input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className="h-8 w-36 text-xs" aria-label={t("dateFrom")} />
+              <span className="text-xs text-muted-foreground">—</span>
+              <Input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className="h-8 w-36 text-xs" aria-label={t("dateTo")} />
+            </div>
+          )}
+          {a && <span className="text-[11px] tabular-nums text-muted-foreground">{a.from === a.to ? a.from : `${a.from} — ${a.to}`} · GMT+5</span>}
+        </div>
+      }>
       {!a && <div className="grid gap-4"><Skeleton className="h-20" /><Skeleton className="h-96" /></div>}
       {a && (
         <div className="grid gap-5">
@@ -52,8 +71,8 @@ export function SupportAnalytics() {
           ]} />
 
           {tab === "overview" && <Overview a={a} t={t} />}
-          {tab === "speed" && <Speed days={Number(days)} t={t} />}
-          {tab === "workload" && <Workload days={Number(days)} t={t} />}
+          {tab === "speed" && <Speed range={range} t={t} />}
+          {tab === "workload" && <Workload range={range} t={t} />}
           {tab === "staff" && <StaffTable a={a} t={t} />}
           {tab === "askers" && <Askers a={a} t={t} />}
           {tab === "topics" && <Topics a={a} t={t} />}
@@ -126,7 +145,7 @@ function Overview({ a, t }: { a: Analytics; t: ST }) {
             <Stat label={t("anQuestions")} value={a.protarget.questions} />
             <Stat label={t("kpiBot")} value={a.protarget.by_bot} />
             <Stat label={t("anUnanswered")} value={a.protarget.unanswered} />
-            <Stat label={t("anPtTeam")} value={<>{a.protarget.team_answers}{a.protarget.team_median_minutes != null && <span className="text-xs font-normal text-muted-foreground"> · {t("anMin", { n: a.protarget.team_median_minutes })}</span>}</>} />
+            <Stat label={t("anPtTeam")} value={<>{a.protarget.team_answers}{a.protarget.team_median_s != null && <span className="text-xs font-normal text-muted-foreground"> · {fmtDur(t, a.protarget.team_median_s)}</span>}</>} />
           </div>
           <Bars rows={a.protarget.types.map((x) => ({ key: x.title, label: x.title, n: x.n }))} empty={t("empty")} />
         </Panel>
@@ -176,9 +195,9 @@ function StaffTable({ a, t }: { a: Analytics; t: ST }) {
         <div className="ml-auto mt-1 h-1 w-16 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary" style={{ width: `${s.share}%` }} /></div></div>
     ) },
     { key: "clar", header: t("anClar"), align: "right", sort: (s) => s.clarifications, cell: (s) => <span className="font-mono">{s.clarifications}</span> },
-    { key: "speed", header: t("anSpeed"), align: "right", sort: (s) => s.median_minutes, cell: (s) => (
-      <span className="font-mono text-xs">{s.median_minutes == null ? "—" : t("anMin", { n: s.median_minutes })}
-        {s.avg_minutes != null && <span className="block text-muted-foreground">⌀ {t("anMin", { n: s.avg_minutes })}</span>}</span>
+    { key: "speed", header: t("anSpeed"), align: "right", sort: (s) => s.median_s, cell: (s) => (
+      <span className="font-mono text-xs">{fmtDur(t, s.median_s)}
+        {s.avg_s != null && <span className="block text-muted-foreground">⌀ {fmtDur(t, s.avg_s)}</span>}</span>
     ) },
     { key: "day", header: t("anPerDay"), align: "right", sort: (s) => s.per_day, cell: (s) => (
       <span className="font-mono">{s.per_day}<span className="block text-[11px] text-muted-foreground">{t("anDays", { n: s.active_days })}</span></span>

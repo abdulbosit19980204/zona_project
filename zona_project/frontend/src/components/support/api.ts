@@ -90,9 +90,13 @@ export interface Speed {
   workers: number; cpu: number | null;
 }
 export interface WorkloadRow { questions: number; bot: number; bot_rate: number; median: number | null; p90: number | null; unanswered?: number }
-export interface Workload {
-  days: number; questions: number; answered_by_human: number; first_median: number | null; first_p90: number | null;
-  within_15: number | null; heatmap: number[][]; by_weekday: number[]; busiest_dates: { date: string; n: number }[];
+/** Hisobot davri: oxirgi N kun (bugun ham to'liq) yoki istalgan sanalar oralig'i. Kunlar Toshkent vaqti bilan. */
+export type Range = { days?: number; from?: string; to?: string };
+export interface Period { from: string; to: string; days: number; tz: string }
+export interface Workload extends Period {
+  questions: number; answered_by_human: number; answered_any: number; first_median: number | null; first_p90: number | null;
+  within_15: number | null; within_60s: number | null; human_median: number | null; human_p90: number | null; human_needed: number;
+  staff_median: number | null; heatmap: number[][]; by_weekday: number[]; busiest_dates: { date: string; n: number }[];
   buckets: { label: string; n: number }[];
   weeks: { week: string; questions: number; bot: number; human: number; unanswered: number; median: number | null }[];
   groups: (WorkloadRow & { group: string })[]; types: (WorkloadRow & { type: string })[];
@@ -139,18 +143,18 @@ export interface HistoryJob {
     clarifications?: number; candidates?: number; flood_wait?: number };
   error: string; created_by: string; created_at: string; started_at: string | null; finished_at: string | null;
 }
-export interface Analytics {
+export interface Analytics extends Period {
   days: number; questions: number; unanswered: number; with_photo: number; entries_with_ask_first: number;
   by_source: Record<string, number>; by_stage: Record<string, number>;
-  staff: { name: string; answers: number; panel: number; clarifications: number; median_minutes: number | null; groups: string[];
-    candidates: number; approved: number; rejected: number; questions: number; share: number; avg_minutes: number | null;
+  staff: { name: string; answers: number; panel: number; clarifications: number; median_s: number | null; groups: string[];
+    candidates: number; approved: number; rejected: number; questions: number; share: number; avg_s: number | null;
     active_days: number; per_day: number; messages: number; last: string | null; topics: { title: string; n: number }[] }[];
   top_asks: { text: string; count: number }[];
   daily: { date: string; total: number; bot: number; staff: number }[];
   groups: { title: string; n: number }[];
   zones: Record<string, number>;
   protarget: { questions: number; by_bot: number; unanswered: number; types: { title: string; n: number }[];
-    team_answers: number; team_median_minutes: number | null };
+    team_answers: number; team_median_s: number | null };
   images: { total: number; labeled: number; types: number; by_image: number };
   askers: { user: number; name: string; username: string; staff_person: string; questions: number; bot: number; escalated: number;
     groups: string[]; last: string; top_types: { title: string; n: number }[] }[];
@@ -204,9 +208,9 @@ export const supportApi = {
   answer: (id: number, text: string, save = true, approve = false) =>
     post<{ ok: boolean; entry: number | null }>(`messages/${id}/answer/`, { text, save, approve }),
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),
-  analytics: (days = 30) => get<Analytics>("analytics/", { days }),
-  workload: (days = 30) => get<Workload>("analytics/workload/", { days }),
-  speed: (days = 7) => get<Speed>("analytics/speed/", { days }),
+  analytics: (r: Range = { days: 30 }) => get<Analytics>("analytics/", r),
+  workload: (r: Range = { days: 30 }) => get<Workload>("analytics/workload/", r),
+  speed: (r: Range = { days: 7 }) => get<Speed>("analytics/speed/", r),
   tasks: (status = "all") => get<TasksPayload>("tasks/", { status }),
   taskAction: (id: number, action: "retry" | "skip", assignee?: string) => post<SupportTaskInfo>(`tasks/${id}/${action}/`, assignee ? { assignee } : {}),
   taskTest: (assignee: string) => post<SupportTaskInfo>("tasks/test/", { assignee }),

@@ -543,8 +543,9 @@ class MessageViewSet(ZonaViewSet):
 # ====================================================================== statistika va xodimlar
 @zona_api(["GET"], [CanView])
 def stats(request):
-    since = timezone.now() - timezone.timedelta(days=int(request.query_params.get("days") or 7))
-    qs = Message.objects.filter(kind=Message.QUESTION, created_at__gte=since)
+    from .workload import period
+    since, end, _info = period(request.query_params, default_days=7)
+    qs = Message.objects.filter(kind=Message.QUESTION, created_at__gte=since, created_at__lt=end)
     by_status = dict(qs.values_list("status").annotate(c=Count("id")))
     by_stage = dict(qs.exclude(stage="").values_list("stage").annotate(c=Count("id")))
     entries = dict(Entry.objects.values_list("status").annotate(c=Count("id")))
@@ -646,9 +647,9 @@ def analytics(request):
     from statistics import median
 
     from .engine import tokens_text
-    days = max(1, min(int(request.query_params.get("days") or 30), 365))
-    since = timezone.now() - timezone.timedelta(days=days)
-    msgs = Message.objects.filter(created_at__gte=since)
+    from .workload import local, period
+    since, end, info = period(request.query_params)
+    msgs = Message.objects.filter(created_at__gte=since, created_at__lt=end)
     questions = msgs.filter(kind=Message.QUESTION)
 
     # xodimlar: kim nechta savolga javob berdi, qanchalik tez, qancha ishladi
@@ -660,7 +661,7 @@ def analytics(request):
         row = per[name]
         row["user"] = row["user"] or r.user
         row["groups"].add(r.group.title if r.group else "")
-        row["days"].add(timezone.localtime(r.created_at).date())
+        row["days"].add(local(r.created_at).date())
         row["last"] = max(row["last"], r.created_at) if row["last"] else r.created_at
         if r.kind == Message.CLARIFY:
             row["clarifications"] += 1
@@ -668,7 +669,7 @@ def analytics(request):
             row["answers"] += 1
             if r.question_id:
                 row["questions"].add(r.question_id)
-                row["times"].append(max(0.0, (r.created_at - r.question.created_at).total_seconds() / 60))
+                row["times"].append(max(0.0, (r.created_at - r.question.created_at).total_seconds()))  # soniya
                 if r.question.entry_id:
                     row["topics"][r.question.entry.title] += 1
     panel = Counter(questions.filter(stage="panel").values_list("answered_by", flat=True))
@@ -689,8 +690,8 @@ def analytics(request):
         staff.append({"name": name, "answers": answers, "panel": panel.get(name, 0), "clarifications": r["clarifications"],
                       "questions": len(r["questions"]) + panel.get(name, 0),
                       "share": round(100 * answers / total_answers),
-                      "median_minutes": round(median(r["times"]), 1) if r["times"] else None,
-                      "avg_minutes": round(sum(r["times"]) / len(r["times"]), 1) if r["times"] else None,
+                      "median_s": round(median(r["times"]), 1) if r["times"] else None,
+                      "avg_s": round(sum(r["times"]) / len(r["times"]), 1) if r["times"] else None,
                       "active_days": len(r["days"]), "per_day": round(answers / max(1, len(r["days"])), 1),
                       "messages": u.msg_count if u else 0, "last": r["last"],
                       "groups": sorted(g for g in r["groups"] if g),
@@ -712,16 +713,16 @@ def analytics(request):
     # savollar: kunlar, guruhlar, bosqichlar, javobsizlar
     daily = defaultdict(lambda: {"total": 0, "bot": 0, "staff": 0})
     for created, stage in questions.values_list("created_at", "stage"):
-        d = daily[timezone.localtime(created).date().isoformat()]
+        d = daily[local(created).date().isoformat()]
         d["total"] += 1
-        if stage in ("template", "faq", "rule", "ai"):
+        if stage in ("template", "faq", "rule", "ai", "image"):
             d["bot"] += 1
         elif stage in ("staff", "panel"):
             d["staff"] += 1
     groups = list(questions.values("group__title").annotate(n=Count("id")).order_by("-n")[:15])
     unanswered = questions.exclude(status__in=[Message.ANSWERED, Message.CLOSED, Message.IGNORED]).count()
     return Response({
-        "days": days, "questions": questions.count(), "unanswered": unanswered,
+        **info, "questions": questions.count(), "unanswered": unanswered,
         "by_source": dict(questions.values_list("source").annotate(c=Count("id"))),
         "by_stage": dict(questions.exclude(stage="").values_list("stage").annotate(c=Count("id"))),
         "staff": staff, "top_asks": top_asks,
@@ -733,7 +734,7 @@ def analytics(request):
         "askers": _askers(questions),
         "top_types": [{"entry": r["entry"], "title": r["entry__title"], "n": r["n"]} for r in
                       questions.filter(entry__isnull=False).values("entry", "entry__title").annotate(n=Count("id")).order_by("-n")[:20]],
-        "protarget": _protarget(questions, since),
+        "protarget": _protarget(questions, since, end),
         "images": {"total": Media.objects.filter(kind=Media.PHOTO).count(),
                    "labeled": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).count(),
                    "types": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).values("label").distinct().count(),
@@ -745,16 +746,18 @@ def analytics(request):
 def analytics_workload(request):
     """Ish yuklamasi: soat × hafta kuni, haftalar, guruhlar, savol turlari, xodimlarning ish soatlari va javob tezligi."""
     from .workload import workload
-    days = max(1, min(int(request.query_params.get("days") or 30), 365))
-    return Response(workload(days))
+    from .workload import period
+    start, end, info = period(request.query_params)
+    return Response(workload(start, end, info))
 
 
 @zona_api(["GET"], [CanView])
 def analytics_speed(request):
     """Bot tezligi: savoldan javobgacha soniyalar, bosqichlar, soatlar, eng sekin savollar."""
     from .workload import speed
-    days = max(1, min(int(request.query_params.get("days") or 7), 90))
-    return Response(speed(days))
+    from .workload import period
+    start, end, info = period(request.query_params, default_days=7)
+    return Response(speed(start, end, info))
 
 
 def _askers(questions):
@@ -789,7 +792,7 @@ def _zones(questions):
     return out
 
 
-def _protarget(questions, since):
+def _protarget(questions, since, end=None):
     """Pro-target'ga tegishli savollar: turlari, javobsizlari va Pro-target jamoasi javoblari."""
     from collections import Counter
     from statistics import median
@@ -799,13 +802,13 @@ def _protarget(questions, since):
                           | Q(entry__title__istartswith="ProTarget"))
     types = Counter(pt.values_list("entry__title", flat=True))
     team = set(TeamContact.objects.filter(member__name="Pro-target").values_list("name", flat=True))
-    times = [max(0.0, (r.created_at - r.question.created_at).total_seconds() / 60)
-             for r in Message.objects.filter(kind=Message.STAFF, created_at__gte=since, question__isnull=False)
+    times = [max(0.0, (r.created_at - r.question.created_at).total_seconds())
+             for r in Message.objects.filter(kind=Message.STAFF, question__in=questions)
              .select_related("user__contact", "user__member", "question") if r.user and r.user.staff_name() in team]
     return {"questions": pt.count(), "by_bot": pt.filter(stage__in=["template", "faq", "rule", "ai", "image"]).count(),
             "unanswered": pt.exclude(status__in=[Message.ANSWERED, Message.CLOSED, Message.IGNORED]).count(),
             "types": [{"title": t, "n": n} for t, n in types.most_common(10)],
-            "team_answers": len(times), "team_median_minutes": round(median(times), 1) if times else None}
+            "team_answers": len(times), "team_median_s": round(median(times), 1) if times else None}
 
 
 # ====================================================================== fayllar va rasm turlari (o'rgatish)

@@ -71,7 +71,7 @@ class StaffActivityTests(Base):
         self.login("viewer")
         row = next(x for x in self.call("get", "support/analytics/?days=30").json()["staff"] if x["name"] == "Saida")
         self.assertEqual((row["answers"], row["questions"], row["messages"], row["active_days"], row["share"]), (2, 2, 3, 1, 100))
-        self.assertIsNotNone(row["avg_minutes"])
+        self.assertIsNotNone(row["avg_s"])
 
 
 class SmartContactTests(Base):

@@ -7,27 +7,28 @@ import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { supportApi, type Workload as W, type WorkloadRow } from "./api";
-import { Initials, Metric, Panel } from "./common";
+import { supportApi, type Range, type Workload as W, type WorkloadRow } from "./api";
+import { fmtDur, Initials, Metric, Panel } from "./common";
 import type { SKey, ST } from "./i18n";
 
 const WD: SKey[] = ["wd0", "wd1", "wd2", "wd3", "wd4", "wd5", "wd6"];
-const mins = (t: ST, v: number | null) => (v == null ? "—" : v >= 60 ? t("wlHours", { n: (v / 60).toFixed(1) }) : t("anMin", { n: v }));
+const mins = fmtDur;  // backend vaqtlarni soniyada beradi
 /** Ketma-ket (bir rang, ochdan to'qqa) shkala: 0 — bo'sh katak, qolgani asosiy rangning to'yinganligi. */
 const shade = (v: number, max: number) => (v ? `color-mix(in oklab, var(--primary) ${Math.round(12 + 88 * (v / max))}%, var(--card))` : undefined);
 
 /** Ish yuklamasi: qachon va qayerdan ko'p savol tushadi, xodimlar qancha tez va qancha vaqt ishlaydi. */
-export function Workload({ days, t }: { days: number; t: ST }) {
-  const q = useQuery({ queryKey: ["support", "workload", days], queryFn: () => supportApi.workload(days), refetchInterval: 120_000 });
+export function Workload({ range, t }: { range: Range; t: ST }) {
+  const q = useQuery({ queryKey: ["support", "workload", range], queryFn: () => supportApi.workload(range), refetchInterval: 120_000 });
   const d = q.data;
   if (!d) return <Skeleton className="h-96" />;
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label={t("wlHuman")} value={d.answered_by_human} hint={t("wlOf", { n: d.questions })} icon={Users} tone="primary" />
-        <Metric label={t("wlMedian")} value={mins(t, d.first_median)} hint={t("wlMedianHint")} icon={Timer} tone="success" />
+        <Metric label={t("wlMedian")} value={mins(t, d.first_median)} hint={t("wlMedianHint2", { n: d.answered_any })} icon={Timer} tone="success" />
         <Metric label={t("wlP90")} value={mins(t, d.first_p90)} hint={t("wlP90Hint")} icon={Gauge} tone="warning" />
-        <Metric label={t("wlWithin15")} value={d.within_15 == null ? "—" : `${d.within_15}%`} icon={Clock3} />
+        <Metric label={t("wlHumanMed")} value={mins(t, d.human_median)} hint={t("wlHumanMedHint", { n: d.human_needed, all: d.answered_by_human })} icon={Users} tone="primary" />
+        <Metric label={t("wlWithin60")} value={d.within_60s == null ? "—" : `${d.within_60s}%`}
+          hint={d.within_15 == null ? undefined : t("wlWithin15Short", { n: d.within_15 })} icon={Clock3} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
