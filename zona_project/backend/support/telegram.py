@@ -112,6 +112,21 @@ class Client:
         except TelegramError:
             pass
 
+    def edit_text(self, chat_id, message_id, text, buttons=None, html=True):
+        """Xabar matnini almashtirish (oraliq "ko'ryapman…" xabari -> haqiqiy javob)."""
+        self._throttle(chat_id)
+        params = {"chat_id": chat_id, "message_id": int(message_id), "text": text[:4096], "disable_web_page_preview": True,
+                  "parse_mode": "HTML" if html else None}
+        if buttons:
+            params["reply_markup"] = {"inline_keyboard": buttons}
+        return self.call("editMessageText", params, retries=1)
+
+    def delete(self, chat_id, message_id):
+        try:
+            return self.call("deleteMessage", {"chat_id": chat_id, "message_id": int(message_id)}, retries=0)
+        except TelegramError:
+            return None
+
     def copy(self, chat_id, from_chat_id, message_id):
         """Xabarni (rasm/fayl bilan) boshqa chatga nusxalash — forward belgisisiz."""
         self._throttle(chat_id)

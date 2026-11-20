@@ -573,6 +573,8 @@ const uz = {
   varGen: "AI: variant yozish",
   varQueued: "AI variantlarni yozmoqda — bir necha daqiqada shu yerda chiqadi",
   varHint: "Bot har safar asl javob yoki shulardan birini tanlaydi — chatdagilar bir xil shablonni koʻrib zerikmaydi. Raqamlar, nomlar va qadamlar tekshirilgan. Javob matni oʻzgarsa, variantlar oʻchadi.",
+  t_progress: "Kutishda oraliq xabar",
+  t_progressHint: "Javob tayyorlanishi uzoq boʻlsa (rasm oʻqish, AI), bot darhol «🔎 Koʻryapman, hozir yordam beraman…» deb javob beradi, kutishda matn almashib turadi va shu xabar haqiqiy javobga aylanadi. Tez javoblarda chiqmaydi.",
 };
 
 export type SKey = keyof typeof uz;
@@ -1139,6 +1141,8 @@ const ru: Record<SKey, string> = {
   varGen: "AI: написать варианты",
   varQueued: "AI пишет варианты — появятся здесь через несколько минут",
   varHint: "Бот каждый раз выбирает исходный ответ или один из вариантов. Цифры, имена и шаги проверены. При изменении ответа варианты удаляются.",
+  t_progress: "Промежуточное сообщение при ожидании",
+  t_progressHint: "Если ответ готовится дольше (чтение скриншота, AI), бот сразу пишет «🔎 Смотрю, сейчас помогу…», текст обновляется во время ожидания, а потом это же сообщение становится ответом. При быстрых ответах не появляется.",
 };
 
 const en: Record<SKey, string> = {
@@ -1703,6 +1707,8 @@ const en: Record<SKey, string> = {
   varGen: "AI: write variants",
   varQueued: "AI is writing variants — they will appear here in a few minutes",
   varHint: "Each time the bot picks the original or one of these. Numbers, names and steps are checked. Variants are cleared when the answer changes.",
+  t_progress: "Progress message while waiting",
+  t_progressHint: "When the answer takes longer (reading a screenshot, AI) the bot replies right away “🔎 Looking, I'll help in a moment…”, updates it while waiting and turns the same message into the answer. Not shown for fast answers.",
 };
 
 const DICT: Record<Locale, Record<SKey, string>> = { uz, ru, en };

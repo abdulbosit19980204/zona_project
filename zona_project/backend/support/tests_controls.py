@@ -14,7 +14,7 @@ from zona.tests import Base
 from . import engine
 from .models import MODE_COLLECT, MODE_LIVE, Bot, Entry, Group, HistoryJob, Message, Settings
 from .runner import Handler
-from .tests import OCR_PT, FakeClient, group_msg
+from .tests import OCR_PT, FakeClient, group_msg, visible
 
 
 class ControlsBase(Base):
@@ -92,10 +92,10 @@ class ModeAndToggleTests(ControlsBase):
                                                                drafts_to_admin=False)
         h = self.handler()
         h.handle(group_msg(1, 10, "noma'lum murakkab savol bu yerda yozilgan"))
-        self.assertEqual(self.tg.sent, [])  # na guruhga, na admin chatiga
+        self.assertEqual(visible(self.tg), [])  # na guruhga, na admin chatiga (oraliq xabar o'chirildi)
         h.handle(group_msg(2, 10, "Nuqta отправлена на модерацию, qachon?"))
-        self.assertEqual(len(self.tg.sent), 1)
-        self.assertIsNone(self.tg.sent[0]["buttons"])
+        self.assertEqual(len(visible(self.tg)), 1)
+        self.assertIsNone(visible(self.tg)[0]["buttons"])
 
     def test_bot_asks_required_info_first_then_answers(self):
         Entry.objects.create(kind=Entry.FAQ, title="Klient agentda ko'rinmayapti", answer="Supervayzer marshrutga qo'shadi.",

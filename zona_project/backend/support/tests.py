@@ -35,11 +35,26 @@ class FakeClient:
     def edit_buttons(self, chat_id, message_id, buttons=None):
         self.edited.append(message_id)
 
+    def edit_text(self, chat_id, message_id, text, buttons=None, html=True):
+        self.edits = getattr(self, "edits", [])
+        self.edits.append({"chat": chat_id, "id": message_id, "text": text, "buttons": buttons})
+        return {"message_id": message_id}
+
+    def delete(self, chat_id, message_id):
+        self.deleted = getattr(self, "deleted", [])
+        self.deleted.append(message_id)
+
     def typing(self, chat_id):
         pass
 
     def download(self, file_id, max_bytes=0):
         return b"img"
+
+
+def visible(tg):
+    """Chatda qolgan xabarlar (oraliq "ko'ryapman…" xabari o'chirilgan bo'lsa — hisobga olinmaydi)."""
+    gone = set(getattr(tg, "deleted", []))
+    return [x for i, x in enumerate(tg.sent) if 1001 + i not in gone]
 
 
 def group_msg(mid, uid, text, username="", reply_to=None, chat=-100, photo=False):

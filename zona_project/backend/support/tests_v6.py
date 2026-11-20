@@ -13,7 +13,7 @@ from zona.tests import Base
 from . import engine
 from .models import MODE_LIVE, Bot, Entry, Group, Media, Message, Settings
 from .runner import Handler
-from .tests import FakeClient, group_msg
+from .tests import FakeClient, group_msg, visible
 
 
 class FlowBase(Base):
@@ -55,7 +55,7 @@ class AlbumTests(FlowBase):
             h = self.h()
             h.handle(group_msg(1, 10, "", photo=True))
             h.handle(group_msg(2, 10, "", photo=True))
-        answers = [x for x in self.tg.sent if x["chat"] == -100]
+        answers = [x for x in visible(self.tg) if x["chat"] == -100]
         self.assertEqual(len(answers), 1)
         self.assertEqual(Message.objects.get(message_id=2).stage, "dup")
 

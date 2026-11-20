@@ -55,6 +55,8 @@ class Settings(models.Model):
     task_mode = models.CharField("Vazifa rejimi", max_length=8, default="command", db_default="command")
     task_remind_group = models.BooleanField("Guruhda qisqa eslatma (@mas'ul)", default=True, db_default=True)
     task_remind_dm = models.BooleanField("Mas'ulga shaxsiy xabarda tafsilot", default=True, db_default=True)
+    progress_messages = models.BooleanField("Sekin javobda oraliq xabar (\"ko'ryapman…\") va kutish davomida yangilanib turish",
+                                            default=True, db_default=True)
     answer_variety = models.BooleanField("Javoblarni har safar biroz boshqacha (mazmuni o'zgarmagan holda) yozish",
                                          default=True, db_default=True)
     self_learning = models.BooleanField("O'z-o'zini o'qitish (chatlardan o'rganish)", default=True, db_default=True)

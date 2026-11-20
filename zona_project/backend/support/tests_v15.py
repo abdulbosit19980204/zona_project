@@ -98,3 +98,31 @@ class VarietyTests(FlowBase):
             ai_review.run_job(job.id)
         self.assertEqual(seen, [2, 1, 1])
         self.assertEqual(Entry.objects.filter(variants__isnull=False).count(), 2)
+
+
+class ProgressTests(FlowBase):
+    def test_slow_answer_shows_progress_then_becomes_the_answer(self):
+        Settings.load()
+        slow = Decision("ai", None, 90, "AI javobi: supervayzer marshrutga qo'shadi.", False)
+        real = engine.decide
+
+        def fake(*a, **k):
+            return None if k.get("fast") else slow
+        with mock.patch.object(engine, "decide", side_effect=fake):
+            self.h().handle(group_msg(1, 10, "klientim agentda ko'rinmayapti nima qilay"))
+        group = [x for x in self.tg.sent if x["chat"] == -100]
+        self.assertEqual(len(group), 1)  # bitta xabar: avval "ko'ryapman…", keyin shu xabar javobga aylandi
+        self.assertTrue(group[0]["text"].startswith(("🔎", "👀", "⏳")))
+        self.assertIn("supervayzer marshrutga", self.tg.edits[-1]["text"])
+        self.assertEqual(Message.objects.get(message_id=1).status, Message.ANSWERED)
+        _ = real
+
+    def test_fast_answer_has_no_progress(self):
+        Entry.objects.create(kind=Entry.FAQ, title="Parol", answer="Profil → Parolni tiklash.",
+                             questions=["parolni qanday tiklayman"], status=Entry.APPROVED)
+        Settings.objects.update(ai_primary=False, ai_enabled=False)
+        self.h().handle(group_msg(2, 10, "parolni qanday tiklayman"))
+        group = [x for x in self.tg.sent if x["chat"] == -100]
+        self.assertEqual(len(group), 1)
+        self.assertIn("Parolni tiklash", group[0]["text"])
+        self.assertFalse(getattr(self.tg, "edits", []))
