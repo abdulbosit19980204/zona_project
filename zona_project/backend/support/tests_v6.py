@@ -56,7 +56,8 @@ class AlbumTests(FlowBase):
             h.handle(group_msg(1, 10, "", photo=True))
             h.handle(group_msg(2, 10, "", photo=True))
         answers = [x for x in visible(self.tg) if x["chat"] == -100]
-        self.assertEqual(len(answers), 1)
+        self.assertEqual(len(answers), 2)  # javob + qisqa "javobi yuqorida" eslatmasi
+        self.assertIn("☝️", answers[1]["text"])
         self.assertEqual(Message.objects.get(message_id=2).stage, "dup")
 
     def test_forwarded_message_is_answered(self):

@@ -111,7 +111,8 @@ class ProgressTests(FlowBase):
             self.h().handle(group_msg(1, 10, "klientim agentda ko'rinmayapti nima qilay"))
         group = [x for x in self.tg.sent if x["chat"] == -100]
         self.assertEqual(len(group), 1)  # bitta xabar: avval "ko'ryapman…", keyin shu xabar javobga aylandi
-        self.assertTrue(group[0]["placeholder"].startswith(("🔎", "👀", "⏳")))
+        self.assertTrue(group[0]["placeholder"][0] in "🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚🕛")  # soat animatsiyasi
+        self.assertIn("▱", group[0]["placeholder"])  # progress chizig'i
         self.assertEqual(group[0]["reply_to"], 1)
         self.assertIn("supervayzer marshrutga", group[0]["text"])
         self.assertEqual(Message.objects.get(message_id=1).status, Message.ANSWERED)
@@ -166,3 +167,36 @@ class PolicyTests(FlowBase):
         self.assertEqual(Entry.objects.get(pk=self.faq.pk).kind, Entry.TEMPLATE)
         # standart holatga o'tgan yozuv shartlari bo'lmasa ham savol ko'rinishi bo'yicha topiladi
         self.assertEqual(engine.decide("kassa apparati chek chiqarmayapti").entry, Entry.objects.get(pk=self.faq.pk))
+
+
+class MultiImageTests(FlowBase):
+    FEATS = {"width": 576, "height": 1280, "dhash": "0f0f0f0f0f0f0f0f", "dhash_mid": "0f0f0f0f0f0f0f0f"}
+
+    def test_different_screens_in_a_row_each_get_an_answer(self):
+        a = Entry.objects.create(kind=Entry.TEMPLATE, title="Ekran A", answer="A javobi", status=Entry.APPROVED)
+        b = Entry.objects.create(kind=Entry.TEMPLATE, title="Ekran B", answer="B javobi", status=Entry.APPROVED)
+        order = iter([(a, 1, None), (b, 1, None), (a, 1, None)])
+        with mock.patch("support.vision.features", return_value=self.FEATS), \
+                mock.patch("support.runner.ocr.read_text", return_value=""), \
+                mock.patch("support.runner.vision.match", side_effect=lambda *x, **k: next(order)):
+            h = self.h()
+            h.handle(group_msg(1, 10, "", photo=True))
+            h.handle(group_msg(2, 10, "", photo=True))
+            h.handle(group_msg(3, 10, "", photo=True))
+        texts = [x["text"] for x in self.tg.sent if x["chat"] == -100]
+        self.assertTrue(any("A javobi" in t for t in texts))
+        self.assertTrue(any("B javobi" in t for t in texts))  # boshqa ekran — alohida javob
+        self.assertEqual(Message.objects.get(message_id=3).stage, "dup")  # yana A — qisqa eslatma
+        self.assertTrue(any("☝️" in t for t in texts))
+
+    def test_album_with_two_screens_gives_two_answers(self):
+        a = Entry.objects.create(kind=Entry.TEMPLATE, title="Ekran A", answer="A javobi", status=Entry.APPROVED)
+        b = Entry.objects.create(kind=Entry.TEMPLATE, title="Ekran B", answer="B javobi", status=Entry.APPROVED)
+        d = engine.decide("", text="", images=[(a, 90, 0), (b, 90, 1)])
+        self.assertEqual([p[1] for p in d.parts], [a, b])
+        q = Message.objects.create(bot=self.bot, chat_id=-100, message_id=9, text="", photo_file_id="x")
+        h = self.h()
+        h._respond(q, d, "live", False)
+        texts = [x["text"] for x in self.tg.sent if x["chat"] == -100]
+        self.assertEqual(sum(1 for t in texts if "javobi" in t), 2)
+        self.assertTrue(any(t.startswith("🖼 1-rasm") or "1-rasm" in t for t in texts))

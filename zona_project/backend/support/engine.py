@@ -35,6 +35,7 @@ class Decision:
     fields: dict = field(default_factory=dict)
     unapproved: bool = False   # soya rejimida tasdiqlanmagan shablon ishlatildi
     note: str = ""
+    parts: list = field(default_factory=list)  # albomda turli ekranlar: [(rasm_tartibi, yozuv, ishonch)] — alohida javoblar
 
 
 # ------------------------------------------------------------------ yordamchilar
@@ -533,7 +534,8 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
             best = distinct[0]
             return Decision("image", best[0], min(c for _e, c, _i in distinct), "\n\n".join(parts), False, own(best[0]), {},
                             any(e.status != Entry.APPROVED for e, _c, _i in distinct),
-                            note="albom: " + ", ".join(f"{i + 1}-rasm→#{e.pk}" for e, _c, i in distinct))
+                            note="albom: " + ", ".join(f"{i + 1}-rasm→#{e.pk}" for e, _c, i in distinct),
+                            parts=[(i, e, c) for e, c, i in sorted(distinct, key=lambda x: x[2])])
 
     # aniq matnli savolda shablon va bazadan qidiruv faqat matn bo'yicha (uzun rasm matni javobni chalg'itmasin)
     qtext = text if strong_text else raw
