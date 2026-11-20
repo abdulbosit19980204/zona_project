@@ -27,7 +27,7 @@ class FakeClient:
         Handler._answered.clear()  # testlar orasida "yaqinda javob berilgan" xotirasi qolmasin (id'lar qayta ishlatiladi)
         self.sent, self.callbacks, self.edited = [], [], []
 
-    def send(self, chat_id, text, reply_to=None, buttons=None, html=True):
+    def send(self, chat_id, text, reply_to=None, buttons=None, html=True, **kw):
         self.sent.append({"chat": chat_id, "text": text, "reply_to": reply_to, "buttons": buttons})
         return {"message_id": 1000 + len(self.sent)}
 

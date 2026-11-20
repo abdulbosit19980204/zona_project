@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, Copy, RotateCcw, GitMerge, Layers, ListChecks, Pencil, Sparkles, SquareStack, Star, X } from "lucide-react";
+import { Check, ChevronRight, Copy, ExternalLink, RotateCcw, GitMerge, Layers, ListChecks, MessageSquare, Pencil, Sparkles, SquareStack, Star, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -20,6 +20,7 @@ import { AISuggestions } from "./ai-suggestions";
 import { Duplicates } from "./duplicates";
 import { Recheck } from "./recheck";
 import { EntryEditor } from "./entry-editor";
+import { MediaRow } from "./media";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 
@@ -81,6 +82,40 @@ function EntryHead({ e, t }: { e: Entry; t: ST }) {
   );
 }
 
+/** Yozuv qaysi savoldan o'rganilgan: muallif, guruh, matn va savoldagi BARCHA fayllar (albom, qo'shimcha skrinshotlar). */
+function Sources({ e, t }: { e: Entry; t: ST }) {
+  const src = e.sources_info ?? [];
+  if (!src.length) return null;
+  const title = (e.pending?.title ?? e.title).trim();
+  return (
+    <div className="grid gap-2">
+      {src.map((s) => (
+        <div key={s.id} className="grid min-w-0 gap-1.5 rounded-lg border bg-muted/30 p-2.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <MessageSquare className="size-3.5" />
+            <span className="font-medium text-foreground">{t("srcTitle")}</span>
+            {s.user && <span>· {s.user}</span>}
+            {s.group && <span>· {s.group}</span>}
+            <span>· {fmtDate(s.at)}</span>
+            {s.media.length > 0 && <span>· {t("srcFiles", { n: s.media.length })}</span>}
+            {s.link && (
+              <a href={s.link} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-primary hover:underline">
+                <ExternalLink className="size-3.5" />{t("srcOpen")}
+              </a>
+            )}
+          </div>
+          {s.text && s.text.trim() !== title && <p className="whitespace-pre-wrap break-words text-sm">{s.text}</p>}
+          {s.info.length > 0 && (
+            <p className="break-words text-xs text-muted-foreground"><span className="font-medium">{t("srcInfo")}:</span> {s.info.join(" · ")}</p>
+          )}
+          <MediaRow items={s.media} />
+          {!s.text && s.ocr && <p className="line-clamp-2 break-words text-xs text-muted-foreground">{t("srcOcr")}: {s.ocr}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Diff({ e, t }: { e: Entry; t: ST }) {
   if (!e.pending?.answer) return <p className="whitespace-pre-wrap text-sm">{e.answer}</p>;
   return (
@@ -128,6 +163,7 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
               <EntryHead e={e} t={t} />
               <div className="font-semibold leading-snug">{e.pending?.title ?? e.title}</div>
               {(e.questions ?? []).length > 1 && <div className="text-xs text-muted-foreground">{e.questions.slice(1).join(" · ")}</div>}
+              <Sources e={e} t={t} />
               <Diff e={e} t={t} />
               <div className="flex flex-wrap gap-2 border-t pt-3">
                 {can.edit && <Button size="sm" onClick={() => one.mutate(() => supportApi.approve(e.id))}><Check className="size-4" />{t("approve")}</Button>}
@@ -172,6 +208,7 @@ function OneCard({ e, t, pos, total, next }: { e: Entry; t: ST; pos: number; tot
       <EntryHead e={e} t={t} />
       <div className="text-lg font-semibold">{e.pending?.title ?? e.title}</div>
       {e.questions.length > 0 && <ul className="list-disc pl-5 text-sm text-muted-foreground">{e.questions.map((q, k) => <li key={k} className="whitespace-pre-wrap">{q}</li>)}</ul>}
+      <Sources e={e} t={t} />
       {e.pending?.answer && <div className="rounded-lg border p-2 text-sm"><div className="text-xs text-muted-foreground">{t("oldAnswer")}</div><p className="whitespace-pre-wrap">{e.answer}</p></div>}
       <Textarea rows={7} value={answer} onChange={(x) => setAnswer(x.target.value)} disabled={!can.edit} />
       {can.edit && (

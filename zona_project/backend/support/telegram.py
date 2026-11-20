@@ -86,7 +86,8 @@ class Client:
                                                             "my_chat_member"]},
                          timeout=timeout + 10, retries=0)
 
-    def send(self, chat_id, text, reply_to=None, buttons=None, html=True):
+    def send(self, chat_id, text, reply_to=None, buttons=None, html=True, timeout=None, retries=2):
+        """timeout/retries — oraliq xabar uchun qisqa (tarmoq sekin bo'lsa javobni kutib qolmaydi)."""
         self._throttle(chat_id)
         params = {"chat_id": chat_id, "text": text[:4096], "disable_web_page_preview": True,
                   "parse_mode": "HTML" if html else None}
@@ -94,7 +95,7 @@ class Client:
             params["reply_parameters"] = {"message_id": int(reply_to), "allow_sending_without_reply": True}
         if buttons:
             params["reply_markup"] = {"inline_keyboard": buttons}
-        return self.call("sendMessage", params)
+        return self.call("sendMessage", params, timeout=timeout, retries=retries)
 
     def edit_buttons(self, chat_id, message_id, buttons=None):
         try:
@@ -129,7 +130,8 @@ class Client:
                   "parse_mode": "HTML" if html else None}
         if buttons:
             params["reply_markup"] = {"inline_keyboard": buttons}
-        return self.call("editMessageText", params, retries=0 if quiet else 1)
+        # animatsiya kadri qisqa kutadi: tarmoqda uzoq "osilib" qolib, keyin yakuniy javobni bosib ketmasin
+        return self.call("editMessageText", params, retries=0 if quiet else 1, timeout=8 if quiet else None)
 
     def delete(self, chat_id, message_id):
         try:

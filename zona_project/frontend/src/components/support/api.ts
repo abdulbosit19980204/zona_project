@@ -38,7 +38,12 @@ export interface Entry {
   responsible_name: string; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
   author: string; approved_by: string; approved_at: string | null; uses: number; likes: number; dislikes: number;
   last_used_at: string | null; created_at: string; updated_at: string;
+  sources_info?: EntrySource[];
   versions?: EntryVersion[]; messages?: { id: number; text: string; at: string; status: MsgStatus }[];
+}
+/** Yozuv o'rganilgan savol: matni, guruhi, muallifi va barcha fayllari (albom va qo'shimcha skrinshotlar). */
+export interface EntrySource {
+  id: number; text: string; ocr: string; info: string[]; group: string; user: string; link: string; at: string; media: MediaInfo[];
 }
 export interface SupportMessage {
   id: number; group: number | null; group_title: string; user_name: string; user_username: string; text: string;

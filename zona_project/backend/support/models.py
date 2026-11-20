@@ -183,6 +183,8 @@ class Entry(models.Model):
     priority = models.BooleanField("Ustuvor (bot javobini xodim tuzatgan)", default=False)
     pending = models.JSONField("Tasdiq kutayotgan tahrir", null=True, blank=True)
     attachments = models.JSONField("Javob bilan yuboriladigan fayllar (Media id)", default=list, blank=True)
+    # qaysi savollardan o'rganilgan (Message id) — tasdiqlashda savol matni va barcha fayllari ko'rsatiladi
+    sources = models.JSONField("Manba savollar (Message id)", null=True, blank=True)
     answer_mode = models.CharField("Chatda javob: '' — umumiy sozlama, on — har doim, off — faqat o'rganish",
                                    max_length=3, blank=True, default="", db_default="")
     variants = models.JSONField("Javobning qayta yozilgan variantlari (AI, mazmuni bir xil)", null=True, blank=True)

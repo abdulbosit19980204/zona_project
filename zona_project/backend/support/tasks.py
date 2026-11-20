@@ -181,6 +181,10 @@ def problem_text(q, title, entry=None):
 def post_command(q, d, title, assignee, reason, tg, s):
     """Savolga reply qilib "/vazifa@prbc_bot @ijrochi muammo" — PRBC vazifani yaratadi va savoldagi fayllarni o'zi oladi.
     PRBC javobi ("TASK-123 yaratildi") botga reply bo'lib keladi va capture_reply() orqali shu yerga yoziladi."""
+    if assignee and tg is not None and prbc_silent():
+        # PRBC bot buyruqlarimizga javob bermayapti (Bot-to-Bot o'chiq): ochiq guruhga buyruq yozilmaydi —
+        # ko'rsatma faqat xodimga (shaxsiy xabar yoki admin chati)
+        return remind(q, d, title, assignee, reason, tg, s, group=False)
     bot = (s.task_bot or "prbc_bot").lstrip("@")
     link = q.group.message_link(q.message_id) if q.group_id else ""
     text = f"/vazifa@{bot} @{assignee} {problem_text(q, title, d.entry)}" if assignee else ""
@@ -200,9 +204,20 @@ def post_command(q, d, title, assignee, reason, tg, s):
     return t
 
 
+def prbc_silent(n=3):
+    """Oxirgi n ta buyrug'imizga PRBC boti javob bermagan (va undan keyin birorta vazifa yaratilmagan) bo'lsa — True."""
+    last = list(SupportTask.objects.filter(post_id__isnull=False).exclude(reply="PRBC javobi kutilmoqda…")
+                .order_by("-id").values_list("reply", "created_at")[:n])
+    if len(last) < n or any(TASK_OK.search(r or "") for r, _at in last):
+        return False
+    # sutkada bir marta baribir sinab ko'riladi (Bot-to-Bot yoqilsa — o'zi tiklanadi)
+    return last[0][1] >= timezone.now() - timezone.timedelta(hours=24)
+
+
 def check_unanswered(tg, wait=120):
-    """PRBC bot buyrug'imizga javob bermasa (bot-to-bot o'chiq yoki botdan buyruq qabul qilmaydi) — xabarimiz mas'ulga
-    ko'rsatmaga aylanadi: tayyor buyruq bilan, u savolga reply qilib yuboradi va vazifa ochiladi."""
+    """PRBC bot buyrug'imizga javob bermasa (bot-to-bot o'chiq yoki botdan buyruq qabul qilmaydi) — guruhdagi buyruq
+    o'chiriladi (savol beruvchilar uchun tushunarsiz xabar qolmaydi), tayyor buyruqli ko'rsatma esa mas'ulning o'ziga
+    boradi: shaxsiy xabar, bo'lmasa admin chati. Ikkalasi ham bo'lmasa — guruhdagi xabar ko'rsatmaga aylanadi."""
     since = timezone.now() - timezone.timedelta(seconds=wait)
     for t in SupportTask.objects.filter(status=SupportTask.SENT, post_id__isnull=False, reply="PRBC javobi kutilmoqda…",
                                         sent_at__lte=since).select_related("message")[:5]:
@@ -210,13 +225,18 @@ def check_unanswered(tg, wait=120):
         if q is None:
             continue
         cmd = CMD_RE.sub("", t.text or "").strip() or t.title
-        html_text = (f"🗂 <b>@{_esc(t.assignee)}</b>, bu savol bo'yicha vazifa oching — savolga <i>reply</i> qilib yuboring:\n"
-                     f"<code>/vazifa {_esc(cmd)}</code>")
-        try:
-            tg.edit_text(q.chat_id, t.post_id, html_text)
-            t.reply = "PRBC bot buyrug'iga javob bermadi — xabar mas'ulga ko'rsatmaga aylantirildi"
-        except Exception as e:  # noqa: BLE001
-            t.reply = f"PRBC javob bermadi; xabarni o'zgartirib bo'lmadi: {str(e)[:120]}"
+        where = _notify_staff(tg, q, dm_text(q, cmd, t.assignee, t.link), t.assignee, t.link)
+        if where:
+            tg.delete(q.chat_id, t.post_id)
+            t.reply = f"PRBC bot buyrug'iga javob bermadi — buyruq guruhdan o'chirildi, ko'rsatma: {where}"
+        else:
+            html_text = (f"🗂 <b>@{_esc(t.assignee)}</b>, bu savol bo'yicha vazifa oching — savolga <i>reply</i> qilib "
+                         f"yuboring:\n<code>/vazifa {_esc(cmd)}</code>")
+            try:
+                tg.edit_text(q.chat_id, t.post_id, html_text)
+                t.reply = "PRBC bot buyrug'iga javob bermadi — xabar mas'ulga ko'rsatmaga aylantirildi"
+            except Exception as e:  # noqa: BLE001
+                t.reply = f"PRBC javob bermadi; xabarni o'zgartirib bo'lmadi: {str(e)[:120]}"
         t.status = SupportTask.REMINDED
         t.error = "PRBC javob bermadi: @BotFather → @savolbopbot → Bot-to-Bot Communication Mode yoqilganini tekshiring"
         t.save(update_fields=["reply", "status", "error"])
@@ -289,7 +309,30 @@ def group_hint(assignee, lang):
             f"<code>/vazifa Sarlavha</code> yozing")
 
 
-def remind(q, d, title, assignee, reason, tg, s):
+def _notify_staff(tg, q, html_text, assignee, link=""):
+    """Ko'rsatmani xodimning o'ziga yetkazish: shaxsiy xabar (botni ochgan bo'lsa), bo'lmasa — bot admin chati.
+    Qaytaradi: qayerga yuborildi ("shaxsiy xabar" / "admin chati") yoki "" (hech qayerga)."""
+    buttons = [[{"text": "↗ Savolga o'tish", "url": link}]] if link else None
+    chat = staff_chat_id(assignee)
+    if chat:
+        try:
+            tg.send(chat, html_text, buttons=buttons)
+            if q.photo_file_id and hasattr(tg, "copy"):
+                tg.copy(chat, q.chat_id, q.message_id)
+            return "shaxsiy xabar"
+        except Exception:  # noqa: BLE001 — xodim botni ochmagan (403)
+            pass
+    admin = q.bot.admin_chat_id if q.bot_id else None
+    if admin:
+        try:
+            tg.send(admin, html_text, buttons=buttons)
+            return "admin chati"
+        except Exception:  # noqa: BLE001
+            pass
+    return ""
+
+
+def remind(q, d, title, assignee, reason, tg, s, group=None):
     """Bir mavzuga bir marta: mas'ulga shaxsiy xabar (tafsilot + havola + rasm nusxasi) va guruhda qisqa eslatma."""
     link = q.group.message_link(q.message_id) if q.group_id else ""
     t = SupportTask.objects.create(message=q, entry=d.entry, assignee=assignee, title=title, link=link, reason=reason,
@@ -311,7 +354,13 @@ def remind(q, d, title, assignee, reason, tg, s):
             notes.append("shaxsiy xabar yuborildi")
         except Exception as e:  # noqa: BLE001 — xodim botni ochmagan bo'lishi mumkin (403)
             notes.append(f"shaxsiy xabar yuborilmadi: {str(e)[:120]}")
-    if s.task_remind_group:
+    if group is False and not any(n == "shaxsiy xabar yuborildi" for n in notes) and q.bot_id and q.bot.admin_chat_id:
+        try:  # guruhga yozilmaydi — shaxsiy xabar bormagan bo'lsa ko'rsatma admin chatiga
+            tg.send(q.bot.admin_chat_id, t.text, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
+            notes.append("ko'rsatma admin chatiga yuborildi")
+        except Exception as e:  # noqa: BLE001
+            notes.append(f"admin chatiga yuborilmadi: {str(e)[:120]}")
+    if s.task_remind_group and group is not False:
         try:
             tg.send(q.chat_id, group_hint(assignee, q.lang), reply_to=q.message_id)
             notes.append("guruhda eslatildi")

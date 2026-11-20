@@ -641,6 +641,8 @@ class Handler:
             Message.objects.filter(pk=a.pk).update(created_at=when)
         if clarify:
             return a
+        if engine.not_an_answer(text):
+            return a  # boshqa xodimga yo'naltirish ("@operator", "Vali помогите") — savol hali javob kutadi, o'rganilmaydi
         corrected = q.status == Message.ANSWERED and q.answered_by == "bot"
         if q.status != Message.ANSWERED or corrected:
             q.status, q.stage, q.answered_by, q.answered_at = Message.ANSWERED, "staff", staff_name, when
@@ -923,7 +925,7 @@ def learn(q, answer, staff_name, priority=False, ask_first="", source="staff"):
     tasdiqlangan javob allaqachon bor bo'lsa (va bot javobi tuzatilmagan bo'lsa) — nomzod kerak emas.
     """
     question = q.text.strip() or q.ocr_text.strip()[:300]
-    if not question or len(answer.strip()) < 3:
+    if not question or len(answer.strip()) < 3 or (source != "panel" and engine.not_an_answer(answer)):
         return None, False
     pool = list(Entry.objects.filter(kind=Entry.FAQ, status__in=[Entry.NEW, Entry.REVIEW, Entry.APPROVED]))
     match, score = engine.match_faq(question, pool)
@@ -935,12 +937,20 @@ def learn(q, answer, staff_name, priority=False, ask_first="", source="staff"):
             if ask_first and not match.ask_first:
                 match.ask_first = ask_first[:1000]
             match.priority = match.priority or priority
-            match.save(update_fields=["questions", "ask_first", "priority", "updated_at"])
+            match.sources = _add_source(match.sources, q)
+            match.save(update_fields=["questions", "ask_first", "priority", "sources", "updated_at"])
             return match, False
     title = question.splitlines()[0][:190]
     return Entry.objects.create(kind=Entry.FAQ, title=title, questions=[question[:1000]], answer=answer.strip(),
                                 ask_first=ask_first[:1000], status=Entry.NEW, source=source, author=staff_name,
-                                priority=priority), True
+                                priority=priority, sources=_add_source(None, q)), True
+
+
+def _add_source(ids, q):
+    """Manba savollar ro'yxati (oxirgi 20 tasi): tasdiqlashda savolning o'zi va fayllari ko'rsatiladi."""
+    if not q.pk:
+        return ids
+    return list(dict.fromkeys([*(ids or []), q.pk]))[-20:]
 
 
 def snapshot(entry, editor, note=""):
@@ -1059,7 +1069,8 @@ class Progress:
             return
         try:
             if self.id is None:
-                sent = self.tg.send(self.q.chat_id, self._frame(0), reply_to=self.q.message_id)
+                # qisqa kutish, qayta urinishsiz: tarmoq sekin bo'lsa oraliq xabarsiz davom etamiz (javob kechikmaydi)
+                sent = self.tg.send(self.q.chat_id, self._frame(0), reply_to=self.q.message_id, timeout=12, retries=0)
                 self.id = (sent or {}).get("message_id")
         except Exception as e:  # noqa: BLE001 — oraliq xabar javobni to'xtatmasin
             log.warning("progress failed: %s", e)
@@ -1120,7 +1131,7 @@ class Progress:
         Progress._live.pop(self.id, None)
         if self.id is None or not hasattr(self.tg, "edit_text"):
             return None
-        got = self._edit_lock.acquire(timeout=8)  # yo'ldagi kadr tugashini kutish (tarmoq sekin bo'lsa ham tartib saqlanadi)
+        got = self._edit_lock.acquire(timeout=self.LOCK_WAIT)  # yo'ldagi kadr tugashini kutish (tarmoq sekin bo'lsa ham tartib saqlanadi)
         try:
             self.tg.edit_text(self.q.chat_id, self.id, html_text, buttons=buttons)
             if self._net_err or not got:
@@ -1130,23 +1141,45 @@ class Progress:
             if "not modified" in str(e):
                 return {"message_id": self.id}
             log.warning("progress finish failed: %s", e)
+            if "Tarmoq" in str(e) or "timed out" in str(e):
+                # tarmoq uzilishi: tahrir yetib borgan bo'lishi mumkin — xabar o'chirilmaydi, fonda qayta yoziladi;
+                # baribir bo'lmasa — javob yangi xabar bo'lib ketadi va oraliq xabar o'chiriladi
+                self._confirm(html_text, buttons, fallback=True)
+                return {"message_id": self.id}
             self.drop()
             return None
         finally:
             if got:
                 self._edit_lock.release()
 
-    def _confirm(self, html_text, buttons=None, after=3.0):
-        """Tarmoq beqaror paytda: kechikib yetgan eski kadr javobni bosib ketgan bo'lsa — javob qayta yoziladi
+    CONFIRM_AFTER = (3.0, 12.0)
+    LOCK_WAIT = 10.0
+
+    def _confirm(self, html_text, buttons=None, fallback=False):
+        """Tarmoq beqaror paytda: kechikib yetgan eski kadr javobni bosib ketgan bo'lsa — javob qayta yoziladi.
+        Avval yo'ldagi kadr so'rovi tugashi kutiladi (navbat qulfi), keyin 3 s va 12 s dan so'ng yana yoziladi
         (o'zgarmagan bo'lsa Telegram "not modified" deydi — hech narsa bo'lmaydi)."""
-        tg, chat, mid = self.tg, self.q.chat_id, self.id
+        tg, chat, mid, lock, q = self.tg, self.q.chat_id, self.id, self._edit_lock, self.q
 
         def again():
-            time.sleep(after)
-            try:
-                tg.edit_text(chat, mid, html_text, buttons=buttons, quiet=True)
-            except Exception:  # noqa: BLE001
-                pass
+            ok = False
+            for delay in self.CONFIRM_AFTER:
+                time.sleep(delay)
+                got = lock.acquire(timeout=30)
+                try:
+                    tg.edit_text(chat, mid, html_text, buttons=buttons, quiet=True)
+                    ok = True
+                except Exception as e:  # noqa: BLE001
+                    ok = ok or "not modified" in str(e)
+                finally:
+                    if got:
+                        lock.release()
+            if fallback and not ok:
+                try:
+                    tg.send(chat, html_text, reply_to=q.message_id, buttons=buttons)
+                    tg.delete(chat, mid)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("progress fallback failed: %s", e)
         threading.Thread(target=again, name="support-progress-confirm", daemon=True).start()
 
     def drop(self):

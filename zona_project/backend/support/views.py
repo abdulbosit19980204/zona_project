@@ -185,6 +185,29 @@ class EntrySerializer(serializers.ModelSerializer):
     responsible_name = serializers.CharField(source="responsible.name", read_only=True, default="")
     attachments_info = serializers.SerializerMethodField()
     image_examples_count = serializers.SerializerMethodField()
+    sources_info = serializers.SerializerMethodField()
+
+    def get_sources_info(self, obj):
+        """Yozuv o'rganilgan savollar (oxirgi 5 tasi): matni, guruhi, muallifi va BARCHA fayllari — albomdagi har bir
+        rasm hamda savol egasining keyin yuborgan qo'shimcha fayllari (aniqlashtirishga javob)."""
+        ids = list(obj.sources or [])[-5:]
+        view = self.context.get("view")
+        detail = getattr(view, "action", "") == "retrieve"
+        if not ids or not (detail or obj.pending or obj.status in (Entry.NEW, Entry.REVIEW)):
+            return []  # katta bilim bazasi ro'yxatini sekinlashtirmaslik uchun — faqat tasdiq kutayotganlarda
+        out = []
+        for q in Message.objects.filter(pk__in=ids).select_related("group", "user").order_by("-created_at"):
+            related = Message.objects.filter(question=q, kind=Message.INFO)
+            if q.media_group_id:
+                related = related | Message.objects.filter(bot_id=q.bot_id, chat_id=q.chat_id, media_group_id=q.media_group_id)
+            mids = {q.pk, *related.values_list("pk", flat=True)}
+            files = Media.objects.filter(message_id__in=mids).select_related("label").order_by("message_id", "id")
+            info = [x for x in related.filter(kind=Message.INFO).order_by("created_at").values_list("text", flat=True) if x]
+            out.append({"id": q.pk, "text": q.text, "ocr": (q.ocr_text or "")[:400], "info": info[:5],
+                        "group": q.group.title if q.group_id else "", "user": q.user.name if q.user_id else "",
+                        "link": q.group.message_link(q.message_id) if q.group_id else "", "at": q.created_at,
+                        "media": [media_dict(m) for m in files[:30]]})
+        return out
 
     def get_attachments_info(self, obj):
         files = {m.id: m for m in Media.objects.filter(id__in=obj.attachments or [])}
@@ -204,7 +227,7 @@ class EntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Entry
         fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first",
-                  "attachments", "attachments_info", "image_examples_count", "zone", "zone_name", "creates_task", "task_assignee", "variants", "answer_mode",
+                  "attachments", "attachments_info", "image_examples_count", "sources_info", "zone", "zone_name", "creates_task", "task_assignee", "variants", "answer_mode",
                   "responsible", "responsible_name", "status", "source", "priority", "pending", "author",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
         read_only_fields = ["status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",

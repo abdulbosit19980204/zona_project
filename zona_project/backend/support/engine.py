@@ -90,12 +90,38 @@ ANSWER_HINT = re.compile(r"\b(qildim|qilindi|bo'ldi|boldi|tuzatildi|qo'shildi|qo
                          r"tayyor|hal qilindi|сделал|сделано|исправил|исправлено|добавил|готово|открыл)\b", re.IGNORECASE)
 
 
+HANDOFF_WORDS = re.compile(
+    r"\b(помогите|поможите|посмотрите|гляньте|глянь|подключитесь|ответьте|к вам|вам|сюда|тут|"
+    r"yordam|bering|beringlar|qarang|qarab|qaravoring|ko'ring|koring|javob|bera|olasizmi|aka|opa|brat|help|pls|plz|please)\b",
+    re.IGNORECASE)
+REWRITE_ASK = re.compile(
+    r"(правильно|нормально|подробн\w*|четко|чётко|понятно|точнее)\s+(напиш|опиш)\w*|(напиш|опиш)\w*\s+(правильно|"
+    r"нормально|подробн\w*|понятн\w*|точнее)|подробнее|aniq(roq)?\s+yoz\w*|to'g'ri\s+yoz\w*|togri\s+yoz\w*|"
+    r"tushunarli\s+yoz\w*|tushuntir\w*", re.IGNORECASE)
+
+
+def not_an_answer(text):
+    """Xodim xabari bilim bazasi uchun javob emasmi: faqat boshqa xodimni chaqirish ("@operator", "Vali помогите"),
+    "savolni to'g'ri yozing" kabi qayta so'rash yoki mazmunsiz qisqa gap ("Tekshiring")."""
+    t = (text or "").strip()
+    if not t:
+        return True
+    if REWRITE_ASK.search(t) and len(t) <= 200:
+        return True
+    rest = re.sub(r"@\w+", " ", t)
+    rest = HANDOFF_WORDS.sub(" ", rest)
+    words = re.findall(r"[^\W\d_][\w'ʻʼ’]*", rest)
+    if "@" in t and len(words) <= 2:
+        return True  # mas'ulga yo'naltirish — javob emas
+    return len(words) <= 1
+
+
 def is_clarifying(text):
     """Xodim javobi aslida aniqlashtiruvchi savolmi ("STIR yuboring", "skrin tashlang?") — bunday matn javob emas."""
     t = (text or "").strip()
     if not t or len(t) > 260 or ANSWER_HINT.search(t):
         return False
-    return t.endswith("?") or bool(CLARIFY_WORDS.search(t))
+    return t.endswith("?") or bool(CLARIFY_WORDS.search(t)) or bool(REWRITE_ASK.search(t))
 
 
 def tokens_text(text):
@@ -485,7 +511,8 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
     if examples:
         system += ("\n\nXODIMLARIMIZNING O'XSHASH SAVOLLARGA BERGAN HAQIQIY JAVOBLARI (uslub va mazmun uchun namuna; "
                    "kompaniya amaliyotini shulardan o'rgan):\n" + "\n".join(f"- SAVOL: {q}\n  XODIM JAVOBI: {a}" for q, a in examples))
-    message = f"SAVOL:\n{raw[:2000]}"
+    tongue = "faqat RUS tilida" if lang == "ru" else "faqat O'ZBEK (lotin) tilida"
+    message = f"JAVOB TILI: {tongue} (savol shu tilda).\n\nSAVOL:\n{raw[:2000]}"
     if ocr:
         message += f"\n\nRASMDAGI MATN (OCR, xato o'qilgan bo'lishi mumkin):\n{ocr[:1500]}"
     try:
