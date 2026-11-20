@@ -127,6 +127,7 @@ def prompt_buttons(q):
 
 TASK_WAIT_HOURS = 2  # vazifa ochilgan, guruhda xodim javobi yo'q — shuncha vaqtdan keyin so'raladi
 WORK_HOURS = (9, 20)  # kechasi odamlarni bezovta qilmaymiz (Toshkent vaqti)
+ASK_WINDOW_HOURS = 3  # xodim javobidan keyin shu vaqt ichida so'raladi (keyin — kech, so'ralmaydi)
 
 
 def due(now=None, s=None):
@@ -138,10 +139,11 @@ def due(now=None, s=None):
                                    user__member__isnull=True, user__contact__isnull=True,
                                    created_at__gte=now - timezone.timedelta(days=2))
             .exclude(stage="dup").exclude(status__in=[Message.IGNORED, Message.NEW]))
-    staff = base.filter(status=Message.ANSWERED, answered_at__lte=now - timezone.timedelta(minutes=s.confirm_after or 0)) \
-        .exclude(answered_by="bot")
+    # eski savollar haqida so'ralmaydi (kecha javob berilgan savolga bugun "hal bo'ldimi?" — g'alati)
+    staff = base.filter(status=Message.ANSWERED, answered_at__lte=now - timezone.timedelta(minutes=s.confirm_after or 0),
+                        answered_at__gte=now - timezone.timedelta(hours=ASK_WINDOW_HOURS)).exclude(answered_by="bot")
     task_ids = SupportTask.objects.filter(created_at__lte=now - timezone.timedelta(hours=TASK_WAIT_HOURS),
-                                          created_at__gte=now - timezone.timedelta(days=2)).values_list("message_id", flat=True)
+                                          created_at__gte=now - timezone.timedelta(hours=24)).values_list("message_id", flat=True)
     tasked = base.filter(pk__in=task_ids)
     return (staff | tasked).distinct().select_related("user", "group").order_by("created_at")
 
