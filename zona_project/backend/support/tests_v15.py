@@ -80,3 +80,21 @@ class VarietyTests(FlowBase):
             ai_review.run_job(job.id)
         self.e.refresh_from_db()
         self.assertEqual([v["uz"] for v in self.e.variants], [good])
+
+    def test_variants_job_retries_one_by_one_when_truncated(self):
+        e2 = Entry.objects.create(kind=Entry.FAQ, title="T2", status=Entry.APPROVED, answer="Parolni tiklash: Profil bo'limi, 3 qadam.")
+        good = {self.e.id: "Odatda 5–10 daqiqada, ish vaqtida 9:00–18:00 tekshiriladi. Natijani **Profil → Bildirishnomalar**da ko'rasiz.",
+                e2.id: "Parolni tiklash uchun Profil bo'limiga kiring — jami 3 qadam."}
+        seen = []
+
+        def fake(label, system, message, schema):
+            ids = [i for i in good if f"[id={i}]" in message]
+            seen.append(len(ids))
+            if len(ids) > 1:
+                raise RuntimeError("AIError: Javob max_tokens chegarasida uzilib qoldi")
+            return {"items": [{"entry_id": ids[0], "variants": [{"uz": good[ids[0]], "ru": ""}]}]}
+        with mock.patch.object(ai_review, "_run", side_effect=fake):
+            job = AIJob.objects.create(kind=AIJob.VARIANTS, params={"ids": [self.e.id, e2.id]})
+            ai_review.run_job(job.id)
+        self.assertEqual(seen, [2, 1, 1])
+        self.assertEqual(Entry.objects.filter(variants__isnull=False).count(), 2)
