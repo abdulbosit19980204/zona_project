@@ -146,12 +146,12 @@ function SetupGuide() {
 /** Sozlamalar qatori: nom va izoh chapda, boshqaruv o'ngda — o'qish va bosish oson. */
 export function SettingRow({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b py-3 first:pt-0 last:border-b-0 last:pb-0">
-      <div className="min-w-0">
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b py-3 first:pt-0 last:border-b-0 last:pb-0">
+      <div className="min-w-[12rem] flex-1">
         <div className="text-sm font-medium">{label}</div>
         {hint && <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{hint}</div>}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="max-w-full shrink-0">{children}</div>
     </div>
   );
 }

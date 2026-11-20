@@ -777,7 +777,7 @@ def _askers(questions):
     out = [{"user": uid, "name": r["name"], "username": r["username"], "staff_person": r["staff"], "questions": r["questions"],
             "bot": r["bot"], "escalated": r["escalated"], "groups": sorted(r["groups"]), "last": r["last"],
             "top_types": [{"title": t, "n": n} for t, n in r["types"].most_common(3)]} for uid, r in rows.items()]
-    return sorted(out, key=lambda x: -x["questions"])[:100]
+    return sorted(out, key=lambda x: -x["questions"])[:3000]
 
 
 def _zones(questions):
@@ -1002,7 +1002,8 @@ def _tg_user(u):
             "staff_person": sp.id if sp else None, "staff_person_name": sp.name if sp else "",
             "staff_person_role": sp.get_role_display() if sp else "", "project": sp.project.name if sp else "",
             "supervisor": sv.name if sv else "", "link": u.staff_link,
-            "questions": u.messages.filter(kind=Message.QUESTION).count(), "last_seen": u.last_seen}
+            "questions": u.n_questions if hasattr(u, "n_questions") else u.messages.filter(kind=Message.QUESTION).count(),
+            "last_seen": u.last_seen, "msg_count": u.msg_count}
 
 
 @zona_api(["GET"], [CanView])
@@ -1010,7 +1011,8 @@ def tg_users(request):
     qs = TgUser.objects.select_related("staff_person__project", "staff_person__manager__manager", "member", "contact")
     if request.query_params.get("unlinked") == "1":
         qs = qs.filter(staff_person__isnull=True, member__isnull=True, contact__isnull=True)
-    return Response([_tg_user(u) for u in qs.order_by("-last_seen")[:500]])
+    qs = qs.annotate(n_questions=Count("messages", filter=Q(messages__kind=Message.QUESTION)))  # bitta so'rovda
+    return Response([_tg_user(u) for u in qs.order_by("-last_seen")[:5000]])
 
 
 @zona_api(["POST"], [ReadOrEdit])

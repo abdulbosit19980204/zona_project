@@ -11,11 +11,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type SupportSettings, type TgUserInfo } from "./api";
+import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type StaffRow, type SupportSettings, type TgUserInfo } from "./api";
+import { DataTable, type Column } from "./data-table";
 import { fmtDate, ModeBadge, SearchPicker, Segmented, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SettingRow, SupportShell } from "./shell";
@@ -321,94 +321,106 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
 
 /* ---------------------------------------------------------------- Telegram foydalanuvchilar <-> kontaktlar */
 function TgUsersSection({ t }: { t: ST }) {
-  const [onlyUnlinked, setOnlyUnlinked] = useState(false);
-  const users = useQuery({ queryKey: ["support", "tg-users", onlyUnlinked], queryFn: () => supportApi.tgUsers(onlyUnlinked) });
+  const users = useQuery({ queryKey: ["support", "tg-users"], queryFn: () => supportApi.tgUsers() });
+  const columns: Column<TgUserInfo>[] = [
+    {
+      key: "name", header: "Telegram", sort: (u) => (u.name || u.username || "").toLowerCase(),
+      cell: (u) => (
+        <div className="min-w-44">
+          <div className="font-medium">{u.name || "—"}</div>
+          <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+            {u.username && <span>@{u.username}</span>}
+            {u.is_staff && <Badge variant="outline" className="font-normal">{t("staffBadge")}: {u.staff_name}</Badge>}
+          </div>
+        </div>
+      ),
+    },
+    { key: "person", header: t("tgStaff"), sort: (u) => u.staff_person_name || null, className: "min-w-64", cell: (u) => <TgLinkCell u={u} t={t} /> },
+    { key: "sv", header: t("tgSupervisor"), sort: (u) => u.supervisor || null, cell: (u) => <span className="text-sm">{u.supervisor || "—"}</span> },
+    { key: "msgs", header: t("anMessages"), align: "right", sort: (u) => u.msg_count ?? 0, cell: (u) => <span className="font-mono text-xs">{u.msg_count ?? 0}</span> },
+    { key: "q", header: t("anQuestions"), align: "right", sort: (u) => u.questions, cell: (u) => <span className="font-mono text-xs">{u.questions}</span> },
+    { key: "seen", header: t("lastSeen"), align: "right", sort: (u) => u.last_seen, cell: (u) => <span className="whitespace-nowrap text-xs text-muted-foreground">{fmtDate(u.last_seen)}</span> },
+  ];
   return (
     <section>
-      <div className="mb-2 flex items-center gap-3">
-        <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold"><Link2 className="size-4" />{t("tgUsers")}</h3>
-        <label className="ml-auto flex items-center gap-2 text-xs"><Switch checked={onlyUnlinked} onCheckedChange={setOnlyUnlinked} />{t("tgUnlinked")}</label>
-      </div>
+      <h3 className="mb-1 inline-flex items-center gap-1.5 text-sm font-semibold"><Link2 className="size-4" />{t("tgUsers")}</h3>
       <p className="mb-3 text-xs text-muted-foreground">{t("tgUsersHint")}</p>
-      <Card className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow><TableHead>Telegram</TableHead><TableHead>{t("tgStaff")}</TableHead><TableHead>{t("tgSupervisor")}</TableHead><TableHead className="text-right">{t("anQuestions")}</TableHead></TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.data?.length === 0 && <TableRow><TableCell colSpan={4} className="text-muted-foreground">{t("empty")}</TableCell></TableRow>}
-            {users.data?.map((u) => <TgUserRow key={u.id} u={u} t={t} />)}
-          </TableBody>
-        </Table>
-      </Card>
+      <DataTable rows={users.data} loading={users.isLoading} columns={columns} rowKey={(u) => u.id} t={t}
+        initialSort={{ key: "seen", dir: "desc" }}
+        search={(u) => [u.name, u.username, u.staff_name, u.staff_person_name, u.project, u.supervisor].join(" ")}
+        filters={[
+          { value: "all", label: t("dtAll"), test: () => true },
+          { value: "staff", label: t("dtStaff"), test: (u) => u.is_staff },
+          { value: "linked", label: t("dtAgents"), test: (u) => !!u.staff_person },
+          { value: "none", label: t("dtUnlinked"), test: (u) => !u.is_staff && !u.staff_person },
+        ]} />
     </section>
   );
 }
 
-function TgUserRow({ u, t }: { u: TgUserInfo; t: ST }) {
+function TgLinkCell({ u, t }: { u: TgUserInfo; t: ST }) {
   const [editing, setEditing] = useState(false);
   const [q, setQ] = useState("");
   const found = useQuery({ queryKey: ["support", "staff-people", q], queryFn: () => supportApi.staffPeople(q), enabled: editing && q.length >= 2 });
   const link = useSupportMutation((id: number | null) => supportApi.linkTgUser(u.id, id), t("saved"));
+  if (!editing) {
+    return (
+      <div className="flex items-center justify-between gap-2">
+        {u.staff_person ? (
+          <span className="min-w-0 text-sm">{u.staff_person_name}
+            <span className="block truncate text-xs text-muted-foreground">{u.staff_person_role} · {u.project}{u.link === "auto" ? ` · ${t("tgAuto")}` : ""}</span>
+          </span>
+        ) : <span className="text-xs text-muted-foreground">{u.link === "none" ? t("tgNone") : "—"}</span>}
+        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setEditing(true)}>{t("edit")}</Button>
+      </div>
+    );
+  }
   return (
-    <TableRow>
-      <TableCell>
-        <div className="font-medium">{u.name || "—"}</div>
-        <div className="text-xs text-muted-foreground">{u.username ? `@${u.username}` : ""}{u.is_staff && <Badge variant="outline" className="ml-1 font-normal">{t("staffBadge")}: {u.staff_name}</Badge>}</div>
-      </TableCell>
-      <TableCell className="min-w-56">
-        {!editing ? (
-          <div className="flex items-center gap-2">
-            {u.staff_person ? (
-              <span className="text-sm">{u.staff_person_name}<span className="block text-xs text-muted-foreground">{u.staff_person_role} · {u.project}{u.link === "auto" ? ` · ${t("tgAuto")}` : ""}</span></span>
-            ) : <span className="text-xs text-muted-foreground">{u.link === "none" ? t("tgNone") : "—"}</span>}
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>{t("edit")}</Button>
-          </div>
-        ) : (
-          <div className="grid gap-1.5">
-            <div className="relative"><Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
-              <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("tgSearch")} className="h-8 pl-7" /></div>
-            {(found.data ?? []).map((p) => (
-              <button key={p.id} type="button" className="rounded-md px-2 py-1 text-left text-xs hover:bg-muted"
-                onClick={() => link.mutate(p.id, { onSuccess: () => setEditing(false) })}>
-                <span className="font-medium">{p.name}</span> · {p.role} · {p.project}{p.manager ? ` · ${t("tgSupervisor")}: ${p.manager}` : ""}
-              </button>
-            ))}
-            <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={() => link.mutate(null, { onSuccess: () => setEditing(false) })}>{t("tgUnlink")}</Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>{t("cancel")}</Button>
-            </div>
-          </div>
-        )}
-      </TableCell>
-      <TableCell className="text-sm">{u.supervisor || "—"}</TableCell>
-      <TableCell className="text-right font-mono text-xs">{u.questions}</TableCell>
-    </TableRow>
+    <div className="grid gap-1.5">
+      <div className="relative"><Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+        <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("tgSearch")} className="h-8 pl-7" /></div>
+      <div className="grid max-h-56 gap-0.5 overflow-auto">
+        {(found.data ?? []).map((p) => (
+          <button key={p.id} type="button" className="rounded-md px-2 py-1 text-left text-xs hover:bg-muted"
+            onClick={() => link.mutate(p.id, { onSuccess: () => setEditing(false) })}>
+            <span className="font-medium">{p.name}</span> · {p.role} · {p.project}{p.manager ? ` · ${t("tgSupervisor")}: ${p.manager}` : ""}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        <Button size="sm" variant="ghost" onClick={() => link.mutate(null, { onSuccess: () => setEditing(false) })}>{t("tgUnlink")}</Button>
+        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>{t("cancel")}</Button>
+      </div>
+    </div>
   );
 }
 
 /* ---------------------------------------------------------------- xodimlar */
 function StaffSection({ t }: { t: ST }) {
   const q = useQuery({ queryKey: ["support", "staff"], queryFn: supportApi.staff });
+  const teams = Array.from(new Set((q.data ?? []).map((s) => s.team).filter(Boolean)));
+  const columns: Column<StaffRow>[] = [
+    { key: "name", header: t("staff"), sort: (s) => s.name.toLowerCase(),
+      cell: (s) => <div className="min-w-40 font-medium">{s.name}<div className="text-xs font-normal text-muted-foreground">{s.role}</div></div> },
+    { key: "team", header: t("team"), sort: (s) => s.team || null,
+      cell: (s) => (s.team ? <Badge variant="outline" className="font-normal">{s.team}</Badge> : <span className="text-xs text-muted-foreground">—</span>) },
+    { key: "level", header: "L", sort: (s) => s.level || null, cell: (s) => <span className="text-xs">{s.level}</span> },
+    { key: "tg", header: "Telegram", sort: (s) => s.telegram || null,
+      cell: (s) => (
+        <span className="whitespace-nowrap text-xs">{s.telegram ? `@${s.telegram.replace(/^@/, "")}` : "ID"}
+          {s.linked && <span className="ml-1 text-success">· {t("linked")}</span>}</span>
+      ) },
+    { key: "phone", header: "☎", cell: (s) => <span className="whitespace-nowrap text-xs text-muted-foreground">{s.phone}</span> },
+  ];
   return (
     <section>
-      <h3 className="mb-2 text-sm font-semibold">{t("staff")}</h3>
+      <h3 className="mb-1 text-sm font-semibold">{t("staff")}</h3>
       <p className="mb-3 text-xs text-muted-foreground">{t("staffHint")}</p>
-      <Card className="p-0">
-        <Table>
-          <TableBody>
-            {q.data?.map((s) => (
-              <TableRow key={`${s.type}-${s.id}`}>
-                <TableCell className="font-medium">{s.name}<div className="text-xs font-normal text-muted-foreground">{s.role}</div></TableCell>
-                <TableCell className="text-xs">{s.team ? <Badge variant="outline" className="font-normal">{t("team")}: {s.team}</Badge> : null}</TableCell>
-                <TableCell className="text-xs">{s.level}</TableCell>
-                <TableCell className="text-xs">@{s.telegram.replace(/^@/, "")}{s.linked && <span className="ml-1 text-success">· {t("linked")}</span>}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{s.phone}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+      <DataTable rows={q.data} loading={q.isLoading} columns={columns} rowKey={(s) => `${s.type}-${s.id}`} t={t}
+        initialSort={{ key: "name", dir: "asc" }} maxHeight="60vh"
+        search={(s) => [s.name, s.role, s.team, s.telegram, s.phone].join(" ")}
+        filters={[{ value: "all", label: t("dtAll"), test: () => true },
+          ...teams.map((tm) => ({ value: `team:${tm}`, label: tm, test: (s: StaffRow) => s.team === tm }))]} />
     </section>
   );
 }

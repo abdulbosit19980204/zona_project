@@ -124,7 +124,7 @@ export interface AISuggestion {
 export interface TgUserInfo {
   id: number; name: string; username: string; is_staff: boolean; staff_name: string; staff_person: number | null;
   staff_person_name: string; staff_person_role: string; project: string; supervisor: string; link: string; questions: number;
-  last_seen: string;
+  last_seen: string; msg_count?: number;
 }
 export interface StaffPersonHit { id: number; name: string; role: string; project: string; territory: string; manager: string }
 export interface ImageTypes {

@@ -6,10 +6,10 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { supportApi, type Analytics } from "./api";
 import { Initials, Metric, Panel, Segmented, stageLabel } from "./common";
+import { DataTable, type Column } from "./data-table";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 import { Speed } from "./speed";
@@ -156,50 +156,42 @@ function Overview({ a, t }: { a: Analytics; t: ST }) {
 }
 
 function StaffTable({ a, t }: { a: Analytics; t: ST }) {
+  type R = Analytics["staff"][number];
+  const columns: Column<R>[] = [
+    { key: "name", header: t("staff"), sort: (s) => s.name.toLowerCase(), cell: (s) => (
+      <div className="flex min-w-52 items-center gap-2.5">
+        <Initials name={s.name} className="size-8" />
+        <div className="min-w-0">
+          <div className="font-medium">{s.name}</div>
+          {s.topics.length > 0 && <div className="max-w-72 truncate text-xs text-muted-foreground">{s.topics.map((x) => `${x.title} (${x.n})`).join(" · ")}</div>}
+          <div className="max-w-72 truncate text-[11px] text-muted-foreground">{s.groups.join(", ")}</div>
+        </div>
+      </div>
+    ) },
+    { key: "answers", header: t("anAnswers"), align: "right", sort: (s) => s.answers, cell: (s) => (
+      <span className="font-mono">{s.answers}{s.panel > 0 && <span className="text-xs text-muted-foreground"> ({s.panel} panel)</span>}</span>
+    ) },
+    { key: "share", header: t("anShare"), align: "right", sort: (s) => s.share, cell: (s) => (
+      <div><div className="font-mono text-xs">{s.share}%</div>
+        <div className="ml-auto mt-1 h-1 w-16 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary" style={{ width: `${s.share}%` }} /></div></div>
+    ) },
+    { key: "clar", header: t("anClar"), align: "right", sort: (s) => s.clarifications, cell: (s) => <span className="font-mono">{s.clarifications}</span> },
+    { key: "speed", header: t("anSpeed"), align: "right", sort: (s) => s.median_minutes, cell: (s) => (
+      <span className="font-mono text-xs">{s.median_minutes == null ? "—" : t("anMin", { n: s.median_minutes })}
+        {s.avg_minutes != null && <span className="block text-muted-foreground">⌀ {t("anMin", { n: s.avg_minutes })}</span>}</span>
+    ) },
+    { key: "day", header: t("anPerDay"), align: "right", sort: (s) => s.per_day, cell: (s) => (
+      <span className="font-mono">{s.per_day}<span className="block text-[11px] text-muted-foreground">{t("anDays", { n: s.active_days })}</span></span>
+    ) },
+    { key: "msgs", header: t("anMessages"), align: "right", sort: (s) => s.messages, cell: (s) => <span className="font-mono">{s.messages}</span> },
+    { key: "appr", header: t("anApproved"), align: "right", sort: (s) => s.approved, cell: (s) => <span className="font-mono">{s.approved}/{s.candidates}</span> },
+  ];
   return (
-    <Panel title={t("anStaff")} icon={UserRound} bodyClassName="p-0">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40">
-            <TableHead className="pl-4">{t("staff")}</TableHead>
-            <TableHead className="text-right">{t("anAnswers")}</TableHead>
-            <TableHead className="text-right">{t("anShare")}</TableHead>
-            <TableHead className="text-right">{t("anClar")}</TableHead>
-            <TableHead className="text-right">{t("anSpeed")}</TableHead>
-            <TableHead className="text-right">{t("anPerDay")}</TableHead>
-            <TableHead className="text-right">{t("anMessages")}</TableHead>
-            <TableHead className="pr-4 text-right">{t("anApproved")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {a.staff.length === 0 && <TableRow><TableCell colSpan={8} className="pl-4 text-muted-foreground">{t("empty")}</TableCell></TableRow>}
-          {a.staff.map((s) => (
-            <TableRow key={s.name}>
-              <TableCell className="pl-4">
-                <div className="flex items-center gap-2.5">
-                  <Initials name={s.name} className="size-8" />
-                  <div className="min-w-0">
-                    <div className="font-medium">{s.name}</div>
-                    {s.topics.length > 0 && <div className="max-w-72 truncate text-xs text-muted-foreground">{s.topics.map((x) => `${x.title} (${x.n})`).join(" · ")}</div>}
-                    <div className="max-w-72 truncate text-[11px] text-muted-foreground">{s.groups.join(", ")}</div>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-right font-mono">{s.answers}{s.panel > 0 && <span className="text-xs text-muted-foreground"> ({s.panel} panel)</span>}</TableCell>
-              <TableCell className="text-right">
-                <div className="font-mono text-xs">{s.share}%</div>
-                <div className="ml-auto mt-1 h-1 w-16 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary" style={{ width: `${s.share}%` }} /></div>
-              </TableCell>
-              <TableCell className="text-right font-mono">{s.clarifications}</TableCell>
-              <TableCell className="text-right font-mono text-xs">{s.median_minutes == null ? "—" : t("anMin", { n: s.median_minutes })}
-                {s.avg_minutes != null && <div className="text-muted-foreground">⌀ {t("anMin", { n: s.avg_minutes })}</div>}</TableCell>
-              <TableCell className="text-right font-mono">{s.per_day}<div className="text-[11px] text-muted-foreground">{t("anDays", { n: s.active_days })}</div></TableCell>
-              <TableCell className="text-right font-mono">{s.messages}</TableCell>
-              <TableCell className="pr-4 text-right font-mono">{s.approved}/{s.candidates}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <Panel title={t("anStaff")} icon={UserRound}>
+      <DataTable rows={a.staff} columns={columns} rowKey={(s) => s.name} t={t} initialSort={{ key: "answers", dir: "desc" }}
+        search={(s) => [s.name, ...s.groups, ...s.topics.map((x) => x.title)].join(" ")}
+        filters={[{ value: "all", label: t("dtAll"), test: () => true },
+          { value: "active", label: t("anAnswers"), test: (s) => s.answers > 0 }]} />
     </Panel>
   );
 }
@@ -207,33 +199,9 @@ function StaffTable({ a, t }: { a: Analytics; t: ST }) {
 function Askers({ a, t }: { a: Analytics; t: ST }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
-      <Panel title={t("anAskers")} hint={t("anAskersHint")} icon={Users} bodyClassName="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/40"><TableHead className="pl-4">{t("anAsker")}</TableHead><TableHead className="text-right">{t("anQuestions")}</TableHead>
-              <TableHead className="text-right">{t("kpiBot")}</TableHead><TableHead className="pr-4 text-right">{t("kpiHuman")}</TableHead></TableRow>
-          </TableHeader>
-          <TableBody>
-            {a.askers.length === 0 && <TableRow><TableCell colSpan={4} className="pl-4 text-muted-foreground">{t("empty")}</TableCell></TableRow>}
-            {a.askers.slice(0, 50).map((u) => (
-              <TableRow key={u.user}>
-                <TableCell className="pl-4">
-                  <div className="flex items-center gap-2.5">
-                    <Initials name={u.name} className="size-8" />
-                    <div className="min-w-0">
-                      <div className="font-medium">{u.name || "—"}{u.username && <span className="font-normal text-muted-foreground"> @{u.username}</span>}</div>
-                      {u.staff_person && <div className="text-xs text-muted-foreground">{u.staff_person}</div>}
-                      {u.top_types.length > 0 && <div className="max-w-md truncate text-xs text-muted-foreground">{u.top_types.map((x) => `${x.title} (${x.n})`).join(" · ")}</div>}
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right font-mono">{u.questions}</TableCell>
-                <TableCell className="text-right font-mono text-success">{u.bot}</TableCell>
-                <TableCell className="pr-4 text-right font-mono text-warning">{u.escalated}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <Panel title={t("anAskers")} hint={t("anAskersHint")} icon={Users}>
+        <DataTable rows={a.askers} columns={askerCols(t)} rowKey={(u) => u.user} t={t} initialSort={{ key: "q", dir: "desc" }}
+          search={(u) => [u.name, u.username, u.staff_person, ...u.top_types.map((x) => x.title)].join(" ")} />
       </Panel>
       <Panel title={t("anAsks")} hint={t("anAsksHint")} icon={MessageCircleQuestion}>
         {a.top_asks.length === 0 && <p className="text-sm text-muted-foreground">{t("empty")}</p>}
@@ -260,4 +228,22 @@ function Topics({ a, t }: { a: Analytics; t: ST }) {
       </Panel>
     </div>
   );
+}
+
+function askerCols(t: ST): Column<Analytics["askers"][number]>[] {
+  return [
+    { key: "name", header: t("anAsker"), sort: (u) => (u.name || "").toLowerCase(), cell: (u) => (
+      <div className="flex min-w-52 items-center gap-2.5">
+        <Initials name={u.name} className="size-8" />
+        <div className="min-w-0">
+          <div className="font-medium">{u.name || "—"}{u.username && <span className="font-normal text-muted-foreground"> @{u.username}</span>}</div>
+          {u.staff_person && <div className="text-xs text-muted-foreground">{u.staff_person}</div>}
+          {u.top_types.length > 0 && <div className="max-w-md truncate text-xs text-muted-foreground">{u.top_types.map((x) => `${x.title} (${x.n})`).join(" · ")}</div>}
+        </div>
+      </div>
+    ) },
+    { key: "q", header: t("anQuestions"), align: "right", sort: (u) => u.questions, cell: (u) => <span className="font-mono">{u.questions}</span> },
+    { key: "bot", header: t("kpiBot"), align: "right", sort: (u) => u.bot, cell: (u) => <span className="font-mono text-success">{u.bot}</span> },
+    { key: "esc", header: t("kpiHuman"), align: "right", sort: (u) => u.escalated, cell: (u) => <span className="font-mono text-warning">{u.escalated}</span> },
+  ];
 }
