@@ -108,12 +108,24 @@ def not_an_answer(text):
         return True
     if REWRITE_ASK.search(t) and len(t) <= 200:
         return True
-    rest = re.sub(r"@\w+", " ", t)
-    rest = HANDOFF_WORDS.sub(" ", rest)
-    words = re.findall(r"[^\W\d_][\w'ʻʼ’]*", rest)
+    return is_handoff(t) or len(_handoff_rest(t)) <= 1  # "Готово", "Tekshiring" — qayta ishlatib bo'lmaydi
+
+
+def _handoff_rest(t):
+    rest = HANDOFF_WORDS.sub(" ", re.sub(r"@\w+", " ", t))
+    return re.findall(r"[^\W\d_][\w'ʻʼ’]*", rest)
+
+
+def is_handoff(text):
+    """Xodim savolni boshqa xodimga yo'naltirdi ("@operator", "Vali помогите") — bu javob emas, savol javob kutadi.
+    "Готово", "qildim" kabi bajarildi xabarlari — javob (yo'naltirish emas)."""
+    t = (text or "").strip()
+    if not t or ANSWER_HINT.search(t):
+        return False
+    words = _handoff_rest(t)
     if "@" in t and len(words) <= 2:
-        return True  # mas'ulga yo'naltirish — javob emas
-    return len(words) <= 1
+        return True
+    return bool(HANDOFF_WORDS.search(t)) and len(words) <= 1
 
 
 def is_clarifying(text):

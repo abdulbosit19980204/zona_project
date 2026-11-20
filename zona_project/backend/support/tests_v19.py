@@ -24,6 +24,11 @@ class NotAnAnswerTests(FlowBase):
         for t in ["qayta tekshiring botni restart qilib", "Klientni qayta ulang, keyin sinxron qiling",
                   "Проверил, у всех агентов время визита корректно отображается", "Напишите оператору"]:
             self.assertFalse(engine.not_an_answer(t), t)
+        # "Готово" — savol hal qilindi (javob), lekin bilim bazasi uchun qayta ishlatiladigan javob emas
+        self.assertFalse(engine.is_handoff("Готово"))
+        self.assertTrue(engine.not_an_answer("Готово"))
+        self.assertTrue(engine.is_handoff("@test_lead Vali"))
+        self.assertFalse(engine.is_handoff("Tekwiring"))
 
     def test_staff_handoff_does_not_close_question_or_create_candidate(self):
         Settings.load()

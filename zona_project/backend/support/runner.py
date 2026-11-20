@@ -641,7 +641,7 @@ class Handler:
             Message.objects.filter(pk=a.pk).update(created_at=when)
         if clarify:
             return a
-        if engine.not_an_answer(text):
+        if engine.is_handoff(text):
             return a  # boshqa xodimga yo'naltirish ("@operator", "Vali помогите") — savol hali javob kutadi, o'rganilmaydi
         corrected = q.status == Message.ANSWERED and q.answered_by == "bot"
         if q.status != Message.ANSWERED or corrected:
