@@ -73,3 +73,18 @@ class TagPeopleTests(FlowBase):
         self.assertIn("Saidabror (@StargroupSaid)", out)
         self.assertNotIn("@sv_team", out)
         self.assertEqual(engine.tag_people(out), out)  # qayta belgilanmaydi
+
+
+class StaffListTests(FlowBase):
+    def test_recognized_staff_without_answers_listed(self):
+        from zona.models import Department, Member
+
+        from . import engine
+        it = Department.objects.create(name="IT s")
+        team = Member.objects.create(name="Pro-target", role="r", department=it, is_team=True, level="EXT")
+        team.contacts.create(name="Eldar", telegram_id=555)
+        u = engine.identify(555, "", "Eldar")  # username yo'q — Telegram ID bo'yicha taniladi
+        self.assertTrue(u.is_staff)
+        self.login("viewer")
+        names = [s["name"] for s in self.call("get", "support/analytics/?days=30").json()["staff"]]
+        self.assertIn("Eldar", names)

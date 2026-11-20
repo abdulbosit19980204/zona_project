@@ -677,6 +677,10 @@ def analytics(request):
         authored[author][st] += 1
     total_answers = sum(r["answers"] for r in per.values()) + sum(panel.values()) or 1
     staff = []
+    # bot taniydigan, lekin shu davrda hali javob yozmagan xodimlar ham ro'yxatda (0 bilan) — kim tanilgani ko'rinib tursin
+    for u in TgUser.objects.filter(Q(member__isnull=False) | Q(contact__isnull=False)).select_related("member", "contact"):
+        if u.staff_name() not in per and u.staff_name() not in panel:
+            per[u.staff_name()]["user"] = u
     for name in set(per) | set(panel):
         r = per[name]
         a = authored.get(name, Counter())
