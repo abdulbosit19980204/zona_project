@@ -58,3 +58,18 @@ class ResumeTests(FlowBase):
         self.assertEqual(q.bot_reply_id, 1001)  # yangi xabar emas — o'sha xabar javobga aylandi
         self.assertNotIn("🕐", self.tg.sent[0]["text"])
         self.assertEqual(len([x for x in self.tg.sent if x["reply_to"] == 8]), 0)  # javob berilgani qayta ishlanmaydi
+
+
+class TagPeopleTests(FlowBase):
+    def test_named_responsible_is_tagged_once(self):
+        from zona.models import Department, Member
+
+        from . import engine
+        it = Department.objects.create(name="IT t")
+        Member.objects.create(name="Saidabror", role="r", department=it, telegram="StargroupSaid")
+        Member.objects.create(name="Supervayzerlar", role="r", department=it, telegram="sv_team", is_team=True)
+        out = engine.tag_people("Этот вопрос решает Saidabror — Saidabror ответит.\nЕсли нет ответа: Supervayzerlar")
+        self.assertEqual(out.count("@StargroupSaid"), 1)
+        self.assertIn("Saidabror (@StargroupSaid)", out)
+        self.assertNotIn("@sv_team", out)
+        self.assertEqual(engine.tag_people(out), out)  # qayta belgilanmaydi

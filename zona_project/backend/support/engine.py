@@ -201,6 +201,20 @@ def needs_supervisor(d):
     return bool(SUPERVISOR_HINT.search(d.text or ""))
 
 
+def tag_people(body_html):
+    """Javobda ismi aytilgan mas'ullar Telegram'da belgilanadi: «Saidabror» -> «Saidabror (@StargroupSaid)» —
+    bildirishnoma boradi. Supervayzerlar jamoasi bu yerda belgilanmaydi (savol beruvchining o'z supervayzeri alohida)."""
+    for m in Member.objects.exclude(level="EXT").prefetch_related("contacts"):
+        if m.is_team and SUPERVISOR_HINT.search(m.name or ""):
+            continue
+        tgs = _person(m)["telegram"][:3]
+        if not tgs or len(m.name or "") < 3 or any("@" + t.lower() in body_html.lower() for t in tgs):
+            continue
+        pat = re.compile(r"(?<![\w@])(" + re.escape(html.escape(m.name)) + r")(?!\w)", re.IGNORECASE)
+        body_html = pat.sub(lambda x: x.group(1) + " (" + " ".join("@" + html.escape(t) for t in tgs) + ")", body_html, count=1)
+    return body_html
+
+
 def supervisor_line(user, lang):
     """«Supervayzeringiz: @...» — supervayzer ham guruhda yozgan bo'lsa belgilanadi, aks holda faqat ismi."""
     sv = supervisor_of(user)

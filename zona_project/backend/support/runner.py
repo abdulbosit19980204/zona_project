@@ -754,6 +754,8 @@ class Handler:
         """Javob boshida savol beruvchi; supervayzer harakati kerak bo'lsa — uning supervayzeri (kontaktlar bo'yicha)."""
         s = self.settings
         head = engine.mention_html(q.user) + ", " if s.mention_asker and q.user else ""
+        if s.mention_responsible:
+            body_html = engine.tag_people(body_html)
         tail = ""
         if s.mention_supervisor and q.user and engine.needs_supervisor(d):
             line = engine.supervisor_line(q.user, q.lang)
