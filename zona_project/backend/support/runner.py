@@ -17,7 +17,7 @@ from django.utils import timezone
 from zona import conf
 from zona.crypto import decrypt
 
-from . import contacts, engine, ocr, translit, vision
+from . import contacts, engine, ocr, resolution, translit, vision
 from .models import (MODE_COLLECT, MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, HistoryJob,
                      Media, Message, Settings, TgUser)
 from .telegram import Client, TelegramError
@@ -225,6 +225,14 @@ class Handler:
         if user.is_staff:
             return self.on_staff(msg, group, user, text, reply_to)
 
+        # savol egasining "rahmat / готово / ishladi" yoki "ishlamadi" xabari — savol holati (hal bo'ldi / bo'lmadi)
+        if text and not photo and not self.history:
+            fb = resolution.feedback_kind(text)
+            if fb:
+                q = resolution.target(self.bot, chat["id"], user, reply_to, fb)
+                if q is not None:
+                    return self.on_feedback(msg, group, user, text, q, fb, mode)
+
         # savol egasining qo'shimcha ma'lumoti: xodimning aniqlashtiruvchi savoliga yoki botning so'roviga javob
         if reply_to:
             parent = Message.objects.filter(bot=self.bot, chat_id=chat["id"], message_id=reply_to).first()
@@ -365,6 +373,36 @@ class Handler:
             log.exception("question %s failed", qid)
         finally:
             close_old_connections()
+
+    def on_feedback(self, msg, group, user, text, q, fb, mode):
+        """Savol egasi natijani aytdi: xabar zanjirga yoziladi, savol holati belgilanadi; "rahmat" — 👍 reaksiya."""
+        s = self.settings
+        a, created = Message.objects.get_or_create(
+            bot=self.bot, chat_id=msg["chat"]["id"], message_id=msg["message_id"],
+            defaults={"group": group, "user": user, "text": text[:4000], "kind": Message.FEEDBACK, "question": q,
+                      "status": Message.CLOSED, "reply_to_id": (msg.get("reply_to_message") or {}).get("message_id"),
+                      "source": "live"})
+        if not created:
+            return a
+        self._stamp(a, msg)
+        resolution.mark(q, fb, "savol egasi")
+        live = mode == MODE_LIVE
+        if fb == Message.YES:
+            if live and s.thanks_reaction and hasattr(self.tg, "react"):
+                try:
+                    self.tg.react(msg["chat"]["id"], msg["message_id"], "👍")
+                except Exception as e:  # noqa: BLE001 — guruhda reaksiya taqiqlangan bo'lishi mumkin
+                    log.info("reaction failed: %s", e)
+            if q.answered_by == "bot" and q.feedback == 0:
+                Message.objects.filter(pk=q.pk).update(feedback=1)
+                if q.entry_id:
+                    from django.db.models import F as _F
+                    Entry.objects.filter(pk=q.entry_id).update(likes=_F("likes") + 1)
+        elif live:
+            resolution.notify_unresolved(self.tg, q, self.bot.admin_chat_id, text)
+        if live:
+            resolution.close_prompt(self.tg, q, fb)
+        return a
 
     def on_info(self, msg, group, user, text, photo, q, mode):  # noqa: C901
         """Savol egasi so'ralgan ma'lumotni yubordi: zanjirga qo'shiladi; bot o'zi so'ragan bo'lsa — qayta javob beradi."""
@@ -535,6 +573,7 @@ class Handler:
                 return q
         q.stage, q.entry, q.confidence = d.stage, d.entry, d.confidence
         q.answer_text = d.text
+        q.problem = resolution.problem_of(q, d.entry)  # har bir savol — qisqa muammo (jurnal va tahlil uchun)
         if d.entry:
             Entry.objects.filter(pk=d.entry.pk).update(uses=d.entry.uses + 1, last_used_at=timezone.now())
 
@@ -690,6 +729,19 @@ class Handler:
                 if q.feedback < 0 and self.bot.admin_chat_id:
                     self._safe_send(self.bot.admin_chat_id, f"👎 Javob yoqmadi:\n❓ {engine.html.escape(q.text[:300])}\n"
                                                             f"💬 {engine.html.escape(q.answer_text[:500])}")
+                if q.resolution != Message.YES:  # 👍 — hal bo'ldi, 👎 — hal bo'lmadi (savol yana xodimga)
+                    resolution.mark(q, Message.YES if q.feedback > 0 else Message.NO, "savol egasi (👍/👎)")
+            return self.tg.answer_callback(cb["id"], "Rahmat!")
+        if kind == "rs":  # "hal bo'ldimi?" tugmalari
+            mid, _, val = rest.partition(":")
+            q = Message.objects.filter(pk=int(mid or 0), bot=self.bot).select_related("user", "group").first()
+            if not q or (q.user_id and q.user_id != user.id):
+                return self.tg.answer_callback(cb["id"], "Faqat savol egasi belgilaydi")
+            value = Message.YES if val == "1" else Message.NO
+            resolution.mark(q, value, "savol egasi")
+            resolution.close_prompt(self.tg, q, value)
+            if value == Message.NO:
+                resolution.notify_unresolved(self.tg, q, self.bot.admin_chat_id)
             return self.tg.answer_callback(cb["id"], "Rahmat!")
 
         # quyidagilar faqat admin chatidan va xodimlar uchun
@@ -1329,6 +1381,12 @@ class BotWorker(threading.Thread):
                     _tasks.check_unanswered(client)
                 except Exception:  # noqa: BLE001
                     log.exception("task check failed")
+                if time.time() - getattr(self, "last_confirm", 0) > 60:
+                    self.last_confirm = time.time()
+                    try:  # xodim javobi / vazifadan keyin savol egasidan "hal bo'ldimi?"
+                        resolution.ask_pending(client)
+                    except Exception:  # noqa: BLE001
+                        log.exception("resolution ask failed")
                 if time.time() - self.last_warm > 600:
                     self.last_warm = time.time()
                     threading.Thread(target=self._warm, args=(bot, client), name="support-warm", daemon=True).start()

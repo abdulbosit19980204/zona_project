@@ -133,6 +133,11 @@ class Client:
         # animatsiya kadri qisqa kutadi: tarmoqda uzoq "osilib" qolib, keyin yakuniy javobni bosib ketmasin
         return self.call("editMessageText", params, retries=0 if quiet else 1, timeout=8 if quiet else None)
 
+    def react(self, chat_id, message_id, emoji="👍"):
+        """Xabarga reaksiya (masalan, "rahmat" ga 👍)."""
+        return self.call("setMessageReaction", {"chat_id": chat_id, "message_id": int(message_id),
+                                                "reaction": [{"type": "emoji", "emoji": emoji}]}, retries=0, timeout=10)
+
     def delete(self, chat_id, message_id):
         try:
             return self.call("deleteMessage", {"chat_id": chat_id, "message_id": int(message_id)}, retries=0)

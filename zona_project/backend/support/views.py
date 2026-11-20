@@ -44,7 +44,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "tasks_enabled", "task_bot", "task_default_assignee", "task_departments", "task_members",
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
-                   "progress_messages", "answer_policy"]
+                   "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction"]
 
 
 def _settings_payload(s):
@@ -492,7 +492,8 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "media", "link", "lang",
                   "status", "stage", "entry", "entry_title", "confidence", "answer_text", "answered_by", "feedback",
-                  "created_at", "answered_at", "staff_answers", "task"]
+                  "created_at", "answered_at", "staff_answers", "task", "problem", "resolution", "resolved_at",
+                  "resolved_by"]
 
     def get_has_photo(self, obj):
         return bool(obj.photo_file_id)
@@ -521,6 +522,9 @@ class MessageViewSet(ZonaViewSet):
             qs = qs.filter(group_id=p["group"])
         if p.get("stage"):
             qs = qs.filter(stage=p["stage"])
+        if p.get("resolution"):  # yes / no / asked / open (holati noma'lum yoki so'ralgan)
+            r = p["resolution"]
+            qs = qs.filter(resolution__in=["", "asked"]) if r == "open" else qs.filter(resolution=r)
         if p.get("q"):
             qs = qs.filter(Q(text__icontains=p["q"]) | Q(ocr_text__icontains=p["q"]))
         return qs
@@ -556,6 +560,17 @@ class MessageViewSet(ZonaViewSet):
             if entry and _can_edit(request) and request.data.get("approve") and entry.status != Entry.APPROVED:
                 runner.approve(entry, who)
         return Response({"ok": True, "entry": entry.id if entry else None})
+
+    @action(detail=True, methods=["post"])
+    def resolve(self, request, pk=None):
+        """Xodim paneldan belgilaydi: hal bo'ldi (yes) / hal bo'lmadi (no) / noma'lum ("")."""
+        from . import resolution
+        value = str(request.data.get("value") or "")
+        if value not in ("yes", "no", ""):
+            return Response({"detail": "value: yes / no / ''"}, status=400)
+        q = Message.objects.get(pk=pk, kind=Message.QUESTION)
+        resolution.mark(q, value, _actor(request))
+        return Response({"ok": True, "resolution": q.resolution, "status": q.status})
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
@@ -721,6 +736,13 @@ def analytics(request):
                       "topics": [{"title": t, "n": n} for t, n in r["topics"].most_common(3)],
                       "candidates": sum(a.values()), "approved": a.get(Entry.APPROVED, 0),
                       "rejected": a.get(Entry.REJECTED, 0)})
+    # xodim javob bergan savollarning yakuni (savol egasi tasdiqlagan / rad etgan)
+    res_of = dict(Message.objects.filter(pk__in={i for r in per.values() for i in r["questions"]})
+                  .values_list("pk", "resolution"))
+    for row in staff:
+        qids = per[row["name"]]["questions"]
+        row["resolved"] = sum(1 for i in qids if res_of.get(i) == Message.YES)
+        row["unresolved"] = sum(1 for i in qids if res_of.get(i) == Message.NO)
     staff.sort(key=lambda x: -x["answers"])
 
     # qanday ma'lumot so'raladi (aniqlashtirishlar)
@@ -734,10 +756,14 @@ def analytics(request):
     top_asks = [{"text": samples[k], "count": c} for k, c in asks.most_common(15)]
 
     # savollar: kunlar, guruhlar, bosqichlar, javobsizlar
-    daily = defaultdict(lambda: {"total": 0, "bot": 0, "staff": 0})
-    for created, stage in questions.values_list("created_at", "stage"):
+    daily = defaultdict(lambda: {"total": 0, "bot": 0, "staff": 0, "resolved": 0, "unresolved": 0})
+    for created, stage, res in questions.values_list("created_at", "stage", "resolution"):
         d = daily[local(created).date().isoformat()]
         d["total"] += 1
+        if res == Message.YES:
+            d["resolved"] += 1
+        elif res == Message.NO:
+            d["unresolved"] += 1
         if stage in ("template", "faq", "rule", "ai", "image"):
             d["bot"] += 1
         elif stage in ("staff", "panel"):
@@ -758,6 +784,7 @@ def analytics(request):
         "top_types": [{"entry": r["entry"], "title": r["entry__title"], "n": r["n"]} for r in
                       questions.filter(entry__isnull=False).values("entry", "entry__title").annotate(n=Count("id")).order_by("-n")[:20]],
         "protarget": _protarget(questions, since, end),
+        "resolution": _resolution(questions),
         "images": {"total": Media.objects.filter(kind=Media.PHOTO).count(),
                    "labeled": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).count(),
                    "types": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).values("label").distinct().count(),
@@ -813,6 +840,22 @@ def _zones(questions):
         key = zone or ("ProTarget va mobil ilova" if resp == "Pro-target" else "Boshqa")
         out[key] = out.get(key, 0) + 1
     return out
+
+
+def _resolution(questions):
+    """Savollar yakuni: hal bo'ldi (savol egasi tasdiqladi), hal bo'lmadi, tasdiq kutilmoqda, noma'lum."""
+    from collections import Counter
+    real =questions.exclude(status=Message.IGNORED).exclude(stage="dup")
+    c = dict(real.values_list("resolution").annotate(n=Count("id")))
+    yes, no, asked = c.get(Message.YES, 0), c.get(Message.NO, 0), c.get(Message.ASKED, 0)
+    total = sum(c.values())
+    by = Counter()
+    for who, n in real.filter(resolution=Message.YES).values_list("resolved_by").annotate(n=Count("id")):
+        by[who or "—"] += n
+    return {"total": total, "yes": yes, "no": no, "asked": asked, "unknown": total - yes - no - asked,
+            "rate": round(100 * yes / (yes + no)) if yes + no else None,
+            "confirmed_share": round(100 * yes / total) if total else None,
+            "by": [{"by": k, "n": v} for k, v in by.most_common(6)]}
 
 
 def _protarget(questions, since, end=None):

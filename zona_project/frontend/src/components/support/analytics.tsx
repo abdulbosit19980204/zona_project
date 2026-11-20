@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Bot, Clock3, Zap, HelpCircle, Image as ImageIcon, Inbox, ListChecks, MessageCircleQuestion, Tags, Target, UserRound, Users } from "lucide-react";
+import { BarChart3, Bot, CircleCheck, Clock3, Zap, HelpCircle, Image as ImageIcon, Inbox, ListChecks, MessageCircleQuestion, Tags, Target, UserRound, Users } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -53,8 +53,10 @@ export function SupportAnalytics() {
       {!a && <div className="grid gap-4"><Skeleton className="h-20" /><Skeleton className="h-96" /></div>}
       {a && (
         <div className="grid gap-5">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Metric label={t("anQuestions")} value={a.questions} icon={Inbox} tone="primary" />
+            <Metric label={t("resRate")} value={a.resolution?.rate != null ? `${a.resolution.rate}%` : "—"}
+              hint={a.resolution ? `${t("r_yes")} ${a.resolution.yes} · ${t("r_no")} ${a.resolution.no}` : undefined} icon={CircleCheck} tone="success" />
             <Metric label={t("kpiBot")} value={botClosed} hint={a.questions ? `${Math.round((100 * botClosed) / a.questions)}%` : undefined} icon={Bot} tone="success" />
             <Metric label={t("anUnanswered")} value={a.unanswered} icon={HelpCircle} tone="warning" />
             <Metric label={t("anPhoto")} value={a.with_photo} icon={ImageIcon} />
@@ -106,10 +108,50 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+/** Savollar yakuni: hal bo'ldi / hal bo'lmadi / tasdiq kutilmoqda / noma'lum — bitta ulushli chiziq va raqamlar. */
+function Outcomes({ a, t }: { a: Analytics; t: ST }) {
+  const r = a.resolution;
+  if (!r) return null;
+  const parts = [
+    { key: "yes", n: r.yes, cls: "bg-success", label: t("r_yes") },
+    { key: "no", n: r.no, cls: "bg-destructive", label: t("r_no") },
+    { key: "asked", n: r.asked, cls: "bg-warning", label: t("r_asked") },
+    { key: "unknown", n: r.unknown, cls: "bg-muted-foreground/25", label: t("r_") },
+  ];
+  const total = Math.max(1, r.total);
+  return (
+    <Panel title={t("resTitle")} icon={CircleCheck}>
+      <p className="mb-3 text-xs text-muted-foreground">{t("resHint")}</p>
+      <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted" role="img"
+        aria-label={parts.map((p) => `${p.label}: ${p.n}`).join(", ")}>
+        {parts.filter((p) => p.n > 0).map((p) => (
+          <div key={p.key} className={p.cls} style={{ width: `${(100 * p.n) / total}%` }} title={`${p.label}: ${p.n}`} />
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {parts.map((p) => (
+          <div key={p.key} className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+            <span className={`size-2.5 shrink-0 rounded-sm ${p.cls}`} />
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{p.label}</span>
+            <span className="font-semibold tabular-nums">{p.n}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round((100 * p.n) / total)}%</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+        <span>{t("resRate")}: <b className="text-foreground tabular-nums">{r.rate != null ? `${r.rate}%` : "—"}</b> ({t("resRateHint")})</span>
+        <span>{t("resConfirmed")}: <b className="text-foreground tabular-nums">{r.confirmed_share != null ? `${r.confirmed_share}%` : "—"}</b></span>
+        {r.by.length > 0 && <span>{t("resBy")}: {r.by.map((b) => `${b.by} (${b.n})`).join(", ")}</span>}
+      </div>
+    </Panel>
+  );
+}
+
 function Overview({ a, t }: { a: Analytics; t: ST }) {
   const maxDay = Math.max(1, ...a.daily.map((d) => d.total));
   return (
     <div className="grid gap-4">
+      <Outcomes a={a} t={t} />
       <Panel title={t("anDaily")} icon={BarChart3}
         actions={(
           <div className="hidden flex-wrap gap-3 text-xs text-muted-foreground sm:flex">
@@ -193,6 +235,10 @@ function StaffTable({ a, t }: { a: Analytics; t: ST }) {
     { key: "share", header: t("anShare"), align: "right", sort: (s) => s.share, cell: (s) => (
       <div><div className="font-mono text-xs">{s.share}%</div>
         <div className="ml-auto mt-1 h-1 w-16 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary" style={{ width: `${s.share}%` }} /></div></div>
+    ) },
+    { key: "res", header: t("colResolved"), align: "right", sort: (s) => s.resolved ?? 0, cell: (s) => (
+      <span className="font-mono"><span className="text-success">{s.resolved ?? 0}</span>
+        {(s.unresolved ?? 0) > 0 && <span className="text-destructive"> / {s.unresolved}</span>}</span>
     ) },
     { key: "clar", header: t("anClar"), align: "right", sort: (s) => s.clarifications, cell: (s) => <span className="font-mono">{s.clarifications}</span> },
     { key: "speed", header: t("anSpeed"), align: "right", sort: (s) => s.median_s, cell: (s) => (

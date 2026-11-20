@@ -250,6 +250,11 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {sw("mention_responsible", t("t_mention"))}
           {sw("escalation_ack", t("t_escalation"))}
           {sw("feedback_buttons", t("t_feedback"))}
+          {sw("thanks_reaction", t("t_thanks"), t("t_thanksHint"))}
+          {sw("confirm_resolution", t("t_confirm"), t("t_confirmHint"))}
+          {f.confirm_resolution && field(t("t_confirmAfter"), undefined,
+            <Input type="number" min={0} value={f.confirm_after} onChange={num("confirm_after")}
+              onBlur={() => toggle.mutate({ confirm_after: f.confirm_after })} />)}
           {sw("ask_first_prompt", t("t_askFirst"))}
           {sw("contact_lookup", t("t_contacts"), t("t_contactsHint"))}
         </Card>

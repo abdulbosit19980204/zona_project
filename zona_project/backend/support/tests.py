@@ -45,6 +45,10 @@ class FakeClient:
             self.sent[i] = {**self.sent[i], "text": text, "buttons": buttons, "placeholder": self.sent[i].get("placeholder", self.sent[i]["text"])}
         return {"message_id": message_id}
 
+    def react(self, chat_id, message_id, emoji="👍"):
+        self.reactions = getattr(self, "reactions", [])
+        self.reactions.append((chat_id, message_id, emoji))
+
     def delete(self, chat_id, message_id):
         self.deleted = getattr(self, "deleted", [])
         self.deleted.append(message_id)

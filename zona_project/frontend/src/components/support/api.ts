@@ -45,12 +45,15 @@ export interface Entry {
 export interface EntrySource {
   id: number; text: string; ocr: string; info: string[]; group: string; user: string; link: string; at: string; media: MediaInfo[];
 }
+/** Savol yakuni: hal bo'ldi / hal bo'lmadi / tasdiq so'raldi / noma'lum. */
+export type Resolution = "" | "asked" | "yes" | "no";
 export interface SupportMessage {
   id: number; group: number | null; group_title: string; user_name: string; user_username: string; text: string;
   ocr_text: string; has_photo: boolean; media: MediaInfo[]; link: string; lang: string; status: MsgStatus; stage: string; entry: number | null;
   entry_title: string; confidence: number; answer_text: string; answered_by: string; feedback: number;
   created_at: string; answered_at: string | null;
-  staff_answers: { by: string; text: string; at: string; kind: "staff" | "clarify" | "info"; ocr: string; media: MediaInfo[] }[];
+  staff_answers: { by: string; text: string; at: string; kind: "staff" | "clarify" | "info" | "feedback"; ocr: string; media: MediaInfo[] }[];
+  problem: string; resolution: Resolution; resolved_at: string | null; resolved_by: string;
   task?: { id: number; status: string; assignee: string; reply: string; error: string } | null;
 }
 export interface SupportSettings {
@@ -71,6 +74,7 @@ export interface SupportSettings {
   task_mode: "command" | "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
   self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all"; answer_variety: boolean; progress_messages: boolean;
   answer_policy: "standard" | "kb" | "all";
+  confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean;
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
@@ -153,9 +157,12 @@ export interface Analytics extends Period {
   by_source: Record<string, number>; by_stage: Record<string, number>;
   staff: { name: string; answers: number; panel: number; clarifications: number; median_s: number | null; groups: string[];
     candidates: number; approved: number; rejected: number; questions: number; share: number; avg_s: number | null;
-    active_days: number; per_day: number; messages: number; last: string | null; topics: { title: string; n: number }[] }[];
+    active_days: number; per_day: number; messages: number; last: string | null; topics: { title: string; n: number }[];
+    resolved?: number; unresolved?: number }[];
   top_asks: { text: string; count: number }[];
-  daily: { date: string; total: number; bot: number; staff: number }[];
+  daily: { date: string; total: number; bot: number; staff: number; resolved?: number; unresolved?: number }[];
+  resolution?: { total: number; yes: number; no: number; asked: number; unknown: number; rate: number | null;
+    confirmed_share: number | null; by: { by: string; n: number }[] };
   groups: { title: string; n: number }[];
   zones: Record<string, number>;
   protarget: { questions: number; by_bot: number; unanswered: number; types: { title: string; n: number }[];
@@ -213,6 +220,7 @@ export const supportApi = {
   answer: (id: number, text: string, save = true, approve = false) =>
     post<{ ok: boolean; entry: number | null }>(`messages/${id}/answer/`, { text, save, approve }),
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),
+  resolve: (id: number, value: Resolution) => post<{ ok: boolean }>(`messages/${id}/resolve/`, { value }),
   analytics: (r: Range = { days: 30 }) => get<Analytics>("analytics/", r),
   workload: (r: Range = { days: 30 }) => get<Workload>("analytics/workload/", r),
   speed: (r: Range = { days: 7 }) => get<Speed>("analytics/speed/", r),

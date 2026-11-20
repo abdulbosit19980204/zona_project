@@ -39,6 +39,8 @@ def threads(limit=5000):
             "clarifications": [r.text for r in replies if r.kind == Message.CLARIFY],
             "extra_info": [r.text for r in replies if r.kind == Message.INFO],
             "answer": final[-1], "source": q.source, "date": q.created_at.date().isoformat(),
+            "problem": q.problem, "resolution": q.resolution,
+            "feedback": [r.text for r in replies if r.kind == Message.FEEDBACK],
         })
     return out
 

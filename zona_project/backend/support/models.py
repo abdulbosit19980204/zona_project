@@ -74,6 +74,12 @@ class Settings(models.Model):
     task_daily_limit = models.PositiveIntegerField("Kuniga ko'pi bilan vazifa", default=40)
     task_gap = models.PositiveIntegerField("Vazifalar orasidagi tanaffus (soniya)", default=20)
     task_attach = models.BooleanField("Savoldagi fayllarni vazifaga biriktirish", default=True)
+    # --- savol yopildimi: savol egasining tasdig'i ---
+    confirm_resolution = models.BooleanField("Xodim javobi / vazifadan keyin savol egasidan \"hal bo'ldimi?\" deb so'rash",
+                                             default=True, db_default=True)
+    confirm_after = models.PositiveIntegerField("Tasdiq so'rash: xodim javobidan keyin (daqiqa)", default=10, db_default=10)
+    thanks_reaction = models.BooleanField("\"Rahmat\", \"готово\" yozilsa — 👍 reaksiya va savol yopiladi", default=True,
+                                          db_default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -279,6 +285,8 @@ class Message(models.Model):
     """Guruhga kelgan xabar (savol yoki xodim javobi) va bot nima qilgani."""
 
     QUESTION, STAFF, CLARIFY, INFO, OTHER = "question", "staff", "clarify", "info", "other"
+    FEEDBACK = "feedback"  # savol egasining "rahmat / готово / ishlamadi" xabari
+    YES, NO, ASKED = "yes", "no", "asked"  # resolution: hal bo'ldi / bo'lmadi / tasdiq so'raldi ("" — noma'lum)
     NEW, ANSWERED, DRAFTED, ESCALATED, IGNORED, CLOSED = "new", "answered", "drafted", "escalated", "ignored", "closed"
     STATUSES = [(NEW, "Yangi"), (ANSWERED, "Javob berildi"), (DRAFTED, "Qoralama (soya rejimi)"),
                 (ESCALATED, "Odamga uzatildi"), (IGNORED, "Savol emas"), (CLOSED, "Yopildi")]
@@ -310,6 +318,12 @@ class Message(models.Model):
     timing = models.JSONField(null=True, blank=True)
     learned = models.BooleanField(default=False, db_default=False)  # o'z-o'zini o'qitishda ko'rib chiqilgan
     error = models.CharField(max_length=300, blank=True)
+    # muammo: savolning qisqa mazmuni (aniq matn, tanilgan holat nomi yoki "Rasmli savol")
+    problem = models.CharField(max_length=300, blank=True, default="", db_default="")
+    resolution = models.CharField(max_length=6, blank=True, default="", db_default="", db_index=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.CharField(max_length=150, blank=True, default="", db_default="")
+    confirm_msg_id = models.BigIntegerField(null=True, blank=True)  # "hal bo'ldimi?" xabari
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
 
