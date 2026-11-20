@@ -1015,6 +1015,9 @@ class Progress:
         self._stop = threading.Event()
         self._thread = None
         self._i = 0
+        # kadr va yakuniy javob bitta navbatda: javobdan keyin hech bir kadr yetib borib uni bosib ketmaydi
+        self._edit_lock = threading.Lock()
+        self._net_err = False  # kadr tarmoqda "osilib" qolgan bo'lsa — javob keyin yana bir bor tasdiqlanadi
 
     def _lang(self):
         return "ru" if self.q.lang == "ru" else "uz"
@@ -1044,6 +1047,12 @@ class Progress:
             log.warning("progress failed: %s", e)
         if self.id is None:
             return
+        if self.q.pk and not (self.q.timing or {}).get("ph"):
+            try:  # jarayon uzilsa, qayta ishga tushganda shu xabardan davom ettiriladi
+                self.q.timing = {**(self.q.timing or {}), "ph": self.id}
+                Message.objects.filter(pk=self.q.pk).update(timing=self.q.timing)
+            except Exception:  # noqa: BLE001
+                pass
         old = Progress._live.get(self.id)
         if old is not None and old is not self:
             old._stop.set()  # oldingi bosqich animatsiyasi shu yerdan davom etadi
@@ -1072,10 +1081,15 @@ class Progress:
                 if time.monotonic() - last_typing > 4:
                     self.tg.typing(self.q.chat_id)
                     last_typing = time.monotonic()
-                self.tg.edit_text(self.q.chat_id, self.id, self._frame(i), quiet=True)
+                with self._edit_lock:
+                    if self._stop.is_set():
+                        return
+                    self.tg.edit_text(self.q.chat_id, self.id, self._frame(i), quiet=True)
             except Exception as e:  # noqa: BLE001 — limitga tushsa animatsiya to'xtaydi, javob esa ketadi
                 if "429" in str(e) or "Too Many" in str(e):
                     return
+                if "not modified" not in str(e):
+                    self._net_err = True
 
     def stop(self):
         self._stop.set()
@@ -1088,13 +1102,34 @@ class Progress:
         Progress._live.pop(self.id, None)
         if self.id is None or not hasattr(self.tg, "edit_text"):
             return None
+        got = self._edit_lock.acquire(timeout=8)  # yo'ldagi kadr tugashini kutish (tarmoq sekin bo'lsa ham tartib saqlanadi)
         try:
             self.tg.edit_text(self.q.chat_id, self.id, html_text, buttons=buttons)
+            if self._net_err or not got:
+                self._confirm(html_text, buttons)
             return {"message_id": self.id}
         except Exception as e:  # noqa: BLE001
+            if "not modified" in str(e):
+                return {"message_id": self.id}
             log.warning("progress finish failed: %s", e)
             self.drop()
             return None
+        finally:
+            if got:
+                self._edit_lock.release()
+
+    def _confirm(self, html_text, buttons=None, after=3.0):
+        """Tarmoq beqaror paytda: kechikib yetgan eski kadr javobni bosib ketgan bo'lsa — javob qayta yoziladi
+        (o'zgarmagan bo'lsa Telegram "not modified" deydi — hech narsa bo'lmaydi)."""
+        tg, chat, mid = self.tg, self.q.chat_id, self.id
+
+        def again():
+            time.sleep(after)
+            try:
+                tg.edit_text(chat, mid, html_text, buttons=buttons, quiet=True)
+            except Exception:  # noqa: BLE001
+                pass
+        threading.Thread(target=again, name="support-progress-confirm", daemon=True).start()
 
     def drop(self):
         """Keraksiz oraliq xabar: qisqa "o'chirish" kadri, keyin o'chadi (javobni kutmaydi)."""
@@ -1189,11 +1224,35 @@ class BotWorker(threading.Thread):
         finally:
             close_old_connections()
 
+    RESUME_MINUTES = 30
+
+    def _resume(self, client, pool):
+        """Jarayon uzilgan bo'lsa (qayta ishga tushirish, deploy, xato) — javobi chala qolgan so'nggi savollar
+        joyidan davom etadi: o'sha oraliq xabar ("o'qiyapman…") tahrirlanib javobga aylanadi, yangi xabar yozilmaydi."""
+        close_old_connections()
+        try:
+            bot = Bot.objects.get(pk=self.bot_id)
+            since = timezone.now() - timezone.timedelta(minutes=self.RESUME_MINUTES)
+            qs = (Message.objects.filter(bot=bot, kind=Message.QUESTION, status=Message.NEW, stage="", source="live",
+                                         created_at__gte=since).select_related("group").order_by("id")[:50])
+            h = Handler(bot, client, executor=pool)
+            n = 0
+            for q in qs:
+                if q.group is None or q.group.effective_mode() != MODE_LIVE:
+                    continue
+                h._submit(q.pk, MODE_LIVE, None, None, {"resumed": 1})
+                n += 1
+            if n:
+                log.info("bot %s: %s chala qolgan savol davom ettirildi", bot.id, n)
+        except Exception:  # noqa: BLE001 — tiklash botning ishga tushishini to'xtatmasin
+            log.exception("resume failed")
+
     def run(self):
         client = Client(self.token.split("|", 1)[0])
         backoff = 5
         workers = max(1, min(Settings.load().workers or 10, 24))
         pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f"support-q{self.bot_id}")
+        self._resume(client, pool)
         while not self.stop_event.is_set():
             close_old_connections()
             try:
