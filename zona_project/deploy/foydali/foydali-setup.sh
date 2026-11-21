@@ -189,7 +189,9 @@ chmod 755 /usr/local/sbin/foydali-pm2
   done
   echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/bin/journalctl -u ssh --since -24h --no-pager -q -o short-iso"
   echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/bin/journalctl -u ssh --since -7d --no-pager -q -o short-iso --grep Accepted"
-  echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/sbin/ufw status verbose"
+  # ufw ichida iptables'ni chaqiradi (NOEXEC bloklaydi); faqat holatni o'qiydi, sahifalovchi ochmaydi
+  echo "$USR ALL=(root) NOPASSWD: /usr/sbin/ufw status verbose"
+  echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/sbin/sshd -T"
 } > /etc/sudoers.d/foydali-control.tmp
 visudo -cf /etc/sudoers.d/foydali-control.tmp >/dev/null
 mv /etc/sudoers.d/foydali-control.tmp /etc/sudoers.d/foydali-control

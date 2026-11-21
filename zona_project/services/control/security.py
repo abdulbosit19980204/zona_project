@@ -158,13 +158,27 @@ class Security:
         return parse_accepted(out.splitlines())
 
     def _sshd(self) -> dict[str, str]:
-        text = ""
+        """Amaldagi sozlama: `sshd -T` (barcha Include'lar bilan). Bo'lmasa — fayllar; biror fayl o'qilmasa — "noma'lum"
+        (xavfsiz deb ko'rsatilmaydi: o'qilmagan faylda "PasswordAuthentication yes" bo'lishi mumkin)."""
+        out = self._run(["/usr/sbin/sshd", "-T"], 15)
+        if out:
+            conf = {}
+            for ln in out.splitlines():
+                k, _, v = ln.partition(" ")
+                conf.setdefault(k.lower(), v.strip().lower())
+            return conf
+        text, partial = "", False
         for f in [*sorted(glob.glob("/etc/ssh/sshd_config.d/*.conf")), "/etc/ssh/sshd_config"]:
             try:
                 text += Path(f).read_text() + "\n"
             except OSError:
-                pass
-        return parse_sshd(text)
+                partial = True
+        conf = parse_sshd(text)
+        if partial:
+            conf["_partial"] = "1"
+            for k in ("passwordauthentication", "permitrootlogin"):
+                conf.pop(k, None)  # noma'lum — taxmin qilinmaydi
+        return conf
 
     def _firewall(self) -> dict[str, Any]:
         if not shutil.which("ufw") and not Path("/usr/sbin/ufw").exists():
@@ -283,7 +297,9 @@ class Security:
         sshd, ssh = d.get("sshd") or {}, d.get("ssh") or {}
         root = sshd.get("permitrootlogin", "prohibit-password")
         pw = sshd.get("passwordauthentication", "yes")
-        if root == "yes" and pw != "no":
+        if sshd.get("_partial"):
+            add("medium", "SSH sozlamasini to'liq o'qib bo'lmadi", "sudoers'da `sshd -T` ruxsatini tekshiring (deploy qayta yozadi).")
+        elif root == "yes" and pw != "no":
             add("critical", "root parol bilan SSH orqali kira oladi",
                 "SSH kalit bilan kirishni sozlang, so'ng PasswordAuthentication no va PermitRootLogin prohibit-password.")
         elif pw != "no":

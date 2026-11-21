@@ -77,6 +77,23 @@ class AssessTests(unittest.TestCase):
                      "SSL", "javob bermayapti", "zaxira", "cloud-init"):
             self.assertIn(frag, titles)
 
+    def test_unreadable_sshd_config_is_unknown_not_safe(self):
+        sec = S.Security({})
+        with mock.patch.object(sec, "_run", return_value=""), \
+             mock.patch.object(S.glob, "glob", return_value=["/etc/ssh/sshd_config.d/50-cloud-init.conf"]), \
+             mock.patch.object(S.Path, "read_text", side_effect=[PermissionError(), "PasswordAuthentication no\n"]):
+            conf = sec._sshd()
+        self.assertNotIn("passwordauthentication", conf)
+        risks, _score = S.Security.assess({"sshd": conf})
+        self.assertIn("to'liq o'qib bo'lmadi", risks[0]["title"])
+
+    def test_sshd_t_output_is_used(self):
+        sec = S.Security({})
+        with mock.patch.object(sec, "_run", return_value="port 22\npermitrootlogin yes\npasswordauthentication yes\n"):
+            conf = sec._sshd()
+        self.assertEqual((conf["permitrootlogin"], conf["passwordauthentication"]), ("yes", "yes"))
+        self.assertEqual(S.Security.assess({"sshd": conf})[0][0]["level"], "critical")
+
     def test_good_server(self):
         d = {"sshd": {"permitrootlogin": "prohibit-password", "passwordauthentication": "no"}, "ssh": {"fails": 3},
              "firewall": {"active": True}, "fail2ban": True, "ports": [{"port": 443, "public": True, "name": ""}],
