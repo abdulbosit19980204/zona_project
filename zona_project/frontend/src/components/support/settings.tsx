@@ -456,8 +456,6 @@ function HistorySection({ t }: { t: ST }) {
   const [at, setAt] = useState("");
   const [night, setNight] = useState<{ a: number; b: number } | null>(null);
   const saveNight = useSupportMutation((b: { history_night_from: number; history_night_to: number }) => supportApi.saveSettings(b), t("saved"));
-  const act = useSupportMutation((v: { id: number; action: "cancel" | "now" | "continue" }) => supportApi.historyAction(v.id, v.action), t("saved"));
-  const contAll = useSupportMutation(() => supportApi.historyContinue("all"), (r) => t("jContinued", { n: r.continued }));
   const send = useSupportMutation(() => supportApi.mtSendCode(phone), (r) => (r.need_password ? t("mtNeedPassword") : t("mtCodeSent", { p: r.mtproto_phone })));
   const sign = useSupportMutation(() => supportApi.mtSignIn(code, password),
     (r) => (r.need_password ? t("mtNeedPassword") : t("mtConnected", { u: r.mtproto_user })));
@@ -466,7 +464,6 @@ function HistorySection({ t }: { t: ST }) {
     groups: all ? "all" : [Number(group)], days: days ?? s?.history_days ?? 30, photos: photos ?? s?.history_photos ?? true,
     date_from: from || undefined, date_to: to || undefined, schedule: when === "at" ? at : when,
   }), t("saved"));
-  const fmtDay = (v: string | null) => (v ? new Date(v).toLocaleDateString() : "");
   if (!s) return <Skeleton className="h-40" />;
   const ready = !!s.api_id && s.has_api_hash;
 
@@ -575,56 +572,123 @@ function HistorySection({ t }: { t: ST }) {
           </div>
         )}
 
-        {(jobs.data ?? []).length > 0 && (
-          <div className="grid gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-sm font-medium">{t("histJobs")}</div>
-              <Button size="sm" variant="outline" className="ml-auto h-7" disabled={contAll.isPending}
-                title={t("jContinueAllHint")} onClick={() => contAll.mutate(undefined)}>
-                <History className="size-4" />{t("jContinueAll")}
-              </Button>
-            </div>
-            {jobs.data!.map((j) => (
-              <div key={j.id} className="grid gap-1 rounded-lg border p-2 text-xs">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={j.status === "done" ? "border-success/50 text-success" : j.status === "failed" || j.status === "canceled" ? "border-destructive/50 text-destructive" : "border-warning/50 text-warning"}>
-                    {t(`j_${j.status}` as never)}
-                  </Badge>
-                  <span className="font-medium">{j.group_title}</span>
-                  <span className="text-muted-foreground">
-                    · {j.date_from ? `${t("jRange")}: ${fmtDay(j.date_from)} — ${j.date_to ? fmtDay(new Date(new Date(j.date_to).getTime() - 1000).toISOString()) : "…"}` : `${j.days} kun`}
-                    {j.night_only && ` · 🌙 ${t("jNightOnly")}`}
-                    {j.status === "queued" && j.run_after && ` · ${t("jStartsAt")}: ${fmtDate(j.run_after)}`}
-                    {` · ${fmtDate(j.created_at)} · ${j.created_by}`}
-                  </span>
-                  <span className="ml-auto flex gap-1">
-                    {j.status === "queued" && (j.run_after || j.night_only) && (
-                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={act.isPending}
-                        onClick={() => act.mutate({ id: j.id, action: "now" })}>{t("jNow")}</Button>)}
-                    {(j.status === "queued" || j.status === "running") && (
-                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" disabled={act.isPending}
-                        onClick={() => act.mutate({ id: j.id, action: "cancel" })}>{t("jCancel")}</Button>)}
-                    {(j.status === "failed" || j.status === "canceled" || j.status === "done") && (
-                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={act.isPending}
-                        title={t(j.status === "done" ? "jContinueDoneHint" : "jContinueHint")}
-                        onClick={() => act.mutate({ id: j.id, action: "continue" })}>{t("jResume")}</Button>)}
-                  </span>
-                </div>
-                <div className="text-muted-foreground">
-                  {[["messages", "jMsgs"], ["processed", "jProcessed"], ["photos", "jPhotos"], ["skipped", "jSkipped"], ["questions", "jQuestions"],
-                    ["staff_answers", "jAnswers"], ["clarifications", "jClar"], ["candidates", "jCand"]]
-                    .filter(([k]) => j.progress[k as keyof HistoryJob["progress"]] != null)
-                    .map(([k, l]) => `${j.progress[k as keyof HistoryJob["progress"]]} ${t(l as never)}`).join(" · ")}
-                  {j.progress.reached && ` · ${t("jReached")}: ${fmtDay(j.progress.reached)}`}
-                  {!!j.progress.flood_wait && ` · ${t("jWait", { n: j.progress.flood_wait })}`}
-                </div>
-                {j.progress.paused && j.status === "queued" && <div className="text-warning">{j.progress.paused}</div>}
-                {j.error && <div className="text-destructive">{j.error}</div>}
-              </div>
-            ))}
-          </div>
-        )}
+        <HistoryJobs jobs={jobs.data} loading={jobs.isLoading} t={t} />
       </Card>
     </section>
+  );
+}
+
+const JOB_ORDER: Record<HistoryJob["status"], number> = { running: 0, queued: 1, failed: 2, canceled: 3, done: 4 };
+const fmtDay = (v: string | null | undefined) => (v ? new Date(v).toLocaleDateString() : "");
+
+/** Guruh tarixi vazifalari: filtr (holat), qidiruv, tartiblash, sahifalash, belgilab o'chirish. O'chirish faqat ro'yxatdagi
+ * yozuvni olib tashlaydi — o'rganilgan savollar, javoblar va bilim bazasi saqlanadi. */
+function HistoryJobs({ jobs, loading, t }: { jobs: HistoryJob[] | undefined; loading: boolean; t: ST }) {
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const act = useSupportMutation((v: { id: number; action: "cancel" | "now" | "continue" | "delete" }) =>
+    supportApi.historyAction(v.id, v.action), t("saved"));
+  const contAll = useSupportMutation(() => supportApi.historyContinue("all"), (r) => t("jContinued", { n: r.continued }));
+  const del = useSupportMutation((body: { ids?: number[]; statuses?: string[] }) => supportApi.historyDelete(body),
+    (r) => { setSel(new Set()); return t("jDeleted", { n: r.deleted }); });
+  const rows = jobs ?? [];
+  const deletable = rows.filter((j) => j.status !== "running");
+  const toggle = (id: number) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allOn = deletable.length > 0 && deletable.every((j) => sel.has(j.id));
+  const junk = rows.filter((j) => j.status === "canceled" || j.status === "failed").length;
+  const ask = (n: number) => window.confirm(t("jDeleteConfirm", { n }));
+  const range = (j: HistoryJob) => (j.date_from
+    ? `${fmtDay(j.date_from)} — ${j.date_to ? fmtDay(new Date(new Date(j.date_to).getTime() - 1000).toISOString()) : t("jNowTo")}`
+    : t("jLastDays", { n: j.days }));
+  const tone = (s: HistoryJob["status"]) => (s === "done" ? "border-success/50 text-success" : s === "failed" || s === "canceled"
+    ? "border-destructive/50 text-destructive" : s === "running" ? "border-primary/50 text-primary" : "border-warning/50 text-warning");
+  const n = (v: number | undefined) => (v == null ? "—" : v.toLocaleString());
+  const btn = "h-6 px-2 text-xs";
+
+  const columns: Column<HistoryJob>[] = [
+    { key: "sel", header: <input type="checkbox" aria-label={t("jSelectAll")} checked={allOn}
+        onChange={() => setSel(allOn ? new Set() : new Set(deletable.map((j) => j.id)))} />,
+      cell: (j) => <input type="checkbox" aria-label={t("jSelect")} disabled={j.status === "running"} checked={sel.has(j.id)}
+        onChange={() => toggle(j.id)} />, className: "w-8" },
+    { key: "group", header: t("histGroup"), sort: (j) => j.group_title.toLowerCase(),
+      cell: (j) => <span className="font-medium">{j.group_title}</span> },
+    { key: "status", header: t("jColStatus"), sort: (j) => JOB_ORDER[j.status],
+      cell: (j) => (
+        <span className="grid gap-0.5">
+          <Badge variant="outline" className={cn("w-fit", tone(j.status))}>{t(`j_${j.status}` as SKey)}</Badge>
+          {j.night_only && <span className="text-[11px] text-muted-foreground">🌙 {t("jNightOnly")}</span>}
+          {j.status === "queued" && j.run_after && <span className="text-[11px] text-muted-foreground">{t("jStartsAt")}: {fmtDate(j.run_after)}</span>}
+          {j.progress.paused && j.status === "queued" && <span className="max-w-56 text-[11px] text-warning">{j.progress.paused}</span>}
+          {j.error && <span className="max-w-56 truncate text-[11px] text-destructive" title={j.error}>{j.error}</span>}
+          {!!j.progress.flood_wait && <span className="text-[11px] text-warning">{t("jWait", { n: j.progress.flood_wait })}</span>}
+        </span>) },
+    { key: "range", header: t("jColRange"), sort: (j) => j.date_from ?? j.created_at, cell: (j) => <span className="whitespace-nowrap text-xs">{range(j)}</span> },
+    { key: "read", header: t("jColRead"), align: "right", sort: (j) => j.progress.messages ?? -1,
+      cell: (j) => (
+        <span className="grid text-right text-xs tabular-nums">
+          <span>{n(j.progress.messages)} {t("jMsgs")}</span>
+          <span className="text-muted-foreground">{n(j.progress.photos)} {t("jPhotos")}{j.progress.skipped ? ` · ${n(j.progress.skipped)} ${t("jSkipped")}` : ""}</span>
+        </span>) },
+    { key: "result", header: t("jColResult"), align: "right", sort: (j) => j.progress.candidates ?? j.progress.processed ?? -1,
+      cell: (j) => (
+        <span className="grid text-right text-xs tabular-nums">
+          {j.status === "done" ? <>
+            <span>{n(j.progress.questions)} {t("jQuestions")} · {n(j.progress.candidates)} {t("jCand")}</span>
+            <span className="text-muted-foreground">{n(j.progress.staff_answers)} {t("jAnswers")} · {n(j.progress.clarifications)} {t("jClar")}</span>
+          </> : <span>{n(j.progress.processed)} {t("jProcessed")}</span>}
+        </span>) },
+    { key: "reached", header: t("jReached"), sort: (j) => j.progress.reached ?? "",
+      cell: (j) => <span className="whitespace-nowrap text-xs">{fmtDay(j.progress.reached) || "—"}</span> },
+    { key: "created", header: t("jColCreated"), sort: (j) => j.created_at,
+      cell: (j) => <span className="grid text-xs"><span className="whitespace-nowrap">{fmtDate(j.created_at)}</span>
+        <span className="text-muted-foreground">{j.created_by}</span></span> },
+    { key: "act", header: "", cell: (j) => (
+      <span className="flex flex-wrap justify-end gap-1">
+        {j.status === "queued" && (j.run_after || j.night_only) && (
+          <Button size="sm" variant="ghost" className={btn} disabled={act.isPending} onClick={() => act.mutate({ id: j.id, action: "now" })}>{t("jNow")}</Button>)}
+        {(j.status === "queued" || j.status === "running") && (
+          <Button size="sm" variant="ghost" className={cn(btn, "text-destructive")} disabled={act.isPending}
+            onClick={() => act.mutate({ id: j.id, action: "cancel" })}>{t("jCancel")}</Button>)}
+        {(j.status === "failed" || j.status === "canceled" || j.status === "done") && (
+          <Button size="sm" variant="ghost" className={btn} disabled={act.isPending}
+            title={t(j.status === "done" ? "jContinueDoneHint" : "jContinueHint")}
+            onClick={() => act.mutate({ id: j.id, action: "continue" })}>{t("jResume")}</Button>)}
+        {j.status !== "running" && (
+          <Button size="icon" variant="ghost" className="size-6 text-muted-foreground hover:text-destructive" aria-label={t("jDelete")}
+            title={t("jDelete")} disabled={act.isPending} onClick={() => ask(1) && act.mutate({ id: j.id, action: "delete" })}>
+            <Trash2 className="size-3.5" />
+          </Button>)}
+      </span>) },
+  ];
+  const st = (s: HistoryJob["status"]) => (j: HistoryJob) => j.status === s;
+
+  return (
+    <div className="grid gap-2">
+      <div className="text-sm font-medium">{t("histJobs")}</div>
+      <DataTable rows={rows} loading={loading} columns={columns} rowKey={(j) => j.id} t={t} pageSize={25} maxHeight="60vh"
+        initialSort={{ key: "created", dir: "desc" }}
+        search={(j) => `${j.group_title} ${j.created_by} ${j.error} ${j.progress.paused ?? ""}`}
+        filters={[
+          { value: "all", label: t("all"), test: () => true },
+          { value: "running", label: t("j_running"), test: st("running") },
+          { value: "queued", label: t("j_queued"), test: st("queued") },
+          { value: "done", label: t("j_done"), test: st("done") },
+          { value: "failed", label: t("j_failed"), test: st("failed") },
+          { value: "canceled", label: t("j_canceled"), test: st("canceled") },
+        ]}
+        toolbar={(
+          <span className="flex flex-wrap gap-1.5">
+            <Button size="sm" variant="outline" className="h-8" disabled={contAll.isPending} title={t("jContinueAllHint")}
+              onClick={() => contAll.mutate(undefined)}><History className="size-4" />{t("jContinueAll")}</Button>
+            {sel.size > 0 && (
+              <Button size="sm" variant="outline" className="h-8 text-destructive" disabled={del.isPending}
+                onClick={() => ask(sel.size) && del.mutate({ ids: [...sel] })}><Trash2 className="size-4" />{t("jDeleteSel", { n: sel.size })}</Button>)}
+            {junk > 0 && (
+              <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" disabled={del.isPending}
+                onClick={() => ask(junk) && del.mutate({ statuses: ["canceled", "failed"] })}>{t("jClean", { n: junk })}</Button>)}
+          </span>
+        )}
+        empty={<span className="text-sm text-muted-foreground">{t("jEmpty")}</span>} />
+      <p className="text-[11px] text-muted-foreground">{t("jDeleteHint")}</p>
+    </div>
   );
 }

@@ -35,6 +35,7 @@ urlpatterns = [
     path("ai/suggestions/<int:pk>/<str:action>/", views.suggestion_decide, name="ai-suggestion-decide"),
     path("history/", views.history_jobs, name="history"),
     path("history/continue/", views.history_continue, name="history-continue"),
+    path("history/delete/", views.history_delete, name="history-delete"),
     path("training/export/", views.training_export, name="training-export"),
     path("messages/<int:pk>/label/", views.message_label, name="message-label"),
     path("history/<int:pk>/", views.history_job_action, name="history-action"),

@@ -232,6 +232,30 @@ class ContinueTests(HistBase):
         self.assertEqual(j.status, HistoryJob.FAILED)
 
 
+class DeleteJobsTests(HistBase):
+    def test_delete_single_bulk_and_keep_learned_data(self):
+        self.login("admin")
+        done = HistoryJob.objects.create(group=self.group, status=HistoryJob.DONE)
+        running = HistoryJob.objects.create(group=self.group, status=HistoryJob.RUNNING)
+        g2 = Group.objects.create(bot=self.bot, chat_id=-1004, title="G4")
+        c1 = HistoryJob.objects.create(group=g2, status=HistoryJob.CANCELED)
+        c2 = HistoryJob.objects.create(group=g2, status=HistoryJob.FAILED)
+        q = Message.objects.create(bot=self.bot, group=self.group, chat_id=self.group.chat_id, message_id=5,
+                                   kind=Message.QUESTION, text="x", source="history")
+        self.assertEqual(self.call("post", f"support/history/{running.id}/", {"action": "delete"}).status_code, 400)
+        r = self.call("post", f"support/history/{done.id}/", {"action": "delete"})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(HistoryJob.objects.filter(pk=done.pk).exists())
+        r = self.call("post", "support/history/delete/", {"statuses": ["canceled", "failed", "running"]})
+        self.assertEqual(r.json()["deleted"], 2)
+        self.assertEqual(set(HistoryJob.objects.values_list("pk", flat=True)), {running.pk})  # ishlayotgani qoldi
+        self.assertTrue(Message.objects.filter(pk=q.pk).exists())  # o'rganilgan ma'lumot o'chmaydi
+        r = self.call("post", "support/history/delete/", {"ids": [running.id]})
+        self.assertEqual(r.json()["deleted"], 0)
+        self.assertEqual(self.call("post", "support/history/delete/", {}).status_code, 400)
+        _ = (c1, c2)
+
+
 class ScreenshotMessageTests(ControlsBase):
     def test_main_message_skips_status_bar_and_menu(self):
         self.assertEqual(ocr.main_message(OCR_ERR), "Данные контрагента не получены. Сохранение отменено; попробуйте ещё раз.")

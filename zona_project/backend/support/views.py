@@ -727,7 +727,7 @@ def history_jobs(request):
                 for g in groups if g.pk not in busy]
         if not made:
             return Response({"detail": "Bu guruh(lar) tarixi allaqachon navbatda yoki o'qilmoqda."}, status=400)
-    return Response([_job(j) for j in HistoryJob.objects.select_related("group")[:60]])
+    return Response(_jobs())
 
 
 @zona_api(["POST"], [AdminOnly])
@@ -745,7 +745,35 @@ def history_job_action(request, pk):
         from . import history as hist
         if hist.continue_job(j, _actor(request)) is None:
             return Response({"detail": "Bu guruh tarixi allaqachon navbatda yoki o'qilmoqda."}, status=400)
-    return Response([_job(x) for x in HistoryJob.objects.select_related("group")[:60]])
+    elif action == "delete":
+        if j.status == HistoryJob.RUNNING:
+            return Response({"detail": "Ishlayotgan vazifani avval bekor qiling."}, status=400)
+        j.delete()  # faqat vazifa yozuvi; o'rganilgan savollar va bilim bazasi saqlanadi
+    return Response(_jobs())
+
+
+def _jobs():
+    return [_job(x) for x in HistoryJob.objects.select_related("group")[:JOBS_LIMIT]]
+
+
+JOBS_LIMIT = 1000
+
+
+@zona_api(["POST"], [AdminOnly])
+def history_delete(request):
+    """Bir nechta vazifani o'chirish: {"ids": [...]} yoki {"statuses": ["canceled", "failed"]}. Ishlayotgani o'chirilmaydi;
+    o'rganilgan ma'lumot (savollar, javoblar, bilim bazasi) o'chmaydi — faqat ro'yxatdagi yozuv."""
+    qs = HistoryJob.objects.exclude(status=HistoryJob.RUNNING)
+    ids, statuses = request.data.get("ids"), request.data.get("statuses")
+    if ids:
+        qs = qs.filter(pk__in=[int(x) for x in ids])
+    elif statuses:
+        allowed = {HistoryJob.CANCELED, HistoryJob.FAILED, HistoryJob.DONE, HistoryJob.QUEUED}
+        qs = qs.filter(status__in=[x for x in statuses if x in allowed])
+    else:
+        return Response({"detail": "ids yoki statuses kerak"}, status=400)
+    n, _ = qs.delete()
+    return Response({"deleted": n, "jobs": _jobs()})
 
 
 @zona_api(["POST"], [AdminOnly])
@@ -755,7 +783,7 @@ def history_continue(request):
     raw = request.data.get("groups") or "all"
     ids = None if raw == "all" else [int(x) for x in raw]
     made = hist.continue_groups(ids, _actor(request))
-    return Response({"continued": len(made), "jobs": [_job(x) for x in HistoryJob.objects.select_related("group")[:60]]})
+    return Response({"continued": len(made), "jobs": _jobs()})
 
 
 # ====================================================================== tahlil: xodimlar javoblari va aniqlashtirishlar
