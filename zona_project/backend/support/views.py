@@ -495,7 +495,7 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "media", "link", "lang",
                   "status", "stage", "entry", "entry_title", "confidence", "answer_text", "answered_by", "feedback",
                   "created_at", "answered_at", "staff_answers", "task", "problem", "resolution", "resolved_at",
-                  "resolved_by"]
+                  "resolved_by", "app", "origin", "category", "solution", "labeled_by", "train"]
 
     def get_has_photo(self, obj):
         return bool(obj.photo_file_id)
@@ -527,6 +527,9 @@ class MessageViewSet(ZonaViewSet):
         if p.get("resolution"):  # yes / no / asked / open (holati noma'lum yoki so'ralgan)
             r = p["resolution"]
             qs = qs.filter(resolution__in=["", "asked"]) if r == "open" else qs.filter(resolution=r)
+        for f in ("app", "origin", "category"):  # tizim bo'yicha filtr
+            if p.get(f):
+                qs = qs.filter(**{f: "" if p[f] == "none" else p[f]})
         if p.get("q"):
             qs = qs.filter(Q(text__icontains=p["q"]) | Q(ocr_text__icontains=p["q"]))
         return qs
@@ -851,6 +854,7 @@ def analytics(request):
                       questions.filter(entry__isnull=False).values("entry", "entry__title").annotate(n=Count("id")).order_by("-n")[:20]],
         "protarget": _protarget(questions, since, end),
         "resolution": _resolution(questions),
+        "systems": _systems(questions),
         "images": {"total": Media.objects.filter(kind=Media.PHOTO).count(),
                    "labeled": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).count(),
                    "types": Media.objects.filter(kind=Media.PHOTO, label__isnull=False).values("label").distinct().count(),
@@ -906,6 +910,77 @@ def _zones(questions):
         key = zone or ("ProTarget va mobil ilova" if resp == "Pro-target" else "Boshqa")
         out[key] = out.get(key, 0) + 1
     return out
+
+
+def _systems(questions):
+    """Qaysi guruh qaysi tizim bilan ishlaydi va xatolar qayerdan chiqadi: ilova (qayerda ko'rindi) / manba (sabab),
+    toifalar, ilova -> manba juftlari (masalan, ProTarget'da ko'rindi, 1C'dan chiqdi), belgilash va o'qitish holati."""
+    from collections import Counter, defaultdict
+    qs = questions.exclude(stage="dup")
+    rows = list(qs.values("group__title", "app", "origin", "category", "labeled_by", "resolution", "train"))
+    groups = defaultdict(lambda: {"total": 0, "apps": Counter(), "origins": Counter(), "cats": Counter(), "yes": 0})
+    pairs, apps, origins, cats, by = Counter(), Counter(), Counter(), Counter(), Counter()
+    for r in rows:
+        g = groups[r["group__title"] or "—"]
+        g["total"] += 1
+        g["yes"] += r["resolution"] == Message.YES
+        if r["app"]:
+            g["apps"][r["app"]] += 1
+            apps[r["app"]] += 1
+        if r["origin"]:
+            g["origins"][r["origin"]] += 1
+            origins[r["origin"]] += 1
+        if r["category"]:
+            g["cats"][r["category"]] += 1
+            cats[r["category"]] += 1
+        if r["app"] and r["origin"] and r["app"] != r["origin"]:
+            pairs[(r["app"], r["origin"])] += 1
+        by[r["labeled_by"] or "none"] += 1
+    return {
+        "apps": dict(apps), "origins": dict(origins), "categories": dict(cats.most_common()),
+        "pairs": [{"app": a, "origin": o, "n": n} for (a, o), n in pairs.most_common(10)],
+        "labeled": dict(by), "train": sum(1 for r in rows if r["train"]), "total": len(rows),
+        "groups": [{"title": t, "total": g["total"], "apps": dict(g["apps"]), "origins": dict(g["origins"]),
+                    "top": [{"category": c, "n": n} for c, n in g["cats"].most_common(4)], "resolved": g["yes"]}
+                   for t, g in sorted(groups.items(), key=lambda x: -x[1]["total"])][:30],
+    }
+
+
+@zona_api(["GET"], [AdminOnly])
+def training_export(request):
+    """O'z AI modelimizni o'qitish uchun ma'lumot (JSONL). ?kb=0 — bilim bazasisiz; ?all=1 — AI tekshirmaganlar ham."""
+    from django.http import StreamingHttpResponse
+
+    from . import training
+    if request.query_params.get("stats"):
+        return Response(training.stats())
+    resp = StreamingHttpResponse(training.export_lines(include_kb=request.query_params.get("kb") != "0",
+                                                       only_train=request.query_params.get("all") != "1"),
+                                 content_type="application/x-ndjson; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="support-training-{timezone.now():%Y%m%d}.jsonl"'
+    return resp
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def message_label(request, pk):
+    """Xodim belgini tuzatadi (eng ishonchli: AI va qoidalar uni qayta yozmaydi)."""
+    from . import systems
+    q = Message.objects.filter(pk=pk, kind=Message.QUESTION).first()
+    if q is None:
+        return Response({"detail": "Topilmadi."}, status=404)
+    upd = {"labeled_by": "staff", "label_conf": 100}
+    for f, allowed in (("app", systems.APPS), ("origin", systems.ORIGINS), ("category", systems.CATEGORIES)):
+        if f in request.data:
+            v = str(request.data[f] or "")
+            if v and v not in allowed:
+                return Response({"detail": f"{f} noto'g'ri"}, status=400)
+            upd[f] = v
+    if "solution" in request.data:
+        upd["solution"] = str(request.data["solution"] or "")[:2000]
+    if "train" in request.data:
+        upd["train"] = None if request.data["train"] is None else bool(request.data["train"])
+    Message.objects.filter(pk=pk).update(**upd)
+    return Response({k: v for k, v in upd.items()})
 
 
 def _resolution(questions):
@@ -1198,12 +1273,12 @@ def ai_jobs(request):
         if not ai.status().get("support"):
             return Response({"detail": "AI sozlanmagan: Sozlamalar → AI → «Support bot javoblari» uchun model tanlang."}, status=400)
         kind = request.data.get("kind")
-        if kind not in (AIJob.REVIEW_ENTRIES, AIJob.REVIEW_UNANSWERED, AIJob.DEDUPE, AIJob.VARIANTS):
+        if kind not in (AIJob.REVIEW_ENTRIES, AIJob.REVIEW_UNANSWERED, AIJob.DEDUPE, AIJob.VARIANTS, AIJob.LABELS):
             return Response({"detail": "Tahlil turini tanlang."}, status=400)
         if AIJob.objects.filter(status__in=[AIJob.QUEUED, AIJob.RUNNING]).exists():
             return Response({"detail": "AI tahlili allaqachon bajarilmoqda."}, status=400)
         AIJob.objects.create(kind=kind, created_by=_actor(request),
-                             params={k: request.data[k] for k in ("scope", "limit", "days", "threshold", "auto", "ids") if k in request.data})
+                             params={k: request.data[k] for k in ("scope", "limit", "days", "threshold", "auto", "ids", "relabel") if k in request.data})
     return Response([{"id": j.id, "kind": j.kind, "status": j.status, "progress": j.progress, "error": j.error,
                       "created_by": j.created_by, "created_at": j.created_at, "finished_at": j.finished_at}
                      for j in AIJob.objects.all()[:20]])

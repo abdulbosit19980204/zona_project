@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
 
-import { supportApi, type MsgStatus, type Resolution, type SupportMessage } from "./api";
+import { supportApi, SYS_APPS, SYS_CATEGORIES, SYS_ORIGINS, type MsgStatus, type Resolution, type SupportMessage } from "./api";
 import { fmtDate, Initials, Metric, MsgBadge, Segmented, stageLabel, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { MediaRow } from "./media";
@@ -150,6 +150,32 @@ export function SupportInbox() {
   );
 }
 
+/** Tizim belgisi: ilova (qayerda ko'rindi), manba (xato qayerdan), toifa; xodim tuzatsa — eng ishonchli belgi bo'ladi. */
+function SystemLabel({ m, t }: { m: SupportMessage; t: ST }) {
+  const can = useCan();
+  const save = useSupportMutation((body: Parameters<typeof supportApi.setLabel>[1]) => supportApi.setLabel(m.id, body), t("saved"));
+  const sel = (field: "app" | "origin" | "category", opts: readonly string[], prefix: string) => (
+    <select className="h-7 rounded-md border bg-background px-1.5 text-xs disabled:opacity-70" value={m[field]}
+      disabled={!can.edit || save.isPending} aria-label={t(`lbl_${field}` as SKey)}
+      onChange={(e) => save.mutate({ [field]: e.target.value } as Parameters<typeof supportApi.setLabel>[1])}>
+      <option value="">{t(`lbl_${field}` as SKey)}: —</option>
+      {opts.map((o) => <option key={o} value={o}>{t(`lbl_${field}` as SKey)}: {t(`${prefix}${o}` as SKey)}</option>)}
+    </select>
+  );
+  return (
+    <span className="grid gap-1.5">
+      <span className="flex flex-wrap gap-1">
+        {sel("app", SYS_APPS, "sys_")}{sel("origin", SYS_ORIGINS, "org_")}{sel("category", SYS_CATEGORIES, "cat_")}
+      </span>
+      <span className="text-[11px] text-muted-foreground">
+        {m.labeled_by ? t(`lb_${m.labeled_by}` as SKey) : t("lb_none")}
+        {m.train != null && ` · ${m.train ? t("trainYes") : t("trainNo")}`}
+      </span>
+      {m.solution && <span className="text-xs"><b className="text-muted-foreground">{t("dSolution")}:</b> {m.solution}</span>}
+    </span>
+  );
+}
+
 function Details({ m, t }: { m: SupportMessage; t: ST }) {
   const row = (label: string, value: ReactNode) => (
     <div className="grid gap-0.5 border-b py-2.5 last:border-b-0">
@@ -173,6 +199,7 @@ function Details({ m, t }: { m: SupportMessage; t: ST }) {
           <ResolutionMark r={m.resolution} t={t} label />
           {m.resolved_at && <span className="text-xs text-muted-foreground">· {fmtDate(m.resolved_at)}{m.resolved_by ? ` · ${m.resolved_by}` : ""}</span>}
         </span>)}
+        {row(t("dSystem"), <SystemLabel m={m} t={t} />)}
         {row(t("dGroup"), m.group_title)}
         {row(t("dAsked"), fmtDate(m.created_at))}
         {m.answered_at && row(t("dAnswered"), `${fmtDate(m.answered_at)}${m.answered_by ? ` · ${m.answered_by}` : ""}`)}

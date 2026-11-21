@@ -147,11 +147,94 @@ function Outcomes({ a, t }: { a: Analytics; t: ST }) {
   );
 }
 
+/** Qaysi guruh qaysi tizim bilan ishlaydi, xatolar qayerda ko'rinadi va qayerdan chiqadi; o'qitish ma'lumoti. */
+function Systems({ a, t }: { a: Analytics; t: ST }) {
+  const s = a.systems;
+  const [busy, setBusy] = useState(false);
+  if (!s || !s.total) return null;
+  const sys = (k: string) => t(`sys_${k}` as SKey);
+  const org = (k: string) => t(`org_${k}` as SKey);
+  const cat = (k: string) => t(`cat_${k}` as SKey);
+  const chips = (m: Record<string, number>, lbl: (k: string) => string) =>
+    Object.entries(m).sort((x, y) => y[1] - x[1]).map(([k, n]) => (
+      <Badge key={k} variant="outline" className="mr-1 mb-1 font-normal">{lbl(k)} <b className="ml-1 tabular-nums">{n}</b></Badge>));
+  const download = async () => {
+    setBusy(true);
+    try {
+      const blob = await supportApi.trainingFile();
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url;
+      el.download = `support-training-${new Date().toISOString().slice(0, 10)}.jsonl`;
+      el.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const lab = s.labeled;
+  return (
+    <Panel title={t("sysTitle")} icon={Target}
+      actions={<button className="text-xs font-medium text-primary hover:underline disabled:opacity-50" disabled={busy}
+        onClick={download}>{t("sysExport")}</button>}>
+      <p className="mb-3 text-xs text-muted-foreground">{t("sysHint")}</p>
+      <div className="mb-3 grid gap-2 sm:grid-cols-2">
+        <div><div className="mb-1 text-xs text-muted-foreground">{t("sysApps")}</div>{chips(s.apps, sys)}</div>
+        <div><div className="mb-1 text-xs text-muted-foreground">{t("sysOrigins")}</div>{chips(s.origins, org)}</div>
+      </div>
+      {s.pairs.length > 0 && (
+        <div className="mb-3">
+          <div className="mb-1 text-xs text-muted-foreground">{t("sysPairs")}</div>
+          {s.pairs.map((p) => (
+            <Badge key={`${p.app}-${p.origin}`} variant="outline" className="mr-1 mb-1 font-normal">
+              {sys(p.app)} → {org(p.origin)} <b className="ml-1 tabular-nums">{p.n}</b>
+            </Badge>
+          ))}
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-xs text-muted-foreground">
+            <tr className="border-b text-left">
+              <th className="py-1.5 pr-2 font-medium">{t("sysGroup")}</th>
+              <th className="py-1.5 pr-2 text-right font-medium">{t("sysQuestions")}</th>
+              <th className="py-1.5 pr-2 font-medium">{t("sysApps")}</th>
+              <th className="py-1.5 pr-2 font-medium">{t("sysOrigins")}</th>
+              <th className="py-1.5 pr-2 font-medium">{t("sysTop")}</th>
+              <th className="py-1.5 text-right font-medium">{t("r_yes")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {s.groups.map((g) => (
+              <tr key={g.title} className="border-b align-top last:border-0">
+                <td className="py-1.5 pr-2 font-medium">{g.title}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums">{g.total}</td>
+                <td className="py-1.5 pr-2">{chips(g.apps, sys)}</td>
+                <td className="py-1.5 pr-2">{chips(g.origins, org)}</td>
+                <td className="py-1.5 pr-2 text-xs">{g.top.map((c) => `${cat(c.category)} (${c.n})`).join(", ")}</td>
+                <td className="py-1.5 text-right tabular-nums">{g.resolved}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+        <span>{t("sysLabeledAi")}: <b className="text-foreground tabular-nums">{lab.ai ?? 0}</b></span>
+        <span>{t("sysLabeledStaff")}: <b className="text-foreground tabular-nums">{lab.staff ?? 0}</b></span>
+        <span>{t("sysLabeledRule")}: <b className="text-foreground tabular-nums">{lab.rule ?? 0}</b></span>
+        <span>{t("sysUnlabeled")}: <b className="text-foreground tabular-nums">{lab.none ?? 0}</b></span>
+        <span>{t("sysTrain")}: <b className="text-foreground tabular-nums">{s.train}</b></span>
+      </div>
+    </Panel>
+  );
+}
+
 function Overview({ a, t }: { a: Analytics; t: ST }) {
   const maxDay = Math.max(1, ...a.daily.map((d) => d.total));
   return (
     <div className="grid gap-4">
       <Outcomes a={a} t={t} />
+      <Systems a={a} t={t} />
       <Panel title={t("anDaily")} icon={BarChart3}
         actions={(
           <div className="hidden flex-wrap gap-3 text-xs text-muted-foreground sm:flex">

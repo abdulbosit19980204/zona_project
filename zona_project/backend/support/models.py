@@ -330,6 +330,14 @@ class Message(models.Model):
     resolved_at = models.DateTimeField(null=True, blank=True)
     resolved_by = models.CharField(max_length=150, blank=True, default="", db_default="")
     confirm_msg_id = models.BigIntegerField(null=True, blank=True)  # "hal bo'ldimi?" xabari
+    # tizim belgilari (systems.py): ilova — muammo qayerda ko'rindi, manba — xato qaysi tizimdan; toifa; yechim
+    app = models.CharField(max_length=12, blank=True, default="", db_default="", db_index=True)
+    origin = models.CharField(max_length=12, blank=True, default="", db_default="", db_index=True)
+    category = models.CharField(max_length=12, blank=True, default="", db_default="")
+    solution = models.TextField(blank=True, default="", db_default="")  # nima hal qildi (AI xodim javobidan yozadi)
+    label_conf = models.PositiveSmallIntegerField(default=0, db_default=0)
+    labeled_by = models.CharField(max_length=6, blank=True, default="", db_default="")  # rule / ai / staff
+    train = models.BooleanField(null=True, blank=True)  # o'qitish uchun yaroqlimi (AI baholaydi; None — baholanmagan)
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
 
@@ -404,8 +412,10 @@ class AIJob(models.Model):
     """Bot bo'yicha AI tahlili: bilim bazasini ko'rib chiqish yoki javobsiz savollardan yangi javob taklif qilish."""
 
     REVIEW_ENTRIES, REVIEW_UNANSWERED, DEDUPE, VARIANTS = "entries", "unanswered", "dedupe", "variants"
+    LABELS = "labels"
     KINDS = [(REVIEW_ENTRIES, "Bilim bazasini ko'rib chiqish"), (REVIEW_UNANSWERED, "Javobsiz savollar tahlili"),
-             (DEDUPE, "Takror savol-javoblarni tozalash"), (VARIANTS, "Javob variantlarini yozish")]
+             (DEDUPE, "Takror savol-javoblarni tozalash"), (VARIANTS, "Javob variantlarini yozish"),
+             (LABELS, "Savollarni belgilash (tizim, toifa, yechim)")]
     QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
     kind = models.CharField(max_length=12, choices=KINDS)
     params = models.JSONField(default=dict, blank=True)

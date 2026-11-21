@@ -47,6 +47,19 @@ export interface EntrySource {
 }
 /** Savol yakuni: hal bo'ldi / hal bo'lmadi / tasdiq so'raldi / noma'lum. */
 export type Resolution = "" | "asked" | "yes" | "no";
+export const SYS_APPS = ["prbc", "protarget", "1c", "telegram", "other"] as const;
+export const SYS_ORIGINS = ["1c", "prbc", "protarget", "telegram", "network", "user", "other"] as const;
+export const SYS_CATEGORIES = ["client", "order", "promo", "payment", "product", "stock", "visit", "login", "route", "report",
+  "sync", "network", "other"] as const;
+export type SysApp = (typeof SYS_APPS)[number] | "";
+export type SysOrigin = (typeof SYS_ORIGINS)[number] | "";
+export type SysCategory = (typeof SYS_CATEGORIES)[number] | "";
+export interface SystemsInfo {
+  apps: Record<string, number>; origins: Record<string, number>; categories: Record<string, number>;
+  pairs: { app: string; origin: string; n: number }[]; labeled: Record<string, number>; train: number; total: number;
+  groups: { title: string; total: number; apps: Record<string, number>; origins: Record<string, number>;
+    top: { category: string; n: number }[]; resolved: number }[];
+}
 export interface SupportMessage {
   id: number; group: number | null; group_title: string; user_name: string; user_username: string; text: string;
   ocr_text: string; has_photo: boolean; media: MediaInfo[]; link: string; lang: string; status: MsgStatus; stage: string; entry: number | null;
@@ -54,6 +67,7 @@ export interface SupportMessage {
   created_at: string; answered_at: string | null;
   staff_answers: { by: string; text: string; at: string; kind: "staff" | "clarify" | "info" | "feedback"; ocr: string; media: MediaInfo[] }[];
   problem: string; resolution: Resolution; resolved_at: string | null; resolved_by: string;
+  app: SysApp; origin: SysOrigin; category: SysCategory; solution: string; labeled_by: "" | "rule" | "ai" | "staff"; train: boolean | null;
   task?: { id: number; status: string; assignee: string; reply: string; error: string } | null;
 }
 export interface SupportSettings {
@@ -165,6 +179,7 @@ export interface Analytics extends Period {
   daily: { date: string; total: number; bot: number; staff: number; resolved?: number; unresolved?: number }[];
   resolution?: { total: number; yes: number; no: number; asked: number; unknown: number; rate: number | null;
     confirmed_share: number | null; by: { by: string; n: number }[] };
+  systems?: SystemsInfo;
   groups: { title: string; n: number }[];
   zones: Record<string, number>;
   protarget: { questions: number; by_bot: number; unanswered: number; types: { title: string; n: number }[];
@@ -223,6 +238,11 @@ export const supportApi = {
     post<{ ok: boolean; entry: number | null }>(`messages/${id}/answer/`, { text, save, approve }),
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),
   resolve: (id: number, value: Resolution) => post<{ ok: boolean }>(`messages/${id}/resolve/`, { value }),
+  setLabel: (id: number, body: { app?: SysApp; origin?: SysOrigin; category?: SysCategory; solution?: string; train?: boolean | null }) =>
+    post<Record<string, unknown>>(`messages/${id}/label/`, body),
+  trainingStats: () => get<{ questions: number; labeled_ai: number; labeled_rule: number; train: number; kb_entries: number }>("training/export/?stats=1"),
+  trainingFile: async (all = false) =>
+    (await api.get<Blob>(`${B}training/export/${all ? "?all=1" : ""}`, { responseType: "blob" })).data,
   analytics: (r: Range = { days: 30 }) => get<Analytics>("analytics/", r),
   workload: (r: Range = { days: 30 }) => get<Workload>("analytics/workload/", r),
   speed: (r: Range = { days: 7 }) => get<Speed>("analytics/speed/", r),
@@ -257,7 +277,7 @@ export const supportApi = {
   linkTgUser: (id: number, staffPerson: number | null) => post<TgUserInfo>(`tg-users/${id}/link/`, { staff_person: staffPerson }),
   staffPeople: (q: string) => get<StaffPersonHit[]>("staff-people/", { q }),
   aiJobs: () => get<AIJobInfo[]>("ai/jobs/"),
-  startAIJob: (kind: "entries" | "unanswered" | "dedupe" | "variants", params: Record<string, unknown> = {}) => post<AIJobInfo[]>("ai/jobs/", { kind, ...params }),
+  startAIJob: (kind: "entries" | "unanswered" | "dedupe" | "variants" | "labels", params: Record<string, unknown> = {}) => post<AIJobInfo[]>("ai/jobs/", { kind, ...params }),
   aiSuggestions: (status = "pending") => get<AISuggestion[]>("ai/suggestions/", { status }),
   decideSuggestion: (id: number, action: "approve" | "reject", payload?: Record<string, unknown>) =>
     post<AISuggestion>(`ai/suggestions/${id}/${action}/`, payload ? { payload } : {}),

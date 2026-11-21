@@ -371,12 +371,115 @@ def write_variants(job):
     return done
 
 
+# ====================================================================== savollarni belgilash (o'qitish ma'lumoti)
+LABEL_CHUNK = 10
+LABEL_RESERVE = 500  # AI kunlik limitidan shuncha so'rov jonli guruhlardagi javoblar uchun doim qoladi
+LABEL_SCHEMA = {
+    "type": "object",
+    "properties": {"items": {"type": "array", "items": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "app": {"type": "string", "enum": ["prbc", "protarget", "1c", "telegram", "other", ""]},
+            "origin": {"type": "string", "enum": ["1c", "prbc", "protarget", "telegram", "network", "user", "other", ""]},
+            "category": {"type": "string", "enum": ["client", "order", "promo", "payment", "product", "stock", "visit",
+                                                    "login", "route", "report", "sync", "network", "other"]},
+            "problem": {"type": "string"}, "solution": {"type": "string"},
+            "train": {"type": "boolean"}, "reason": {"type": "string"},
+        },
+        "required": ["id", "app", "origin", "category", "problem", "solution", "train", "reason"],
+        "additionalProperties": False}}},
+    "required": ["items"], "additionalProperties": False,
+}
+LABEL_SYSTEM = """Sen savdo kompaniyasining IT qo'llab-quvvatlash (L1) suhbatlarini belgilaysan. Bu belgilar AI modelni
+o'qitish uchun ishlatiladi — aniqlik eng muhim; bilmasang bo'sh qoldir, o'ylab topma.
+
+TIZIMLAR:
+- prbc — Telegram ichidagi PRBC mini-ilovasi: yangi klient / savdo nuqtasi so'rovlari (1C'ga yuboriladi), marshrut,
+  savdo jamoalari, akkaunt tasdig'i ("Awaiting approval").
+- protarget — agentlarning mobil ilovasi ProTarget: vizitlar (geotag, radius), katalog, savat (корзина), zakaz,
+  "Торговая точка ... отправлена на модерацию", "Inactive user account", sinxronizatsiya.
+- 1c — 1C (ERP): kontragentlar, STIR/INN, qoldiq (ostatka), narx va aksiya sozlamalari, hujjatlar, zakazni qabul qilish.
+- telegram — Telegram yoki botning o'zi.
+
+app — muammo QAYERDA ko'rindi (qaysi ilovada ishlayotganda). origin — xato QAYSI tizimdan chiqqan (sabab): masalan
+ProTarget'da "Заказ отклонен — 1C не приняла" -> app=protarget, origin=1c; aksiya ProTarget'da ishlamaydi, xodim
+"1C'da aksiya qo'shildi" degan -> app=protarget, origin=1c. network — internet/VPN/server; user — foydalanuvchi
+noto'g'ri kiritgan / jarayonni bilmagan. Aniqlab bo'lmasa — "".
+
+problem — muammoning bitta aniq jumlasi (o'zbekcha, lotin), skrinshotdagi xato matnini saqla.
+solution — haqiqatda NIMA hal qildi (xodim javobidan yoki savol egasi "hal bo'ldi" degan bot javobidan), qisqa
+ko'rsatma ko'rinishida. Javob bo'lmasa yoki noaniq bo'lsa — "".
+train — true faqat: aniq muammo + uni hal qilgan aniq javob bor (salomlashish, hisobot, "ok", yo'naltirish — false).
+"""
+
+
+def _label_text(q):
+    from . import conversation
+    from .ocr import main_message
+    shot = main_message(q.ocr_text or "")
+    head = (f"[q={q.id}] GURUH: {q.group.title if q.group_id else '-'} | "
+            f"NATIJA: {q.resolution or 'noma`lum'} | HOLAT: {q.status}")
+    body = conversation.context(q)
+    extra = []
+    if shot:
+        extra.append(f"SKRINSHOTDAGI XABAR: {shot}")
+    if q.entry_id:
+        extra.append(f"BAZADAN TANILGAN: {q.entry.title}")
+    if q.answered_by == "bot" and q.answer_text and "Bot:" not in body:
+        extra.append(f"BOT JAVOBI: {q.answer_text[:500]}")
+    return "\n".join([head, body[-1800:], *extra])
+
+
+def label_questions(job):
+    """Savollarga ilova / manba / toifa / muammo / yechim / o'qitishga yaroqlilik belgisi (AI). Javoblar o'zgarmaydi."""
+    from .engine import ai_quota_left
+    from .models import Settings
+    p = job.params or {}
+    days, limit = int(p.get("days") or 3650), min(int(p.get("limit") or 300), 3000)
+    since = timezone.now() - timezone.timedelta(days=days)
+    qs = (Message.objects.filter(kind=Message.QUESTION, created_at__gte=since).exclude(stage="dup")
+          .exclude(status=Message.IGNORED).select_related("group", "entry").order_by("-created_at"))
+    if not p.get("relabel"):
+        qs = qs.exclude(labeled_by__in=["ai", "staff"])
+    rows = list(qs[:limit])
+    total, done, labeled = len(rows), 0, 0
+    s = Settings.load()
+    for i in range(0, total, LABEL_CHUNK):
+        if ai_quota_left(s) < LABEL_RESERVE:
+            job.error = "AI kunlik limitining zaxirasi jonli javoblar uchun qoldirildi — qolgani keyingi safar"
+            break
+        chunk = rows[i:i + LABEL_CHUNK]
+        ids = {q.id for q in chunk}
+        try:
+            data = _run(f"Support: savollarni belgilash ({len(chunk)} ta)", LABEL_SYSTEM,
+                        "\n\n".join(_label_text(q) for q in chunk), LABEL_SCHEMA)
+        except Exception as e:  # noqa: BLE001 — bitta bo'lak yiqilsa keyingisiga o'tamiz
+            job.error = f"{type(e).__name__}: {e}"[:500]
+            continue
+        for it in data.get("items") or []:
+            if it.get("id") not in ids:
+                continue
+            upd = {"app": it.get("app") or "", "origin": it.get("origin") or "", "category": it.get("category") or "",
+                   "solution": (it.get("solution") or "").strip()[:2000], "train": bool(it.get("train")),
+                   "label_conf": 90, "labeled_by": "ai"}
+            prob = (it.get("problem") or "").strip()
+            if prob:
+                upd["problem"] = prob[:300]
+            Message.objects.filter(pk=it["id"]).exclude(labeled_by="staff").update(**upd)
+            labeled += 1
+        done = min(i + LABEL_CHUNK, total)
+        job.progress = {"done": done, "total": total, "labeled": labeled}
+        job.save(update_fields=["progress", "error"])
+    return labeled
+
+
 def run_job(job_id):
     job = AIJob.objects.get(pk=job_id)
     job.status, job.error = AIJob.RUNNING, ""
     job.save(update_fields=["status", "error"])
     n = {AIJob.REVIEW_ENTRIES: review_entries, AIJob.DEDUPE: review_dedupe,
-         AIJob.VARIANTS: write_variants}.get(job.kind, review_unanswered)(job)
+         AIJob.VARIANTS: write_variants, AIJob.LABELS: label_questions}.get(job.kind, review_unanswered)(job)
     job.status = AIJob.FAILED if job.error and not n else AIJob.DONE
     job.progress = {**(job.progress or {}), "suggestions": n}
     job.finished_at = timezone.now()

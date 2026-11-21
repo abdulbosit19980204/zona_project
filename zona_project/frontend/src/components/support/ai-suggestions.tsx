@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, GitMerge, ListPlus, Loader2, Shuffle, Sparkles, Wand2, X } from "lucide-react";
+import { Check, Copy, GitMerge, ListPlus, Loader2, Shuffle, Sparkles, Tags, Wand2, X } from "lucide-react";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/common/page";
@@ -23,8 +23,10 @@ export function AISuggestions({ t }: { t: ST }) {
     refetchInterval: (q) => ((q.state.data ?? []).some((j) => j.status === "queued" || j.status === "running") ? 4000 : 30_000),
   });
   const list = useQuery({ queryKey: ["support", "ai-suggestions"], queryFn: () => supportApi.aiSuggestions("pending"), refetchInterval: 15_000 });
-  const start = useSupportMutation((kind: "entries" | "unanswered" | "dedupe" | "variants") => supportApi.startAIJob(kind), t("aiJobStarted"));
-  const jobLabel = (k: string) => t(k === "entries" ? "aiReviewKb" : k === "dedupe" ? "aiReviewDedupe" : k === "variants" ? "aiVariants" : "aiReviewUnanswered");
+  const start = useSupportMutation((kind: "entries" | "unanswered" | "dedupe" | "variants" | "labels") =>
+    supportApi.startAIJob(kind, kind === "labels" ? { limit: 1000 } : {}), t("aiJobStarted"));
+  const jobLabel = (k: string) => t(k === "entries" ? "aiReviewKb" : k === "dedupe" ? "aiReviewDedupe" : k === "variants" ? "aiVariants"
+    : k === "labels" ? "aiLabels" : "aiReviewUnanswered");
   const running = (jobs.data ?? []).find((j) => j.status === "queued" || j.status === "running");
 
   return (
@@ -38,6 +40,7 @@ export function AISuggestions({ t }: { t: ST }) {
             <Button variant="outline" disabled={!!running || start.isPending} onClick={() => start.mutate("unanswered")}><ListPlus className="size-4" />{t("aiReviewUnanswered")}</Button>
             <Button variant="outline" disabled={!!running || start.isPending} onClick={() => start.mutate("dedupe")}><Copy className="size-4" />{t("aiReviewDedupe")}</Button>
             <Button variant="outline" disabled={!!running || start.isPending} onClick={() => start.mutate("variants")}><Shuffle className="size-4" />{t("aiVariants")}</Button>
+            <Button variant="outline" disabled={!!running || start.isPending} title={t("aiLabelsHint")} onClick={() => start.mutate("labels")}><Tags className="size-4" />{t("aiLabels")}</Button>
           </div>
         )}
         {running && (

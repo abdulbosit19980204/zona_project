@@ -17,7 +17,7 @@ from django.utils import timezone
 from zona import conf
 from zona.crypto import decrypt
 
-from . import contacts, conversation, engine, ocr, resolution, translit, vision
+from . import contacts, conversation, engine, ocr, resolution, systems, translit, vision
 from .models import (MODE_COLLECT, MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, HistoryJob,
                      Media, Message, Settings, TgUser)
 from .telegram import Client, TelegramError
@@ -721,6 +721,7 @@ class Handler:
         q.stage, q.entry, q.confidence = d.stage, d.entry, d.confidence
         q.answer_text = d.text
         q.problem = resolution.problem_of(q, d.entry)  # har bir savol — qisqa muammo (jurnal va tahlil uchun)
+        systems.apply(q, d.entry)  # ilova / manba / toifa (tez qoidalar; AI tahlili keyin aniqlashtiradi)
         if d.entry:
             Entry.objects.filter(pk=d.entry.pk).update(uses=d.entry.uses + 1, last_used_at=timezone.now())
 
@@ -1630,6 +1631,21 @@ def _task_thread():
         close_old_connections()
 
 
+def _nightly_labels(hist):
+    """Tunda: hali AI belgilamagan savollar (tizim, toifa, muammo, yechim) — o'qitish ma'lumoti. Tunda bir marta."""
+    from .models import AIJob
+    s = Settings.load()
+    if not s.ai_enabled or not hist.is_night(None, s):
+        return None
+    if AIJob.objects.filter(status__in=[AIJob.QUEUED, AIJob.RUNNING]).exists():
+        return None
+    if AIJob.objects.filter(kind=AIJob.LABELS, created_at__gte=timezone.now() - timezone.timedelta(hours=12)).exists():
+        return None
+    if not Message.objects.filter(kind=Message.QUESTION).exclude(stage="dup").exclude(labeled_by__in=["ai", "staff"]).exists():
+        return None
+    return AIJob.objects.create(kind=AIJob.LABELS, params={"limit": 1000}, created_by="avto (tun)")
+
+
 def run_forever(poll=10):
     from . import history as hist
     from .models import AIJob, SupportTask
@@ -1684,6 +1700,7 @@ def run_forever(poll=10):
                     from . import selflearn
                     n = selflearn.tick()
                     selflearn.daily_review()
+                    _nightly_labels(hist)
                     if n:
                         log.info("self-learning: %s new question variants", n)
                 except Exception:  # noqa: BLE001
