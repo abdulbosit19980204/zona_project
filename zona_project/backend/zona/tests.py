@@ -34,6 +34,11 @@ class Base(TestCase):
         cls.editor = make_user("editor", Profile.EDITOR)
         cls.viewer = make_user("viewer", Profile.VIEWER)
 
+    def setUp(self):
+        super().setUp()
+        from django.core.cache import cache
+        cache.clear()  # test bazasi orqaga qaytariladi va id'lar qayta ishlatiladi — oldingi testning keshi qolmasin
+
     def login(self, username):
         r = self.client.post(API + "auth/login/", {"username": username, "password": "Parol-123456"},
                              content_type="application/json")
