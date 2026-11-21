@@ -368,55 +368,103 @@ class Supervisor:
 
 # ---------------------------------------------------------------- autentifikatsiya
 class Auth:
+    """Kirish.
+
+    OTP rejimi (CONTROL_AUTH=otp, serverda): FAQAT bir martalik 6 xonali kod — egasining Telegram'iga yoki serverda
+    `--issue-code` buyrug'i bilan. Doimiy parol yo'q va hech qayerda saqlanmaydi (eski parol qoldiqlari o'chiriladi).
+    Parol rejimi (lokal ishlab chiqish): CONTROL_PASSWORD yoki birinchi ishga tushishda yaratilgan parol; bu yerda ham
+    Telegram'ga parol emas, faqat kod yuboriladi.
+    Kodlar diskda (otp.json, 0600) — faqat HMAC xeshi; muddati 5 daqiqa, bir marta ishlaydi."""
+
+    CODE_TTL = 300
+    GLOBAL_FAILS, GLOBAL_WINDOW = 30, 300  # barcha IP'lardan shuncha xato — barcha faol kodlar bekor qilinadi
+
     def __init__(self, data_dir: Path):
         data_dir.mkdir(parents=True, exist_ok=True)
         self.file = data_dir / "control-auth.json"
+        self.codes_file = data_dir / "otp.json"
         self.fails: dict[str, list[float]] = {}
+        self.global_fails: list[float] = []
+        self.lock = threading.Lock()
         stored = json.loads(self.file.read_text("utf-8")) if self.file.is_file() else {}
         self.secret = stored.get("secret") or secrets.token_hex(32)
+        self.otp_only = os.environ.get("CONTROL_AUTH", "").strip().lower() == "otp"
         self.generated_password: str | None = None
-        env_pw = os.environ.get("CONTROL_PASSWORD", "").strip()
-        self.plain = env_pw or None  # serverda parol env faylida — "parolni unutdim" uni egasining Telegram'iga yuboradi
-        self.codes: dict[str, float] = {}  # bir martalik kirish kodlari (parol faqat xesh ko'rinishida bo'lsa): xesh -> muddat
-        if env_pw:
-            self.salt, self.hash = self._hash(env_pw)
-        elif stored.get("hash"):
-            self.salt, self.hash = stored["salt"], stored["hash"]
+        self.salt = self.hash = ""
+        if self.otp_only:
+            try:
+                (data_dir / "initial-password.txt").unlink()  # eski doimiy parol qoldig'i
+            except OSError:
+                pass
         else:
-            self.generated_password = secrets.token_urlsafe(12)
-            self.salt, self.hash = self._hash(self.generated_password)
-            (data_dir / "initial-password.txt").write_text(self.generated_password + "\n", "utf-8")
-        self.file.write_text(json.dumps({"secret": self.secret, "salt": self.salt, "hash": self.hash}), "utf-8")
-        try:
-            os.chmod(self.file, 0o600)
-        except OSError:
-            pass
+            env_pw = os.environ.get("CONTROL_PASSWORD", "").strip()
+            if env_pw:
+                self.salt, self.hash = self._hash(env_pw)
+            elif stored.get("hash"):
+                self.salt, self.hash = stored["salt"], stored["hash"]
+            else:
+                self.generated_password = secrets.token_urlsafe(12)
+                self.salt, self.hash = self._hash(self.generated_password)
+                (data_dir / "initial-password.txt").write_text(self.generated_password + "\n", "utf-8")
+        keep = {"secret": self.secret, **({"salt": self.salt, "hash": self.hash} if self.hash else {})}
+        self.file.write_text(json.dumps(keep), "utf-8")
+        _private(self.file)
 
     @staticmethod
     def _hash(password: str, salt: str | None = None) -> tuple[str, str]:
         salt = salt or secrets.token_hex(16)
         return salt, hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 200_000).hex()
 
-    def check_password(self, ip: str, password: str) -> str | None:
+    def check_password(self, ip: str, value: str) -> str | None:
         """None — to'g'ri; aks holda xato matni."""
         window = [t for t in self.fails.get(ip, []) if now() - t < 900]
         if len(window) >= 10:
             return "Juda ko'p urinish. 15 daqiqadan keyin qayta urinib ko'ring."
-        if hmac.compare_digest(self._hash(password, self.salt)[1], self.hash) or self._use_code(password):
+        value = (value or "").strip()
+        ok = self._use_code(value) or (not self.otp_only and bool(self.hash) and bool(value)
+                                       and hmac.compare_digest(self._hash(value, self.salt)[1], self.hash))
+        if ok:
             self.fails.pop(ip, None)
             return None
         self.fails[ip] = [*window, now()]
-        return "Parol noto'g'ri."
+        self.global_fails = [t for t in self.global_fails if now() - t < self.GLOBAL_WINDOW] + [now()]
+        if len(self.global_fails) >= self.GLOBAL_FAILS:  # tarqoq taxmin qilish — barcha kodlar bekor
+            self._save_codes({})
+            self.global_fails = []
+        return "Kod noto'g'ri yoki muddati o'tgan." if self.otp_only else "Parol yoki kod noto'g'ri."
 
-    def new_code(self, minutes: int = 10) -> str:
+    # ---------- bir martalik kodlar ----------
+    def _key(self, code: str) -> str:
+        return hmac.new(self.secret.encode(), code.encode(), hashlib.sha256).hexdigest()
+
+    def _load_codes(self) -> dict[str, float]:
+        try:
+            data = json.loads(self.codes_file.read_text("utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return {k: float(v) for k, v in data.items() if float(v) > now()}
+
+    def _save_codes(self, codes: dict[str, float]) -> None:
+        tmp = self.codes_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(codes), "utf-8")
+        _private(tmp)
+        os.replace(tmp, self.codes_file)
+
+    def new_code(self, ttl: int | None = None) -> str:
         code = f"{secrets.randbelow(10 ** 6):06d}"
-        self.codes = {k: v for k, v in self.codes.items() if v > now()}
-        self.codes[hashlib.sha256(code.encode()).hexdigest()] = now() + minutes * 60
+        with self.lock:
+            codes = self._load_codes()
+            codes[self._key(code)] = now() + (ttl or self.CODE_TTL)
+            self._save_codes(codes)
         return code
 
     def _use_code(self, code: str) -> bool:
-        key = hashlib.sha256(code.strip().encode()).hexdigest()
-        exp = self.codes.pop(key, 0)
+        if not (code.isdigit() and len(code) == 6):
+            return False
+        with self.lock:
+            codes = self._load_codes()
+            exp = codes.pop(self._key(code), 0)
+            self._save_codes(codes)
         return exp > now()
 
     def make_cookie(self, hours: int = 12) -> str:
@@ -433,33 +481,46 @@ class Auth:
         return hmac.compare_digest(sig, good) and int(exp) > now()
 
 
+def _private(path: Path) -> None:
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------- veb
 LOGIN_PAGE = """<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kuzatuv markazi — kirish</title><style>
 :root{color-scheme:dark;--bg:#0a0d12;--card:#10151c;--fg:#e6ebf2;--mut:#8b97a8;--acc:#4f8cff;--bd:#1f2833}
 @media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f3f5f9;--card:#fff;--fg:#111827;--mut:#5b6474;--acc:#2563eb;--bd:#e3e7ee}}
-@media (prefers-color-scheme:dark){:root{--bg:#0b0d10;--card:#15181d;--fg:#e8eaed;--mut:#98a2b3;--acc:#60a5fa;--bd:#262a31}}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;padding:16px}
-.c{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:28px;width:100%;max-width:360px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:28px;width:100%;max-width:380px}
 h1{font-size:18px;margin:0 0 4px}p{color:var(--mut);margin:0 0 18px;font-size:13px}
 input{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:transparent;color:inherit;font:inherit}
+input.code{font:600 22px/1.2 ui-monospace,monospace;letter-spacing:.35em;text-align:center}
 button{margin-top:12px;width:100%;padding:10px;border:0;border-radius:10px;background:var(--acc);color:#fff;font:inherit;cursor:pointer}
-.e{color:#dc2626;margin-top:10px;font-size:13px}.m{color:#16a34a;margin-top:10px;font-size:13px}
-.l{background:none;color:var(--acc);margin-top:8px;padding:6px;font-size:13px}</style></head><body><form class="c" method="post" action="login">
+.e{color:#ef4444;margin-top:10px;font-size:13px}.m{color:#22c55e;margin-top:10px;font-size:13px}
+.l{background:none;border:1px solid var(--bd);color:var(--fg);margin-top:8px;padding:9px;font-size:14px}
+.h{color:var(--mut);font-size:12px;margin-top:12px}</style></head><body><form class="c" method="post" action="login">
 <h1>Kuzatuv va xavfsizlik markazi</h1><p>Server, servislar, resurslar va xavfsizlik — bir joyda.</p>
-<input type="password" name="password" placeholder="Parol yoki Telegram'dagi kod" autofocus required>__ERR__<button type="submit">Kirish</button>
+__INPUT____ERR__<button type="submit">Kirish</button>
 __REC__</form></body></html>"""
-RECOVER_FORM = ('<button type="submit" formaction="recover" formnovalidate class="l">Parolni unutdim — Telegram\'imga yuborish</button>')
+INPUT_OTP = ('<input class="code" type="text" name="password" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" '
+             'maxlength="6" placeholder="••••••" aria-label="Telegram\'dagi 6 xonali kod" autofocus required>')
+INPUT_PASSWORD = ('<input type="password" name="password" placeholder="Parol yoki Telegram\'dagi kod" aria-label="Parol yoki kod" '
+                  'autofocus required>')
+RECOVER_FORM = ('<button type="submit" formaction="recover" formnovalidate class="l">📨 Telegram\'imga kod yuborish</button>'
+                '<div class="h">Kod faqat egasining Telegram\'iga yuboriladi, 5 daqiqa va bir marta amal qiladi. '
+                'Doimiy parol yo\'q.</div>')
 
 
 class Recovery:
-    """"Parolni unutdim": parol (yoki bir martalik kod) FAQAT oldindan sozlangan egasining Telegram'iga yuboriladi.
+    """Bir martalik kirish kodi FAQAT oldindan sozlangan egasining Telegram'iga yuboriladi (doimiy parol hech qachon).
 
     Sozlash (env): CONTROL_TG_TOKEN — bot tokeni, CONTROL_TG_CHAT_ID — egasining shaxsiy chat id (vergul bilan bir nechta).
-    Qabul qiluvchi sahifadan kiritilmaydi — parolni boshqa birovga yuborib bo'lmaydi. Soatiga ko'pi bilan 3 marta;
-    xabar himoyalangan (forward/nusxa yo'q)."""
+    Qabul qiluvchi sahifadan kiritilmaydi. Soatiga ko'pi bilan 5 ta kod; xabar himoyalangan (forward/nusxa yo'q)."""
 
-    LIMIT, WINDOW = 3, 3600
+    LIMIT, WINDOW = 5, 3600
 
     def __init__(self, auth: "Auth"):
         self.auth = auth
@@ -483,23 +544,19 @@ class Recovery:
     def send(self, ip: str, host: str = "") -> str:
         """Qaytaradi: foydalanuvchiga ko'rsatiladigan xabar (kimga yuborilgani aytilmaydi)."""
         if not self.enabled:
-            return "Telegram orqali tiklash sozlanmagan. Server administratoriga murojaat qiling."
+            return "Telegram orqali kod yuborish sozlanmagan. Server administratoriga murojaat qiling."
         self.sent = [t for t in self.sent if now() - t < self.WINDOW]
         if len(self.sent) >= self.LIMIT:
-            return "Soatiga 3 martadan ko'p so'rab bo'lmaydi. Telegram'dagi oldingi xabarni ko'ring."
+            return "Soatiga 5 tadan ko'p kod so'rab bo'lmaydi. Telegram'dagi oxirgi kodni ishlating."
         self.sent.append(now())
-        where = f" ({host})" if host else ""
+        where = f" ({html_escape(host)})" if host else ""
         when = datetime.now().strftime("%Y-%m-%d %H:%M")
-        if self.auth.plain:
-            body = f"🔐 <b>Servislar markazi{where}</b>\nKirish paroli: <code>{html_escape(self.auth.plain)}</code>"
-        else:
-            body = (f"🔐 <b>Servislar markazi{where}</b>\nBir martalik kirish kodi: <code>{self.auth.new_code()}</code>\n"
-                    "Kod 10 daqiqa amal qiladi — parol maydoniga kiriting.")
-        body += (f"\n\nSo'rov: {when}, IP {html_escape(ip)}.\nSiz so'ramagan bo'lsangiz — parolni almashtiring. "
-                 "O'qib bo'lgach, bu xabarni o'chirib qo'ying.")
+        body = (f"🔐 <b>Kuzatuv markazi{where}</b>\nBir martalik kirish kodi: <code>{self.auth.new_code()}</code>\n"
+                f"5 daqiqa amal qiladi va faqat bir marta ishlaydi.\n\nSo'rov: {when}, IP {html_escape(ip)}.\n"
+                "Siz so'ramagan bo'lsangiz — e'tibor bermang (kodsiz hech kim kira olmaydi).")
         ok = any([self._call("sendMessage", {"chat_id": c, "text": body, "parse_mode": "HTML", "protect_content": True})
                   for c in self.chats])
-        return ("Parol Telegram'ingizga yuborildi." if ok else
+        return ("Kod Telegram'ingizga yuborildi." if ok else
                 "Telegram'ga yuborib bo'lmadi: botga avval /start yozing yoki keyinroq urinib ko'ring.")
 
 
@@ -513,7 +570,8 @@ def make_handler(sup: Supervisor, auth: Auth, res: Any = None, rec: "Recovery | 
 
     def login_page(err: str = "", msg: str = "") -> str:
         note = (f'<div class="e">{err}</div>' if err else "") + (f'<div class="m">{msg}</div>' if msg else "")
-        return LOGIN_PAGE.replace("__ERR__", note).replace("__REC__", RECOVER_FORM if rec is not None and rec.enabled else "")
+        page = LOGIN_PAGE.replace("__INPUT__", INPUT_OTP if auth.otp_only else INPUT_PASSWORD).replace("__ERR__", note)
+        return page.replace("__REC__", RECOVER_FORM if rec is not None and rec.enabled else "")
 
     class Handler(http.server.BaseHTTPRequestHandler):
         server_version = "zona-control"
@@ -611,7 +669,7 @@ def make_handler(sup: Supervisor, auth: Auth, res: Any = None, rec: "Recovery | 
                     return self._send(404, login_page("Mavjud emas"), "text/html; charset=utf-8")
                 msg = rec.send(self._ip(), self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "")
                 sup.event(f"Parolni tiklash so'raldi (IP {self._ip()}): {msg}")
-                ok = msg.startswith("Parol")
+                ok = msg.startswith("Kod")
                 return self._send(200, login_page("" if ok else msg, msg if ok else ""), "text/html; charset=utf-8")
             if tail == "logout":
                 return self._send(303, b"", headers={"Location": "login", "Set-Cookie": self._cookie("", 0)})
@@ -648,7 +706,12 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--port", type=int, default=int(os.environ.get("CONTROL_PORT", "8900")))
     ap.add_argument("--data", default=os.environ.get("CONTROL_DATA_DIR") or str(HERE / "data"))
     ap.add_argument("--no-autostart", action="store_true", help="servislarni avtomatik ishga tushirmaslik")
+    ap.add_argument("--issue-code", action="store_true",
+                    help="favqulodda: bir martalik kirish kodi chiqarish (Telegram ishlamasa; faqat serverda)")
     args = ap.parse_args(argv)
+    if args.issue_code:
+        print(Auth(Path(args.data)).new_code(), "— 5 daqiqa amal qiladi, bir marta ishlaydi")
+        return
 
     config = load_config(Path(args.config))
     sup = Supervisor(config)

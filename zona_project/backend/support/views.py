@@ -195,8 +195,9 @@ class EntrySerializer(serializers.ModelSerializer):
         ids = list(obj.sources or [])[-5:]
         view = self.context.get("view")
         detail = getattr(view, "action", "") == "retrieve"
-        if not ids or not (detail or obj.pending or obj.status in (Entry.NEW, Entry.REVIEW)):
-            return []  # katta bilim bazasi ro'yxatini sekinlashtirmaslik uchun — faqat tasdiq kutayotganlarda
+        # og'ir (har savol uchun bir nechta so'rov): faqat bitta yozuv ochilganda yoki sahifalangan navbatda (sources=1)
+        if not ids or not (detail or self.context.get("with_sources")):
+            return []
         out = []
         for q in Message.objects.filter(pk__in=ids).select_related("group", "user").order_by("-created_at"):
             related = Message.objects.filter(question=q, kind=Message.INFO)
@@ -212,11 +213,16 @@ class EntrySerializer(serializers.ModelSerializer):
         return out
 
     def get_attachments_info(self, obj):
-        files = {m.id: m for m in Media.objects.filter(id__in=obj.attachments or [])}
-        return [media_dict(files[i]) for i in obj.attachments or [] if i in files]
+        if not obj.attachments:
+            return []
+        files = self.context.get("media_map")  # ro'yxatda — bir so'rov bilan oldindan yuklangan
+        if files is None:
+            files = {m.id: m for m in Media.objects.filter(id__in=obj.attachments)}
+        return [media_dict(files[i]) for i in obj.attachments if i in files]
 
     def get_image_examples_count(self, obj):
-        return obj.image_examples.count()
+        n = getattr(obj, "n_images", None)  # ro'yxatda — annotatsiya (har yozuvga alohida so'rov emas)
+        return n if n is not None else obj.image_examples.count()
 
     def validate_attachments(self, v):
         if not isinstance(v, list):
@@ -284,6 +290,30 @@ class EntryViewSet(ZonaViewSet):
             q = p["q"]
             qs = qs.filter(Q(title__icontains=q) | Q(answer__icontains=q) | Q(questions__icontains=q))
         return qs
+
+    def list(self, request, *args, **kwargs):
+        """Tez ro'yxat. ?brief=1 — faqat id/sarlavha/holat (tanlash ro'yxatlari uchun);
+        ?limit=&offset= — sahifa {"count", "results"} (navbat: muhimlari va yangilari oldin);
+        ?sources=1 — manba savollar ham (faqat sahifalangan ro'yxatda — og'ir)."""
+        from django.db.models import Count
+        p = request.query_params
+        qs = self.get_queryset()
+        if p.get("brief") == "1":
+            return Response(list(qs.order_by("title").values("id", "title", "status", "kind")))
+        qs = qs.annotate(n_images=Count("image_examples"))
+        count = None
+        if p.get("limit"):
+            limit, offset = max(1, min(int(p["limit"]), 100)), max(0, int(p.get("offset") or 0))
+            qs = qs.order_by("-priority", "-created_at", "-id")
+            count = qs.count()
+            rows = list(qs[offset:offset + limit])
+        else:
+            rows = list(qs)
+        att = {i for e in rows for i in (e.attachments or [])}
+        ctx = {**self.get_serializer_context(), "media_map": {m.id: m for m in Media.objects.filter(id__in=att)},
+               "with_sources": count is not None and p.get("sources") == "1"}
+        data = EntrySerializer(rows, many=True, context=ctx).data
+        return Response(data if count is None else {"count": count, "results": data})
 
     def retrieve(self, request, *args, **kwargs):
         e = self.get_object()
@@ -1155,9 +1185,25 @@ def media_file(request, pk):
 
 @zona_api(["GET"], [CanView])
 def image_types(request):
-    """Rasm turlari: o'rgatilgan namunalar (yozuv bo'yicha) va yorliqsiz rasmlar guruhlari."""
-    from . import vision
+    """Rasm turlari: o'rgatilgan namunalar (yozuv bo'yicha) va yorliqsiz rasmlar guruhlari.
+    Guruhlash og'ir — natija keshlanadi; rasmlar qo'shilsa/belgilansa/e'tiborsiz qilinsa kalit o'zgaradi (darhol yangilanadi)."""
+    from django.core.cache import cache
+    from django.db.models import Count, Max, Sum
+    photos = Media.objects.filter(kind=Media.PHOTO)
+    agg = photos.aggregate(n=Count("id"), last=Max("id"), lab=Count("label"), labsum=Sum("label_id"),
+                           ign=Count("id", filter=Q(ignored=True)))
     s = Settings.load()
+    key = f"support:images:{agg['n']}:{agg['last']}:{agg['lab']}:{agg['labsum']}:{agg['ign']}:{s.image_threshold}"
+    hit = cache.get(key)
+    if hit is not None:
+        return Response(hit)
+    data = _image_types(s)
+    cache.set(key, data, 600)
+    return Response(data)
+
+
+def _image_types(s):
+    from . import vision
     labeled = {}
     for m in Media.objects.filter(kind=Media.PHOTO, label__isnull=False).select_related("label").order_by("-created_at"):
         row = labeled.setdefault(m.label_id, {"entry": m.label_id, "title": m.label.title, "status": m.label.status,
@@ -1177,9 +1223,8 @@ def image_types(request):
         groups.append({"count": len(g), "ids": [m.id for m in g], "samples": [media_dict(m) for m in g[:4]],
                        "ocr": next((m.ocr_text[:300] for m in g if m.ocr_text), ""),
                        "guess": guess.id if guess else None, "guess_title": guess.title if guess else ""})
-    return Response({"labeled": sorted(labeled.values(), key=lambda r: -r["count"]), "unlabeled": groups, "ignored": ignored,
-                     "threshold": s.image_threshold,
-                     "total": Media.objects.filter(kind=Media.PHOTO).count()})
+    return {"labeled": sorted(labeled.values(), key=lambda r: -r["count"]), "unlabeled": groups, "ignored": ignored,
+            "threshold": s.image_threshold, "total": Media.objects.filter(kind=Media.PHOTO).count()}
 
 
 @zona_api(["POST"], [ReadOrEdit])

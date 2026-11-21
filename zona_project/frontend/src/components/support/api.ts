@@ -222,6 +222,10 @@ export const supportApi = {
   groups: () => get<SupportGroup[]>("groups/"),
   updateGroup: (id: number, body: Partial<SupportGroup>) => patch<SupportGroup>(`groups/${id}/`, body),
   entries: (params: Record<string, string | number> = {}) => get<Entry[]>("entries/", params),
+  /** sahifa (backend'da filtr va tartib): {count, results}; sources=1 — manba savollar faqat shu sahifa uchun */
+  entriesPage: (params: Record<string, string | number>) => get<{ count: number; results: Entry[] }>("entries/", params),
+  /** tanlash ro'yxatlari uchun yengil ro'yxat: faqat id, sarlavha, holat */
+  entriesBrief: (status: string) => get<Pick<Entry, "id" | "title" | "status" | "kind">[]>("entries/", { brief: 1, status }),
   entry: (id: number) => get<Entry>(`entries/${id}/`),
   createEntry: (body: Partial<Entry> & { approve?: boolean }) => post<Entry>("entries/", body),
   updateEntry: (id: number, body: Partial<Entry>) => patch<Entry>(`entries/${id}/`, body),

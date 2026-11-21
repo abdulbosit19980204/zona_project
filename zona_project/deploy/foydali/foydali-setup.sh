@@ -108,17 +108,27 @@ else
   sed -i "s|^QRDRIVE_SSO_SECRET=.*|QRDRIVE_SSO_SECRET=$JWT|" "$ETC/foydali-qrdrive.env"
 fi
 if [[ ! -f "$ETC/foydali-control.env" ]]; then
-  CPASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(14))")
   cat > "$ETC/foydali-control.env" <<EOF
-# Foydali — servislar boshqaruv markazi (https://$DOMAIN/control/)
-CONTROL_PASSWORD=$CPASS
+# Foydali — kuzatuv markazi (https://$DOMAIN/control/). Kirish FAQAT bir martalik kod bilan (doimiy parol yo'q):
+# kod egasining Telegram'iga keladi (CONTROL_TG_TOKEN, CONTROL_TG_CHAT_ID) yoki serverda: foydali-control-code
+CONTROL_AUTH=otp
 CONTROL_HOST=127.0.0.1
 CONTROL_PORT=8920
 CONTROL_CONFIG=$ETC/foydali-control.services.json
 CONTROL_DATA_DIR=$DATA/control
 EOF
-  echo "  Boshqaruv markazi paroli: $CPASS  (saqlangan: $ETC/foydali-control.env)"
+  echo "  Kuzatuv markazi: kirish kodi — Telegram orqali yoki serverda: foydali-control-code"
 fi
+# doimiy parol ishlatilmaydi va saqlanmaydi (eski o'rnatishlardan qolgan bo'lsa — olib tashlanadi)
+sed -i '/^CONTROL_PASSWORD=/d' "$ETC/foydali-control.env"
+grep -q '^CONTROL_AUTH=' "$ETC/foydali-control.env" || echo 'CONTROL_AUTH=otp' >> "$ETC/foydali-control.env"
+rm -f "$DATA/control/initial-password.txt"
+cat > /usr/local/sbin/foydali-control-code <<EOF
+#!/bin/bash
+# Favqulodda: kuzatuv markaziga bir martalik kirish kodi (Telegram ishlamasa). Faqat root.
+exec sudo -u $USR env CONTROL_AUTH=otp python3 $SRC/services/control/control.py --data $DATA/control --issue-code
+EOF
+chmod 700 /usr/local/sbin/foydali-control-code
 chown root:"$USR" "$ETC"/*.env
 chmod 640 "$ETC"/*.env
 sed "s|bind = .*|bind = \"127.0.0.1:8020\"|" "$SRC/deploy/gunicorn.conf.py" > "$ETC/foydali-gunicorn.conf.py"

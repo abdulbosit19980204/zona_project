@@ -65,7 +65,8 @@ class SourceFilesTests(FlowBase):
         self.assertTrue(new)
         self.assertEqual(e.sources, [q.pk])
         from .views import EntrySerializer
-        src = EntrySerializer(e).data["sources_info"]
+        self.assertEqual(EntrySerializer(e).data["sources_info"], [])  # ro'yxatda og'ir manbalar so'ralmasa — yo'q
+        src = EntrySerializer(e, context={"with_sources": True}).data["sources_info"]
         self.assertEqual(len(src), 1)
         self.assertEqual(src[0]["text"], "Tovar ilovada ko'rinmayapti")
         self.assertEqual(src[0]["group"], "ROP")

@@ -1,15 +1,16 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, Copy, ExternalLink, RotateCcw, GitMerge, Layers, ListChecks, MessageSquare, Pencil, Sparkles, SquareStack, Star, X } from "lucide-react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Check, ChevronLeft, ChevronRight, Copy, ExternalLink, RotateCcw, GitMerge, Layers, ListChecks, MessageSquare, Pencil, Search, Sparkles, SquareStack, Star, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/common/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
@@ -25,6 +26,7 @@ import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 
 type View = "queue" | "cards" | "clusters" | "dups" | "recheck" | "ai";
+const PAGE = 20;
 
 export function SupportReview() {
   return <Suspense><ReviewInner /></Suspense>;
@@ -37,17 +39,48 @@ function ReviewInner() {
   const [view, setView] = useState<View>("queue");
   const [editing, setEditing] = useState<number | null>(() => Number(params.get("entry")) || null);
   const [open, setOpen] = useState(() => !!Number(params.get("entry")));
-  const fresh = useQuery({ queryKey: ["support", "entries", "queue"], queryFn: () => supportApi.entries({ status: "new,review" }) });
+  // navbat backend'da sahifalanadi (20 tadan): manba savollar va fayllar faqat ko'rinayotgan sahifa uchun keladi
+  const [page, setPage] = useState(0);
+  const [q, setQ] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => { const h = setTimeout(() => { setSearch(q.trim()); setPage(0); }, 350); return () => clearTimeout(h); }, [q]);
+  const fresh = useQuery({
+    queryKey: ["support", "entries", "queue", page, search],
+    queryFn: () => supportApi.entriesPage({ status: "new,review", limit: PAGE, offset: page * PAGE, sources: 1, ...(search ? { q: search } : {}) }),
+    placeholderData: keepPreviousData,
+  });
   const edits = useQuery({ queryKey: ["support", "entries", "pending"], queryFn: () => supportApi.entries({ status: "approved", pending: 1 }) });
-  const items = useMemo(() => [...(edits.data ?? []), ...(fresh.data ?? [])]
-    .sort((a, b) => Number(b.priority) - Number(a.priority)), [fresh.data, edits.data]);
+  // guruhlash uchun butun navbat kerak — faqat shu ko'rinish ochilganda (manbalarsiz, yengil)
+  const all = useQuery({ queryKey: ["support", "entries", "queue-all"], queryFn: () => supportApi.entries({ status: "new,review" }),
+    enabled: view === "clusters" });
+  const total = fresh.data?.count ?? 0;
+  const items = useMemo(() => [...(page === 0 && !search ? edits.data ?? [] : []), ...(fresh.data?.results ?? [])]
+    .sort((a, b) => Number(b.priority) - Number(a.priority)), [fresh.data, edits.data, page, search]);
+  const pages = Math.max(1, Math.ceil(total / PAGE));
   const edit = (id: number) => { setEditing(id); setOpen(true); };
+  const pager = (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="relative min-w-56 flex-1 sm:max-w-80">
+        <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} className="h-9 pl-8" />
+      </div>
+      <span className="text-xs text-muted-foreground">
+        {total ? `${page * PAGE + 1}–${Math.min(total, (page + 1) * PAGE)} / ${total}` : "0"}
+        {fresh.isFetching && " …"}
+      </span>
+      <span className="ml-auto flex gap-1">
+        <Button size="icon" variant="outline" className="size-8" aria-label={t("pgPrev")} disabled={page === 0} onClick={() => setPage(page - 1)}><ChevronLeft className="size-4" /></Button>
+        <span className="self-center px-1 text-xs tabular-nums text-muted-foreground">{page + 1} / {pages}</span>
+        <Button size="icon" variant="outline" className="size-8" aria-label={t("pgNext")} disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}><ChevronRight className="size-4" /></Button>
+      </span>
+    </div>
+  );
 
   return (
     <SupportShell title={t("reviewTitle")} description={t("reviewDesc")}>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Segmented value={view} onChange={setView} options={[
-          { value: "queue", label: t("viewQueue"), count: items.length, icon: ListChecks },
+          { value: "queue", label: t("viewQueue"), count: total + (edits.data?.length ?? 0), icon: ListChecks },
           { value: "cards", label: t("viewCards"), icon: SquareStack },
           { value: "clusters", label: t("viewClusters"), icon: Layers },
           { value: "dups", label: t("viewDups"), icon: Copy },
@@ -59,11 +92,14 @@ function ReviewInner() {
       {view === "ai" && <AISuggestions t={t} />}
       {view === "dups" && <Duplicates t={t} />}
       {view === "recheck" && <Recheck t={t} onEdit={edit} />}
-      {!["ai", "dups", "recheck"].includes(view) && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
-      {!["ai", "dups", "recheck"].includes(view) && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
-      {items.length > 0 && view === "queue" && <QueueView items={items} t={t} onEdit={edit} />}
-      {items.length > 0 && view === "cards" && <CardsView items={items} t={t} />}
-      {items.length > 0 && view === "clusters" && <ClustersView items={items.filter((e) => !e.pending)} t={t} onEdit={edit} />}
+      {(view === "queue" || view === "cards") && pager}
+      {(view === "queue" || view === "cards") && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
+      {(view === "queue" || view === "cards") && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
+      {items.length > 0 && view === "queue" && <QueueView key={`${page}-${search}`} items={items} t={t} onEdit={edit} />}
+      {items.length > 0 && view === "cards" && <CardsView key={`${page}-${search}`} items={items} t={t} />}
+      {view === "clusters" && all.isLoading && <Skeleton className="h-48" />}
+      {view === "clusters" && !!all.data?.length && <ClustersView items={all.data} t={t} onEdit={edit} />}
+      {view === "clusters" && all.data?.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
       <EntryEditor entryId={editing} open={open} onOpenChange={setOpen} />
     </SupportShell>
   );
@@ -191,7 +227,8 @@ function OneCard({ e, t, pos, total, next }: { e: Entry; t: ST; pos: number; tot
   const can = useCan();
   const [answer, setAnswer] = useState(e.pending?.answer ?? e.answer);
   const [target, setTarget] = useState("");
-  const approved = useQuery({ queryKey: ["support", "entries", "approved-all"], queryFn: () => supportApi.entries({ status: "approved" }) });
+  const approved = useQuery({ queryKey: ["support", "entries", "brief", "approved"], queryFn: () => supportApi.entriesBrief("approved"),
+    staleTime: 60_000 });
   const act = useSupportMutation((fn: () => Promise<unknown>) => fn(), t("saved"));
   const changed = answer.trim() !== (e.pending?.answer ?? e.answer);
   const approve = () => act.mutate(async () => {

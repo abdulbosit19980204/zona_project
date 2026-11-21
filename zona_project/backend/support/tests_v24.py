@@ -1,4 +1,5 @@
 """Admin nazorati: savol yopilganini admin o'zi tasdiqlaydi (savol egasini kutmasdan) — bu qaror yakuniy."""
+from unittest import mock
 from zona.crypto import encrypt
 
 from . import resolution
@@ -64,3 +65,43 @@ class AdminResolveTests(ControlsBase):
         resolution.admin_mark(self.q, "yes", "Admin Test")
         self.assertNotIn(self.q.pk, [x.pk for x in resolution.due()])
         _ = (Bot, encrypt)
+
+
+class FastListTests(ControlsBase):
+    """Og'ir sahifalar: hamma narsa birdan emas — sahifalab, faqat kerakli maydonlar."""
+
+    def setUp(self):
+        super().setUp()
+        from .models import Entry
+        self.g = Group.objects.create(bot=self.bot, chat_id=-300, title="G")
+        q = Message.objects.create(bot=self.bot, group=self.g, chat_id=-300, message_id=1, kind=Message.QUESTION, text="savol")
+        for i in range(25):
+            Entry.objects.create(kind=Entry.FAQ, title=f"Yozuv {i:02d}", answer="javob", status=Entry.NEW,
+                                 sources=[q.pk], priority=(i == 7))
+        self.login("admin")
+
+    def test_page_count_order_and_sources_only_when_asked(self):
+        r = self.call("get", "support/entries/?status=new,review&limit=10&offset=0&sources=1").json()
+        self.assertEqual((r["count"], len(r["results"])), (25, 10))
+        self.assertEqual(r["results"][0]["title"], "Yozuv 07")  # muhimi birinchi
+        self.assertEqual(len(r["results"][0]["sources_info"]), 1)
+        r2 = self.call("get", "support/entries/?status=new,review&limit=10&offset=20").json()
+        self.assertEqual(len(r2["results"]), 5)
+        self.assertEqual(r2["results"][0]["sources_info"], [])  # sources=1 bo'lmasa — og'ir qism yo'q
+        full = self.call("get", "support/entries/?status=new").json()
+        self.assertEqual(len(full), 25)
+        self.assertTrue(all(e["sources_info"] == [] for e in full))
+
+    def test_brief_and_search(self):
+        b = self.call("get", "support/entries/?brief=1&status=new").json()
+        self.assertEqual(set(b[0]), {"id", "title", "status", "kind"})
+        r = self.call("get", "support/entries/?status=new&limit=50&q=Yozuv 1").json()
+        self.assertEqual(r["count"], 10)
+
+    def test_images_cached_and_invalidated(self):
+        from .models import Media
+        a = self.call("get", "support/images/").json()
+        with mock.patch("support.views._image_types", side_effect=AssertionError("keshdan kelishi kerak")):
+            self.assertEqual(self.call("get", "support/images/").json(), a)
+        Media.objects.create(kind=Media.PHOTO, path="new.jpg")
+        self.assertEqual(self.call("get", "support/images/").json()["total"], a["total"] + 1)  # yangi rasm — kesh yangilandi

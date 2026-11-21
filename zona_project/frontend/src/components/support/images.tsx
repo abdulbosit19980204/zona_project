@@ -26,7 +26,8 @@ export function SupportImages() {
   const t = useSt();
   const [view, setView] = useState<View>("new");
   const q = useQuery({ queryKey: ["support", "images"], queryFn: supportApi.images });
-  const entries = useQuery({ queryKey: ["support", "entries", "for-label"], queryFn: () => supportApi.entries({ status: "approved,review,new" }) });
+  const entries = useQuery({ queryKey: ["support", "entries", "brief", "approved,review,new"], queryFn: () => supportApi.entriesBrief("approved,review,new"),
+    staleTime: 60_000 });
   const d = q.data;
   const can = useCan();
   const [removing, setRemoving] = useState<MediaInfo | null>(null);
