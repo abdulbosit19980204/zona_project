@@ -3,233 +3,497 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Servislar markazi</title>
+<title>Kuzatuv markazi</title>
 <style>
-:root{color-scheme:light dark;--bg:#f4f6f9;--card:#fff;--fg:#14161a;--mut:#667085;--bd:#e4e7ec;--acc:#2563eb;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--chip:#eef2f7;--code:#0f172a;--codefg:#e2e8f0}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0b0d10;--card:#15181d;--fg:#e8eaed;--mut:#98a2b3;--bd:#262a31;--acc:#60a5fa;--ok:#22c55e;--warn:#f59e0b;--bad:#f87171;--chip:#1e232b;--code:#05070a}}
+:root{color-scheme:dark;--bg:#0a0d12;--panel:#10151c;--panel2:#141b24;--fg:#e6ebf2;--mut:#8b97a8;--dim:#5c6878;--bd:#1f2833;--bd2:#2a3542;
+  --acc:#4f8cff;--acc2:#a78bfa;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--crit:#ff3b5c;--chip:#18202b;--code:#05080c;--codefg:#d6deea}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]){color-scheme:light;--bg:#f3f5f9;--panel:#fff;--panel2:#f7f9fc;--fg:#111827;--mut:#5b6474;--dim:#8a93a3;
+  --bd:#e3e7ee;--bd2:#d6dce6;--acc:#2563eb;--acc2:#7c3aed;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--crit:#e11d48;--chip:#eef2f7;--code:#0f172a;--codefg:#e2e8f0}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0a0d12;--panel:#10151c;--panel2:#141b24;--fg:#e6ebf2;--mut:#8b97a8;--dim:#5c6878;--bd:#1f2833;--bd2:#2a3542;
+  --acc:#4f8cff;--acc2:#a78bfa;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--crit:#ff3b5c;--chip:#18202b;--code:#05080c;--codefg:#d6deea}
+:root[data-theme=light]{color-scheme:light;--bg:#f3f5f9;--panel:#fff;--panel2:#f7f9fc;--fg:#111827;--mut:#5b6474;--dim:#8a93a3;
+  --bd:#e3e7ee;--bd2:#d6dce6;--acc:#2563eb;--acc2:#7c3aed;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--crit:#e11d48;--chip:#eef2f7;--code:#0f172a;--codefg:#e2e8f0}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 20px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--bd)}
-h1{font-size:17px;margin:0}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--acc);text-decoration:none}
+.mono{font-family:ui-monospace,"JetBrains Mono",Menlo,monospace}
+header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--bd)}
+.hrow{max-width:1400px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 20px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;color:#fff;font-weight:700;flex:none}
+h1{font-size:16px;margin:0;letter-spacing:.01em}
 .sub{color:var(--mut);font-size:12px}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--mut)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 2s infinite}
+.live.off i{background:var(--bad);box-shadow:0 0 8px var(--bad)}
+@keyframes pulse{50%{opacity:.4}}
 .sp{flex:1}
-button{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--fg);padding:7px 12px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-button:hover{border-color:var(--acc)}
-button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
-button.dan{color:var(--bad)}
-button:disabled{opacity:.5;cursor:default}
-main{max-width:1200px;margin:0 auto;padding:20px}
-.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px}
-.stat{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px}
-.stat b{display:block;font-size:22px;font-family:ui-monospace,monospace}
-.stat span{color:var(--mut);font-size:12px}
-.grp{margin:22px 0 8px;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
-.top{display:flex;align-items:center;gap:10px}
-.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--mut)}
-.dot.running{background:var(--ok);box-shadow:0 0 10px var(--ok)}
-.dot.starting{background:var(--warn);animation:p 1s infinite}
-.dot.crashed,.dot.failed{background:var(--bad)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:var(--chip);border:1px solid var(--bd);font-size:12px;white-space:nowrap}
+.pill b{font-family:ui-monospace,monospace}
+nav{max-width:1400px;margin:0 auto;display:flex;gap:2px;padding:0 14px;overflow-x:auto}
+nav button{border:0;background:none;color:var(--mut);padding:10px 12px;font:inherit;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;border-radius:0}
+nav button.on{color:var(--fg);border-bottom-color:var(--acc)}
+nav button .cnt{margin-left:6px;font-size:11px;padding:0 6px;border-radius:99px;background:var(--bad);color:#fff}
+button.b{font:inherit;font-size:13px;border:1px solid var(--bd2);background:var(--panel2);color:var(--fg);padding:6px 11px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+button.b:hover{border-color:var(--acc)}
+button.b.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button.b.dan{color:var(--bad)}
+button.b.sm{padding:3px 8px;font-size:12px}
+button.b:disabled{opacity:.45;cursor:default}
+main{max-width:1400px;margin:0 auto;padding:18px 20px 40px}
+section.tab{display:none}section.tab.on{display:block}
+.grid{display:grid;gap:12px}
+.g4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr))}
+.card{background:var(--panel);border:1px solid var(--bd);border-radius:14px;padding:16px;min-width:0}
+.card h2{font-size:13px;font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:8px;color:var(--fg);flex-wrap:wrap}
+.card h2 .sub{font-weight:400}
+.card h2 .sp{flex:1}
+.kpi{display:flex;align-items:center;gap:14px}
+.kpi .v{font-size:22px;font-weight:600;font-family:ui-monospace,monospace;line-height:1.15}
+.kpi .l{font-size:12px;color:var(--mut)}
+.ring{flex:none}
+.sites{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.site{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--bd);flex-wrap:wrap}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--dim)}
+.dot.ok,.dot.running{background:var(--ok);box-shadow:0 0 10px color-mix(in srgb,var(--ok) 60%,transparent)}
+.dot.warn,.dot.starting{background:var(--warn)}
+.dot.bad,.dot.crashed,.dot.failed{background:var(--bad);box-shadow:0 0 10px color-mix(in srgb,var(--bad) 60%,transparent)}
 .dot.external{background:var(--acc)}
-@keyframes p{50%{opacity:.35}}
-.name{font-weight:600}
-.state{margin-left:auto;font-size:12px;padding:2px 9px;border-radius:99px;background:var(--chip)}
-.meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--mut);font-size:12px}
+.risk{display:flex;gap:10px;padding:10px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--bd);margin-bottom:8px}
+.risk .lv{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:6px;height:fit-content;white-space:nowrap}
+.lv.critical{background:color-mix(in srgb,var(--crit) 18%,transparent);color:var(--crit)}
+.lv.high,.lv.bad{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
+.lv.medium,.lv.warn{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn)}
+.lv.low,.lv.info{background:var(--chip);color:var(--mut)}
+.lv.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.risk .t{font-weight:500}.risk .f{font-size:12px;color:var(--mut)}
+.chart{position:relative}
+.chart .hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px}
+.chart .hd .t{font-size:12px;color:var(--mut)}
+.chart .hd .now{font-family:ui-monospace,monospace;font-size:15px;font-weight:600}
+.chart svg{width:100%;display:block;overflow:visible}
+.legend{display:flex;gap:12px;font-size:11px;color:var(--mut);margin-top:4px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.tip{position:absolute;pointer-events:none;background:var(--panel2);border:1px solid var(--bd2);border-radius:8px;padding:6px 9px;font-size:12px;display:none;white-space:nowrap;box-shadow:0 6px 20px #0005;z-index:3}
+.tip b{font-family:ui-monospace,monospace}
+.empty{height:120px;display:grid;place-items:center;color:var(--dim);font-size:12px;border:1px dashed var(--bd);border-radius:10px}
+.seg{display:inline-flex;border:1px solid var(--bd2);border-radius:9px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:var(--panel2);color:var(--mut);padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+.seg button.on{background:var(--acc);color:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--bd);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-family:ui-monospace,monospace;white-space:nowrap}
+.wrap{overflow-x:auto}
+.bar{height:6px;border-radius:3px;background:var(--chip);min-width:70px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--acc)}
+.cores{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:6px;align-items:end;height:100px}
+.core{display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.core .c{width:100%;border-radius:4px 4px 0 0;min-height:2px}
+.core span{font-size:10px;color:var(--mut);font-family:ui-monospace,monospace}
+.svc{display:flex;flex-direction:column;gap:9px}
+.svc .top{display:flex;align-items:center;gap:10px}
+.svc .nm{font-weight:600}
+.state{margin-left:auto;font-size:11px;padding:2px 9px;border-radius:99px;background:var(--chip);white-space:nowrap}
+.meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--mut);font-size:12px}
 .meta code{font-family:ui-monospace,monospace;color:var(--fg)}
 .err{color:var(--bad);font-size:12px}
-.acts{display:flex;flex-wrap:wrap;gap:6px}
-.acts a{color:var(--acc);text-decoration:none;font-size:13px;align-self:center;margin-left:auto}
-.events{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 16px;margin-top:22px;max-height:240px;overflow:auto;font-size:13px}
-.events div{padding:3px 0;border-bottom:1px dashed var(--bd)}
-.events time{color:var(--mut);font-family:ui-monospace,monospace;font-size:12px;margin-right:8px}
-dialog{width:min(1000px,96vw);height:min(80vh,800px);border:1px solid var(--bd);border-radius:14px;padding:0;background:var(--card);color:var(--fg)}
-dialog::backdrop{background:#0008}
+.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.acts a{margin-left:auto;font-size:13px}
+.grp{margin:18px 0 8px;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.events div{padding:6px 0;border-bottom:1px dashed var(--bd);font-size:13px}
+.events time{color:var(--dim);font-family:ui-monospace,monospace;font-size:12px;margin-right:10px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:13px;align-items:center}
+.kv>span:nth-child(odd){color:var(--mut)}
+.tag{font-size:11px;padding:1px 7px;border-radius:6px;background:var(--chip);color:var(--mut);white-space:nowrap}
+.tag.bad{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad)}
+.tag.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.tag.warn{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn)}
+dialog{width:min(1100px,96vw);height:min(82vh,820px);border:1px solid var(--bd2);border-radius:14px;padding:0;background:var(--panel);color:var(--fg)}
+dialog::backdrop{background:#000a}
 .dh{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--bd)}
-pre{margin:0;height:calc(100% - 58px);overflow:auto;padding:12px 16px;background:var(--code);color:var(--codefg);font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}
-.toast{position:fixed;bottom:16px;right:16px;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;box-shadow:0 6px 24px #0003;display:none}
-.res{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:12px}
-.res h2{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
-.seg{display:inline-flex;border:1px solid var(--bd);border-radius:9px;overflow:hidden}
-.seg button{border:0;border-radius:0;padding:4px 10px;font-size:12px}
-.seg button.on{background:var(--acc);color:#fff}
-.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-.chart{position:relative}
-.chart .t{font-size:12px;color:var(--mut);display:flex;justify-content:space-between}
-.chart svg{width:100%;height:110px;display:block}
-.chart .tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 8px;font-size:12px;display:none;white-space:nowrap;box-shadow:0 4px 14px #0002}
-table.rt{width:100%;border-collapse:collapse;font-size:13px}
-.rt th{text-align:left;font-weight:500;color:var(--mut);font-size:12px;padding:5px 6px;border-bottom:1px solid var(--bd)}
-.rt td{padding:5px 6px;border-bottom:1px solid var(--bd);vertical-align:middle}
-.rt td.n{text-align:right;font-family:ui-monospace,monospace;white-space:nowrap}
-.bar{height:6px;border-radius:3px;background:var(--chip);min-width:60px}
-.bar i{display:block;height:100%;border-radius:3px;background:var(--acc)}
-.note{padding:6px 10px;border-radius:9px;margin:4px 0;font-size:13px;background:var(--chip);border-left:3px solid var(--acc)}
-.note.bad{border-left-color:var(--bad)}.note.warn{border-left-color:var(--warn)}.note.ok{border-left-color:var(--ok)}
-.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-.wrap{overflow-x:auto}
-@media (max-width:420px){.grid{grid-template-columns:1fr}header{padding:12px 16px}main{padding:16px}}
+pre{margin:0;height:calc(100% - 58px);overflow:auto;padding:12px 16px;background:var(--code);color:var(--codefg);font:12px/1.55 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}
+.toast{position:fixed;bottom:16px;right:16px;background:var(--panel2);border:1px solid var(--bd2);border-radius:10px;padding:10px 14px;box-shadow:0 6px 24px #0006;display:none;z-index:20}
+.score{font-size:40px;font-weight:700;font-family:ui-monospace,monospace;line-height:1}
+.svcbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-bottom:6px}
+@media (max-width:640px){.hrow{padding:10px 16px}main{padding:14px 16px 30px}.g3{grid-template-columns:1fr}nav{padding:0 8px}.score{font-size:32px}}
 </style>
 </head>
 <body>
 <header>
-  <div>
-    <h1>Servislar boshqaruv markazi</h1>
-    <div class="sub" id="sub">Yuklanmoqda…</div>
+  <div class="hrow">
+    <div class="brand"><div class="logo">F</div><div style="min-width:0"><h1>Kuzatuv va xavfsizlik markazi</h1><div class="sub" id="sub">Yuklanmoqda…</div></div></div>
+    <span class="live" id="live"><i></i>jonli</span>
+    <div class="sp"></div>
+    <span class="pill" id="pillScore" title="Xavfsizlik bali">🛡 <b>—</b></span>
+    <span class="pill" id="pillSvc" title="Foydali servislari">⚙ <b>—</b></span>
+    <button class="b sm" onclick="toggleTheme()" title="Yorugʻ / qorongʻi mavzu" aria-label="Mavzuni almashtirish">◐</button>
+    <form method="post" action="logout" style="margin:0"><button class="b sm" type="submit">Chiqish</button></form>
   </div>
-  <div class="sp"></div>
-  <button class="pri" onclick="all_('start')">▶ Hammasini ishga tushirish</button>
-  <button onclick="all_('restart')">⟳ Hammasini qayta ishga tushirish</button>
-  <button class="dan" onclick="confirm('Barcha servislar to\'xtatilsinmi?') && all_('stop')">■ Hammasini to'xtatish</button>
-  <form method="post" action="logout" style="margin:0"><button type="submit">Chiqish</button></form>
+  <nav id="nav">
+    <button data-t="overview" class="on">Umumiy</button>
+    <button data-t="resources">Resurslar</button>
+    <button data-t="services">Servislar</button>
+    <button data-t="procs">Jarayonlar</button>
+    <button data-t="security">Xavfsizlik<span class="cnt" id="riskCnt" style="display:none"></span></button>
+    <button data-t="events">Hodisalar</button>
+  </nav>
 </header>
 <main>
-  <div class="sum" id="sum"></div>
-  <div class="grp">Server resurslari</div>
-  <div id="resources"><div class="res sub">Yuklanmoqda…</div></div>
-  <div class="grp">Servislar</div>
-  <div id="groups"></div>
-  <div class="grp">So'nggi hodisalar</div>
-  <div class="events" id="events"></div>
+  <section class="tab on" id="t-overview">
+    <div class="sites" id="sites"></div>
+    <div class="grid g4" id="gauges" style="margin-top:12px"></div>
+    <div class="grid g2" style="margin-top:12px">
+      <div class="card"><h2>Diqqat talab qiladi<span class="sp"></span><a href="#security" onclick="go('security');return false">Xavfsizlik →</a></h2><div id="ovRisks"></div></div>
+      <div class="card"><h2>Rejalashtirish</h2><div id="ovNotes"></div></div>
+    </div>
+    <div class="grid g2" style="margin-top:12px">
+      <div class="card" id="ovCpu"></div>
+      <div class="card" id="ovMem"></div>
+    </div>
+    <div class="card" style="margin-top:12px"><h2>Loyihalar boʻyicha RAM<span class="sub">— hozir, serverning jami RAMʼiga nisbatan</span></h2><div class="wrap" id="ovGroups"></div></div>
+  </section>
+
+  <section class="tab" id="t-resources">
+    <div class="card" style="margin-bottom:12px"><h2>Tarix<span class="sp"></span>
+      <span class="seg"><button data-r="24h" class="on">24 soat</button><button data-r="30d">30 kun</button></span></h2>
+      <div class="grid g2" id="charts"></div></div>
+    <div class="grid g2">
+      <div class="card"><h2>Yadrolar yuklamasi<span class="sub" id="coreSub"></span></h2><div class="cores" id="cores"></div></div>
+      <div class="card"><h2>Tizim</h2><div class="kv" id="sysInfo"></div></div>
+    </div>
+    <div class="grid g2" style="margin-top:12px">
+      <div class="card"><h2>Loyihalar</h2><div class="wrap" id="resGroups"></div></div>
+      <div class="card"><h2>Maʼlumotlar hajmi</h2><div class="wrap" id="sizes"></div></div>
+    </div>
+  </section>
+
+  <section class="tab" id="t-services">
+    <div class="svcbar">
+      <button class="b pri" onclick="all_('start')">▶ Hammasini ishga tushirish</button>
+      <button class="b" onclick="all_('restart')">⟳ Qayta ishga tushirish</button>
+      <button class="b dan" onclick="confirm('Foydali servislari toʻxtatilsinmi?') && all_('stop')">■ Toʻxtatish</button>
+    </div>
+    <div id="groups"></div>
+    <div class="grp">Serverdagi barcha servislar (BioLab va tizim — faqat kuzatish)</div>
+    <div class="card"><div class="wrap" id="allSvc"></div></div>
+  </section>
+
+  <section class="tab" id="t-procs">
+    <div class="card"><h2>Jarayonlar<span class="sub" id="procSub"></span><span class="sp"></span>
+      <span class="seg"><button data-p="cpu" class="on">CPU boʻyicha</button><button data-p="mem">RAM boʻyicha</button></span></h2>
+      <div class="wrap" id="procs"></div></div>
+  </section>
+
+  <section class="tab" id="t-security">
+    <div class="grid g3">
+      <div class="card"><h2>Xavfsizlik bali</h2><div class="kpi"><div id="scoreRing"></div><div><div id="scoreTxt"></div><div class="sub" id="secAt"></div></div></div></div>
+      <div class="card"><h2>SSH hujumlari<span class="sub">— 24 soat</span></h2><div id="sshKpi"></div></div>
+      <div class="card"><h2>Himoya</h2><div class="kv" id="defense"></div></div>
+    </div>
+    <div class="card" style="margin-top:12px"><h2>Xavflar va nima qilish kerak</h2><div id="risks"></div></div>
+    <div class="grid g2" style="margin-top:12px">
+      <div class="card" id="sshChart"></div>
+      <div class="card"><h2>Eng koʻp urinayotgan IP'lar</h2><div class="wrap" id="topIps"></div></div>
+    </div>
+    <div class="grid g2" style="margin-top:12px">
+      <div class="card"><h2>Muvaffaqiyatli kirishlar<span class="sub">— 7 kun</span></h2><div class="wrap" id="accepted"></div></div>
+      <div class="card"><h2>Taxmin qilingan loginlar</h2><div class="wrap" id="topUsers"></div></div>
+    </div>
+    <div class="grid g3" style="margin-top:12px">
+      <div class="card"><h2>Ochiq portlar</h2><div class="wrap" id="ports"></div></div>
+      <div class="card"><h2>Saytlar va SSL</h2><div class="wrap" id="certs"></div></div>
+      <div class="card"><h2>Tizim holati</h2><div class="kv" id="sysSec"></div></div>
+    </div>
+  </section>
+
+  <section class="tab" id="t-events">
+    <div class="card"><h2>Soʻnggi hodisalar</h2><div class="events" id="events"></div></div>
+  </section>
 </main>
 <dialog id="dlg">
   <div class="dh"><b id="dlgTitle"></b><span class="sp"></span>
     <label class="sub"><input type="checkbox" id="follow" checked> oxiriga kuzatish</label>
-    <button onclick="loadLogs()">Yangilash</button><button onclick="dlg.close()">Yopish</button></div>
+    <button class="b sm" onclick="loadLogs()">Yangilash</button><button class="b sm" onclick="dlg.close()">Yopish</button></div>
   <pre id="logs"></pre>
 </dialog>
 <div class="toast" id="toast"></div>
 <script>
-const STATE = {running:"Ishlayapti", starting:"Ishga tushmoqda", stopped:"To'xtatilgan", stopping:"To'xtamoqda",
-  crashed:"Yiqilgan", failed:"Ishga tushmadi", external:"Tashqi jarayon", unknown:"Noma'lum"};
-let current = null, logTimer = null;
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function dur(sec){ if(sec==null) return "—"; const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const GB = 1024 ** 3, MB = 1024 ** 2;
+const STATE = {running:"Ishlayapti", starting:"Ishga tushmoqda", stopped:"Toʻxtatilgan", stopping:"Toʻxtamoqda", crashed:"Yiqilgan",
+  failed:"Yiqilgan", external:"Tashqi jarayon", unknown:"Nomaʼlum", active:"Ishlayapti", inactive:"Toʻxtagan"};
+const LEVEL = {critical:"Kritik", high:"Yuqori", medium:"Oʻrta", low:"Past", info:"Maʼlumot", ok:"Yaxshi", warn:"Diqqat", bad:"Xavf"};
+const LOG_UNITS = ["biolab", "biolab-ci", "nginx", "ssh"];
+let ST = null, RES = null, SEC = null, range = "24h", procBy = "cpu", current = null, logTimer = null, logKind = "services";
+
+function bytes(n){ if(n==null) return "—"; const a=Math.abs(n); if(a>=GB) return (n/GB).toFixed(a>=10*GB?0:1)+" GB"; if(a>=MB) return Math.round(n/MB)+" MB"; if(a>=1024) return Math.round(n/1024)+" KB"; return Math.round(n)+" B"; }
+const rate = (n) => n==null ? "—" : bytes(n) + "/s";
+const pc = (v) => v==null ? "—" : Math.round(v) + "%";
+function dur(sec){ if(sec==null) return "—"; sec=Math.round(sec); const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60);
   return d? `${d} kun ${h} soat` : h? `${h} soat ${m} daq` : m? `${m} daq` : `${sec} s`; }
 function toast(t){ const el=$("toast"); el.textContent=t; el.style.display="block"; clearTimeout(el._t); el._t=setTimeout(()=>el.style.display="none",3500); }
+function lvlColor(p, warn=70, bad=85){ return p==null ? "var(--dim)" : p>=bad ? "var(--bad)" : p>=warn ? "var(--warn)" : "var(--ok)"; }
 async function api(path, method="GET"){
   const r = await fetch(path, {method, headers: method==="POST" ? {"X-Control":"1"} : {}, credentials:"same-origin"});
   if (r.status === 401) { location.href = "login"; throw new Error("auth"); }
   return r.json();
 }
-function render(d){
-  $("sub").textContent = `${d.host} · rejim: ${d.mode === "systemd" ? "systemd (server)" : "jarayonlar"} · ${new Date(d.time).toLocaleTimeString()}`;
+function toggleTheme(){
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : !matchMedia("(prefers-color-scheme: light)").matches;
+  const next = dark ? "light" : "dark"; document.documentElement.dataset.theme = next;
+  try{ localStorage.setItem("ctl-theme", next); }catch(e){}
+}
+try{ const t = localStorage.getItem("ctl-theme"); if (t) document.documentElement.dataset.theme = t; }catch(e){}
+
+// ---------------- tablar
+function go(t){ document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.t===t));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id==="t-"+t)); history.replaceState(null, "", "#"+t); }
+$("nav").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) go(b.dataset.t); });
+if (location.hash && $("t-"+location.hash.slice(1))) go(location.hash.slice(1));
+
+// ---------------- grafiklar (SVG)
+function ring(p, size, color, label){
+  const r = size/2 - 6, c = 2*Math.PI*r, v = Math.max(0, Math.min(100, p ?? 0));
+  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(label||"")}: ${pc(p)}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--chip)" stroke-width="7"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
+      stroke-dasharray="${(c*v/100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size/2} ${size/2})"/>
+    <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle" fill="var(--fg)" font-size="${size>80?20:14}" font-weight="600" font-family="ui-monospace,monospace">${p==null?"—":Math.round(p)}</text></svg>`;
+}
+const CHARTS = {};
+function area(id, title, pts, series, opt={}){
+  const H = opt.h || 130, W = 600;
+  const has = series.some(s => pts.filter(p => p[s.key] != null).length > 1);
+  const now = series.map(s => { const v = [...pts].reverse().find(p => p[s.key] != null); return v ? s.fmt(v[s.key]) : "—"; });
+  const head = `<div class="hd"><span class="t">${esc(title)}</span><span class="now">${now.join(" / ")}</span></div>`;
+  if (!has) return `<div class="chart">${head}<div class="empty">Maʼlumot yigʻilmoqda…</div></div>`;
+  const vals = series.flatMap(s => pts.map(p => p[s.key]).filter(v => v != null));
+  const hi = opt.max || (Math.max(...vals) * 1.15) || 1;
+  const t0 = pts[0].t, t1 = pts[pts.length-1].t || t0 + 1;
+  const X = t => ((t - t0) / Math.max(1, t1 - t0)) * W, Y = v => H - 2 - (v / hi) * (H - 8);
+  CHARTS[id] = {pts, series, t0, t1, W};
+  let body = [0.25, 0.5, 0.75].map(f => `<line x1="0" x2="${W}" y1="${Y(hi*f)}" y2="${Y(hi*f)}" stroke="var(--bd)" stroke-width="1" vector-effect="non-scaling-stroke"/>`).join("");
+  series.forEach((s, i) => {
+    let d = "", first = null, last = null, pen = false;
+    for (const p of pts) { if (p[s.key] == null) { pen = false; continue; } const x = X(p.t).toFixed(1), y = Y(p[s.key]).toFixed(1);
+      d += (pen ? "L" : "M") + x + "," + y; pen = true; if (first == null) first = x; last = x; }
+    if (series.length === 1) { const gid = `g-${id}`;
+      body += `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".32"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient></defs>
+        <path d="${d}L${last},${H}L${first},${H}Z" fill="url(#${gid})" stroke="none"/>`; }
+    body += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+  });
+  body += `<line class="cx" x1="0" x2="0" y1="0" y2="${H}" stroke="var(--mut)" stroke-width="1" vector-effect="non-scaling-stroke" stroke-dasharray="3 3" style="display:none"/>`;
+  const fmtT = (t) => new Date(t*1000).toLocaleString([], range==="24h" ? {hour:"2-digit",minute:"2-digit"} : {month:"short",day:"numeric"});
+  return `<div class="chart" data-id="${id}">${head}
+    <svg viewBox="0 0 ${W} ${H}" height="${H}" preserveAspectRatio="none" role="img" aria-label="${esc(title)}: hozir ${esc(now.join(", "))}"
+      onmousemove="hover(event,this)" onmouseleave="unhover(this)">${body}</svg>
+    <div class="legend" style="justify-content:space-between"><span>${fmtT(t0)}</span><span>${fmtT((t0+t1)/2)}</span><span>${fmtT(t1)}</span></div>
+    ${series.length > 1 ? `<div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join("")}</div>` : ""}
+    <div class="tip"></div></div>`;
+}
+function hover(ev, svg){
+  const box = svg.parentNode, c = CHARTS[box.dataset.id]; if (!c || !c.pts.length) return;
+  const r = svg.getBoundingClientRect(), f = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), t = c.t0 + f * (c.t1 - c.t0);
+  let best = c.pts[0]; for (const p of c.pts) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+  const x = c.t1 > c.t0 ? ((best.t - c.t0) / (c.t1 - c.t0)) * c.W : 0, cx = svg.querySelector(".cx");
+  cx.setAttribute("x1", x); cx.setAttribute("x2", x); cx.style.display = "";
+  const tip = box.querySelector(".tip");
+  tip.innerHTML = `<div class="sub">${new Date(best.t*1000).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</div>`
+    + c.series.map(s => `<div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:6px"></i>${esc(s.label)}: <b>${s.fmt(best[s.key])}</b></div>`).join("");
+  tip.style.display = "block"; const px = (x / c.W) * r.width;
+  tip.style.left = Math.min(r.width - 190, Math.max(0, px + 12)) + "px"; tip.style.top = "26px";
+}
+function unhover(svg){ svg.parentNode.querySelector(".tip").style.display = "none"; svg.querySelector(".cx").style.display = "none"; }
+function hbars(rows, total){
+  if (!rows.length) return '<div class="sub">Maʼlumot yoʻq</div>';
+  return `<table>${rows.map(r => `<tr><td>${esc(r.label)}</td><td class="n">${r.fmt(r.value)}</td>
+    <td style="width:40%"><div class="bar"><i style="width:${Math.min(100, 100*(r.value||0)/(total||1)).toFixed(1)}%"></i></div></td>
+    <td class="n sub">${r.extra ?? ""}</td></tr>`).join("")}</table>`;
+}
+function bars(pts, color){
+  const max = Math.max(1, ...pts.map(p => p.v)), W = 600, H = 120, bw = W / Math.max(1, pts.length);
+  CHARTS.sshb = {pts, series: [{key:"v", label:"urinish", color, fmt: v => (v||0).toLocaleString()}], t0: pts[0]?.t, t1: pts[pts.length-1]?.t, W};
+  return `<div class="chart" data-id="sshb"><svg viewBox="0 0 ${W} ${H}" height="${H}" preserveAspectRatio="none" role="img" aria-label="SSH urinishlari, 24 soat"
+    onmousemove="hover(event,this)" onmouseleave="unhover(this)">${pts.map((p, i) => { const h = Math.max(1, (p.v / max) * (H - 6));
+      return `<rect x="${(i*bw + 2).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${Math.max(1, bw - 4).toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}" opacity=".85"/>`; }).join("")}
+    <line class="cx" x1="0" x2="0" y1="0" y2="${H}" stroke="var(--mut)" stroke-width="1" vector-effect="non-scaling-stroke" stroke-dasharray="3 3" style="display:none"/></svg>
+    <div class="legend" style="justify-content:space-between"><span>24 soat oldin</span><span>12 soat oldin</span><span>hozir</span></div><div class="tip"></div></div>`;
+}
+
+// ---------------- holat (servislar)
+function renderStatus(d){
+  ST = d;
   const crashed = d.services.filter(s => ["crashed","failed"].includes(s.state)).length;
-  const unhealthy = d.services.filter(s => s.health && s.health.ok === false && s.state === "running").length;
-  $("sum").innerHTML = `
-    <div class="stat"><b>${d.summary.running} / ${d.summary.total}</b><span>Ishlayotgan servislar</span></div>
-    <div class="stat"><b style="color:${crashed?'var(--bad)':'inherit'}">${crashed}</b><span>Yiqilgan</span></div>
-    <div class="stat"><b style="color:${unhealthy?'var(--warn)':'inherit'}">${unhealthy}</b><span>Javob bermayotgan</span></div>
-    <div class="stat"><b>${d.services.reduce((n,s)=>n+s.restarts,0)}</b><span>Avtomatik qayta ishga tushirishlar</span></div>`;
+  $("pillSvc").innerHTML = `⚙ <b>${d.summary.running}/${d.summary.total}</b>${crashed?` <span style="color:var(--bad)">· ${crashed} yiqilgan</span>`:""}`;
   const groups = {};
   d.services.forEach(s => (groups[s.group || "Servislar"] ??= []).push(s));
-  $("groups").innerHTML = Object.entries(groups).map(([g, list]) => `<div class="grp">${esc(g)}</div><div class="grid">${list.map(card).join("")}</div>`).join("");
-  $("events").innerHTML = d.events.length ? d.events.map(e => `<div><time>${new Date(e.at).toLocaleTimeString()}</time>${esc(e.text)}</div>`).join("") : '<span class="sub">Hodisa yo\'q</span>';
+  $("groups").innerHTML = Object.entries(groups).map(([g, list]) => `<div class="grp">${esc(g)}</div><div class="grid g3">${list.map(card).join("")}</div>`).join("");
+  $("events").innerHTML = d.events.length ? d.events.map(e => `<div><time>${new Date(e.at).toLocaleString()}</time>${esc(e.text)}</div>`).join("") : '<span class="sub">Hodisa yoʻq</span>';
+  $("live").classList.remove("off");
 }
 function card(s){
-  const h = s.health ? (s.health.ok ? `javob: ${s.health.ms} ms` : (s.health.ok === false ? '<span style="color:var(--bad)">javob bermayapti</span>' : "tekshirilmoqda")) : "";
+  const h = s.health ? (s.health.ok ? `javob: <code>${s.health.ms} ms</code>` : (s.health.ok === false ? '<span style="color:var(--bad)">javob bermayapti</span>' : "tekshirilmoqda")) : "";
   const on = ["running","starting","external"].includes(s.state);
-  return `<div class="card">
-    <div class="top"><span class="dot ${s.state}"></span><span class="name">${esc(s.label)}</span><span class="state">${STATE[s.state] || s.state}</span></div>
+  const u = (RES?.current?.services || []).find(x => x.key === s.name || x.label === s.label);
+  return `<div class="card svc">
+    <div class="top"><span class="dot ${s.state}"></span><span class="nm">${esc(s.label)}</span><span class="state">${STATE[s.state] || s.state}</span></div>
     <div class="meta"><span><code>${esc(s.name)}</code></span>${s.port?`<span>port <code>${s.port}</code></span>`:""}${s.pid?`<span>pid <code>${s.pid}</code></span>`:""}
       <span>ishlash vaqti: ${dur(s.uptime)}</span>${s.restarts?`<span>qayta: ${s.restarts}</span>`:""}${h?`<span>${h}</span>`:""}
-      ${s.last_exit!=null && !on?`<span>chiqish kodi: ${s.last_exit}</span>`:""}</div>
+      ${u?`<span>RAM <code>${bytes(u.mem)}</code></span><span>CPU <code>${pc(u.cpu)}</code></span>`:""}</div>
     ${s.error?`<div class="err">${esc(s.error)}</div>`:""}
     <div class="acts">
-      <button ${on?"disabled":""} onclick="act('${s.name}','start')">▶ Ishga tushirish</button>
-      <button ${s.state==="external"?"disabled":""} onclick="act('${s.name}','restart')">⟳ Qayta</button>
-      <button class="dan" ${!on||s.state==="external"?"disabled":""} onclick="act('${s.name}','stop')">■ To'xtatish</button>
-      <button onclick="openLogs('${s.name}','${esc(s.label).replace(/'/g,"")}')">Loglar</button>
+      <button class="b sm" title="Ishga tushirish" ${on?"disabled":""} onclick="act('${s.name}','start')">▶</button>
+      <button class="b sm" ${s.state==="external"?"disabled":""} onclick="act('${s.name}','restart')">⟳ Qayta</button>
+      <button class="b sm dan" title="Toʻxtatish" ${!on||s.state==="external"?"disabled":""} onclick="act('${s.name}','stop')">■</button>
+      <button class="b sm" onclick="openLogs('services','${s.name}','${esc(s.label).replace(/&#39;/g,"")}')">Loglar</button>
       ${s.open?`<a href="${esc(s.open)}" target="_blank" rel="noreferrer">Ochish ↗</a>`:""}
     </div></div>`;
 }
-async function refresh(){ try { render(await api("api/status")); } catch(e){ if(e.message!=="auth") $("sub").textContent = "Nazoratchi bilan aloqa yo'q"; } }
-async function act(name, action){ const r = await api(`api/services/${name}/${action}`, "POST"); if (r.result && r.result!=="ok") toast(r.result); render(r); }
-async function all_(action){ toast("Bajarilmoqda…"); render(await api(`api/all/${action}`, "POST")); toast("Tayyor"); }
-async function loadLogs(){ if(!current) return; const r = await api(`api/services/${current}/logs?n=800`); const pre=$("logs");
-  pre.textContent = r.lines.join("\n") || "Log hali yo'q"; if ($("follow").checked) pre.scrollTop = pre.scrollHeight; }
-function openLogs(name, label){ current = name; $("dlgTitle").textContent = `${label} — loglar`; $("dlg").showModal(); loadLogs();
-  clearInterval(logTimer); logTimer = setInterval(() => $("dlg").open ? loadLogs() : clearInterval(logTimer), 2000); }
-refresh(); setInterval(refresh, 3000);
 
-// ------------------------------------------------------------ server resurslari
-let resRange = "24h", resData = null;
-const GB = 1024 ** 3, MB = 1024 ** 2;
-function bytes(n){ if(n==null) return "—"; if(n>=GB) return (n/GB).toFixed(n>=10*GB?0:1)+" GB"; if(n>=MB) return Math.round(n/MB)+" MB"; return Math.round(n/1024)+" KB"; }
-function pc(v){ return v==null ? "—" : Math.round(v) + "%"; }
-const FMT = {cpu: pc, mem: bytes, disk: bytes, load: (v) => v==null ? "—" : v.toFixed(2)};
-function line(title, pts, key, max){
-  const vals = pts.map(p => p[key]).filter(v => v != null);
-  if (vals.length < 2) return '<div class="chart"><div class="t"><span>' + title + '</span></div><div class="sub" style="height:110px;display:grid;place-items:center">Maʼlumot yigʻilmoqda…</div></div>';
-  const W = 600, H = 110, hi = max || (Math.max(...vals) * 1.15) || 1;
-  const t0 = pts[0].t, t1 = pts[pts.length - 1].t || t0 + 1;
-  const X = t => ((t - t0) / Math.max(1, t1 - t0)) * W, Y = v => H - 4 - (v / hi) * (H - 10);
-  let d = "", pen = false;
-  for (const p of pts) { if (p[key] == null) { pen = false; continue; } d += (pen ? "L" : "M") + X(p.t).toFixed(1) + "," + Y(p[key]).toFixed(1); pen = true; }
-  const last = vals[vals.length - 1];
-  const grid = [0.5, 1].map(f => '<line x1="0" x2="' + W + '" y1="' + Y(hi * f) + '" y2="' + Y(hi * f) + '" stroke="var(--bd)" stroke-width="1" vector-effect="non-scaling-stroke"/>').join("");
-  return '<div class="chart" data-key="' + key + '"><div class="t"><span>' + title + '</span><b>' + FMT[key](last) + '</b></div>'
-    + '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' + title + ': hozir ' + FMT[key](last) + '"'
-    + ' onmousemove="hover(event,this)" onmouseleave="unhover(this)">' + grid
-    + '<path d="' + d + '" fill="none" stroke="var(--acc)" stroke-width="2" vector-effect="non-scaling-stroke"/>'
-    + '<line class="cx" x1="0" x2="0" y1="0" y2="' + H + '" stroke="var(--mut)" stroke-width="1" vector-effect="non-scaling-stroke" style="display:none"/></svg>'
-    + '<div class="tip"></div></div>';
-}
-function hover(ev, svg){
-  const pts = resData.series, key = svg.parentNode.dataset.key, r = svg.getBoundingClientRect();
-  const f = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), t0 = pts[0].t, t1 = pts[pts.length - 1].t;
-  const t = t0 + f * (t1 - t0);
-  let best = pts[0];
-  for (const p of pts) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
-  const tip = svg.parentNode.querySelector(".tip"), cx = svg.querySelector(".cx");
-  cx.setAttribute("x1", f * 600); cx.setAttribute("x2", f * 600); cx.style.display = "";
-  tip.innerHTML = new Date(best.t * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}) + " · <b>" + FMT[key](best[key]) + "</b>";
-  tip.style.display = "block"; tip.style.left = Math.min(r.width - 160, Math.max(0, ev.clientX - r.left + 8)) + "px"; tip.style.top = "22px";
-}
-function unhover(svg){ svg.parentNode.querySelector(".tip").style.display = "none"; svg.querySelector(".cx").style.display = "none"; }
-function setRange(r){ resRange = r; loadRes(); }
-function row(cells){ return "<tr>" + cells.join("") + "</tr>"; }
+// ---------------- resurslar
 function renderRes(d){
-  resData = d;
-  const c = d.current || {}, m = c.mem || {}, k = c.disk || {}, f = d.forecast || {};
-  if (!d.available && !k.total) { $("resources").innerHTML = '<div class="res sub">Resurslar faqat Linux serverda oʻlchanadi.</div>'; return; }
-  const growth = f.disk_growth_day != null ? "kuniga " + (f.disk_growth_day >= 0 ? "+" : "−") + bytes(Math.abs(f.disk_growth_day)) : "oʻsish hisoblanmoqda";
-  const kpi = '<div class="sum">'
-    + '<div class="stat"><b>' + pc(c.cpu) + '</b><span>CPU (' + c.cores + ' yadro) · 24 soat p95: ' + pc(f.cpu_p95_24h) + '</span></div>'
-    + '<div class="stat"><b>' + bytes(m.used) + ' / ' + bytes(m.total) + '</b><span>RAM · 24 soat choʻqqisi: ' + bytes(f.mem_peak_24h) + (m.swap_total ? " · swap " + bytes(m.swap_used) : " · swap yoʻq") + '</span></div>'
-    + '<div class="stat"><b>' + bytes(k.used) + ' / ' + bytes(k.total) + '</b><span>Disk · ' + growth + (f.disk_days_to_90 != null ? " · 90% gacha ~" + f.disk_days_to_90 + " kun" : "") + '</span></div>'
-    + '<div class="stat"><b>' + (c.load ? c.load.map(x => x.toFixed(2)).join(" · ") : "—") + '</b><span>Load (1 / 5 / 15 daq) · yadrolar: ' + c.cores + '</span></div>'
-    + '<div class="stat"><b>' + (c.net ? "↓" + bytes(c.net.rx) + "/s ↑" + bytes(c.net.tx) + "/s" : "—") + '</b><span>Tarmoq</span></div></div>';
+  RES = d;
+  const c = d.current || {}, m = c.mem || {}, k = c.disk || {}, f = d.forecast || {}, sys = c.system || {};
+  $("sub").textContent = [sys.host || ST?.host, sys.os, sys.uptime ? "ishlash vaqti " + dur(sys.uptime) : ""].filter(Boolean).join(" · ");
+  const memP = m.total ? 100 * m.used / m.total : null, diskP = k.total ? 100 * k.used / k.total : null;
+  const loadP = c.load && c.cores ? 100 * c.load[0] / c.cores : null;
+  $("gauges").innerHTML = [
+    ["CPU", c.cpu, `${c.cores || "—"} yadro · p95 (24 soat): ${pc(f.cpu_p95_24h)}`, pc(c.cpu)],
+    ["RAM", memP, `${bytes(m.used)} / ${bytes(m.total)} · choʻqqi ${bytes(f.mem_peak_24h)}`, bytes(m.used)],
+    ["Disk", diskP, `${bytes(k.used)} / ${bytes(k.total)}${f.disk_days_to_90!=null?` · 90% gacha ~${f.disk_days_to_90} kun`:""}`, bytes(k.free) + " boʻsh"],
+    ["Load", loadP, c.load ? `1 / 5 / 15 daq: ${c.load.map(x=>x.toFixed(2)).join(" · ")}` : "—", c.load ? c.load[0].toFixed(2) : "—"],
+  ].map(([l, p, sub, v]) => `<div class="card kpi">${ring(p, 72, lvlColor(p), l)}<div style="min-width:0"><div class="l">${l}</div><div class="v">${v}</div><div class="sub">${esc(sub)}</div></div></div>`).join("")
+    + `<div class="card kpi"><div><div class="l">Tarmoq</div><div class="v" style="font-size:16px">↓ ${rate(c.net?.rx)}<br>↑ ${rate(c.net?.tx)}</div></div></div>
+       <div class="card kpi"><div><div class="l">Disk I/O</div><div class="v" style="font-size:16px">oʻqish ${rate(c.io?.rd)}<br>yozish ${rate(c.io?.wr)}</div></div></div>`;
+  const notes = (f.notes || []).map(n => `<div class="risk"><span class="lv ${n[0]}">${LEVEL[n[0]]||n[0]}</span><div class="t">${esc(n[1])}</div></div>`).join("");
+  $("ovNotes").innerHTML = notes || '<div class="sub">Maʼlumot yigʻilmoqda…</div>';
   const pts = d.series || [];
-  const charts = '<div class="res"><h2>Tarix<span class="sp"></span><span class="seg">'
-    + '<button class="' + (resRange === "24h" ? "on" : "") + '" onclick="setRange(\'24h\')">24 soat</button>'
-    + '<button class="' + (resRange === "30d" ? "on" : "") + '" onclick="setRange(\'30d\')">30 kun</button></span></h2>'
-    + '<div class="charts">' + line("CPU, %", pts, "cpu", 100) + line("RAM", pts, "mem", m.total) + line("Disk", pts, "disk", k.total) + line("Load (1 daq)", pts, "load") + '</div></div>';
-  const total = m.total || 1;
-  const groups = '<div class="res"><h2>Loyihalar boʻyicha (hozir)</h2><div class="wrap"><table class="rt">'
-    + row(['<th>Loyiha / guruh</th>', '<th style="text-align:right">RAM</th>', '<th>Ulush</th>', '<th style="text-align:right">CPU</th>'])
-    + (d.groups || []).map(g => row(['<td>' + esc(g.group) + '</td>', '<td class="n">' + bytes(g.mem) + '</td>',
-        '<td><div class="bar"><i style="width:' + Math.min(100, 100 * g.mem / total).toFixed(1) + '%"></i></div></td>',
-        '<td class="n">' + (g.cpu == null ? "—" : pc(g.cpu)) + '</td>'])).join("")
-    + '</table></div><div class="sub" style="margin-top:6px">Ulush — serverning jami RAMʼiga nisbatan; CPU — butun serverga nisbatan (100% = barcha yadrolar).</div></div>';
-  const svc = (c.services || []).slice().sort((a, b) => (b.mem || 0) - (a.mem || 0));
-  const services = '<div class="res"><h2>Servislar</h2><div class="wrap"><table class="rt">'
-    + row(['<th>Servis</th>', '<th>Guruh</th>', '<th style="text-align:right">RAM</th>', '<th style="text-align:right">CPU</th>'])
-    + svc.map(s => row(['<td>' + esc(s.label) + '</td>', '<td class="sub">' + esc(s.group) + '</td>', '<td class="n">' + bytes(s.mem) + '</td>',
-        '<td class="n">' + (s.cpu == null ? "…" : pc(s.cpu)) + '</td>'])).join("") + '</table></div></div>';
-  const sizes = '<div class="res"><h2>Maʼlumotlar hajmi</h2><div class="wrap"><table class="rt">'
-    + ((c.sizes || []).map(x => row(['<td>' + esc(x.label) + '<div class="sub">' + esc(x.path) + '</div></td>', '<td class="n">' + bytes(x.bytes) + '</td>'])).join("")
-       || '<tr><td class="sub">Hisoblanmoqda…</td></tr>') + '</table></div></div>';
-  const notes = '<div class="res"><h2>Rejalashtirish — tavsiyalar</h2>' + (f.notes || []).map(n => '<div class="note ' + n[0] + '">' + esc(n[1]) + '</div>').join("") + '</div>';
-  $("resources").innerHTML = kpi + notes + charts + '<div class="two">' + groups + sizes + '</div>' + services;
+  $("ovCpu").innerHTML = area("ovc", range === "24h" ? "CPU — 24 soat" : "CPU — 30 kun", pts, [{key:"cpu", label:"CPU", color:"var(--acc)", fmt:pc}], {max:100, h:110});
+  $("ovMem").innerHTML = area("ovm", range === "24h" ? "RAM — 24 soat" : "RAM — 30 kun", pts, [{key:"mem", label:"RAM", color:"var(--acc2)", fmt:bytes}], {max:m.total, h:110});
+  $("charts").innerHTML = [
+    area("c1", "CPU, %", pts, [{key:"cpu", label:"oʻrtacha", color:"var(--acc)", fmt:pc}, {key:"cpu_max", label:"choʻqqi", color:"var(--acc2)", fmt:pc}], {max:100}),
+    area("c2", "RAM", pts, [{key:"mem", label:"RAM", color:"var(--acc2)", fmt:bytes}], {max:m.total}),
+    area("c3", "Tarmoq", pts, [{key:"rx", label:"qabul ↓", color:"var(--acc)", fmt:rate}, {key:"tx", label:"yuborish ↑", color:"var(--acc2)", fmt:rate}]),
+    area("c4", "Disk I/O", pts, [{key:"rd", label:"oʻqish", color:"var(--acc)", fmt:rate}, {key:"wr", label:"yozish", color:"var(--acc2)", fmt:rate}]),
+    area("c5", "Load (1 daq)", pts, [{key:"load", label:"load", color:"var(--acc)", fmt:v=>v==null?"—":v.toFixed(2)}]),
+    area("c6", "Disk band", pts, [{key:"disk", label:"disk", color:"var(--acc2)", fmt:bytes}], {max:k.total}),
+  ].map(x => `<div>${x}</div>`).join("");
+  const cores = c.cores_pct || [];
+  $("coreSub").textContent = cores.length ? ` — ${cores.length} yadro` : "";
+  $("cores").innerHTML = cores.map((p, i) => `<div class="core" title="Yadro ${i}: ${pc(p)}"><div class="c" style="height:${Math.max(2, p||0)}%;background:${lvlColor(p, 75, 90)}"></div><span>${p==null?"·":Math.round(p)}</span></div>`).join("") || '<div class="sub">—</div>';
+  $("sysInfo").innerHTML = [["Server", sys.host], ["OT", sys.os], ["Yadro (kernel)", sys.kernel], ["Protsessor", sys.cpu_model],
+    ["Ishlash vaqti", dur(sys.uptime)], ["Jarayonlar", sys.procs], ["Swap", m.swap_total ? bytes(m.swap_used)+" / "+bytes(m.swap_total) : "yoʻq"]]
+    .map(([a, b]) => `<span>${a}</span><span>${esc(b ?? "—")}</span>`).join("");
+  const grp = (d.groups || []).map(g => ({label: g.group, value: g.mem, fmt: bytes, extra: g.cpu==null ? "" : "CPU " + pc(g.cpu)}));
+  $("ovGroups").innerHTML = hbars(grp, m.total); $("resGroups").innerHTML = hbars(grp, m.total);
+  const sz = (c.sizes || []).map(x => ({label: x.label, value: x.bytes, fmt: bytes}));
+  $("sizes").innerHTML = hbars(sz, Math.max(1, ...sz.map(x => x.value)));
+  const svc = (c.services || []).slice().sort((a, b) => (b.mem||0) - (a.mem||0));
+  $("allSvc").innerHTML = `<table><tr><th>Servis</th><th>Guruh</th><th>Holat</th><th class="n">RAM</th><th class="n">CPU</th><th></th></tr>${svc.map(s => `<tr>
+    <td>${esc(s.label)}${s.label !== s.key ? `<div class="sub mono">${esc(s.key)}</div>` : ""}</td><td><span class="tag">${esc(s.group)}</span></td>
+    <td><span class="tag ${s.state==="active"?"ok":s.state==="failed"?"bad":""}">${STATE[s.state] || s.state || "—"}</span></td>
+    <td class="n">${bytes(s.mem)}</td><td class="n">${s.cpu==null?"…":pc(s.cpu)}</td>
+    <td>${LOG_UNITS.includes(s.key)?`<button class="b sm" onclick="openLogs('units','${s.key}','${esc(s.label).replace(/&#39;/g,"")}')">Loglar</button>`:""}</td></tr>`).join("")}</table>`;
+  renderProcs();
+  if (ST) renderStatus(ST);
 }
-async function loadRes(){
-  try { renderRes(await api("api/resources?range=" + resRange)); }
-  catch (e) { if (e.message !== "auth") $("resources").innerHTML = '<div class="res sub">Resurslar mavjud emas</div>'; }
+function renderProcs(){
+  const list = ((RES?.current?.procs) || []).slice().sort((a, b) => procBy === "cpu" ? (b.cpu||0) - (a.cpu||0) : b.mem - a.mem).slice(0, 25);
+  $("procSub").textContent = RES?.current?.system?.procs ? ` — jami ${RES.current.system.procs} ta` : "";
+  const tot = RES?.current?.mem?.total || 1;
+  $("procs").innerHTML = list.length ? `<table><tr><th>PID</th><th>Jarayon</th><th>Foydalanuvchi</th><th class="n">CPU</th><th class="n">RAM</th><th>Ulush</th></tr>${list.map(p => {
+    const w = procBy === "cpu" ? (p.cpu || 0) : 100 * p.mem / tot;
+    return `<tr><td class="mono sub">${p.pid}</td><td><b>${esc(p.name)}</b><div class="sub mono" style="max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.cmd||"")}</div></td>
+    <td><span class="tag ${p.user==="root"?"warn":""}">${esc(p.user)}</span></td><td class="n">${p.cpu==null?"…":pc(p.cpu)}</td><td class="n">${bytes(p.mem)}</td>
+    <td style="width:15%"><div class="bar"><i style="width:${Math.min(100, w).toFixed(1)}%"></i></div></td></tr>`; }).join("")}</table>` : '<div class="sub">Maʼlumot yigʻilmoqda…</div>';
 }
-loadRes(); setInterval(loadRes, 10000);
 
+// ---------------- xavfsizlik
+function renderSec(d){
+  SEC = d; if (!d || !d.at) return;
+  const risks = d.risks || [], ssh = d.ssh || {}, sshd = d.sshd || {}, fw = d.firewall || {}, up = d.updates || {};
+  const col = d.score >= 80 ? "var(--ok)" : d.score >= 50 ? "var(--warn)" : "var(--bad)";
+  $("pillScore").innerHTML = `🛡 <b style="color:${col}">${d.score}</b>/100`;
+  const serious = risks.filter(r => r.level === "critical" || r.level === "high").length;
+  $("riskCnt").style.display = serious ? "" : "none"; $("riskCnt").textContent = serious;
+  $("scoreRing").innerHTML = ring(d.score, 92, col, "Xavfsizlik bali");
+  $("scoreTxt").innerHTML = `<div class="score" style="color:${col}">${d.score}<span class="sub" style="font-size:14px"> / 100</span></div>
+    <div class="sub">${risks.filter(r=>r.level==="critical").length} kritik · ${risks.filter(r=>r.level==="high").length} yuqori · ${risks.filter(r=>r.level==="medium").length} oʻrta</div>`;
+  $("secAt").textContent = "Tekshirildi: " + new Date(d.at*1000).toLocaleTimeString() + " (har 5 daqiqada)";
+  const riskHtml = (list) => list.length ? list.map(r => `<div class="risk"><span class="lv ${r.level}">${LEVEL[r.level]}</span><div><div class="t">${esc(r.title)}</div><div class="f">${esc(r.fix)}</div></div></div>`).join("")
+    : '<div class="risk"><span class="lv ok">Yaxshi</span><div class="t">Jiddiy xavf topilmadi</div></div>';
+  $("risks").innerHTML = riskHtml(risks); $("ovRisks").innerHTML = riskHtml(risks.slice(0, 4));
+  $("sshKpi").innerHTML = ssh.available === false ? '<div class="sub">SSH loglarini oʻqishga ruxsat yoʻq</div>'
+    : `<div class="kpi" style="gap:28px"><div><div class="v" style="color:${ssh.fails>500?"var(--bad)":"inherit"}">${(ssh.fails||0).toLocaleString()}</div><div class="l">muvaffaqiyatsiz urinish</div></div>
+       <div><div class="v">${ssh.unique_ips||0}</div><div class="l">turli IP</div></div></div>`;
+  const yes = (v) => `<span class="tag ok">${v}</span>`, no = (v) => `<span class="tag bad">${v}</span>`, warn = (v) => `<span class="tag warn">${v}</span>`;
+  $("defense").innerHTML = [
+    ["Firewall", fw.active === true ? yes("yoqilgan") : fw.active === false ? no("oʻchiq") : warn("nomaʼlum")],
+    ["fail2ban", d.fail2ban ? yes("bor") : no("yoʻq")],
+    ["root SSH", sshd.permitrootlogin === "yes" ? no("parol bilan ham") : yes(esc(sshd.permitrootlogin || "standart"))],
+    ["Parol bilan kirish", (sshd.passwordauthentication || "yes") === "no" ? yes("oʻchiq") : no("yoqilgan")],
+    ["SSH port", esc(sshd.port || "22")],
+  ].map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join("");
+  const hpts = (ssh.hours || []).map((v, i, arr) => ({t: d.at - (arr.length - 1 - i) * 3600, v}));
+  $("sshChart").innerHTML = `<h2>SSH urinishlari soatlar boʻyicha</h2>` + (hpts.length ? bars(hpts, "var(--bad)") : '<div class="empty">—</div>');
+  $("topIps").innerHTML = (ssh.top_ips || []).length ? `<table><tr><th>IP</th><th class="n">Urinish</th><th>Ulush</th></tr>${ssh.top_ips.map(([ip, n]) =>
+    `<tr><td class="mono">${esc(ip)}</td><td class="n">${n.toLocaleString()}</td><td style="width:40%"><div class="bar"><i style="width:${(100*n/Math.max(1,ssh.fails)).toFixed(1)}%;background:var(--bad)"></i></div></td></tr>`).join("")}</table>` : '<div class="sub">Urinish yoʻq</div>';
+  $("topUsers").innerHTML = (ssh.top_users || []).length ? `<table><tr><th>Login</th><th class="n">Urinish</th></tr>${ssh.top_users.map(([u, n]) =>
+    `<tr><td class="mono">${esc(u)}</td><td class="n">${n.toLocaleString()}</td></tr>`).join("")}</table>` : '<div class="sub">—</div>';
+  const acc = d.accepted || [];
+  const ipCount = {}; acc.forEach(a => ipCount[a.ip] = (ipCount[a.ip] || 0) + a.n);
+  $("accepted").innerHTML = acc.length ? `<table><tr><th>IP</th><th>Login</th><th>Usul</th><th class="n">Soni</th><th>Oxirgi</th></tr>${acc.map(a => `<tr>
+    <td class="mono">${esc(a.ip)}${ipCount[a.ip] <= 3 ? ' <span class="tag warn" title="Kam uchraydigan manzil — oʻzingiz ekanini tekshiring">kam</span>' : ""}</td>
+    <td>${a.user === "root" ? warn("root") : esc(a.user)}</td><td>${a.method === "password" ? warn("parol") : yes(esc(a.method))}</td>
+    <td class="n">${a.n}</td><td class="sub">${new Date(a.last).toLocaleString()}</td></tr>`).join("")}</table>
+    <div class="sub" style="margin-top:6px">“kam” — bu IPʼdan 7 kunda ≤ 3 marta kirilgan: oʻzingiz ekaningizni tekshiring.</div>` : '<div class="sub">Maʼlumot yoʻq</div>';
+  $("ports").innerHTML = `<table><tr><th>Port</th><th>Xizmat</th><th>Kimga ochiq</th></tr>${(d.ports||[]).map(p => `<tr>
+    <td class="mono">${p.port}</td><td>${esc(p.name || "—")}</td><td>${p.public ? ([22,80,443].includes(p.port) ? warn("internet") : no("internet")) : yes("faqat lokal")}</td></tr>`).join("")}</table>`;
+  $("certs").innerHTML = `<table><tr><th>Sayt</th><th>Holat</th><th class="n">SSL</th></tr>${(d.sites||[]).map(s => {
+    const days = (d.certs || {})[s.host];
+    return `<tr><td>${esc(s.name)}<div class="sub">${esc(s.host||"")}</div></td><td>${s.ok ? yes(`${s.code} · ${s.ms} ms`) : no(esc(s.code || "javob yoʻq"))}</td>
+      <td class="n">${days==null ? "—" : days < 14 ? `<span style="color:var(--bad)">${days} kun</span>` : days + " kun"}</td></tr>`; }).join("")}</table>`;
+  renderSites();
+  const b = d.backups || {};
+  $("sysSec").innerHTML = [
+    ["Yangilanishlar", up.total ? (up.security ? no(`${up.total} (${up.security} xavfsizlik)`) : warn(up.total)) : yes("yoʻq")],
+    ["Qayta yuklash", up.reboot ? warn("kerak") : yes("shart emas")],
+    ["Oxirgi zaxira", b.age_h == null ? "—" : (b.age_h > 30 ? no(b.age_h.toFixed(0) + " soat oldin") : yes(b.age_h.toFixed(1) + " soat oldin"))],
+    ["Zaxiralar soni", b.count ?? "—"],
+    ["Yiqilgan servislar", (d.failed_units||[]).length ? warn(esc(d.failed_units.join(", "))) : yes("yoʻq")],
+    ["Hozir kirganlar", (d.sessions||[]).length ? esc(d.sessions.map(s => `${s.user} ${s.from}`).join(", ")) : "—"],
+    ["Markazga xato kirish (15 daq)", d.control ? (d.control.failed_logins_15m ? warn(d.control.failed_logins_15m) : yes("0")) : "—"],
+  ].map(([a, v]) => `<span>${a}</span><span>${v}</span>`).join("");
+}
+function renderSites(){
+  const d = SEC || {};
+  const crashed = (ST?.services || []).some(s => ["crashed","failed"].includes(s.state));
+  $("sites").innerHTML = (d.sites || []).map(s => { const days = (d.certs || {})[s.host];
+    return `<div class="site"><span class="dot ${s.ok?"ok":"bad"}"></span><div style="min-width:0"><b>${esc(s.name)}</b><div class="sub">${esc(s.host||s.url)}</div></div>
+      <span class="sp"></span><span class="pill">${s.ok ? `<b>${s.ms}</b> ms` : "javob yoʻq"}</span>${days!=null?`<span class="pill">SSL <b>${days}</b> kun</span>`:""}</div>`; }).join("")
+    + `<div class="site"><span class="dot ${crashed?"bad":"ok"}"></span><div><b>Foydali servislari</b><div class="sub">${ST?`${ST.summary.running} / ${ST.summary.total} ishlayapti`:"—"}</div></div></div>`;
+}
+
+// ---------------- amallar va loglar
+async function act(name, action){ const r = await api(`api/services/${name}/${action}`, "POST"); if (r.result && r.result!=="ok") toast(r.result); renderStatus(r); }
+async function all_(action){ toast("Bajarilmoqda…"); renderStatus(await api(`api/all/${action}`, "POST")); toast("Tayyor"); }
+async function loadLogs(){ if(!current) return; const r = await api(`api/${logKind}/${current}/logs?n=800`); const pre=$("logs");
+  pre.textContent = (r.lines || []).join("\n") || "Log hali yoʻq"; if ($("follow").checked) pre.scrollTop = pre.scrollHeight; }
+function openLogs(kind, name, label){ logKind = kind; current = name; $("dlgTitle").textContent = `${label} — loglar`; $("dlg").showModal(); loadLogs();
+  clearInterval(logTimer); logTimer = setInterval(() => $("dlg").open ? loadLogs() : clearInterval(logTimer), 3000); }
+document.querySelectorAll("[data-r]").forEach(b => b.onclick = () => { range = b.dataset.r; document.querySelectorAll("[data-r]").forEach(x => x.classList.toggle("on", x===b)); loadRes(); });
+document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { procBy = b.dataset.p; document.querySelectorAll("[data-p]").forEach(x => x.classList.toggle("on", x===b)); renderProcs(); });
+
+async function loadStatus(){ try { renderStatus(await api("api/status")); if (SEC) renderSites(); } catch(e){ if(e.message!=="auth"){ $("live").classList.add("off"); $("sub").textContent = "Nazoratchi bilan aloqa yoʻq"; } } }
+async function loadRes(){ try { renderRes(await api("api/resources?range=" + range)); } catch(e){} }
+async function loadSec(){ try { renderSec(await api("api/security")); } catch(e){} }
+loadStatus(); loadRes(); loadSec();
+setInterval(loadStatus, 3000); setInterval(loadRes, 10000); setInterval(loadSec, 60000);
 </script>
 </body>
 </html>

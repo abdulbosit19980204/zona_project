@@ -43,6 +43,11 @@ RESTART_WINDOW, RESTART_MAX = 300, 5
 LOG_LINES = 3000
 
 
+def log_n(n: int) -> int:
+    """Log qatorlari soni — faqat sudoers'dagi qat'iy qiymatlardan biri (joker belgisiz qoidalar)."""
+    return 300 if n <= 300 else (800 if n <= 800 else 3000)
+
+
 def now() -> float:
     return time.time()
 
@@ -279,7 +284,7 @@ class Supervisor:
 
     def logs(self, s: Service, n: int = 300) -> list[str]:
         if self.mode == "systemd":
-            cmd = [*s.ctl, "logs", str(n)] if s.ctl else ["journalctl", "-u", s.unit, "-n", str(n), "--no-pager", "-o", "short-iso"]
+            cmd = [*s.ctl, "logs", str(n)] if s.ctl else ["/usr/bin/journalctl", "-u", s.unit, "-n", str(log_n(n)), "--no-pager", "-o", "short-iso"]
             r = subprocess.run([*self._sudo(), *cmd], capture_output=True, text=True, timeout=15)
             return (r.stdout or r.stderr).splitlines()
         return list(s.logs)[-n:]
@@ -430,8 +435,9 @@ class Auth:
 
 # ---------------------------------------------------------------- veb
 LOGIN_PAGE = """<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Servislar markazi — kirish</title><style>
-:root{color-scheme:light dark;--bg:#f4f6f9;--card:#fff;--fg:#14161a;--mut:#667085;--acc:#2563eb;--bd:#e4e7ec}
+<title>Kuzatuv markazi — kirish</title><style>
+:root{color-scheme:dark;--bg:#0a0d12;--card:#10151c;--fg:#e6ebf2;--mut:#8b97a8;--acc:#4f8cff;--bd:#1f2833}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f3f5f9;--card:#fff;--fg:#111827;--mut:#5b6474;--acc:#2563eb;--bd:#e3e7ee}}
 @media (prefers-color-scheme:dark){:root{--bg:#0b0d10;--card:#15181d;--fg:#e8eaed;--mut:#98a2b3;--acc:#60a5fa;--bd:#262a31}}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;padding:16px}
 .c{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:28px;width:100%;max-width:360px}
@@ -440,7 +446,7 @@ input{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--
 button{margin-top:12px;width:100%;padding:10px;border:0;border-radius:10px;background:var(--acc);color:#fff;font:inherit;cursor:pointer}
 .e{color:#dc2626;margin-top:10px;font-size:13px}.m{color:#16a34a;margin-top:10px;font-size:13px}
 .l{background:none;color:var(--acc);margin-top:8px;padding:6px;font-size:13px}</style></head><body><form class="c" method="post" action="login">
-<h1>Servislar boshqaruv markazi</h1><p>Barcha servislarni ishga tushirish va nazorat qilish.</p>
+<h1>Kuzatuv va xavfsizlik markazi</h1><p>Server, servislar, resurslar va xavfsizlik — bir joyda.</p>
 <input type="password" name="password" placeholder="Parol yoki Telegram'dagi kod" autofocus required>__ERR__<button type="submit">Kirish</button>
 __REC__</form></body></html>"""
 RECOVER_FORM = ('<button type="submit" formaction="recover" formnovalidate class="l">Parolni unutdim — Telegram\'imga yuborish</button>')
@@ -501,7 +507,8 @@ def html_escape(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def make_handler(sup: Supervisor, auth: Auth, res: Any = None, rec: "Recovery | None" = None):
+def make_handler(sup: Supervisor, auth: Auth, res: Any = None, rec: "Recovery | None" = None, sec: Any = None,
+                 log_units: list[str] | None = None):
     page = (HERE / "page.html").read_text("utf-8")
 
     def login_page(err: str = "", msg: str = "") -> str:
@@ -567,6 +574,17 @@ def make_handler(sup: Supervisor, auth: Auth, res: Any = None, rec: "Recovery | 
                 rest = route[i + 1:]
                 if rest == ["status"]:
                     return self._json(200, sup.status())
+                if rest == ["security"] and sec is not None:
+                    data = sec.snapshot()
+                    data["control"] = {"failed_logins_15m": sum(len([t for t in v if now() - t < 900]) for v in auth.fails.values()),
+                                       "ips": len(auth.fails)}
+                    return self._json(200, data)
+                if len(rest) == 3 and rest[0] == "units" and rest[2] == "logs" and rest[1] in (log_units or []):
+                    # boshqa loyiha/tizim servislari loglari — faqat o'qish (sudoers'da aniq, NOEXEC)
+                    n = log_n(int(parse_qs(urlsplit(self.path).query).get("n", ["300"])[0]))
+                    r = subprocess.run([*sup._sudo(), "/usr/bin/journalctl", "-u", rest[1], "-n", str(n), "--no-pager", "-o", "short-iso"],
+                                       capture_output=True, text=True, timeout=15)
+                    return self._json(200, {"lines": (r.stdout or r.stderr).splitlines()})
                 if rest == ["resources"] and res is not None:
                     rng = parse_qs(urlsplit(self.path).query).get("range", ["24h"])[0]
                     return self._json(200, res.snapshot("30d" if rng == "30d" else "24h"))
@@ -638,7 +656,10 @@ def main(argv: list[str] | None = None) -> None:
     from resources import Resources  # shu papkadagi modul (standart kutubxona)
     res = Resources(config, sup.services, Path(args.data))
     rec = Recovery(auth)
-    server = http.server.ThreadingHTTPServer((args.host, args.port), make_handler(sup, auth, res, rec))
+    from security import Security
+    sec = Security(config)
+    log_units = (config.get("security") or {}).get("log_units") or []
+    server = http.server.ThreadingHTTPServer((args.host, args.port), make_handler(sup, auth, res, rec, sec, log_units))
     url = f"http://{args.host}:{args.port}/"
     print("=" * 64)
     print(f"  Servislar boshqaruv markazi: {url}   (rejim: {sup.mode})")
@@ -649,6 +670,7 @@ def main(argv: list[str] | None = None) -> None:
 
     threading.Thread(target=sup.loop, daemon=True).start()
     threading.Thread(target=res.loop, args=(sup.stop_event,), daemon=True).start()  # server resurslari
+    threading.Thread(target=sec.loop, args=(sup.stop_event,), daemon=True).start()  # xavfsizlik (5 daqiqada)
     if not args.no_autostart and sup.mode == "process":
         threading.Thread(target=lambda: [sup.start(s) for s in sup.services if s.autostart], daemon=True).start()
 

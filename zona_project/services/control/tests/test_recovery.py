@@ -31,8 +31,8 @@ class RecoveryTests(unittest.TestCase):
         sup = control.Supervisor({"mode": "process", "services": []})
         srv = control.http.server.ThreadingHTTPServer(("127.0.0.1", 0), control.make_handler(sup, auth, None, rec))
         threading.Thread(target=srv.serve_forever, daemon=True).start()
-        self.addCleanup(srv.shutdown)
         self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)  # cleanup teskari tartibda: avval to'xtatiladi, keyin yopiladi
         return f"http://127.0.0.1:{srv.server_address[1]}/", auth, rec
 
     def test_not_configured_hides_button(self):

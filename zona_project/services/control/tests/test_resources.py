@@ -78,6 +78,7 @@ class ResourcesTests(unittest.TestCase):
         self.r = FakeProc(cfg, [Svc("backend", "foydali-backend", "Platforma")], Path(self.tmp.name))
 
     def run_show(self):
+        self.r._discover = lambda: []  # serverdagi qolgan servislarni avtomatik topish bu testda kerak emas
         return mock.patch.object(R.subprocess, "run", return_value=mock.Mock(stdout=SHOW)), \
             mock.patch.object(R.shutil, "which", return_value="/bin/systemctl")
 

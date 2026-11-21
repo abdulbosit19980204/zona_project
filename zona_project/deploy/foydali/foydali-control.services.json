@@ -94,5 +94,27 @@
         "path": "/var/lib/foydali/backups"
       }
     ]
+  },
+  "security": {
+    "sites": [
+      {
+        "name": "Foydali (panel)",
+        "url": "https://foydali.xisobchim.uz/login",
+        "host": "foydali.xisobchim.uz"
+      },
+      {
+        "name": "BioLab",
+        "url": "https://bio-lab.uz/",
+        "host": "bio-lab.uz"
+      }
+    ],
+    "backups": "/var/lib/foydali/backups",
+    "backup_max_hours": 30,
+    "log_units": [
+      "biolab",
+      "biolab-ci",
+      "nginx",
+      "ssh"
+    ]
   }
 }

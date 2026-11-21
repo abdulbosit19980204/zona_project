@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -47,6 +48,32 @@ def parse_cpu(text: str) -> tuple[int, int]:
             idle = vals[3] + (vals[4] if len(vals) > 4 else 0)
             return sum(vals) - idle, sum(vals)
     return 0, 0
+
+
+def parse_cores(text: str) -> list[tuple[int, int]]:
+    """/proc/stat cpuN qatorlari -> har bir yadro (band, jami)."""
+    out = []
+    for line in text.splitlines():
+        if line.startswith("cpu") and line[3:4].isdigit():
+            vals = [int(x) for x in line.split()[1:]]
+            idle = vals[3] + (vals[4] if len(vals) > 4 else 0)
+            out.append((sum(vals) - idle, sum(vals)))
+    return out
+
+
+def parse_diskstats(text: str) -> tuple[int, int]:
+    """/proc/diskstats -> (o'qilgan, yozilgan) baytlar — faqat butun disklar (sda, vda, nvme0n1), bo'limlarsiz."""
+    rd = wr = 0
+    for line in text.splitlines():
+        f = line.split()
+        if len(f) < 10:
+            continue
+        name = f[2]
+        if name.startswith(("loop", "ram", "sr", "dm-")) or (name[-1].isdigit() and not name.startswith("nvme")) \
+                or (name.startswith("nvme") and "p" in name[4:]):
+            continue
+        rd, wr = rd + int(f[5]) * 512, wr + int(f[9]) * 512
+    return rd, wr
 
 
 def parse_net(text: str) -> tuple[int, int]:
@@ -124,6 +151,14 @@ def growth_per_day(points: list[tuple[float, float]]) -> float | None:
     return sum((t - mt) * (v - mv) for t, v in pts) / den * 86400
 
 
+_SECRET_ARG = re.compile(r"(?i)((?:pass(?:word)?|token|secret|key)[=:\s]+)\S+")
+
+
+def _mask_cmd(cmd: str) -> str:
+    """Buyruq qatoridagi parol/token qiymatlari yashiriladi (sahifada ko'rsatiladi)."""
+    return _SECRET_ARG.sub(r"\1***", cmd)
+
+
 # ---------------------------------------------------------------- kuzatuvchi
 class Resources:
     def __init__(self, config: dict[str, Any], services: list[Any], data_dir: Path):
@@ -139,7 +174,10 @@ class Resources:
         self.current: dict[str, Any] = {}
         self.sizes: list[dict[str, Any]] = []
         self.sizes_at = 0.0
-        self._prev_cpu = self._prev_net = None
+        self._prev_cpu = self._prev_net = self._prev_io = None
+        self._prev_cores: list[tuple[int, int]] | None = None
+        self._prev_procs: dict[int, tuple[float, float]] = {}
+        self._sys: dict[str, Any] = {}
         self._prev_units: dict[str, tuple[int, float]] = {}
         self._bucket: list[dict[str, Any]] = []
         self._qbucket: list[dict[str, Any]] = []
@@ -179,6 +217,10 @@ class Resources:
                 units.append((s.unit, s.label, s.group or "Servislar"))
         for x in self.extra:
             units.append((x["unit"], x.get("label") or x["unit"], x.get("group") or "Boshqa loyihalar"))
+        known = {u for u, _l, _g in units}
+        for u in self._discover():  # serverdagi qolgan barcha ishlayotgan servislar (BioLab, tizim...)
+            if u not in known:
+                units.append((u, u, "BioLab" if u.startswith("biolab") else "Tizim"))
         props = {}
         if units and shutil.which("systemctl"):
             try:
@@ -201,6 +243,21 @@ class Resources:
             rows.append(self._row(s.name, s.label, s.group or "Servislar", mem, cpu_s, now, ncpu, "active"))
         return rows
 
+    _disc: tuple[float, list[str]] = (0.0, [])
+
+    def _discover(self) -> list[str]:
+        """Ishlayotgan va yiqilgan barcha systemd servislari (daqiqada bir yangilanadi)."""
+        if time.time() - self._disc[0] < 60 or not shutil.which("systemctl"):
+            return self._disc[1]
+        try:
+            r = subprocess.run(["systemctl", "list-units", "--type=service", "--state=running,failed", "--no-legend", "--plain"],
+                               capture_output=True, text=True, timeout=10)
+            names = [ln.split()[0].removesuffix(".service") for ln in r.stdout.splitlines() if ln.strip()]
+        except (OSError, subprocess.SubprocessError):
+            names = []
+        self._disc = (time.time(), names)
+        return names
+
     def _row(self, key, label, group, mem, cpu_s, now, ncpu, state):
         prev = self._prev_units.get(key)
         self._prev_units[key] = (cpu_s, now)
@@ -208,6 +265,78 @@ class Resources:
         if prev and now > prev[1] and cpu_s >= prev[0]:
             cpu = round(100 * (cpu_s - prev[0]) / (now - prev[1]) / ncpu, 1)
         return {"key": key, "label": label, "group": group, "mem": mem, "cpu": cpu, "state": state}
+
+    def _procs(self, top: int = 15) -> list[dict[str, Any]]:
+        """Eng ko'p CPU / RAM ishlatayotgan jarayonlar (barcha foydalanuvchilar; /proc o'qiladi)."""
+        if not PROC.exists():
+            return []
+        tck = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
+        ncpu, now, rows, seen = os.cpu_count() or 1, time.monotonic(), [], {}
+        users = self._users()
+        for d in os.scandir(PROC):
+            if not d.name.isdigit():
+                continue
+            pid = int(d.name)
+            try:
+                stat = (PROC / d.name / "stat").read_text()
+                name = stat[stat.index("(") + 1:stat.rindex(")")]
+                f = stat.rsplit(")", 1)[1].split()
+                cpu_s = (int(f[11]) + int(f[12])) / tck
+                rss = int(f[21]) * 4096
+                uid = (PROC / d.name).stat().st_uid
+            except (OSError, ValueError, IndexError):
+                continue
+            prev = self._prev_procs.get(pid)
+            seen[pid] = (cpu_s, now)
+            cpu = round(100 * (cpu_s - prev[0]) / (now - prev[1]) / ncpu, 1) if prev and now > prev[1] else None
+            rows.append({"pid": pid, "name": name, "user": users.get(uid, str(uid)), "cpu": cpu, "mem": rss})
+        self._prev_procs = seen
+        by_cpu = sorted(rows, key=lambda r: -(r["cpu"] or 0))[:top]
+        by_mem = sorted(rows, key=lambda r: -r["mem"])[:top]
+        pick = {r["pid"]: r for r in [*by_cpu, *by_mem]}
+        for r in pick.values():
+            try:
+                cmd = (PROC / str(r["pid"]) / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace").strip()
+            except OSError:
+                cmd = ""
+            r["cmd"] = _mask_cmd(cmd)[:160]
+        return sorted(pick.values(), key=lambda r: -((r["cpu"] or 0) * 1e12 + r["mem"]))[:top * 2]
+
+    _users_cache: tuple[float, dict[int, str]] = (0.0, {})
+
+    def _users(self) -> dict[int, str]:
+        if time.time() - self._users_cache[0] < 600:
+            return self._users_cache[1]
+        out = {}
+        try:
+            for ln in Path("/etc/passwd").read_text().splitlines():
+                f = ln.split(":")
+                if len(f) > 2 and f[2].isdigit():
+                    out[int(f[2])] = f[0]
+        except OSError:
+            pass
+        self._users_cache = (time.time(), out)
+        return out
+
+    def _system(self) -> dict[str, Any]:
+        if not self._sys:
+            info: dict[str, Any] = {"host": os.uname().nodename if hasattr(os, "uname") else ""}
+            try:
+                for ln in Path("/etc/os-release").read_text().splitlines():
+                    if ln.startswith("PRETTY_NAME="):
+                        info["os"] = ln.split("=", 1)[1].strip('"')
+            except OSError:
+                pass
+            info["kernel"] = os.uname().release if hasattr(os, "uname") else ""
+            try:
+                cpu = next((ln.split(":", 1)[1].strip() for ln in Path("/proc/cpuinfo").read_text().splitlines()
+                            if ln.startswith("model name")), "")
+                info["cpu_model"] = cpu
+            except (OSError, StopIteration):
+                pass
+            self._sys = info
+        up = self._read("uptime").split()
+        return {**self._sys, "uptime": float(up[0]) if up else None, "procs": sum(1 for d in os.scandir(PROC) if d.name.isdigit()) if PROC.exists() else None}
 
     def _pid_usage(self, pid: int) -> tuple[int, float]:
         status, stat = self._read(f"{pid}/status"), self._read(f"{pid}/stat")
@@ -245,6 +374,26 @@ class Resources:
                 dt = t - self._prev_net[2]
                 cur["net"] = {"rx": max(0, (rx - self._prev_net[0]) / dt), "tx": max(0, (tx - self._prev_net[1]) / dt)}
             self._prev_net = (rx, tx, t)
+        stat = self._read("stat")
+        cores = parse_cores(stat)
+        if cores:
+            prev = self._prev_cores or []
+            pcts = []
+            for i, (busy_i, total_i) in enumerate(cores):
+                if i < len(prev) and total_i > prev[i][1]:
+                    pcts.append(round(100 * (busy_i - prev[i][0]) / (total_i - prev[i][1]), 1))
+                else:
+                    pcts.append(None)
+            cur["cores_pct"] = pcts
+            self._prev_cores = cores
+        rd, wr = parse_diskstats(self._read("diskstats"))
+        if rd or wr:
+            if self._prev_io and t > self._prev_io[2]:
+                dt = t - self._prev_io[2]
+                cur["io"] = {"rd": max(0, (rd - self._prev_io[0]) / dt), "wr": max(0, (wr - self._prev_io[1]) / dt)}
+            self._prev_io = (rd, wr, t)
+        cur["procs"] = self._procs()
+        cur["system"] = self._system()
         cur["services"] = self._units(SAMPLE_EVERY)
         if time.time() - self.sizes_at > SIZES_EVERY:
             self.sizes_at = time.time()
@@ -274,6 +423,10 @@ class Resources:
             "mem": self._avg(rows, lambda r: (r.get("mem") or {}).get("used")),
             "disk": self._avg(rows, lambda r: (r.get("disk") or {}).get("used")),
             "load": self._avg(rows, lambda r: (r.get("load") or [None])[0]),
+            "rx": self._avg(rows, lambda r: (r.get("net") or {}).get("rx")),
+            "tx": self._avg(rows, lambda r: (r.get("net") or {}).get("tx")),
+            "rd": self._avg(rows, lambda r: (r.get("io") or {}).get("rd")),
+            "wr": self._avg(rows, lambda r: (r.get("io") or {}).get("wr")),
             "s": {k: [self._avg(v, lambda x: x["mem"]), self._avg(v, lambda x: x["cpu"])] for k, v in svc.items()},
         }
 
@@ -286,7 +439,7 @@ class Resources:
         self._qbucket.append(p)
         if not self.quarters or t - self.quarters[-1]["t"] >= 900:
             q = {"t": int(t)}
-            for k in ("cpu", "mem", "disk", "load"):
+            for k in ("cpu", "mem", "disk", "load", "rx", "tx", "rd", "wr"):
                 q[k] = self._avg(self._qbucket, lambda x, k=k: x.get(k))
             q["cpu_max"] = max((x["cpu_max"] for x in self._qbucket if x.get("cpu_max") is not None), default=None)
             keys = {k for x in self._qbucket for k in x.get("s", {})}
@@ -368,5 +521,5 @@ class Resources:
         if mem.get("used") and mem["used"] > known:
             groups["Tizim va boshqalar"] = {"group": "Tizim va boshqalar", "mem": mem["used"] - known, "cpu": None}
         return {"current": cur, "groups": sorted(groups.values(), key=lambda g: -g["mem"]),
-                "series": [{k: p.get(k) for k in ("t", "cpu", "cpu_max", "mem", "disk", "load")} for p in series],
+                "series": [{k: p.get(k) for k in ("t", "cpu", "cpu_max", "mem", "disk", "load", "rx", "tx", "rd", "wr")} for p in series],
                 "range": rng, "forecast": self.forecast(), "available": bool(PROC.exists())}

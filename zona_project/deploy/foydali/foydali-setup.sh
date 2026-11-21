@@ -180,9 +180,16 @@ chmod 755 /usr/local/sbin/foydali-pm2
   echo "# Foydali boshqaruv markazi: faqat foydali-* servislarini boshqarish va jurnalini o'qish"
   for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot; do
     for a in start stop restart; do echo "$USR ALL=(root) NOPASSWD: /usr/bin/systemctl $a $u"; done
-    echo "$USR ALL=(root) NOPASSWD: /usr/bin/journalctl -u $u *"
+    for n in 300 800 3000; do echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/bin/journalctl -u $u -n $n --no-pager -o short-iso"; done
   done
   echo "$USR ALL=(root) NOPASSWD: /usr/local/sbin/foydali-pm2 *"
+  # kuzatuv va xavfsizlik markazi — FAQAT O'QISH (NOEXEC: journalctl sahifalovchisidan shell'ga chiqib bo'lmaydi)
+  for u in biolab biolab-ci nginx ssh; do
+    for n in 300 800 3000; do echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/bin/journalctl -u $u -n $n --no-pager -o short-iso"; done
+  done
+  echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/bin/journalctl -u ssh --since -24h --no-pager -q -o short-iso"
+  echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/bin/journalctl -u ssh --since -7d --no-pager -q -o short-iso --grep Accepted"
+  echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/sbin/ufw status verbose"
 } > /etc/sudoers.d/foydali-control.tmp
 visudo -cf /etc/sudoers.d/foydali-control.tmp >/dev/null
 mv /etc/sudoers.d/foydali-control.tmp /etc/sudoers.d/foydali-control

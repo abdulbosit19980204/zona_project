@@ -142,7 +142,7 @@ class HttpTests(unittest.TestCase):
         # sahifa prefiks ostida ham ishlaydi (nginx: /control/)
         self.assertEqual(self.req("GET", "/control/api/status", headers={"Cookie": cookie})[0], 200)
         status, _, page = self.req("GET", "/", headers={"Cookie": cookie})
-        self.assertIn("Servislar boshqaruv markazi".encode(), page)
+        self.assertIn("Kuzatuv va xavfsizlik markazi".encode(), page)
 
 
 if __name__ == "__main__":
