@@ -63,7 +63,7 @@ export interface SupportSettings {
   ai_ready: boolean; ai_quota_left: number;
   drafts_to_admin: boolean; escalation_ack: boolean; mention_responsible: boolean; feedback_buttons: boolean;
   notify_candidates: boolean; learn_clarifications: boolean; ask_first_prompt: boolean;
-  history_days: number; history_photos: boolean; history_max: number;
+  history_days: number; history_photos: boolean; history_max: number; history_night_from: number; history_night_to: number;
   mtproto_available: boolean; mtproto_connected: boolean; mtproto_user: string; mtproto_pending: boolean;
   mtproto_need_password: boolean; mtproto_phone: string;
   image_match: boolean; image_threshold: number; image_autolabel: boolean;
@@ -147,10 +147,12 @@ export interface ImageTypes {
   threshold: number; total: number;
 }
 export interface HistoryJob {
-  id: number; group: number; group_title: string; days: number; photos: boolean; status: "queued" | "running" | "done" | "failed";
+  id: number; group: number; group_title: string; days: number; photos: boolean;
+  status: "queued" | "running" | "done" | "failed" | "canceled";
   progress: { stage?: string; messages?: number; photos?: number; processed?: number; questions?: number; staff_answers?: number;
-    clarifications?: number; candidates?: number; flood_wait?: number };
+    clarifications?: number; candidates?: number; flood_wait?: number; skipped?: number; reached?: string; paused?: string };
   error: string; created_by: string; created_at: string; started_at: string | null; finished_at: string | null;
+  date_from: string | null; date_to: string | null; run_after: string | null; night_only: boolean;
 }
 export interface Analytics extends Period {
   days: number; questions: number; unanswered: number; with_photo: number; entries_with_ask_first: number;
@@ -228,7 +230,9 @@ export const supportApi = {
   taskAction: (id: number, action: "retry" | "skip", assignee?: string) => post<SupportTaskInfo>(`tasks/${id}/${action}/`, assignee ? { assignee } : {}),
   taskTest: (assignee: string) => post<SupportTaskInfo>("tasks/test/", { assignee }),
   historyJobs: () => get<HistoryJob[]>("history/"),
-  startHistory: (group: number, days: number, photos: boolean) => post<HistoryJob[]>("history/", { group, days, photos }),
+  startHistory: (p: { groups: number[] | "all"; days: number; photos: boolean; date_from?: string; date_to?: string; schedule: string }) =>
+    post<HistoryJob[]>("history/", p),
+  historyAction: (id: number, action: "cancel" | "now" | "resume") => post<HistoryJob[]>(`history/${id}/`, { action }),
   mtSendCode: (phone: string) => post<SupportSettings & { need_password?: boolean }>("mtproto/send-code/", { phone, confirm: true }),
   mtSignIn: (code: string, password = "") => post<SupportSettings & { need_password?: boolean }>("mtproto/sign-in/", { code, password }),
   mtLogout: () => post<SupportSettings>("mtproto/logout/"),

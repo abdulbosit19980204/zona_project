@@ -83,6 +83,9 @@ class Settings(models.Model):
     # --- suhbat: bir odamning ketma-ket xabarlari (matn, lokatsiya, rasmlar) — bitta mavzu, bitta savol ---
     thread_window = models.PositiveIntegerField("Bitta suhbat: oxirgi xabardan keyin (daqiqa); 0 — o'chiq", default=15,
                                                 db_default=15)
+    # --- guruh tarixi: tungi oyna (Toshkent vaqti) — "faqat tunda" vazifalar shu oraliqda ishlaydi ---
+    history_night_from = models.PositiveSmallIntegerField("Tungi oyna boshlanishi (soat)", default=22, db_default=22)
+    history_night_to = models.PositiveSmallIntegerField("Tungi oyna tugashi (soat)", default=7, db_default=7)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -339,10 +342,16 @@ class Message(models.Model):
 class HistoryJob(models.Model):
     """Guruh tarixini o'qib o'rganish vazifasi (bot jarayoni fonda bajaradi)."""
 
-    QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
+    QUEUED, RUNNING, DONE, FAILED, CANCELED = "queued", "running", "done", "failed", "canceled"
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="history_jobs")
     days = models.PositiveIntegerField(default=30)
     photos = models.BooleanField(default=True)
+    # oraliq: shu sanadan (bo'lmasa — "days" kun oldin) shu sanagacha (bo'lmasa — hozirgacha)
+    date_from = models.DateTimeField(null=True, blank=True)
+    date_to = models.DateTimeField(null=True, blank=True)
+    run_after = models.DateTimeField(null=True, blank=True)  # rejalashtirilgan boshlanish (yoki FloodWait'dan keyin davom)
+    night_only = models.BooleanField(default=False, db_default=False)  # faqat tungi oynada (ish vaqtiga xalaqit bermaydi)
+    cursor = models.BigIntegerField(null=True, blank=True)  # oxirgi o'rganilgan xabar — qayta ishga tushsa shu joydan
     status = models.CharField(max_length=8, default=QUEUED)
     progress = models.JSONField(default=dict, blank=True)
     error = models.CharField(max_length=500, blank=True)

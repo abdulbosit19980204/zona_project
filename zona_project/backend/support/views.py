@@ -39,6 +39,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "learn_from_staff", "ocr_enabled", "media_days", "signature", "drafts_to_admin", "escalation_ack",
                    "mention_responsible", "feedback_buttons", "notify_candidates", "learn_clarifications",
                    "ask_first_prompt", "history_days", "history_photos", "history_max", "image_match",
+                   "history_night_from", "history_night_to",
                    "image_threshold", "image_autolabel", "mention_asker", "mention_supervisor", "workers",
                    "contact_lookup", "ai_primary", "ai_primary_below", "album_window",
                    "tasks_enabled", "task_bot", "task_default_assignee", "task_departments", "task_members",
@@ -653,30 +654,82 @@ def mtproto_logout(request):
 def _job(j):
     return {"id": j.id, "group": j.group_id, "group_title": j.group.title, "days": j.days, "photos": j.photos,
             "status": j.status, "progress": j.progress, "error": j.error, "created_by": j.created_by,
-            "created_at": j.created_at, "started_at": j.started_at, "finished_at": j.finished_at}
+            "created_at": j.created_at, "started_at": j.started_at, "finished_at": j.finished_at,
+            "date_from": j.date_from, "date_to": j.date_to, "run_after": j.run_after, "night_only": j.night_only}
+
+
+def _day(value, end=False):
+    """"2026-01-15" -> Toshkent vaqti bo'yicha kun boshi (end=True — keyingi kun boshi, ya'ni kun oxirigacha)."""
+    from datetime import date, datetime, time
+
+    from .workload import TZ
+    if not value:
+        return None
+    d = date.fromisoformat(str(value)[:10])
+    return datetime.combine(d + timezone.timedelta(days=1) if end else d, time.min, TZ)
 
 
 @zona_api(["GET", "POST"], [AdminOnly])
 def history_jobs(request):
+    """Guruh tarixini o'rganish: bir yoki bir nechta guruh (yoki hammasi), sana oralig'i, rejalashtirish.
+
+    Akkaunt xavfsizligi kunlik son bilan emas, tezlik bilan ta'minlanadi (history.py): bir vaqtda bitta guruh, guruhlar
+    orasida tanaffus, sahifa/rasm oralig'ida pauza, Telegram FloodWait'iga to'liq rioya. Shuning uchun hamma guruhni
+    birdan navbatga qo'yish mumkin — ular ketma-ket o'qiladi."""
     if request.method == "POST":
+        from . import history as hist
         s = Settings.load()
         if not s.mtproto_session_enc:
             return Response({"detail": "Avval Telegram akkauntni ulang."}, status=400)
-        group = Group.objects.filter(pk=request.data.get("group")).first()
-        if not group:
+        raw = request.data.get("groups") or ([request.data["group"]] if request.data.get("group") else [])
+        qs = Group.objects.all() if raw == "all" else Group.objects.filter(pk__in=[int(x) for x in raw])
+        groups = list(qs.order_by("id"))
+        if not groups:
             return Response({"detail": "Guruhni tanlang."}, status=400)
-        if HistoryJob.objects.filter(group=group, status__in=[HistoryJob.QUEUED, HistoryJob.RUNNING]).exists():
-            return Response({"detail": "Bu guruh tarixi allaqachon o'qilmoqda."}, status=400)
-        # akkaunt xavfsizligi: Telegram ko'p so'rovni yoqtirmaydi — bitta guruh 6 soatda bir marta, sutkada 3 tadan ko'p emas
-        now = timezone.now()
-        if HistoryJob.objects.filter(group=group, created_at__gte=now - timezone.timedelta(hours=6)).exists():
-            return Response({"detail": "Bu guruh tarixi yaqinda o'qilgan. Akkaunt xavfsizligi uchun 6 soatdan keyin qayta urining."}, status=400)
-        if HistoryJob.objects.filter(created_at__gte=now - timezone.timedelta(days=1)).count() >= 3:
-            return Response({"detail": "Sutkalik chegara (3 ta) tugadi — ertaga davom eting."}, status=400)
-        days = max(1, min(int(request.data.get("days") or s.history_days), 365))
+        try:
+            date_from, date_to = _day(request.data.get("date_from")), _day(request.data.get("date_to"), end=True)
+        except ValueError:
+            return Response({"detail": "Sana noto'g'ri (YYYY-MM-DD)."}, status=400)
+        if date_from and date_to and date_from >= date_to:
+            return Response({"detail": "Boshlanish sanasi tugash sanasidan oldin bo'lishi kerak."}, status=400)
+        days = max(1, min(int(request.data.get("days") or s.history_days), 3650))
         photos = bool(request.data.get("photos", s.history_photos))
-        HistoryJob.objects.create(group=group, days=days, photos=photos, created_by=_actor(request))
-    return Response([_job(j) for j in HistoryJob.objects.select_related("group")[:30]])
+        when = str(request.data.get("schedule") or "now")  # now / night / ISO vaqt
+        night_only, run_after = when == "night", None
+        if when == "night":
+            run_after = None if hist.is_night(None, s) else hist.next_night_start(None, s)
+        elif when != "now":
+            try:
+                run_after = timezone.datetime.fromisoformat(when)
+                if timezone.is_naive(run_after):
+                    from .workload import TZ
+                    run_after = run_after.replace(tzinfo=TZ)
+            except ValueError:
+                return Response({"detail": "Vaqt noto'g'ri."}, status=400)
+        busy = set(HistoryJob.objects.filter(group__in=groups, status__in=[HistoryJob.QUEUED, HistoryJob.RUNNING])
+                   .values_list("group_id", flat=True))
+        made = [HistoryJob.objects.create(group=g, days=days, photos=photos, created_by=_actor(request), date_from=date_from,
+                                          date_to=date_to, run_after=run_after, night_only=night_only)
+                for g in groups if g.pk not in busy]
+        if not made:
+            return Response({"detail": "Bu guruh(lar) tarixi allaqachon navbatda yoki o'qilmoqda."}, status=400)
+    return Response([_job(j) for j in HistoryJob.objects.select_related("group")[:60]])
+
+
+@zona_api(["POST"], [AdminOnly])
+def history_job_action(request, pk):
+    """Navbatdagi/ishlayotgan vazifani bekor qilish yoki darhol boshlash (ishlayotgani joriy 50 talikdan keyin to'xtaydi)."""
+    j = HistoryJob.objects.filter(pk=pk).first()
+    if j is None:
+        return Response({"detail": "Topilmadi."}, status=404)
+    action = request.data.get("action")
+    if action == "cancel" and j.status in (HistoryJob.QUEUED, HistoryJob.RUNNING):
+        HistoryJob.objects.filter(pk=pk).update(status=HistoryJob.CANCELED, finished_at=timezone.now())
+    elif action == "now" and j.status == HistoryJob.QUEUED:
+        HistoryJob.objects.filter(pk=pk).update(run_after=None, night_only=False)
+    elif action == "resume" and j.status in (HistoryJob.FAILED, HistoryJob.CANCELED):
+        HistoryJob.objects.filter(pk=pk).update(status=HistoryJob.QUEUED, error="", finished_at=None)  # shu joydan davom
+    return Response([_job(x) for x in HistoryJob.objects.select_related("group")[:60]])
 
 
 # ====================================================================== tahlil: xodimlar javoblari va aniqlashtirishlar

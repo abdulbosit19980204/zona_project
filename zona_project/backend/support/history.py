@@ -9,6 +9,7 @@ import asyncio
 import concurrent.futures
 import logging
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
@@ -17,8 +18,18 @@ from zona.crypto import decrypt, encrypt
 from .models import Bot, Group, HistoryJob, Message, Settings
 
 log = logging.getLogger("support")
-MAX_PHOTOS = 400
-PHOTO_MAX_BYTES = 6 * 1024 * 1024
+PHOTO_MAX_BYTES = 8 * 1024 * 1024
+TZ = ZoneInfo("Asia/Tashkent")
+
+# Akkaunt xavfsizligi (Telegram foydalanuvchi akkaunti): faqat o'qish, bir vaqtda bitta guruh, sahifalar orasida pauza,
+# rasmlar bittadan; Telegram "kuting" (FloodWait) desa — aynan shuncha kutiladi, uzoq bo'lsa vazifa keyinga qoldiriladi.
+# Kunlik "3 ta guruh" chegarasi o'rniga shu tezlik cheklovlari ishlaydi (Telegram aynan so'rovlar tezligini kuzatadi).
+BATCH = 50              # shuncha xabardan keyin o'rganiladi va joy (cursor) saqlanadi — qayta ishga tushsa davom etadi
+PAGE_WAIT = 1.5         # 100 talik sahifalar orasida (s)
+PHOTO_GAP = {"day": 1.2, "night": 0.5}    # rasmlar orasida (s); kunduzi sekinroq — ish vaqtida xalaqit bermaslik
+BATCH_REST = {"day": 3.0, "night": 0.5}   # har 50 xabardan keyin dam (s)
+LONG_FLOOD = 600        # Telegram bundan uzoq kutishni so'rasa — vazifa shu vaqtdan keyinga qoldiriladi
+GAP_BETWEEN_JOBS = 60   # guruhlar orasida tanaffus (s)
 
 
 class NeedPassword(Exception):
@@ -164,60 +175,158 @@ async def _resolve(c, chat_id):
     raise ValueError("Ulangan Telegram akkaunt bu guruhda emas (yoki guruh ko'rinmaydi). Akkauntni guruhga qo'shing va qayta urining.")
 
 
-async def fetch(session, api_id, api_hash, chat_id, since, limit, photos, progress):
-    """Guruh xabarlarini (eskidan yangiga) va kerakli rasmlarni oladi. Faqat o'qish."""
+class Pause(Exception):
+    """Vazifa to'xtatiladi va keyin shu joydan davom etadi (tungi oyna tugadi, uzoq FloodWait, bekor qilindi)."""
+
+    def __init__(self, reason, until=None, cancel=False):
+        super().__init__(reason)
+        self.reason, self.until, self.cancel = reason, until, cancel
+
+
+def is_night(now=None, s=None):
+    """Tungi oyna (Toshkent vaqti), masalan 22:00–07:00 — og'ir o'qish shu vaqtga rejalashtiriladi."""
+    s = s or Settings.load()
+    h = (now or timezone.now()).astimezone(TZ).hour
+    a, b = s.history_night_from % 24, s.history_night_to % 24
+    return (a <= h or h < b) if a > b else (a <= h < b)
+
+
+def next_night_start(now=None, s=None):
+    s = s or Settings.load()
+    now = (now or timezone.now()).astimezone(TZ)
+    start = now.replace(hour=s.history_night_from % 24, minute=0, second=0, microsecond=0)
+    if start <= now:
+        start += timedelta(days=1)
+    return start
+
+
+def next_job(now=None):
+    """Navbatdagi vazifa: vaqti kelgan (run_after); "faqat tunda" bo'lsa — tungi oynada."""
+    s = Settings.load()
+    now = now or timezone.now()
+    night = is_night(now, s)
+    for j in HistoryJob.objects.filter(status=HistoryJob.QUEUED).order_by("created_at", "id"):
+        if j.run_after and j.run_after > now:
+            continue
+        if j.night_only and not night:
+            continue
+        return j
+    return None
+
+
+def _is_image(m):
+    if getattr(m, "photo", None):
+        return True
+    doc = getattr(m, "document", None)
+    return bool(doc and str(getattr(doc, "mime_type", "") or "").startswith("image/"))
+
+
+async def _sender(m, senders):
+    sid = m.sender_id or 0
+    if sid not in senders:
+        try:
+            u = await m.get_sender()
+        except Exception:  # noqa: BLE001
+            u = None
+        senders[sid] = {"id": sid, "username": getattr(u, "username", "") or "",
+                        "first_name": getattr(u, "first_name", "") or getattr(u, "title", "") or "",
+                        "last_name": getattr(u, "last_name", "") or "", "is_bot": bool(getattr(u, "bot", False))}
+    return senders[sid]
+
+
+def _flood_pause(e):
+    return Pause(f"Telegram {e.seconds} s kutishni so'radi — keyin shu joydan davom etadi",
+                 until=timezone.now() + timedelta(seconds=e.seconds + 60))
+
+
+async def stream(session, api_id, api_hash, chat_id, start, end, cursor, photos, hooks):
+    """Guruh xabarlarini ESKIDAN YANGIGA o'qiydi (start..end oralig'ida, cursor'dan keyin) va 50 tadan o'rganishga beradi.
+    hooks: known(items) -> o'rganilgan message_id'lar, process(items, wait) -> None, phase() -> "day"/"night"
+    (hammasi sinxron, Django — alohida oqimda). Faqat o'qish."""
     from telethon.errors import FloodWaitError
     c = _client(session, api_id, api_hash)
     await c.connect()
     if not await c.is_user_authorized():
         await c.disconnect()
         raise ValueError("Telegram akkaunt seansi tugagan — paneldan qayta ulaning.")
-    out, photo_count = [], 0
-    try:
-        entity = await _resolve(c, chat_id)
-        senders = {}
+    loop = asyncio.get_running_loop()
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="support-history-db")
+    senders, batch = {}, []
+
+    def call(name, *a):
+        return loop.run_in_executor(ex, lambda: hooks[name](*a))
+
+    async def download(m):
         while True:
             try:
-                async for m in c.iter_messages(entity, limit=limit, wait_time=1):
-                    if m.date < since:
+                data = await c.download_media(m, file=bytes)
+                return data if data and len(data) <= PHOTO_MAX_BYTES else None
+            except FloodWaitError as e:
+                if e.seconds > LONG_FLOOD:
+                    raise
+                await call("process", [], e.seconds)
+                await asyncio.sleep(e.seconds + 1)
+            except Exception:  # noqa: BLE001 — bitta rasm butun tarixni to'xtatmasin
+                return None
+
+    async def flush():
+        nonlocal batch
+        if not batch:
+            return
+        items, batch = batch, []
+        known = await call("known", [it["message_id"] for it in items])
+        mode = await call("phase")
+        for it in items:  # rasm faqat hali o'rganilmagan xabar uchun yuklanadi (qayta ishga tushganda qayta yuklanmaydi)
+            m = it.pop("_m")
+            it["known"] = it["message_id"] in known
+            if photos and not it["known"] and _is_image(m):
+                if (getattr(getattr(m, "document", None), "size", 0) or 0) <= PHOTO_MAX_BYTES:
+                    it["photo"] = await download(m)
+                    await asyncio.sleep(PHOTO_GAP[mode])
+        await call("process", items, 0)
+        await asyncio.sleep(BATCH_REST[mode])
+
+    try:
+        entity = await _resolve(c, chat_id)
+        last = cursor or 0
+        while True:
+            try:
+                kw = {"offset_id": last} if last else {"offset_date": start}
+                async for m in c.iter_messages(entity, reverse=True, wait_time=PAGE_WAIT, **kw):
+                    if end and m.date > end:
                         break
+                    if m.date < start:
+                        continue
+                    last = m.id
                     if m.action is not None:
                         continue  # xizmat xabarlari (qo'shildi, chiqdi...)
-                    sid = m.sender_id or 0
-                    if sid not in senders:
-                        u = await m.get_sender()
-                        senders[sid] = {"id": sid, "username": getattr(u, "username", "") or "",
-                                        "first_name": getattr(u, "first_name", "") or getattr(u, "title", "") or "",
-                                        "last_name": getattr(u, "last_name", "") or "", "is_bot": bool(getattr(u, "bot", False))}
-                    item = {"message_id": m.id, "_date": m.date, "text": m.message or "", "from": senders[sid],
+                    item = {"message_id": m.id, "_date": m.date, "text": m.message or "", "from": await _sender(m, senders),
                             "reply_to": getattr(m.reply_to, "reply_to_msg_id", None) if m.reply_to else None,
-                            "photo": None}
-                    if photos and m.photo and photo_count < MAX_PHOTOS:
-                        try:
-                            data = await c.download_media(m, file=bytes)
-                            if data and len(data) <= PHOTO_MAX_BYTES:
-                                item["photo"] = data
-                                photo_count += 1
-                        except FloodWaitError as e:
-                            await asyncio.sleep(min(e.seconds, 120) + 1)
-                        except Exception:  # noqa: BLE001 — bitta rasm butun tarixni to'xtatmasin
-                            pass
-                    out.append(item)
-                    if len(out) % 200 == 0:
-                        await asyncio.to_thread(progress, len(out), photo_count)
+                            "photo": None, "media_group_id": str(m.grouped_id or ""), "_m": m}
+                    geo = getattr(m, "geo", None)
+                    if geo is not None and getattr(geo, "lat", None) is not None:
+                        item["location"] = {"latitude": geo.lat, "longitude": geo.long}
+                    batch.append(item)
+                    if len(batch) >= BATCH:
+                        await flush()
                 break
-            except FloodWaitError as e:  # Telegram "sekinroq" desa — kutib, davom etamiz
-                await asyncio.to_thread(progress, len(out), photo_count, e.seconds)
-                await asyncio.sleep(min(e.seconds, 300) + 1)
-                if e.seconds > 300:
-                    break
+            except FloodWaitError as e:  # Telegram "sekinroq" desa — kutib, aynan shu joydan davom
+                if e.seconds > LONG_FLOOD:
+                    raise
+                await call("process", [], e.seconds)
+                await asyncio.sleep(e.seconds + 1)
+        await flush()
+    except FloodWaitError as e:
+        raise _flood_pause(e) from e
     finally:
         await c.disconnect()
-    out.reverse()  # eskidan yangiga: avval savol, keyin javob
-    return out, photo_count
+        ex.shutdown(wait=False)
 
 
 def run_job(job_id):
+    from django.db import close_old_connections
+
+    from .models import Entry
     from .runner import Handler, NullClient
 
     job = HistoryJob.objects.select_related("group__bot").get(pk=job_id)
@@ -227,47 +336,82 @@ def run_job(job_id):
         raise ValueError("Telegram akkaunt ulanmagan (Sozlamalar → Guruh tarixi).")
     group: Group = job.group
     bot: Bot = group.bot
-    job.status, job.started_at, job.error = HistoryJob.RUNNING, timezone.now(), ""
-    job.progress = {"stage": "o'qilmoqda", "messages": 0, "photos": 0}
-    job.save()
-
-    def progress(n, ph, wait=0):
-        HistoryJob.objects.filter(pk=job_id).update(progress={"stage": "o'qilmoqda", "messages": n, "photos": ph,
-                                                              "flood_wait": wait})
-
-    since = timezone.now() - timedelta(days=job.days)
-    items, photos = _run(fetch, session, api_id, api_hash, group.chat_id, since, s.history_max, job.photos, progress)
-
-    before_q = Message.objects.filter(group=group, kind=Message.QUESTION).count()
-    from .models import Entry
-    before_e = Entry.objects.filter(source="history").count()
+    start = job.date_from or (job.created_at - timedelta(days=job.days))
+    end = job.date_to
+    p = dict(job.progress or {})
+    if "before_q" not in p:  # birinchi ishga tushish; davom etganda hisoblar saqlanadi
+        p = {"before_q": Message.objects.filter(group=group, kind=Message.QUESTION).count(),
+             "before_e": Entry.objects.filter(source="history").count(), "messages": 0, "photos": 0, "processed": 0,
+             "skipped": 0}
+    p.update(stage="o'qilmoqda", flood_wait=0, paused="")
+    job.status, job.error, job.progress = HistoryJob.RUNNING, "", p
+    job.started_at = job.started_at or timezone.now()
+    job.save(update_fields=["status", "error", "progress", "started_at"])
     handler = Handler(bot, NullClient(), history=True)
-    done = 0
-    for it in items:
-        if it["from"].get("is_bot"):
-            continue
-        msg = {"message_id": it["message_id"], "_date": it["_date"],
-               "chat": {"id": group.chat_id, "type": "supergroup", "title": group.title},
-               "from": it["from"], "text": it["text"]}
-        if it["reply_to"]:
-            msg["reply_to_message"] = {"message_id": it["reply_to"]}
-        if it["photo"]:
-            handler.photo_bytes[it["message_id"]] = it["photo"]
-        try:
-            handler.on_group(msg)
-        except Exception:  # noqa: BLE001
-            log.exception("history message %s failed", it["message_id"])
-        handler.photo_bytes.pop(it["message_id"], None)
-        done += 1
-        if done % 100 == 0:
-            HistoryJob.objects.filter(pk=job_id).update(progress={"stage": "o'rganilmoqda", "messages": len(items),
-                                                                  "photos": photos, "processed": done})
-    stats = {
-        "stage": "tayyor", "messages": len(items), "photos": photos, "processed": done,
-        "questions": Message.objects.filter(group=group, kind=Message.QUESTION).count() - before_q,
-        "staff_answers": Message.objects.filter(group=group, kind=Message.STAFF, source="history").count(),
-        "clarifications": Message.objects.filter(group=group, kind=Message.CLARIFY, source="history").count(),
-        "candidates": Entry.objects.filter(source="history").count() - before_e,
-    }
+
+    def known(ids):
+        close_old_connections()
+        return set(Message.objects.filter(chat_id=group.chat_id, message_id__in=ids).values_list("message_id", flat=True))
+
+    def phase():
+        return "night" if is_night(None, s) else "day"
+
+    def process(items, wait=0):
+        """50 ta xabar — jonli rejimdagi mantiq bilan (yig'ish rejimi) o'rganiladi, keyin joy saqlanadi."""
+        close_old_connections()
+        for it in items:
+            p["messages"] += 1
+            if it.get("photo"):
+                p["photos"] += 1
+            if it.get("known"):
+                p["skipped"] += 1  # avval o'rganilgan (qayta ishga tushish) — takrorlanmaydi
+                continue
+            if it["from"].get("is_bot"):
+                continue
+            msg = {"message_id": it["message_id"], "_date": it["_date"],
+                   "chat": {"id": group.chat_id, "type": "supergroup", "title": group.title},
+                   "from": it["from"], "text": it["text"]}
+            if it.get("media_group_id"):
+                msg["media_group_id"] = it["media_group_id"]
+            if it.get("location"):
+                msg["location"] = it["location"]
+            if it["reply_to"]:
+                msg["reply_to_message"] = {"message_id": it["reply_to"]}
+            if it.get("photo"):
+                handler.photo_bytes[it["message_id"]] = it["photo"]
+            try:
+                handler.on_group(msg)
+            except Exception:  # noqa: BLE001
+                log.exception("history message %s failed", it["message_id"])
+            handler.photo_bytes.pop(it["message_id"], None)
+            p["processed"] += 1
+        upd = {}
+        if items:
+            upd["cursor"] = items[-1]["message_id"]
+            p["reached"] = items[-1]["_date"].isoformat()
+        p.update(stage="o'rganilmoqda", flood_wait=wait)
+        HistoryJob.objects.filter(pk=job_id).update(progress=dict(p), **upd)
+        if HistoryJob.objects.filter(pk=job_id, status=HistoryJob.CANCELED).exists():
+            raise Pause("bekor qilindi", cancel=True)
+        if job.night_only and not is_night(None, s):
+            raise Pause("tungi oyna tugadi — kechqurun shu joydan davom etadi", until=next_night_start(None, s))
+
+    try:
+        asyncio.run(stream(session, api_id, api_hash, group.chat_id, start, end, job.cursor, job.photos,
+                           {"known": known, "process": process, "phase": phase}))
+    except Pause as e:
+        close_old_connections()
+        if e.cancel:
+            HistoryJob.objects.filter(pk=job_id).update(progress={**p, "stage": "bekor qilindi"}, finished_at=timezone.now())
+        else:
+            HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.QUEUED, run_after=e.until,
+                                                        progress={**p, "stage": "kutmoqda", "paused": e.reason})
+        return p
+    close_old_connections()
+    stats = {**p, "stage": "tayyor", "paused": "",
+             "questions": Message.objects.filter(group=group, kind=Message.QUESTION).count() - p["before_q"],
+             "staff_answers": Message.objects.filter(group=group, kind=Message.STAFF, source="history").count(),
+             "clarifications": Message.objects.filter(group=group, kind=Message.CLARIFY, source="history").count(),
+             "candidates": Entry.objects.filter(source="history").count() - p["before_e"]}
     HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.DONE, progress=stats, finished_at=timezone.now())
     return stats

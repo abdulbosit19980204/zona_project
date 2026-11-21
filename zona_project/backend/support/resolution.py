@@ -183,6 +183,7 @@ def problem_of(q, entry=None):
     elif text:
         body = text
     else:
-        ocr = next((ln.strip() for ln in (q.ocr_text or "").splitlines() if len(ln.strip()) >= 12), "")
-        body = ("Rasmli savol" + (f": {ocr}" if ocr else "")) if q.photo_file_id else ""
+        from .ocr import main_message
+        ocr = main_message(q.ocr_text or "")  # skrinshotdagi xato/holat xabari (holat qatori va menyusiz)
+        body = ("Rasmdagi xabar: " + ocr) if ocr else ("Rasmli savol" if q.photo_file_id else "")
     return body[:297] + "…" if len(body) > 300 else body

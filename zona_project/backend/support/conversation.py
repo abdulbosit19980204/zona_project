@@ -39,7 +39,7 @@ def open_root(bot, chat_id, user, window_min, now=None):
         return None
     now = now or timezone.now()
     last = (Message.objects.filter(bot=bot, chat_id=chat_id, user=user, kind__in=[Message.QUESTION, Message.INFO],
-                                   created_at__gte=now - timezone.timedelta(minutes=window_min))
+                                   created_at__gte=now - timezone.timedelta(minutes=window_min), created_at__lte=now)
             .select_related("question").order_by("-created_at").first())
     if last is None:
         return None

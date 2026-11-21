@@ -447,13 +447,25 @@ function HistorySection({ t }: { t: ST }) {
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [group, setGroup] = useState("");
+  const [all, setAll] = useState(false);
   const [days, setDays] = useState<number | null>(null);
   const [photos, setPhotos] = useState<boolean | null>(null);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [when, setWhen] = useState<"now" | "night" | "at">("night");
+  const [at, setAt] = useState("");
+  const [night, setNight] = useState<{ a: number; b: number } | null>(null);
+  const saveNight = useSupportMutation((b: { history_night_from: number; history_night_to: number }) => supportApi.saveSettings(b), t("saved"));
+  const act = useSupportMutation((v: { id: number; action: "cancel" | "now" | "resume" }) => supportApi.historyAction(v.id, v.action), t("saved"));
   const send = useSupportMutation(() => supportApi.mtSendCode(phone), (r) => (r.need_password ? t("mtNeedPassword") : t("mtCodeSent", { p: r.mtproto_phone })));
   const sign = useSupportMutation(() => supportApi.mtSignIn(code, password),
     (r) => (r.need_password ? t("mtNeedPassword") : t("mtConnected", { u: r.mtproto_user })));
   const out = useSupportMutation(() => supportApi.mtLogout(), t("saved"));
-  const start = useSupportMutation(() => supportApi.startHistory(Number(group), days ?? s?.history_days ?? 30, photos ?? s?.history_photos ?? true), t("saved"));
+  const start = useSupportMutation(() => supportApi.startHistory({
+    groups: all ? "all" : [Number(group)], days: days ?? s?.history_days ?? 30, photos: photos ?? s?.history_photos ?? true,
+    date_from: from || undefined, date_to: to || undefined, schedule: when === "at" ? at : when,
+  }), t("saved"));
+  const fmtDay = (v: string | null) => (v ? new Date(v).toLocaleDateString() : "");
   if (!s) return <Skeleton className="h-40" />;
   const ready = !!s.api_id && s.has_api_hash;
 
@@ -501,21 +513,64 @@ function HistorySection({ t }: { t: ST }) {
         )}
 
         {s.mtproto_connected && (
-          <div className="grid gap-3 sm:grid-cols-[2fr_1fr_auto_auto]">
-            <FormRow label={t("histGroup")}>
-              <SearchPicker value={group} onChange={setGroup} className="w-full"
-                options={(groups.data ?? []).map((g) => ({ id: g.id, title: g.title || String(g.chat_id), sub: t("q7") + ": " + g.questions_7d }))}
-                placeholder={t("histGroup")} searchPlaceholder={t("search")} emptyText={t("pickNone")} />
-            </FormRow>
-            <FormRow label={t("histDays")}>
-              <Input type="number" min={1} max={365} value={days ?? s.history_days} onChange={(e) => setDays(Number(e.target.value) || 1)} />
-            </FormRow>
-            <label className="flex items-center gap-2 self-end pb-2 text-sm">
-              <Switch checked={photos ?? s.history_photos} onCheckedChange={setPhotos} />{t("histPhotos")}
-            </label>
-            <Button className="self-end" disabled={!group || start.isPending} onClick={() => start.mutate(undefined)}>
-              <History className="size-4" />{t("histStart")}
-            </Button>
+          <div className="grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-[2fr_auto]">
+              <FormRow label={t("histGroup")}>
+                {all ? <Input disabled value={t("histAll")} /> : (
+                  <SearchPicker value={group} onChange={setGroup} className="w-full"
+                    options={(groups.data ?? []).map((g) => ({ id: g.id, title: g.title || String(g.chat_id), sub: t("q7") + ": " + g.questions_7d }))}
+                    placeholder={t("histGroup")} searchPlaceholder={t("search")} emptyText={t("pickNone")} />
+                )}
+              </FormRow>
+              <label className="flex items-center gap-2 self-end pb-2 text-sm">
+                <Switch checked={all} onCheckedChange={setAll} />{t("histAll")}
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <FormRow label={t("histFrom")} hint={t("histRangeHint")}>
+                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </FormRow>
+              <FormRow label={t("histTo")}>
+                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              </FormRow>
+              <FormRow label={t("histDays")}>
+                <Input type="number" min={1} max={3650} disabled={!!from} value={days ?? s.history_days}
+                  onChange={(e) => setDays(Number(e.target.value) || 1)} />
+              </FormRow>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto]">
+              <FormRow label={t("histWhen")}>
+                <Segmented size="sm" value={when} onChange={setWhen} options={[
+                  { value: "now", label: t("sch_now") }, { value: "night", label: t("sch_night") }, { value: "at", label: t("sch_at") }]} />
+              </FormRow>
+              {when === "at" ? (
+                <FormRow label={t("histAt")}><Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} /></FormRow>
+              ) : <span />}
+              <label className="flex items-center gap-2 self-end pb-2 text-sm">
+                <Switch checked={photos ?? s.history_photos} onCheckedChange={setPhotos} />{t("histPhotos")}
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+              <FormRow label={t("histNight")} hint={t("histNightHint")}>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min={0} max={23} value={night?.a ?? s.history_night_from}
+                    onChange={(e) => setNight({ a: Number(e.target.value), b: night?.b ?? s.history_night_to })}
+                    onBlur={() => night && saveNight.mutate({ history_night_from: night.a, history_night_to: night.b })} />
+                  <span>—</span>
+                  <Input type="number" min={0} max={23} value={night?.b ?? s.history_night_to}
+                    onChange={(e) => setNight({ a: night?.a ?? s.history_night_from, b: Number(e.target.value) })}
+                    onBlur={() => night && saveNight.mutate({ history_night_from: night.a, history_night_to: night.b })} />
+                </div>
+              </FormRow>
+              <span />
+              <Button className="self-end" disabled={(!all && !group) || (when === "at" && !at) || start.isPending}
+                onClick={() => start.mutate(undefined)}>
+                <History className="size-4" />{t("histStart")}
+              </Button>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
+              <b className="text-foreground">{t("histSafetyTitle")}.</b> {t("histSafety")}
+            </div>
           </div>
         )}
 
@@ -525,19 +580,37 @@ function HistorySection({ t }: { t: ST }) {
             {jobs.data!.map((j) => (
               <div key={j.id} className="grid gap-1 rounded-lg border p-2 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={j.status === "done" ? "border-success/50 text-success" : j.status === "failed" ? "border-destructive/50 text-destructive" : "border-warning/50 text-warning"}>
+                  <Badge variant="outline" className={j.status === "done" ? "border-success/50 text-success" : j.status === "failed" || j.status === "canceled" ? "border-destructive/50 text-destructive" : "border-warning/50 text-warning"}>
                     {t(`j_${j.status}` as never)}
                   </Badge>
                   <span className="font-medium">{j.group_title}</span>
-                  <span className="text-muted-foreground">· {j.days} kun · {fmtDate(j.created_at)} · {j.created_by}</span>
+                  <span className="text-muted-foreground">
+                    · {j.date_from ? `${t("jRange")}: ${fmtDay(j.date_from)} — ${j.date_to ? fmtDay(new Date(new Date(j.date_to).getTime() - 1000).toISOString()) : "…"}` : `${j.days} kun`}
+                    {j.night_only && ` · 🌙 ${t("jNightOnly")}`}
+                    {j.status === "queued" && j.run_after && ` · ${t("jStartsAt")}: ${fmtDate(j.run_after)}`}
+                    {` · ${fmtDate(j.created_at)} · ${j.created_by}`}
+                  </span>
+                  <span className="ml-auto flex gap-1">
+                    {j.status === "queued" && (j.run_after || j.night_only) && (
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={act.isPending}
+                        onClick={() => act.mutate({ id: j.id, action: "now" })}>{t("jNow")}</Button>)}
+                    {(j.status === "queued" || j.status === "running") && (
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" disabled={act.isPending}
+                        onClick={() => act.mutate({ id: j.id, action: "cancel" })}>{t("jCancel")}</Button>)}
+                    {(j.status === "failed" || j.status === "canceled") && (
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={act.isPending}
+                        onClick={() => act.mutate({ id: j.id, action: "resume" })}>{t("jResume")}</Button>)}
+                  </span>
                 </div>
                 <div className="text-muted-foreground">
-                  {[["messages", "jMsgs"], ["photos", "jPhotos"], ["questions", "jQuestions"], ["staff_answers", "jAnswers"],
-                    ["clarifications", "jClar"], ["candidates", "jCand"]]
+                  {[["messages", "jMsgs"], ["processed", "jProcessed"], ["photos", "jPhotos"], ["skipped", "jSkipped"], ["questions", "jQuestions"],
+                    ["staff_answers", "jAnswers"], ["clarifications", "jClar"], ["candidates", "jCand"]]
                     .filter(([k]) => j.progress[k as keyof HistoryJob["progress"]] != null)
                     .map(([k, l]) => `${j.progress[k as keyof HistoryJob["progress"]]} ${t(l as never)}`).join(" · ")}
+                  {j.progress.reached && ` · ${t("jReached")}: ${fmtDay(j.progress.reached)}`}
                   {!!j.progress.flood_wait && ` · ${t("jWait", { n: j.progress.flood_wait })}`}
                 </div>
+                {j.progress.paused && j.status === "queued" && <div className="text-warning">{j.progress.paused}</div>}
                 {j.error && <div className="text-destructive">{j.error}</div>}
               </div>
             ))}

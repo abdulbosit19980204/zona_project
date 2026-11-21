@@ -249,7 +249,7 @@ class Handler:
                 return self.on_info(msg, group, user, text, photo, q, mode)
             if parent and parent.kind == Message.QUESTION and parent.user_id != user.pk:
                 reply_other = True  # boshqa odamning savoliga reply — bu odamning o'z suhbati emas
-            elif parent and parent.kind == Message.QUESTION and parent.user_id == user.pk and not self.history:
+            elif parent and parent.kind == Message.QUESTION and parent.user_id == user.pk:
                 root = conversation._root(parent)
                 act = conversation.action(root, text, photo) if root.status not in (Message.IGNORED, Message.CLOSED) else ""
                 if act:  # o'z savoliga reply — o'sha suhbatning davomi
@@ -266,9 +266,10 @@ class Handler:
         merged = self._merge_recent(chat, user, msg, text, photo)
         if merged is not None:  # skrinshot va alohida izoh (bir muallif, bir necha soniya) — bitta savol, bitta javob
             return merged
-        if not self.history and not reply_other and (self.settings.thread_window or 0):
+        if not reply_other and (self.settings.thread_window or 0):
             # bitta mavzu — bitta suhbat: ochiq savolning davomi (lokatsiya, rasmlar, "hali ham shunday") alohida savol emas
-            root = conversation.open_root(self.bot, chat["id"], user, self.settings.thread_window)
+            root = conversation.open_root(self.bot, chat["id"], user, self.settings.thread_window,
+                                           now=self.when(msg) if self.history else None)
             if root is not None:
                 act = conversation.action(root, text, photo)
                 if act:
@@ -342,13 +343,20 @@ class Handler:
     def _album_part(self, q, msg, text):
         """Albom (bir vaqtda yuborilgan bir nechta rasm/video): fayl o'sha savolga biriktiriladi, izoh matnga qo'shiladi.
         Yuklash fon oqimida — asosiy sikl (yangi xabarlarni qabul qilish) hech qachon kutib qolmaydi."""
-        meta = _media_of(msg)
+        meta = _media_of(msg) or (("history", "photo", "", "image/jpeg") if msg["message_id"] in self.photo_bytes else None)
         if meta and not Media.objects.filter(message=q, kind=meta[1]).filter(name=f"album:{msg['message_id']}").exists():
             def fetch():
                 close_old_connections()
                 try:
                     data = self.photo_bytes.get(msg["message_id"]) or self.tg.download(meta[0], max_bytes=(8 if meta[1] == "photo" else 20) * 1024 * 1024)
                     vision.store(data, kind=meta[1], name=f"album:{msg['message_id']}", mime=meta[3], source=q.source, message=q)
+                    if self.history and meta[1] == "photo" and self.settings.ocr_enabled:
+                        # tarix: har bir rasmdagi matn (xato xabari) ham savolga — o'rganishda hech narsa tashlanmaydi
+                        txt = ocr.read_text(data)
+                        if txt:
+                            from django.db.models import Value
+                            from django.db.models.functions import Concat
+                            Message.objects.filter(pk=q.pk).update(ocr_text=Concat("ocr_text", Value("\n---\n" + txt[:3000])))
                 except TelegramError as e:
                     log.warning("album part failed: %s", e)
                 finally:
@@ -490,10 +498,11 @@ class Handler:
         ATTACH — mutaxassis kutilmoqda: faqat saqlanadi (bot qayta "qabul qilindi" yozmaydi);
         REOPEN — xodim javob bergan, odam hali yozyapti: savol yana "javob kutmoqda";
         REANSWER — bot javob bergan, odam davom etdi: butun suhbat bilan bir marta qayta javob, bo'lmasa mutaxassisga."""
-        if act == conversation.APPEND:
+        meaningful = bool(text) and (bool(engine.meaningful(text)) or text.startswith("📍"))
+        if act == conversation.APPEND and not self.history:
             if photo:
                 return self._album_part(root, msg, text)
-            if text and text not in (root.text or ""):
+            if meaningful and text not in (root.text or ""):
                 Message.objects.filter(pk=root.pk).update(text=((root.text or "") + "\n" + text).strip()[:4000])
             return root
         if act == conversation.ASK:
@@ -503,10 +512,17 @@ class Handler:
             defaults={"group": group, "user": user, "text": text[:4000], "photo_file_id": photo or "",
                       "kind": Message.INFO, "question": root, "status": Message.CLOSED, "stage": "thread",
                       "media_group_id": str(msg.get("media_group_id") or ""),
-                      "reply_to_id": (msg.get("reply_to_message") or {}).get("message_id"), "source": "live"})
+                      "reply_to_id": (msg.get("reply_to_message") or {}).get("message_id"),
+                      "source": "history" if self.history else "live"})
         if not created:
             return info
         self._stamp(info, msg)
+        if self.history:
+            # tarix: har bir xabar suhbatda saqlanadi (Telegram vaqti bilan); mazmunli matn savolga ham qo'shiladi —
+            # xodim javobi butun suhbat bo'yicha o'rganiladi
+            Message.objects.filter(pk=info.pk).update(created_at=self.when(msg))
+            if act == conversation.APPEND and meaningful and text not in (root.text or ""):
+                Message.objects.filter(pk=root.pk).update(text=((root.text or "") + "\n" + text).strip()[:4000])
         if photo:
             self._album_part(root, msg, "")  # fayl savolga biriktiriladi (panelda, tasdiqlashda va vazifada ko'rinadi)
         if act == conversation.REOPEN:
@@ -1115,7 +1131,13 @@ def learn(q, answer, staff_name, priority=False, ask_first="", source="staff"):
     Qaytaradi: (yozuv, yangimi). Juda o'xshash nomzod bor bo'lsa — yangisi ochilmaydi, savol ko'rinishi unga qo'shiladi;
     tasdiqlangan javob allaqachon bor bo'lsa (va bot javobi tuzatilmagan bo'lsa) — nomzod kerak emas.
     """
-    question = q.text.strip() or q.ocr_text.strip()[:300]
+    text = q.text.strip()
+    if engine.substantive(text) or not q.ocr_text:
+        question = text or q.ocr_text.strip()[:300]
+    else:
+        # rasmli savol: holat qatori emas, skrinshotdagi asosiy (xato) xabar — savol shu bo'yicha o'rganiladi
+        main = ocr.main_message(q.ocr_text)
+        question = " — ".join(x for x in (text, main) if x) or q.ocr_text.strip()[:300]
     if not question or len(answer.strip()) < 3 or (source != "panel" and engine.not_an_answer(answer)):
         return None, False
     pool = list(Entry.objects.filter(kind=Entry.FAQ, status__in=[Entry.NEW, Entry.REVIEW, Entry.APPROVED]))
@@ -1568,6 +1590,10 @@ def _history_thread(job_id):
     close_old_connections()
     try:
         run_job(job_id)
+    except (OSError, ConnectionError, TimeoutError) as e:  # tarmoq uzildi — vazifa to'xtamaydi, 10 daqiqadan keyin davom
+        log.warning("history job %s network: %s", job_id, e)
+        HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.QUEUED, error=f"Tarmoq: {e}"[:500],
+                                                    run_after=timezone.now() + timezone.timedelta(minutes=10))
     except Exception as e:  # noqa: BLE001
         log.exception("history job %s failed", job_id)
         HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.FAILED, error=f"{type(e).__name__}: {e}"[:500],
@@ -1601,9 +1627,11 @@ def _task_thread():
 
 
 def run_forever(poll=10):
+    from . import history as hist
     from .models import AIJob, SupportTask
     workers = {}
     history = None
+    history_done = 0.0
     ai_worker = None
     task_worker = None
     AIJob.objects.filter(status=AIJob.RUNNING).update(status=AIJob.QUEUED)
@@ -1630,8 +1658,11 @@ def run_forever(poll=10):
                     w = BotWorker(bid, token)  # token|workers
                     w.start()
                     workers[bid] = w
-            if history is None or not history.is_alive():
-                job = HistoryJob.objects.filter(status=HistoryJob.QUEUED).order_by("created_at").first()
+            if history is not None and not history.is_alive():
+                history, history_done = None, time.time()
+            if history is None and time.time() - history_done >= hist.GAP_BETWEEN_JOBS:
+                # bir vaqtda bitta guruh, guruhlar orasida tanaffus; rejalashtirilgan / tungi vazifalar o'z vaqtida
+                job = hist.next_job()
                 if job:
                     history = threading.Thread(target=_history_thread, args=(job.id,), name="support-history", daemon=True)
                     history.start()

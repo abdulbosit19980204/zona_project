@@ -34,6 +34,7 @@ urlpatterns = [
     path("ai/suggestions/", views.suggestions, name="ai-suggestions"),
     path("ai/suggestions/<int:pk>/<str:action>/", views.suggestion_decide, name="ai-suggestion-decide"),
     path("history/", views.history_jobs, name="history"),
+    path("history/<int:pk>/", views.history_job_action, name="history-action"),
     path("mtproto/send-code/", views.mtproto_send_code, name="mtproto-send-code"),
     path("mtproto/sign-in/", views.mtproto_sign_in, name="mtproto-sign-in"),
     path("mtproto/logout/", views.mtproto_logout, name="mtproto-logout"),

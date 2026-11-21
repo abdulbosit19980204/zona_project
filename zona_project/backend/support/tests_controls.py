@@ -118,6 +118,19 @@ class ModeAndToggleTests(ControlsBase):
         self.assertFalse(r.json()["mtproto_connected"])
 
 
+def fake_stream(items, batch=50):
+    """history.stream o'rnida: Telegram'siz — xabarlarni 50 tadan o'rganishga beradi (haqiqiysi kabi)."""
+    def go(session, api_id, api_hash, chat_id, start, end, cursor, photos, hooks):
+        rows = [it for it in items if not cursor or it["message_id"] > cursor]
+        for i in range(0, len(rows), batch):
+            part = rows[i:i + batch]
+            known = hooks["known"]([it["message_id"] for it in part])
+            for it in part:
+                it["known"] = it["message_id"] in known
+            hooks["process"](part, 0)
+    return go
+
+
 class HistoryTests(ControlsBase):
     def setUp(self):
         super().setUp()
@@ -141,7 +154,8 @@ class HistoryTests(ControlsBase):
         s.api_id, s.api_hash_enc, s.mtproto_session_enc = "1", encrypt("h"), encrypt("sess")
         s.save()
         job = HistoryJob.objects.create(group=self.group, days=7)
-        with mock.patch.object(history, "_run", return_value=(self.items(), 1)), \
+        with mock.patch.object(history, "stream", fake_stream(self.items())), \
+             mock.patch("support.history.asyncio.run", side_effect=lambda r: r), \
              mock.patch("support.runner.ocr.read_text", return_value=OCR_PT):
             stats = history.run_job(job.id)
         self.assertEqual(self.tg.sent, [])

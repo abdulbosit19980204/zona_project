@@ -197,13 +197,12 @@ class HistoryLimitTests(Base):
         s.save()
         groups = [Group.objects.create(bot=bot, chat_id=-100 - i, title=f"G{i}") for i in range(4)]
         self.login("admin")
+        # kunlik son chegarasi yo'q (xavfsizlik — tezlik cheklovlari bilan, history.py): hamma guruh navbatga qo'yiladi,
+        # lekin bitta guruh navbatda/ishlayotgan bo'lsa — takror qo'yilmaydi
         self.assertEqual(self.call("post", "support/history/", {"group": groups[0].id}).status_code, 200)
-        HistoryJob.objects.update(status=HistoryJob.DONE)
-        self.assertEqual(self.call("post", "support/history/", {"group": groups[0].id}).status_code, 400)  # 6 soat
-        self.assertEqual(self.call("post", "support/history/", {"group": groups[1].id}).status_code, 200)
-        HistoryJob.objects.update(status=HistoryJob.DONE)
-        self.assertEqual(self.call("post", "support/history/", {"group": groups[2].id}).status_code, 200)
-        HistoryJob.objects.update(status=HistoryJob.DONE)
-        self.assertEqual(self.call("post", "support/history/", {"group": groups[3].id}).status_code, 400)  # sutkada 3 ta
+        self.assertEqual(self.call("post", "support/history/", {"group": groups[0].id}).status_code, 400)  # takror
+        r = self.call("post", "support/history/", {"groups": "all"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(HistoryJob.objects.filter(status=HistoryJob.QUEUED).count(), 4)
         self.assertEqual(self.call("post", "support/mtproto/send-code/", {"phone": "+998901234567"}).status_code, 400)  # rozilik
         _ = timezone
