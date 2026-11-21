@@ -103,5 +103,6 @@ class FastListTests(ControlsBase):
         a = self.call("get", "support/images/").json()
         with mock.patch("support.views._image_types", side_effect=AssertionError("keshdan kelishi kerak")):
             self.assertEqual(self.call("get", "support/images/").json(), a)
-        Media.objects.create(kind=Media.PHOTO, path="new.jpg")
-        self.assertEqual(self.call("get", "support/images/").json()["total"], a["total"] + 1)  # yangi rasm — kesh yangilandi
+        m = Media.objects.create(kind=Media.PHOTO, path="new.jpg")
+        self.call("post", "support/images/ignore/", {"ids": [m.id]})  # admin amali — kesh darhol yangilanadi
+        self.assertEqual(self.call("get", "support/images/").json()["total"], a["total"] + 1)

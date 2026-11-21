@@ -1193,12 +1193,14 @@ def image_types(request):
     agg = photos.aggregate(n=Count("id"), last=Max("id"), lab=Count("label"), labsum=Sum("label_id"),
                            ign=Count("id", filter=Q(ignored=True)))
     s = Settings.load()
-    key = f"support:images:{agg['n']}:{agg['last']}:{agg['lab']}:{agg['labsum']}:{agg['ign']}:{s.image_threshold}"
+    # belgilash / e'tiborsiz qilish — kalit darhol o'zgaradi; yangi kelgan (belgilanmagan) rasmlar — har 25 tada yoki
+    # 5 daqiqada (tarix o'rganilayotganda rasmlar har soniyada qo'shiladi — har so'rovda qayta guruhlamaslik uchun)
+    key = f"support:images:{agg['n'] // 25}:{agg['lab']}:{agg['labsum']}:{agg['ign']}:{s.image_threshold}"
     hit = cache.get(key)
     if hit is not None:
         return Response(hit)
     data = _image_types(s)
-    cache.set(key, data, 600)
+    cache.set(key, data, 300)
     return Response(data)
 
 
