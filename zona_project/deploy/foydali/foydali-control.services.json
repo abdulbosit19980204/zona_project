@@ -92,10 +92,6 @@
       {
         "label": "Zaxiralar",
         "path": "/var/lib/foydali/backups"
-      },
-      {
-        "label": "Loyiha kodi (venv, node_modules bilan)",
-        "path": "/root/zona_project"
       }
     ]
   }
