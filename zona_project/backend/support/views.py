@@ -566,16 +566,27 @@ class MessageViewSet(ZonaViewSet):
                 runner.approve(entry, who)
         return Response({"ok": True, "entry": entry.id if entry else None})
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], permission_classes=[ReadOrEdit])
     def resolve(self, request, pk=None):
         """Xodim paneldan belgilaydi: hal bo'ldi (yes) / hal bo'lmadi (no) / noma'lum ("")."""
         from . import resolution
         value = str(request.data.get("value") or "")
         if value not in ("yes", "no", ""):
             return Response({"detail": "value: yes / no / ''"}, status=400)
-        q = Message.objects.get(pk=pk, kind=Message.QUESTION)
-        resolution.mark(q, value, _actor(request))
-        return Response({"ok": True, "resolution": q.resolution, "status": q.status})
+        q = Message.objects.select_related("bot").get(pk=pk, kind=Message.QUESTION)
+        _admin_resolve([q], value, _actor(request))
+        return Response({"ok": True, "resolution": q.resolution, "status": q.status, "resolved_by": q.resolved_by})
+
+    @action(detail=False, methods=["post"], url_path="resolve-bulk", permission_classes=[ReadOrEdit])
+    def resolve_bulk(self, request):
+        """Admin bir nechta savolni birdan belgilaydi (masalan, "tasdiq kutilmoqda" ro'yxatidagilarni)."""
+        value = str(request.data.get("value") or "")
+        ids = [int(x) for x in (request.data.get("ids") or [])][:500]
+        if value not in ("yes", "no") or not ids:
+            return Response({"detail": "ids va value (yes / no) kerak"}, status=400)
+        qs = list(Message.objects.filter(pk__in=ids, kind=Message.QUESTION).select_related("bot"))
+        _admin_resolve(qs, value, _actor(request))
+        return Response({"ok": True, "done": len(qs)})
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
@@ -910,6 +921,37 @@ def _zones(questions):
         key = zone or ("ProTarget va mobil ilova" if resp == "Pro-target" else "Boshqa")
         out[key] = out.get(key, 0) + 1
     return out
+
+
+def _admin_resolve(questions, value, actor):
+    """Admin qarori — yakuniy. Guruhdagi "hal bo'ldimi?" xabarlari fon oqimida yopiladi (panel kutib qolmaydi)."""
+    import threading
+
+    from django.db import close_old_connections
+
+    from . import resolution
+    for q in questions:
+        resolution.admin_mark(q, value, actor)
+    pending = [q.pk for q in questions if q.confirm_msg_id and value in ("yes", "no")]
+    if not pending:
+        return
+
+    def close():
+        from zona.crypto import decrypt
+
+        from .telegram import Client
+        close_old_connections()
+        try:
+            clients = {}
+            for q in Message.objects.filter(pk__in=pending).select_related("bot"):
+                token = decrypt(q.bot.token_enc) if q.bot_id else ""
+                if not token:
+                    continue
+                tg = clients.setdefault(q.bot_id, Client(token))
+                resolution.close_prompt(tg, q, value)
+        finally:
+            close_old_connections()
+    threading.Thread(target=close, name="support-resolve", daemon=True).start()
 
 
 def _systems(questions):

@@ -417,6 +417,15 @@ class Handler:
         if not created:
             return a
         self._stamp(a, msg)
+        if resolution.is_final(q):
+            # admin yakuniy qaror qilgan: xabar suhbatda saqlanadi, holat o'zgarmaydi; "rahmat" — 👍, qarama-qarshi bo'lsa — adminga
+            if mode == MODE_LIVE:
+                if fb == Message.YES and s.thanks_reaction and q.resolution == Message.YES:
+                    self._bg("_feedback_net", q.pk, fb, msg["chat"]["id"], msg["message_id"], text, True)
+                elif fb != q.resolution:
+                    resolution.notify_unresolved(self.tg, q, self.bot.admin_chat_id,
+                                                 f"savol egasi: {text[:150]} (siz {'hal bo‘ldi' if q.resolution == Message.YES else 'hal bo‘lmadi'} deb yopgansiz)")
+            return a
         resolution.mark(q, fb, "savol egasi")
         if fb == Message.YES and q.answered_by == "bot" and q.feedback == 0:
             Message.objects.filter(pk=q.pk).update(feedback=1)
@@ -889,7 +898,7 @@ class Handler:
                 if q.feedback < 0 and self.bot.admin_chat_id:
                     self._safe_send(self.bot.admin_chat_id, f"👎 Javob yoqmadi:\n❓ {engine.html.escape(q.text[:300])}\n"
                                                             f"💬 {engine.html.escape(q.answer_text[:500])}")
-                if q.resolution != Message.YES:  # 👍 — hal bo'ldi, 👎 — hal bo'lmadi (savol yana xodimga)
+                if q.resolution != Message.YES and not resolution.is_final(q):  # 👍 — hal bo'ldi, 👎 — hal bo'lmadi
                     resolution.mark(q, Message.YES if q.feedback > 0 else Message.NO, "savol egasi (👍/👎)")
             return self.tg.answer_callback(cb["id"], "Rahmat!")
         if kind == "rs":  # "hal bo'ldimi?" tugmalari
@@ -898,6 +907,11 @@ class Handler:
             if not q or (q.user_id and q.user_id != user.id):
                 return self.tg.answer_callback(cb["id"], "Faqat savol egasi belgilaydi")
             value = Message.YES if val == "1" else Message.NO
+            if resolution.is_final(q):  # admin allaqachon yopgan — qaror o'zgarmaydi
+                resolution.close_prompt(self.tg, q, q.resolution)
+                if value == Message.NO and q.resolution == Message.YES:
+                    resolution.notify_unresolved(self.tg, q, self.bot.admin_chat_id, "savol egasi: hal bo'lmadi (siz yopgansiz)")
+                return self.tg.answer_callback(cb["id"], "Rahmat! Mutaxassis allaqachon belgilagan.")
             resolution.mark(q, value, "savol egasi")
             resolution.close_prompt(self.tg, q, value)
             if value == Message.NO:

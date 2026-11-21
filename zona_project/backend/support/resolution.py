@@ -71,6 +71,22 @@ def target(bot, chat_id, user, reply_to, kind):
             .exclude(resolution=YES).exclude(stage="dup").order_by("-created_at").first())
 
 
+ADMIN = "panel: "  # resolved_by shu bilan boshlansa — admin/xodim paneldan belgilagan: YAKUNIY qaror
+
+
+def is_final(q):
+    """Admin paneldan belgilagan — savol egasining keyingi tugmasi/xabari holatni o'zgartirmaydi."""
+    return (q.resolved_by or "").startswith(ADMIN) and q.resolution in (YES, NO)
+
+
+def admin_mark(q, value, actor, tg=None):
+    """Admin qarori (savol egasining javobini kutmasdan): holat yoziladi, guruhdagi "hal bo'ldimi?" xabari yopiladi."""
+    mark(q, value, ADMIN + (actor or "admin"))
+    if value in (YES, NO) and tg is not None and q.confirm_msg_id:
+        close_prompt(tg, q, value)
+    return q
+
+
 def mark(q, value, by):
     """Holatni yozish. "Hal bo'lmadi" — javob berilgan savol yana xodim kutayotganlar qatoriga qaytadi."""
     now = timezone.now()

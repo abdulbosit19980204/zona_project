@@ -61,6 +61,9 @@ export function SupportInbox() {
   const botClosed = ["template", "faq", "rule", "ai", "image"].reduce((n, k) => n + (s?.by_stage[k] ?? 0), 0);
   const current = useMemo(() => shown?.find((m) => m.id === selected) ?? null, [shown, selected]);
   const queue = (s?.entries.new ?? 0) + (s?.entries.review ?? 0) + (s?.pending_edits ?? 0);
+  const can = useCan();
+  const bulk = useSupportMutation((v: { ids: number[]; value: "yes" | "no" }) => supportApi.resolveBulk(v.ids, v.value),
+    (r) => t("resBulkDone", { n: r.done }));
 
   return (
     <SupportShell title={t("inboxTitle")} description={t("inboxDesc2")} fill>
@@ -96,6 +99,19 @@ export function SupportInbox() {
               { value: "yes", label: t("r_yes"), icon: CircleCheck },
               { value: "no", label: t("r_no"), icon: CircleX },
             ]} />
+            {can.edit && (res === "asked" || res === "open") && !!shown?.length && (
+              <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/50 px-2 py-1.5 text-xs">
+                <span className="text-muted-foreground">{t("bulkShown", { n: shown.length })}</span>
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-success" disabled={bulk.isPending}
+                  onClick={() => window.confirm(t("bulkConfirm", { n: shown.length, v: t("r_yes") })) && bulk.mutate({ ids: shown.map((m) => m.id), value: "yes" })}>
+                  <CircleCheck className="size-3.5" />{t("markYes")}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" disabled={bulk.isPending}
+                  onClick={() => window.confirm(t("bulkConfirm", { n: shown.length, v: t("r_no") })) && bulk.mutate({ ids: shown.map((m) => m.id), value: "no" })}>
+                  <CircleX className="size-3.5" />{t("markNo")}
+                </Button>
+              </div>
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {list.isLoading && <div className="grid gap-2 p-3">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16" />)}</div>}
@@ -197,7 +213,7 @@ function Details({ m, t }: { m: SupportMessage; t: ST }) {
         {m.problem && row(t("dProblem"), m.problem)}
         {row(t("dResolution"), <span className="inline-flex flex-wrap items-center gap-1">
           <ResolutionMark r={m.resolution} t={t} label />
-          {m.resolved_at && <span className="text-xs text-muted-foreground">· {fmtDate(m.resolved_at)}{m.resolved_by ? ` · ${m.resolved_by}` : ""}</span>}
+          {m.resolved_at && <span className="text-xs text-muted-foreground">· {fmtDate(m.resolved_at)}{m.resolved_by ? ` · ${m.resolved_by.startsWith("panel: ") ? `${t("byAdmin")}: ${m.resolved_by.slice(7)}` : m.resolved_by}` : ""}</span>}
         </span>)}
         {row(t("dSystem"), <SystemLabel m={m} t={t} />)}
         {row(t("dGroup"), m.group_title)}

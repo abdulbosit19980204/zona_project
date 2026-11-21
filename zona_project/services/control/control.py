@@ -430,7 +430,7 @@ button{margin-top:12px;width:100%;padding:10px;border:0;border-radius:10px;backg
 <input type="password" name="password" placeholder="Parol" autofocus required>__ERR__<button type="submit">Kirish</button></form></body></html>"""
 
 
-def make_handler(sup: Supervisor, auth: Auth):
+def make_handler(sup: Supervisor, auth: Auth, res: Any = None):
     page = (HERE / "page.html").read_text("utf-8")
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -492,6 +492,9 @@ def make_handler(sup: Supervisor, auth: Auth):
                 rest = route[i + 1:]
                 if rest == ["status"]:
                     return self._json(200, sup.status())
+                if rest == ["resources"] and res is not None:
+                    rng = parse_qs(urlsplit(self.path).query).get("range", ["24h"])[0]
+                    return self._json(200, res.snapshot("30d" if rng == "30d" else "24h"))
                 if len(rest) == 3 and rest[0] == "services" and rest[2] == "logs" and rest[1] in sup.by_name:
                     n = int(parse_qs(urlsplit(self.path).query).get("n", ["300"])[0])
                     return self._json(200, {"lines": sup.logs(sup.by_name[rest[1]], min(n, LOG_LINES))})
@@ -547,9 +550,12 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--no-autostart", action="store_true", help="servislarni avtomatik ishga tushirmaslik")
     args = ap.parse_args(argv)
 
-    sup = Supervisor(load_config(Path(args.config)))
+    config = load_config(Path(args.config))
+    sup = Supervisor(config)
     auth = Auth(Path(args.data))
-    server = http.server.ThreadingHTTPServer((args.host, args.port), make_handler(sup, auth))
+    from resources import Resources  # shu papkadagi modul (standart kutubxona)
+    res = Resources(config, sup.services, Path(args.data))
+    server = http.server.ThreadingHTTPServer((args.host, args.port), make_handler(sup, auth, res))
     url = f"http://{args.host}:{args.port}/"
     print("=" * 64)
     print(f"  Servislar boshqaruv markazi: {url}   (rejim: {sup.mode})")
@@ -559,6 +565,7 @@ def main(argv: list[str] | None = None) -> None:
     print("=" * 64, flush=True)
 
     threading.Thread(target=sup.loop, daemon=True).start()
+    threading.Thread(target=res.loop, args=(sup.stop_event,), daemon=True).start()  # server resurslari
     if not args.no_autostart and sup.mode == "process":
         threading.Thread(target=lambda: [sup.start(s) for s in sup.services if s.autostart], daemon=True).start()
 

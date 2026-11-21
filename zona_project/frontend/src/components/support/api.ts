@@ -238,6 +238,7 @@ export const supportApi = {
     post<{ ok: boolean; entry: number | null }>(`messages/${id}/answer/`, { text, save, approve }),
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),
   resolve: (id: number, value: Resolution) => post<{ ok: boolean }>(`messages/${id}/resolve/`, { value }),
+  resolveBulk: (ids: number[], value: "yes" | "no") => post<{ ok: boolean; done: number }>("messages/resolve-bulk/", { ids, value }),
   setLabel: (id: number, body: { app?: SysApp; origin?: SysOrigin; category?: SysCategory; solution?: string; train?: boolean | null }) =>
     post<Record<string, unknown>>(`messages/${id}/label/`, body),
   trainingStats: () => get<{ questions: number; labeled_ai: number; labeled_rule: number; train: number; kb_entries: number }>("training/export/?stats=1"),

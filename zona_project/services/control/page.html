@@ -48,6 +48,26 @@ dialog::backdrop{background:#0008}
 .dh{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--bd)}
 pre{margin:0;height:calc(100% - 58px);overflow:auto;padding:12px 16px;background:var(--code);color:var(--codefg);font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}
 .toast{position:fixed;bottom:16px;right:16px;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;box-shadow:0 6px 24px #0003;display:none}
+.res{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:12px}
+.res h2{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.seg{display:inline-flex;border:1px solid var(--bd);border-radius:9px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:4px 10px;font-size:12px}
+.seg button.on{background:var(--acc);color:#fff}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.chart{position:relative}
+.chart .t{font-size:12px;color:var(--mut);display:flex;justify-content:space-between}
+.chart svg{width:100%;height:110px;display:block}
+.chart .tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 8px;font-size:12px;display:none;white-space:nowrap;box-shadow:0 4px 14px #0002}
+table.rt{width:100%;border-collapse:collapse;font-size:13px}
+.rt th{text-align:left;font-weight:500;color:var(--mut);font-size:12px;padding:5px 6px;border-bottom:1px solid var(--bd)}
+.rt td{padding:5px 6px;border-bottom:1px solid var(--bd);vertical-align:middle}
+.rt td.n{text-align:right;font-family:ui-monospace,monospace;white-space:nowrap}
+.bar{height:6px;border-radius:3px;background:var(--chip);min-width:60px}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--acc)}
+.note{padding:6px 10px;border-radius:9px;margin:4px 0;font-size:13px;background:var(--chip);border-left:3px solid var(--acc)}
+.note.bad{border-left-color:var(--bad)}.note.warn{border-left-color:var(--warn)}.note.ok{border-left-color:var(--ok)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.wrap{overflow-x:auto}
 @media (max-width:420px){.grid{grid-template-columns:1fr}header{padding:12px 16px}main{padding:16px}}
 </style>
 </head>
@@ -65,6 +85,9 @@ pre{margin:0;height:calc(100% - 58px);overflow:auto;padding:12px 16px;background
 </header>
 <main>
   <div class="sum" id="sum"></div>
+  <div class="grp">Server resurslari</div>
+  <div id="resources"><div class="res sub">Yuklanmoqda…</div></div>
+  <div class="grp">Servislar</div>
   <div id="groups"></div>
   <div class="grp">So'nggi hodisalar</div>
   <div class="events" id="events"></div>
@@ -129,6 +152,84 @@ async function loadLogs(){ if(!current) return; const r = await api(`api/service
 function openLogs(name, label){ current = name; $("dlgTitle").textContent = `${label} — loglar`; $("dlg").showModal(); loadLogs();
   clearInterval(logTimer); logTimer = setInterval(() => $("dlg").open ? loadLogs() : clearInterval(logTimer), 2000); }
 refresh(); setInterval(refresh, 3000);
+
+// ------------------------------------------------------------ server resurslari
+let resRange = "24h", resData = null;
+const GB = 1024 ** 3, MB = 1024 ** 2;
+function bytes(n){ if(n==null) return "—"; if(n>=GB) return (n/GB).toFixed(n>=10*GB?0:1)+" GB"; if(n>=MB) return Math.round(n/MB)+" MB"; return Math.round(n/1024)+" KB"; }
+function pc(v){ return v==null ? "—" : Math.round(v) + "%"; }
+const FMT = {cpu: pc, mem: bytes, disk: bytes, load: (v) => v==null ? "—" : v.toFixed(2)};
+function line(title, pts, key, max){
+  const vals = pts.map(p => p[key]).filter(v => v != null);
+  if (vals.length < 2) return '<div class="chart"><div class="t"><span>' + title + '</span></div><div class="sub" style="height:110px;display:grid;place-items:center">Maʼlumot yigʻilmoqda…</div></div>';
+  const W = 600, H = 110, hi = max || (Math.max(...vals) * 1.15) || 1;
+  const t0 = pts[0].t, t1 = pts[pts.length - 1].t || t0 + 1;
+  const X = t => ((t - t0) / Math.max(1, t1 - t0)) * W, Y = v => H - 4 - (v / hi) * (H - 10);
+  let d = "", pen = false;
+  for (const p of pts) { if (p[key] == null) { pen = false; continue; } d += (pen ? "L" : "M") + X(p.t).toFixed(1) + "," + Y(p[key]).toFixed(1); pen = true; }
+  const last = vals[vals.length - 1];
+  const grid = [0.5, 1].map(f => '<line x1="0" x2="' + W + '" y1="' + Y(hi * f) + '" y2="' + Y(hi * f) + '" stroke="var(--bd)" stroke-width="1" vector-effect="non-scaling-stroke"/>').join("");
+  return '<div class="chart" data-key="' + key + '"><div class="t"><span>' + title + '</span><b>' + FMT[key](last) + '</b></div>'
+    + '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' + title + ': hozir ' + FMT[key](last) + '"'
+    + ' onmousemove="hover(event,this)" onmouseleave="unhover(this)">' + grid
+    + '<path d="' + d + '" fill="none" stroke="var(--acc)" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+    + '<line class="cx" x1="0" x2="0" y1="0" y2="' + H + '" stroke="var(--mut)" stroke-width="1" vector-effect="non-scaling-stroke" style="display:none"/></svg>'
+    + '<div class="tip"></div></div>';
+}
+function hover(ev, svg){
+  const pts = resData.series, key = svg.parentNode.dataset.key, r = svg.getBoundingClientRect();
+  const f = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+  const t = t0 + f * (t1 - t0);
+  let best = pts[0];
+  for (const p of pts) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+  const tip = svg.parentNode.querySelector(".tip"), cx = svg.querySelector(".cx");
+  cx.setAttribute("x1", f * 600); cx.setAttribute("x2", f * 600); cx.style.display = "";
+  tip.innerHTML = new Date(best.t * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}) + " · <b>" + FMT[key](best[key]) + "</b>";
+  tip.style.display = "block"; tip.style.left = Math.min(r.width - 160, Math.max(0, ev.clientX - r.left + 8)) + "px"; tip.style.top = "22px";
+}
+function unhover(svg){ svg.parentNode.querySelector(".tip").style.display = "none"; svg.querySelector(".cx").style.display = "none"; }
+function setRange(r){ resRange = r; loadRes(); }
+function row(cells){ return "<tr>" + cells.join("") + "</tr>"; }
+function renderRes(d){
+  resData = d;
+  const c = d.current || {}, m = c.mem || {}, k = c.disk || {}, f = d.forecast || {};
+  if (!d.available && !k.total) { $("resources").innerHTML = '<div class="res sub">Resurslar faqat Linux serverda oʻlchanadi.</div>'; return; }
+  const growth = f.disk_growth_day != null ? "kuniga " + (f.disk_growth_day >= 0 ? "+" : "−") + bytes(Math.abs(f.disk_growth_day)) : "oʻsish hisoblanmoqda";
+  const kpi = '<div class="sum">'
+    + '<div class="stat"><b>' + pc(c.cpu) + '</b><span>CPU (' + c.cores + ' yadro) · 24 soat p95: ' + pc(f.cpu_p95_24h) + '</span></div>'
+    + '<div class="stat"><b>' + bytes(m.used) + ' / ' + bytes(m.total) + '</b><span>RAM · 24 soat choʻqqisi: ' + bytes(f.mem_peak_24h) + (m.swap_total ? " · swap " + bytes(m.swap_used) : " · swap yoʻq") + '</span></div>'
+    + '<div class="stat"><b>' + bytes(k.used) + ' / ' + bytes(k.total) + '</b><span>Disk · ' + growth + (f.disk_days_to_90 != null ? " · 90% gacha ~" + f.disk_days_to_90 + " kun" : "") + '</span></div>'
+    + '<div class="stat"><b>' + (c.load ? c.load.map(x => x.toFixed(2)).join(" · ") : "—") + '</b><span>Load (1 / 5 / 15 daq) · yadrolar: ' + c.cores + '</span></div>'
+    + '<div class="stat"><b>' + (c.net ? "↓" + bytes(c.net.rx) + "/s ↑" + bytes(c.net.tx) + "/s" : "—") + '</b><span>Tarmoq</span></div></div>';
+  const pts = d.series || [];
+  const charts = '<div class="res"><h2>Tarix<span class="sp"></span><span class="seg">'
+    + '<button class="' + (resRange === "24h" ? "on" : "") + '" onclick="setRange(\'24h\')">24 soat</button>'
+    + '<button class="' + (resRange === "30d" ? "on" : "") + '" onclick="setRange(\'30d\')">30 kun</button></span></h2>'
+    + '<div class="charts">' + line("CPU, %", pts, "cpu", 100) + line("RAM", pts, "mem", m.total) + line("Disk", pts, "disk", k.total) + line("Load (1 daq)", pts, "load") + '</div></div>';
+  const total = m.total || 1;
+  const groups = '<div class="res"><h2>Loyihalar boʻyicha (hozir)</h2><div class="wrap"><table class="rt">'
+    + row(['<th>Loyiha / guruh</th>', '<th style="text-align:right">RAM</th>', '<th>Ulush</th>', '<th style="text-align:right">CPU</th>'])
+    + (d.groups || []).map(g => row(['<td>' + esc(g.group) + '</td>', '<td class="n">' + bytes(g.mem) + '</td>',
+        '<td><div class="bar"><i style="width:' + Math.min(100, 100 * g.mem / total).toFixed(1) + '%"></i></div></td>',
+        '<td class="n">' + (g.cpu == null ? "—" : pc(g.cpu)) + '</td>'])).join("")
+    + '</table></div><div class="sub" style="margin-top:6px">Ulush — serverning jami RAMʼiga nisbatan; CPU — butun serverga nisbatan (100% = barcha yadrolar).</div></div>';
+  const svc = (c.services || []).slice().sort((a, b) => (b.mem || 0) - (a.mem || 0));
+  const services = '<div class="res"><h2>Servislar</h2><div class="wrap"><table class="rt">'
+    + row(['<th>Servis</th>', '<th>Guruh</th>', '<th style="text-align:right">RAM</th>', '<th style="text-align:right">CPU</th>'])
+    + svc.map(s => row(['<td>' + esc(s.label) + '</td>', '<td class="sub">' + esc(s.group) + '</td>', '<td class="n">' + bytes(s.mem) + '</td>',
+        '<td class="n">' + (s.cpu == null ? "…" : pc(s.cpu)) + '</td>'])).join("") + '</table></div></div>';
+  const sizes = '<div class="res"><h2>Maʼlumotlar hajmi</h2><div class="wrap"><table class="rt">'
+    + ((c.sizes || []).map(x => row(['<td>' + esc(x.label) + '<div class="sub">' + esc(x.path) + '</div></td>', '<td class="n">' + bytes(x.bytes) + '</td>'])).join("")
+       || '<tr><td class="sub">Hisoblanmoqda…</td></tr>') + '</table></div></div>';
+  const notes = '<div class="res"><h2>Rejalashtirish — tavsiyalar</h2>' + (f.notes || []).map(n => '<div class="note ' + n[0] + '">' + esc(n[1]) + '</div>').join("") + '</div>';
+  $("resources").innerHTML = kpi + notes + charts + '<div class="two">' + groups + sizes + '</div>' + services;
+}
+async function loadRes(){
+  try { renderRes(await api("api/resources?range=" + resRange)); }
+  catch (e) { if (e.message !== "auth") $("resources").innerHTML = '<div class="res sub">Resurslar mavjud emas</div>'; }
+}
+loadRes(); setInterval(loadRes, 10000);
+
 </script>
 </body>
 </html>
