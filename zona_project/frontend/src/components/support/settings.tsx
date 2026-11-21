@@ -255,6 +255,9 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {f.confirm_resolution && field(t("t_confirmAfter"), undefined,
             <Input type="number" min={0} value={f.confirm_after} onChange={num("confirm_after")}
               onBlur={() => toggle.mutate({ confirm_after: f.confirm_after })} />)}
+          {field(t("t_threadWindow"), t("t_threadWindowHint"),
+            <Input type="number" min={0} max={240} value={f.thread_window} onChange={num("thread_window")}
+              onBlur={() => toggle.mutate({ thread_window: f.thread_window })} />)}
           {sw("ask_first_prompt", t("t_askFirst"))}
           {sw("contact_lookup", t("t_contacts"), t("t_contactsHint"))}
         </Card>

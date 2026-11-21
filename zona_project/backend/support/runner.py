@@ -17,7 +17,7 @@ from django.utils import timezone
 from zona import conf
 from zona.crypto import decrypt
 
-from . import contacts, engine, ocr, resolution, translit, vision
+from . import contacts, conversation, engine, ocr, resolution, translit, vision
 from .models import (MODE_COLLECT, MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, HistoryJob,
                      Media, Message, Settings, TgUser)
 from .telegram import Client, TelegramError
@@ -211,6 +211,8 @@ class Handler:
             from django.db.models import F as _F
             TgUser.objects.filter(pk=user.pk).update(msg_count=_F("msg_count") + 1, last_msg_at=timezone.now())
         text = (msg.get("text") or msg.get("caption") or "").strip()
+        loc = "" if text else conversation.location_text(msg)  # lokatsiya — suhbatning bir qismi (matn sifatida)
+        text = text or loc
         media = _media_of(msg) or (("history", "photo", "", "image/jpeg") if msg["message_id"] in self.photo_bytes else None)
         photo = media[0] if media else None
         self.media_meta = media
@@ -234,6 +236,7 @@ class Handler:
                     return self.on_feedback(msg, group, user, text, q, fb, mode)
 
         # savol egasining qo'shimcha ma'lumoti: xodimning aniqlashtiruvchi savoliga yoki botning so'roviga javob
+        reply_other = False
         if reply_to:
             parent = Message.objects.filter(bot=self.bot, chat_id=chat["id"], message_id=reply_to).first()
             q = None
@@ -244,15 +247,34 @@ class Handler:
                                            kind=Message.QUESTION).first()
             if q:
                 return self.on_info(msg, group, user, text, photo, q, mode)
+            if parent and parent.kind == Message.QUESTION and parent.user_id != user.pk:
+                reply_other = True  # boshqa odamning savoliga reply — bu odamning o'z suhbati emas
+            elif parent and parent.kind == Message.QUESTION and parent.user_id == user.pk and not self.history:
+                root = conversation._root(parent)
+                act = conversation.action(root, text, photo) if root.status not in (Message.IGNORED, Message.CLOSED) else ""
+                if act:  # o'z savoliga reply — o'sha suhbatning davomi
+                    return self.on_followup(msg, group, user, text, photo, root, act, mode)
 
         mgid = str(msg.get("media_group_id") or "")
         if mgid:
             first = Message.objects.filter(bot=self.bot, chat_id=chat["id"], media_group_id=mgid, kind=Message.QUESTION).first()
             if first:  # albomning keyingi rasmi — o'sha savolga qo'shiladi, alohida javob bo'lmaydi
                 return self._album_part(first, msg, text)
+            info = Message.objects.filter(bot=self.bot, chat_id=chat["id"], media_group_id=mgid, kind=Message.INFO).first()
+            if info and info.question_id:  # suhbat davomidagi albom — qolgan rasmlar ham o'sha savolga
+                return self._album_part(info.question, msg, text)
         merged = self._merge_recent(chat, user, msg, text, photo)
         if merged is not None:  # skrinshot va alohida izoh (bir muallif, bir necha soniya) — bitta savol, bitta javob
             return merged
+        if not self.history and not reply_other and (self.settings.thread_window or 0):
+            # bitta mavzu — bitta suhbat: ochiq savolning davomi (lokatsiya, rasmlar, "hali ham shunday") alohida savol emas
+            root = conversation.open_root(self.bot, chat["id"], user, self.settings.thread_window)
+            if root is not None:
+                act = conversation.action(root, text, photo)
+                if act:
+                    return self.on_followup(msg, group, user, text, photo, root, act, mode)
+        if loc:
+            return None  # suhbatsiz yolg'iz lokatsiya — savol emas
         if not engine.is_question(text, bool(photo)):
             if text and not photo and not self.history:
                 Handler._recent_text[(chat["id"], user.pk)] = (time.time(), text)  # keyingi rasmga izoh bo'lishi mumkin
@@ -309,6 +331,8 @@ class Handler:
             return prev
         if photo and not prev.photo_file_id and not engine.substantive(text):
             if not Message.objects.filter(pk=prev.pk, status=Message.NEW, stage="").update(photo_file_id=photo):
+                if self.settings.thread_window and not (prev.status == Message.ANSWERED and prev.answered_by == "bot"):
+                    return None  # mutaxassis kutilmoqda — rasm suhbat davomi sifatida yoziladi (zanjirda ko'rinadi)
                 self._album_part(prev, msg, text)  # savolga javob berilgan — rasm faqat saqlanadi (ikkinchi javob yo'q)
             elif text:
                 Message.objects.filter(pk=prev.pk).update(text=(prev.text + "\n" + text).strip()[:4000])
@@ -386,23 +410,26 @@ class Handler:
             return a
         self._stamp(a, msg)
         resolution.mark(q, fb, "savol egasi")
-        live = mode == MODE_LIVE
+        if fb == Message.YES and q.answered_by == "bot" and q.feedback == 0:
+            Message.objects.filter(pk=q.pk).update(feedback=1)
+            if q.entry_id:
+                from django.db.models import F as _F
+                Entry.objects.filter(pk=q.entry_id).update(likes=_F("likes") + 1)
+        if mode == MODE_LIVE:  # reaksiya va xabarlar — fon oqimida
+            self._bg("_feedback_net", q.pk, fb, msg["chat"]["id"], msg["message_id"], text, bool(s.thanks_reaction))
+        return a
+
+    def _feedback_net(self, qid, fb, chat_id, message_id, text, react):
+        q = Message.objects.select_related("user", "group").get(pk=qid)
         if fb == Message.YES:
-            if live and s.thanks_reaction and hasattr(self.tg, "react"):
+            if react and hasattr(self.tg, "react"):
                 try:
-                    self.tg.react(msg["chat"]["id"], msg["message_id"], "👍")
+                    self.tg.react(chat_id, message_id, "👍")
                 except Exception as e:  # noqa: BLE001 — guruhda reaksiya taqiqlangan bo'lishi mumkin
                     log.info("reaction failed: %s", e)
-            if q.answered_by == "bot" and q.feedback == 0:
-                Message.objects.filter(pk=q.pk).update(feedback=1)
-                if q.entry_id:
-                    from django.db.models import F as _F
-                    Entry.objects.filter(pk=q.entry_id).update(likes=_F("likes") + 1)
-        elif live:
+        else:
             resolution.notify_unresolved(self.tg, q, self.bot.admin_chat_id, text)
-        if live:
-            resolution.close_prompt(self.tg, q, fb)
-        return a
+        resolution.close_prompt(self.tg, q, fb)
 
     def on_info(self, msg, group, user, text, photo, q, mode):  # noqa: C901
         """Savol egasi so'ralgan ma'lumotni yubordi: zanjirga qo'shiladi; bot o'zi so'ragan bo'lsa — qayta javob beradi."""
@@ -418,6 +445,13 @@ class Handler:
         if self.history:
             info.created_at = self.when(msg)
             Message.objects.filter(pk=info.pk).update(created_at=info.created_at)
+        # rasm yuklash, OCR va qayta javob — fon oqimida (yangi xabarlarni qabul qilish kutib qolmaydi)
+        self._bg("_info_work", info.pk, q.pk, mode, bool(photo))
+        return info
+
+    def _info_work(self, info_id, qid, mode, photo):
+        info = Message.objects.get(pk=info_id)
+        q = Message.objects.select_related("user", "group").get(pk=qid)
         if photo:
             m = self._fetch_media(info)
             if m and m.kind == Media.PHOTO and self.settings.ocr_enabled:
@@ -427,7 +461,100 @@ class Handler:
             extra = "\n".join(x for x in (info.text, info.ocr_text) if x)
             q.text = (q.text + "\n" + extra).strip()[:4000]
             self.process_question(q, mode, skip_ask=True)
+
+    def _bg(self, method, *args):
+        """Og'ir ish (tarmoq, OCR, AI) — worker'da, alohida Handler bilan (holat aralashmasin). Testda/tarixda — darhol."""
+        if self.executor is None:
+            return getattr(self, method)(*args)
+
+        def run():
+            close_old_connections()
+            try:
+                getattr(Handler(self.bot, self.tg), method)(*args)
+            except Exception:  # noqa: BLE001
+                log.exception("%s failed", method)
+            finally:
+                close_old_connections()
+        try:
+            self.executor.submit(run)
+        except RuntimeError:  # pool yopilgan (bot oqimi qayta ishga tushdi) — ish yo'qolmasin
+            run()
+        return None
+
+    # ---------------------------------------------------------------- suhbat: bitta mavzu, bir nechta xabar
+    def on_followup(self, msg, group, user, text, photo, root, act, mode):
+        """Ochiq savolning davomi: alohida savol ochilmaydi, xabar suhbatga (savol zanjiriga) yoziladi.
+
+        APPEND — savol hali ishlanmoqda: matn/rasm o'sha savolga qo'shiladi (bitta javob);
+        ASK — bot ma'lumot so'ragan edi: javob bilan qayta ishlanadi;
+        ATTACH — mutaxassis kutilmoqda: faqat saqlanadi (bot qayta "qabul qilindi" yozmaydi);
+        REOPEN — xodim javob bergan, odam hali yozyapti: savol yana "javob kutmoqda";
+        REANSWER — bot javob bergan, odam davom etdi: butun suhbat bilan bir marta qayta javob, bo'lmasa mutaxassisga."""
+        if act == conversation.APPEND:
+            if photo:
+                return self._album_part(root, msg, text)
+            if text and text not in (root.text or ""):
+                Message.objects.filter(pk=root.pk).update(text=((root.text or "") + "\n" + text).strip()[:4000])
+            return root
+        if act == conversation.ASK:
+            return self.on_info(msg, group, user, text, photo, root, mode)
+        info, created = Message.objects.get_or_create(
+            bot=self.bot, chat_id=msg["chat"]["id"], message_id=msg["message_id"],
+            defaults={"group": group, "user": user, "text": text[:4000], "photo_file_id": photo or "",
+                      "kind": Message.INFO, "question": root, "status": Message.CLOSED, "stage": "thread",
+                      "media_group_id": str(msg.get("media_group_id") or ""),
+                      "reply_to_id": (msg.get("reply_to_message") or {}).get("message_id"), "source": "live"})
+        if not created:
+            return info
+        self._stamp(info, msg)
+        if photo:
+            self._album_part(root, msg, "")  # fayl savolga biriktiriladi (panelda, tasdiqlashda va vazifada ko'rinadi)
+        if act == conversation.REOPEN:
+            Message.objects.filter(pk=root.pk, status=Message.ANSWERED).update(status=Message.ESCALATED)
+        elif act == conversation.REANSWER and mode == MODE_LIVE:
+            self._bg("_reanswer", root.pk, info.pk)
         return info
+
+    def _reanswer(self, root_id, info_id):
+        """Bot javobidan keyin odam davom etdi ("нету его, там только 400"): butun suhbat bilan AI qayta javob beradi.
+        Bir savolga bir marta; AI ishonmasa yoki yana yozilsa — savol mutaxassisga o'tadi."""
+        root = Message.objects.select_related("user", "group").get(pk=root_id)
+        info = Message.objects.get(pk=info_id)
+        settings = self.settings
+        if root.status != Message.ANSWERED or root.answered_by != "bot":
+            return None
+        first = not root.staff_replies.filter(kind=Message.INFO, stage="re").exists()
+        Message.objects.filter(pk=info.pk).update(stage="re" if first else "thread")
+        lang = engine.detect_lang(info.text or root.text)
+        d = None
+        if first:
+            self.tg.typing(root.chat_id)
+            raw = "\n".join(x for x in (root.text, info.text) if x)
+            d = engine.followup(raw, lang, conversation.context(root), asker=_asker(root), previous=root.answer_text)
+        if d is not None and not d.needs_human and d.text and engine.allowed(d, settings):
+            body = engine.to_html(self._script(root, d.text), settings.signature)
+            buttons = ([[{"text": "👍", "callback_data": f"fb:{root.id}:1"}, {"text": "👎", "callback_data": f"fb:{root.id}:-1"}]]
+                       if settings.feedback_buttons else None)
+            sent = self._safe_send(root.chat_id, body, reply_to=info.message_id, buttons=buttons)
+            if sent:
+                Message.objects.filter(pk=root.pk).update(answer_text=d.text, answered_at=timezone.now(), stage="ai",
+                                                          bot_reply_id=sent.get("message_id"), confidence=d.confidence)
+            return sent
+        # bot yordam bera olmadi — mutaxassis butun suhbatni ko'radi
+        Message.objects.filter(pk=root.pk).update(status=Message.ESCALATED)
+        root.status = Message.ESCALATED
+        if settings.escalation_ack:
+            ack = ("Понятно — специалист посмотрит 🙌" if lang == "ru" else "Tushunarli — mutaxassis ko'rib chiqadi 🙌")
+            self._safe_send(root.chat_id, engine.html.escape(ack), reply_to=info.message_id)
+        d = d or engine.Decision("", None, 0, "", True, [])
+        if settings.drafts_to_admin:
+            self._send_draft(root, d, escalated=True)
+        try:
+            from . import tasks
+            tasks.maybe_create(root, d, self.tg)
+        except Exception:  # noqa: BLE001
+            log.exception("followup task failed")
+        return None
 
     def process_question(self, q, mode, skip_ask=False):
         t0 = time.monotonic()
@@ -655,12 +782,22 @@ class Handler:
         Aniqlashtiruvchi savol ("STIR yuboring", "skrin tashlang?") javob deb olinmaydi — zanjirda saqlanadi va
         keyin "javobdan oldin so'raladigan ma'lumot" sifatida o'rganiladi. Yakuniy javob — bilim bazasiga nomzod.
         """
-        if not text or not reply_to:
+        if not text:
             return None
-        parent = Message.objects.filter(bot=self.bot, chat_id=msg["chat"]["id"], message_id=reply_to).first()
-        if not parent:
-            return None
-        q = parent if parent.kind == Message.QUESTION else parent.question
+        loose = False
+        if not reply_to:
+            # reply qilmasdan yozdi: guruhda javob kutayotgan yagona odam bo'lsa — o'sha savolga (o'rganilmaydi)
+            if self.history or len(text.strip()) < 8:
+                return None
+            q = conversation.staff_target(self.bot, msg["chat"]["id"], text, self.settings.thread_window)
+            if q is None:
+                return None
+            loose = True
+        else:
+            parent = Message.objects.filter(bot=self.bot, chat_id=msg["chat"]["id"], message_id=reply_to).first()
+            if not parent:
+                return None
+            q = parent if parent.kind == Message.QUESTION else parent.question
         if not q or q.kind != Message.QUESTION:
             return None
         settings = self.settings
@@ -686,6 +823,8 @@ class Handler:
         if q.status != Message.ANSWERED or corrected:
             q.status, q.stage, q.answered_by, q.answered_at = Message.ANSWERED, "staff", staff_name, when
             q.save()
+        if loose:
+            return a  # bog'lanish taxminiy — bilim bazasiga o'rganilmaydi
         if settings.learn_from_staff and corrected and q.entry_id and not self.history and len(text.strip()) >= 15:
             from . import selflearn
             if selflearn.on_correction(q, user, text):  # AI yozuvni xodim tuzatishi bilan yaxshilaydi
@@ -1313,6 +1452,24 @@ class BotWorker(threading.Thread):
         self.bot_id, self.token = bot_id, token
         self.stop_event = threading.Event()
         self.last_warm = time.time() - 540  # ishga tushgandan ~1 daqiqada birinchi oldindan yuklash
+        self.periodic = None
+        self.last_confirm = 0.0
+
+    def _periodic(self, client):
+        """PRBC javob bermagan /vazifa xabarlari -> mas'ulga ko'rsatma; daqiqada bir — "hal bo'ldimi?" so'rovlari."""
+        close_old_connections()
+        try:
+            from . import tasks as _tasks
+            _tasks.check_unanswered(client)
+        except Exception:  # noqa: BLE001
+            log.exception("task check failed")
+        if time.time() - self.last_confirm > 60:
+            self.last_confirm = time.time()
+            try:
+                resolution.ask_pending(client)
+            except Exception:  # noqa: BLE001
+                log.exception("resolution ask failed")
+        close_old_connections()
 
     @staticmethod
     def _warm(bot, client):
@@ -1376,17 +1533,10 @@ class BotWorker(threading.Thread):
                     handler.bot.last_update_id = upd["update_id"]
                 Bot.objects.filter(pk=bot.pk).update(last_ok_at=timezone.now(), last_error="")
                 backoff = 5
-                try:  # PRBC javob bermagan /vazifa xabarlari -> mas'ulga ko'rsatma
-                    from . import tasks as _tasks
-                    _tasks.check_unanswered(client)
-                except Exception:  # noqa: BLE001
-                    log.exception("task check failed")
-                if time.time() - getattr(self, "last_confirm", 0) > 60:
-                    self.last_confirm = time.time()
-                    try:  # xodim javobi / vazifadan keyin savol egasidan "hal bo'ldimi?"
-                        resolution.ask_pending(client)
-                    except Exception:  # noqa: BLE001
-                        log.exception("resolution ask failed")
+                # davriy ishlar alohida oqimda: ularning tarmoq so'rovlari yangi xabarlarni qabul qilishni to'xtatmaydi
+                if self.periodic is None or not self.periodic.is_alive():
+                    self.periodic = threading.Thread(target=self._periodic, args=(client,), name="support-periodic", daemon=True)
+                    self.periodic.start()
                 if time.time() - self.last_warm > 600:
                     self.last_warm = time.time()
                     threading.Thread(target=self._warm, args=(bot, client), name="support-warm", daemon=True).start()
@@ -1400,6 +1550,10 @@ class BotWorker(threading.Thread):
                     msg = "Token noto'g'ri (401). Panelda yangilang."
                 Bot.objects.filter(pk=self.bot_id).update(last_error=msg[:500])
                 log.warning("bot %s: %s", self.bot_id, msg)
+                if not e.code and not e.retry_after:
+                    # tarmoq uzilishi (javob kelmadi) — darhol qayta ulanamiz: kutsak, guruhdagi savollar kechikadi
+                    self.stop_event.wait(0.5)
+                    continue
                 self.stop_event.wait(e.retry_after or backoff)
                 backoff = min(backoff * 2, 120)
             except Exception as e:  # noqa: BLE001

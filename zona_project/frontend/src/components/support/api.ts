@@ -74,7 +74,7 @@ export interface SupportSettings {
   task_mode: "command" | "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
   self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all"; answer_variety: boolean; progress_messages: boolean;
   answer_policy: "standard" | "kb" | "all";
-  confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean;
+  confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number;
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;

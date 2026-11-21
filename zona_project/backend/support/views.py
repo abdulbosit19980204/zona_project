@@ -44,7 +44,8 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "tasks_enabled", "task_bot", "task_default_assignee", "task_departments", "task_members",
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
-                   "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction"]
+                   "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction",
+                   "thread_window"]
 
 
 def _settings_payload(s):

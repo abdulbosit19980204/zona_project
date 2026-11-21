@@ -28,7 +28,9 @@ EDIT_GAP = 0.45  # bir xabarni tahrirlash oralig'i (animatsiya)
 
 
 class Client:
-    def __init__(self, token, base=API, timeout=35):
+    # Tarmoq ba'zan "osilib" qoladi (so'rov ketgan, javob kelmaydi): uzoq kutish o'rniga qisqa timeout va tez qayta urinish.
+    # Odatda Telegram <1 s da javob beradi; 12 s — ulanish o'lgan degani.
+    def __init__(self, token, base=API, timeout=12):
         self.token = token
         self.base = base.rstrip("/")
         self.timeout = timeout
@@ -53,7 +55,7 @@ class Client:
                     body = {"ok": False, "error_code": e.code, "description": str(e)}
             except (urllib.error.URLError, TimeoutError, OSError) as e:
                 if attempt < retries:
-                    time.sleep(2 * (attempt + 1))
+                    time.sleep(0.3 * (attempt + 1))
                     continue
                 raise TelegramError(f"Tarmoq xatosi: {e}") from e
             if body.get("ok"):
@@ -80,11 +82,12 @@ class Client:
     def get_me(self):
         return self.call("getMe", timeout=15)
 
-    def get_updates(self, offset, timeout=25):
+    def get_updates(self, offset, timeout=8):
+        # qisqa long-poll: ulanish osilib qolsa 13 s da sezamiz (oldin 35 s + 5..120 s kutish — xabarlar kechikardi)
         return self.call("getUpdates", {"offset": offset, "timeout": timeout,
                                         "allowed_updates": ["message", "edited_message", "callback_query",
                                                             "my_chat_member"]},
-                         timeout=timeout + 10, retries=0)
+                         timeout=timeout + 5, retries=0)
 
     def send(self, chat_id, text, reply_to=None, buttons=None, html=True, timeout=None, retries=2):
         """timeout/retries — oraliq xabar uchun qisqa (tarmoq sekin bo'lsa javobni kutib qolmaydi)."""
@@ -235,7 +238,7 @@ class Client:
     def download(self, file_id, max_bytes=8 * 1024 * 1024):
         """Faylni yuklash. Hajm getFile'dan ma'lum — aynan shuncha bayt o'qiladi (server ulanishni yopishini kutmaymiz:
         aks holda Telegram ba'zan 60 soniya ushlab turadi). Qotib qolsa — qisqa kutishdan keyin qayta urinadi."""
-        info = self.call("getFile", {"file_id": file_id})
+        info = self.call("getFile", {"file_id": file_id}, timeout=8, retries=3)
         size = int(info.get("file_size") or 0)
         if size > max_bytes:
             raise TelegramError("Fayl juda katta")
@@ -244,7 +247,7 @@ class Client:
         for attempt in range(3):
             try:
                 req = urllib.request.Request(url, headers={"Connection": "close"})
-                with urllib.request.urlopen(req, timeout=12) as r:
+                with urllib.request.urlopen(req, timeout=10) as r:
                     if size:
                         buf = bytearray()
                         while len(buf) < size:
@@ -258,5 +261,5 @@ class Client:
                     return r.read(max_bytes + 1)[:max_bytes]
             except (urllib.error.URLError, TimeoutError, OSError) as e:
                 last = e
-                time.sleep(0.5 * (attempt + 1))
+                time.sleep(0.3 * (attempt + 1))
         raise TelegramError(f"Faylni yuklab bo'lmadi: {last}")

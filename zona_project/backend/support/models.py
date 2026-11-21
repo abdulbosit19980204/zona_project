@@ -80,6 +80,9 @@ class Settings(models.Model):
     confirm_after = models.PositiveIntegerField("Tasdiq so'rash: xodim javobidan keyin (daqiqa)", default=10, db_default=10)
     thanks_reaction = models.BooleanField("\"Rahmat\", \"готово\" yozilsa — 👍 reaksiya va savol yopiladi", default=True,
                                           db_default=True)
+    # --- suhbat: bir odamning ketma-ket xabarlari (matn, lokatsiya, rasmlar) — bitta mavzu, bitta savol ---
+    thread_window = models.PositiveIntegerField("Bitta suhbat: oxirgi xabardan keyin (daqiqa); 0 — o'chiq", default=15,
+                                                db_default=15)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

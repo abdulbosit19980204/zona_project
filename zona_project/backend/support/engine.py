@@ -493,7 +493,7 @@ def people_text():
     return _PEOPLE["text"]
 
 
-def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=(), asker=""):
+def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=(), asker="", history=""):
     """AI javobi o'zimizning ma'lumotlarga tayanadi: bilim bazasidagi eng yaqin javoblar, rasmdan tanilgan ekranlar,
     xodimlarning o'xshash savollarga bergan haqiqiy javoblari (misol sifatida) va qoida."""
     from zona import conf
@@ -524,7 +524,12 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
         system += ("\n\nXODIMLARIMIZNING O'XSHASH SAVOLLARGA BERGAN HAQIQIY JAVOBLARI (uslub va mazmun uchun namuna; "
                    "kompaniya amaliyotini shulardan o'rgan):\n" + "\n".join(f"- SAVOL: {q}\n  XODIM JAVOBI: {a}" for q, a in examples))
     tongue = "faqat RUS tilida" if lang == "ru" else "faqat O'ZBEK (lotin) tilida"
-    message = f"JAVOB TILI: {tongue} (savol shu tilda).\n\nSAVOL:\n{raw[:2000]}"
+    message = f"JAVOB TILI: {tongue} (savol shu tilda)."
+    if history:
+        # bitta mavzu bo'yicha butun suhbat: odam bir nechta xabarda yozgan (matn, rasm, lokatsiya, aniqlashtirish)
+        message += ("\n\nSUHBAT (shu odam bilan shu mavzu bo'yicha, eskidan yangiga). Butun suhbatni tushunib, "
+                    "OXIRGI xabarga javob ber; oldin aytilganni takrorlama:\n" + history[-3000:])
+    message += f"\n\nSAVOL:\n{raw[:2000]}"
     if ocr:
         message += f"\n\nRASMDAGI MATN (OCR, xato o'qilgan bo'lishi mumkin):\n{ocr[:1500]}"
     try:
@@ -538,7 +543,7 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
 
 # ------------------------------------------------------------------ yig'ish
 def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False,  # noqa: C901
-           asker=""):
+           asker="", history=""):
     """Savol -> Decision. allow_unapproved: soya rejimida ko'rib chiqilayotgan shablonlar ham.
 
     image: (yozuv, ishonch) yoki images: [(yozuv, ishonch, rasm_tartibi), ...] — rasm turi o'rgatilgan namunadan tanilgan.
@@ -617,7 +622,7 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
     if ai_first:
         # AI asosiy: javobni bilim bazasidagi eng yaqin javoblar va qoidaga tayanib tuzadi (Claude; zaxira — Gemini)
         ai = ai_answer(qtext, lang, approved_ctx, task, settings, ocr=ocr if strong_text else "",
-                       image_entries=[d[0] for d in distinct], asker=asker)
+                       image_entries=[d[0] for d in distinct], asker=asker, history=history)
         if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
             top = e if faq_ok else None
             return Decision("ai", top, ai["confidence"], ai["text"], False, own(top) if top else resp, note=ai["reason"])
@@ -627,13 +632,34 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
         return Decision("rule", None, rule_conf, rule_text(task, lang), False, resp, note=f"task:{task.id}")
     if ai is None:
         ai = ai_answer(qtext, lang, approved_ctx, task, settings, ocr=ocr if strong_text else "",
-                       image_entries=[d[0] for d in distinct], asker=asker)
+                       image_entries=[d[0] for d in distinct], asker=asker, history=history)
         if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
             return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])
     d = Decision("", None, max(score, rule_conf), "", True, resp)
     if ai:
         d.note = f"AI ishonchi past ({ai['confidence']}%): {ai['reason']}"
         d.text = ai["text"]  # admin uchun qoralama sifatida ko'rsatiladi
+    return d
+
+
+def followup(raw, lang, history, asker="", previous=""):
+    """Bitta mavzu bo'yicha davom xabari (bot javob bergan, odam yana yozdi): shablon/baza o'sha javobni takrorlaydi —
+    shuning uchun to'g'ridan-to'g'ri AI, butun suhbat bilan. AI ishonmasa — odamga (needs_human)."""
+    settings = Settings.load()
+    faqs = [e for e in Entry.objects.filter(status=Entry.APPROVED)
+            if e.kind == Entry.FAQ or (e.kind == Entry.TEMPLATE and e.questions)]
+    raw_t = list(dict.fromkeys(toks(raw)))[:MAX_TOKENS]
+    index = _entry_tokens(faqs)
+    ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
+    task, _rc, resp = rule_answer(raw.strip()[:200], lang) if raw.strip() else (None, 0, [])
+    ai = ai_answer(raw, lang, ranked, task, settings, asker=asker, history=history)
+    if (ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence
+            and " ".join(ai["text"].split()) != " ".join((previous or "").split())):
+        return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])
+    d = Decision("", None, 0, "", True, resp)
+    if ai:
+        d.note = f"AI ishonchi past ({ai['confidence']}%): {ai['reason']}"
+        d.text = ai["text"]
     return d
 
 
