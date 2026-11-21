@@ -371,6 +371,8 @@ class Auth:
         self.secret = stored.get("secret") or secrets.token_hex(32)
         self.generated_password: str | None = None
         env_pw = os.environ.get("CONTROL_PASSWORD", "").strip()
+        self.plain = env_pw or None  # serverda parol env faylida — "parolni unutdim" uni egasining Telegram'iga yuboradi
+        self.codes: dict[str, float] = {}  # bir martalik kirish kodlari (parol faqat xesh ko'rinishida bo'lsa): xesh -> muddat
         if env_pw:
             self.salt, self.hash = self._hash(env_pw)
         elif stored.get("hash"):
@@ -395,11 +397,22 @@ class Auth:
         window = [t for t in self.fails.get(ip, []) if now() - t < 900]
         if len(window) >= 10:
             return "Juda ko'p urinish. 15 daqiqadan keyin qayta urinib ko'ring."
-        if hmac.compare_digest(self._hash(password, self.salt)[1], self.hash):
+        if hmac.compare_digest(self._hash(password, self.salt)[1], self.hash) or self._use_code(password):
             self.fails.pop(ip, None)
             return None
         self.fails[ip] = [*window, now()]
         return "Parol noto'g'ri."
+
+    def new_code(self, minutes: int = 10) -> str:
+        code = f"{secrets.randbelow(10 ** 6):06d}"
+        self.codes = {k: v for k, v in self.codes.items() if v > now()}
+        self.codes[hashlib.sha256(code.encode()).hexdigest()] = now() + minutes * 60
+        return code
+
+    def _use_code(self, code: str) -> bool:
+        key = hashlib.sha256(code.strip().encode()).hexdigest()
+        exp = self.codes.pop(key, 0)
+        return exp > now()
 
     def make_cookie(self, hours: int = 12) -> str:
         exp = str(int(now()) + hours * 3600)
@@ -425,13 +438,75 @@ body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--
 h1{font-size:18px;margin:0 0 4px}p{color:var(--mut);margin:0 0 18px;font-size:13px}
 input{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:transparent;color:inherit;font:inherit}
 button{margin-top:12px;width:100%;padding:10px;border:0;border-radius:10px;background:var(--acc);color:#fff;font:inherit;cursor:pointer}
-.e{color:#dc2626;margin-top:10px;font-size:13px}</style></head><body><form class="c" method="post" action="login">
+.e{color:#dc2626;margin-top:10px;font-size:13px}.m{color:#16a34a;margin-top:10px;font-size:13px}
+.l{background:none;color:var(--acc);margin-top:8px;padding:6px;font-size:13px}</style></head><body><form class="c" method="post" action="login">
 <h1>Servislar boshqaruv markazi</h1><p>Barcha servislarni ishga tushirish va nazorat qilish.</p>
-<input type="password" name="password" placeholder="Parol" autofocus required>__ERR__<button type="submit">Kirish</button></form></body></html>"""
+<input type="password" name="password" placeholder="Parol yoki Telegram'dagi kod" autofocus required>__ERR__<button type="submit">Kirish</button>
+__REC__</form></body></html>"""
+RECOVER_FORM = ('<button type="submit" formaction="recover" formnovalidate class="l">Parolni unutdim — Telegram\'imga yuborish</button>')
 
 
-def make_handler(sup: Supervisor, auth: Auth, res: Any = None):
+class Recovery:
+    """"Parolni unutdim": parol (yoki bir martalik kod) FAQAT oldindan sozlangan egasining Telegram'iga yuboriladi.
+
+    Sozlash (env): CONTROL_TG_TOKEN — bot tokeni, CONTROL_TG_CHAT_ID — egasining shaxsiy chat id (vergul bilan bir nechta).
+    Qabul qiluvchi sahifadan kiritilmaydi — parolni boshqa birovga yuborib bo'lmaydi. Soatiga ko'pi bilan 3 marta;
+    xabar himoyalangan (forward/nusxa yo'q)."""
+
+    LIMIT, WINDOW = 3, 3600
+
+    def __init__(self, auth: "Auth"):
+        self.auth = auth
+        self.token = os.environ.get("CONTROL_TG_TOKEN", "").strip()
+        self.chats = [c.strip() for c in os.environ.get("CONTROL_TG_CHAT_ID", "").split(",") if c.strip()]
+        self.sent: list[float] = []
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.token and self.chats)
+
+    def _call(self, method: str, params: dict[str, Any]) -> bool:
+        req = urllib.request.Request(f"https://api.telegram.org/bot{self.token}/{method}", data=json.dumps(params).encode(),
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return bool(json.loads(r.read().decode()).get("ok"))
+        except (urllib.error.URLError, OSError, ValueError):
+            return False
+
+    def send(self, ip: str, host: str = "") -> str:
+        """Qaytaradi: foydalanuvchiga ko'rsatiladigan xabar (kimga yuborilgani aytilmaydi)."""
+        if not self.enabled:
+            return "Telegram orqali tiklash sozlanmagan. Server administratoriga murojaat qiling."
+        self.sent = [t for t in self.sent if now() - t < self.WINDOW]
+        if len(self.sent) >= self.LIMIT:
+            return "Soatiga 3 martadan ko'p so'rab bo'lmaydi. Telegram'dagi oldingi xabarni ko'ring."
+        self.sent.append(now())
+        where = f" ({host})" if host else ""
+        when = datetime.now().strftime("%Y-%m-%d %H:%M")
+        if self.auth.plain:
+            body = f"🔐 <b>Servislar markazi{where}</b>\nKirish paroli: <code>{html_escape(self.auth.plain)}</code>"
+        else:
+            body = (f"🔐 <b>Servislar markazi{where}</b>\nBir martalik kirish kodi: <code>{self.auth.new_code()}</code>\n"
+                    "Kod 10 daqiqa amal qiladi — parol maydoniga kiriting.")
+        body += (f"\n\nSo'rov: {when}, IP {html_escape(ip)}.\nSiz so'ramagan bo'lsangiz — parolni almashtiring. "
+                 "O'qib bo'lgach, bu xabarni o'chirib qo'ying.")
+        ok = any([self._call("sendMessage", {"chat_id": c, "text": body, "parse_mode": "HTML", "protect_content": True})
+                  for c in self.chats])
+        return ("Parol Telegram'ingizga yuborildi." if ok else
+                "Telegram'ga yuborib bo'lmadi: botga avval /start yozing yoki keyinroq urinib ko'ring.")
+
+
+def html_escape(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def make_handler(sup: Supervisor, auth: Auth, res: Any = None, rec: "Recovery | None" = None):
     page = (HERE / "page.html").read_text("utf-8")
+
+    def login_page(err: str = "", msg: str = "") -> str:
+        note = (f'<div class="e">{err}</div>' if err else "") + (f'<div class="m">{msg}</div>' if msg else "")
+        return LOGIN_PAGE.replace("__ERR__", note).replace("__REC__", RECOVER_FORM if rec is not None and rec.enabled else "")
 
     class Handler(http.server.BaseHTTPRequestHandler):
         server_version = "zona-control"
@@ -482,7 +557,7 @@ def make_handler(sup: Supervisor, auth: Auth, res: Any = None):
             if tail == "health":
                 return self._json(200, {"ok": True})
             if tail == "login":
-                return self._send(200, LOGIN_PAGE.replace("__ERR__", ""), "text/html; charset=utf-8")
+                return self._send(200, login_page(), "text/html; charset=utf-8")
             if not self._authed():
                 if "api" in route:
                     return self._json(401, {"detail": "Tizimga kiring"})
@@ -511,8 +586,15 @@ def make_handler(sup: Supervisor, auth: Auth, res: Any = None):
                 password = parse_qs(body).get("password", [""])[0]
                 err = auth.check_password(self._ip(), password)
                 if err:
-                    return self._send(401, LOGIN_PAGE.replace("__ERR__", f'<div class="e">{err}</div>'), "text/html; charset=utf-8")
+                    return self._send(401, login_page(err), "text/html; charset=utf-8")
                 return self._send(303, b"", headers={"Location": "./", "Set-Cookie": self._cookie(auth.make_cookie(), 12 * 3600)})
+            if tail == "recover":  # "parolni unutdim" — faqat egasining Telegram'iga
+                if rec is None:
+                    return self._send(404, login_page("Mavjud emas"), "text/html; charset=utf-8")
+                msg = rec.send(self._ip(), self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "")
+                sup.event(f"Parolni tiklash so'raldi (IP {self._ip()}): {msg}")
+                ok = msg.startswith("Parol")
+                return self._send(200, login_page("" if ok else msg, msg if ok else ""), "text/html; charset=utf-8")
             if tail == "logout":
                 return self._send(303, b"", headers={"Location": "login", "Set-Cookie": self._cookie("", 0)})
             if not self._authed():
@@ -555,7 +637,8 @@ def main(argv: list[str] | None = None) -> None:
     auth = Auth(Path(args.data))
     from resources import Resources  # shu papkadagi modul (standart kutubxona)
     res = Resources(config, sup.services, Path(args.data))
-    server = http.server.ThreadingHTTPServer((args.host, args.port), make_handler(sup, auth, res))
+    rec = Recovery(auth)
+    server = http.server.ThreadingHTTPServer((args.host, args.port), make_handler(sup, auth, res, rec))
     url = f"http://{args.host}:{args.port}/"
     print("=" * 64)
     print(f"  Servislar boshqaruv markazi: {url}   (rejim: {sup.mode})")
