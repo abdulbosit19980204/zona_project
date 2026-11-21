@@ -727,9 +727,21 @@ def history_job_action(request, pk):
         HistoryJob.objects.filter(pk=pk).update(status=HistoryJob.CANCELED, finished_at=timezone.now())
     elif action == "now" and j.status == HistoryJob.QUEUED:
         HistoryJob.objects.filter(pk=pk).update(run_after=None, night_only=False)
-    elif action == "resume" and j.status in (HistoryJob.FAILED, HistoryJob.CANCELED):
-        HistoryJob.objects.filter(pk=pk).update(status=HistoryJob.QUEUED, error="", finished_at=None)  # shu joydan davom
+    elif action in ("continue", "resume"):
+        from . import history as hist
+        if hist.continue_job(j, _actor(request)) is None:
+            return Response({"detail": "Bu guruh tarixi allaqachon navbatda yoki o'qilmoqda."}, status=400)
     return Response([_job(x) for x in HistoryJob.objects.select_related("group")[:60]])
+
+
+@zona_api(["POST"], [AdminOnly])
+def history_continue(request):
+    """Hammasini (yoki tanlangan guruhlarni) davom ettirish: har bir guruhning oxirgi vazifasi kelgan joyidan."""
+    from . import history as hist
+    raw = request.data.get("groups") or "all"
+    ids = None if raw == "all" else [int(x) for x in raw]
+    made = hist.continue_groups(ids, _actor(request))
+    return Response({"continued": len(made), "jobs": [_job(x) for x in HistoryJob.objects.select_related("group")[:60]]})
 
 
 # ====================================================================== tahlil: xodimlar javoblari va aniqlashtirishlar

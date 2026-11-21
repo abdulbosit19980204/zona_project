@@ -415,3 +415,62 @@ def run_job(job_id):
              "candidates": Entry.objects.filter(source="history").count() - p["before_e"]}
     HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.DONE, progress=stats, finished_at=timezone.now())
     return stats
+
+
+# ====================================================================== davom ettirish
+RETRIES = 3  # kutilmagan xatodan keyin avtomatik qayta urinish (10, 20, 40 daqiqadan keyin)
+NEEDS_PERSON = ("guruhda emas", "seans tugagan", "ulanmagan", "API ID", "Could not find the input entity")
+
+
+def retry_later(job_id, err):
+    """Vazifa xato bilan to'xtadi. Odam aralashuvi kerak bo'lsa (akkaunt guruhda emas, seans tugagan) — "Xato";
+    aks holda joyidan (cursor) avtomatik davom etadi."""
+    text = f"{type(err).__name__}: {err}"[:500]
+    j = HistoryJob.objects.filter(pk=job_id).first()
+    if j is None:
+        return
+    p = dict(j.progress or {})
+    n = int(p.get("attempts") or 0)
+    if any(k in text for k in NEEDS_PERSON) or n >= RETRIES:
+        HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.FAILED, error=text, finished_at=timezone.now())
+        return
+    p.update(attempts=n + 1, stage="kutmoqda", paused=f"xato — {10 * 2 ** n} daqiqadan keyin joyidan davom etadi")
+    HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.QUEUED, error=text, progress=p,
+                                                run_after=timezone.now() + timedelta(minutes=10 * 2 ** n))
+
+
+def continue_job(j, by=""):
+    """To'xtagan vazifani davom ettirish. Xato/bekor qilingan — saqlangan joydan (cursor); tugagan — oxirgi o'rganilgan
+    xabardan bugungacha (yangi vazifa). Shu guruhda navbatda/ishlayotgan vazifa bo'lsa — hech narsa qilinmaydi.
+    Qaytaradi: davom etayotgan vazifa yoki None."""
+    busy = HistoryJob.objects.filter(group_id=j.group_id, status__in=[HistoryJob.QUEUED, HistoryJob.RUNNING]).first()
+    if busy is not None:
+        return busy if busy.pk == j.pk else None
+    if j.status in (HistoryJob.FAILED, HistoryJob.CANCELED):
+        p = {**(j.progress or {}), "attempts": 0, "paused": ""}
+        HistoryJob.objects.filter(pk=j.pk).update(status=HistoryJob.QUEUED, error="", finished_at=None, run_after=None,
+                                                  progress=p)
+        return HistoryJob.objects.get(pk=j.pk)
+    if j.status == HistoryJob.DONE:
+        start = j.date_from or (j.created_at - timedelta(days=j.days))
+        return HistoryJob.objects.create(group_id=j.group_id, days=j.days, photos=j.photos, night_only=j.night_only,
+                                         date_from=start, date_to=None, cursor=j.cursor, created_by=by or j.created_by)
+    return None
+
+
+def continue_groups(group_ids=None, by=""):
+    """Har bir guruhning oxirgi vazifasini davom ettirish ("Hammasini davom ettirish")."""
+    qs = HistoryJob.objects.order_by("group_id", "-created_at", "-id")
+    if group_ids is not None:
+        qs = qs.filter(group_id__in=group_ids)
+    out, seen = [], set()
+    for j in qs:
+        if j.group_id in seen:
+            continue
+        seen.add(j.group_id)
+        if j.status in (HistoryJob.QUEUED, HistoryJob.RUNNING):
+            continue  # allaqachon davom etyapti
+        r = continue_job(j, by)
+        if r is not None and r.status == HistoryJob.QUEUED:
+            out.append(r)
+    return out

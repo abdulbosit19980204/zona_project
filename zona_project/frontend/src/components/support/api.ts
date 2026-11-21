@@ -232,7 +232,8 @@ export const supportApi = {
   historyJobs: () => get<HistoryJob[]>("history/"),
   startHistory: (p: { groups: number[] | "all"; days: number; photos: boolean; date_from?: string; date_to?: string; schedule: string }) =>
     post<HistoryJob[]>("history/", p),
-  historyAction: (id: number, action: "cancel" | "now" | "resume") => post<HistoryJob[]>(`history/${id}/`, { action }),
+  historyAction: (id: number, action: "cancel" | "now" | "continue") => post<HistoryJob[]>(`history/${id}/`, { action }),
+  historyContinue: (groups: number[] | "all" = "all") => post<{ continued: number; jobs: HistoryJob[] }>("history/continue/", { groups }),
   mtSendCode: (phone: string) => post<SupportSettings & { need_password?: boolean }>("mtproto/send-code/", { phone, confirm: true }),
   mtSignIn: (code: string, password = "") => post<SupportSettings & { need_password?: boolean }>("mtproto/sign-in/", { code, password }),
   mtLogout: () => post<SupportSettings>("mtproto/logout/"),

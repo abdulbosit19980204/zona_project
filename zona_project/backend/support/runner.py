@@ -1600,8 +1600,8 @@ def _history_thread(job_id):
                                                     run_after=timezone.now() + timezone.timedelta(minutes=10))
     except Exception as e:  # noqa: BLE001
         log.exception("history job %s failed", job_id)
-        HistoryJob.objects.filter(pk=job_id).update(status=HistoryJob.FAILED, error=f"{type(e).__name__}: {e}"[:500],
-                                                    finished_at=timezone.now())
+        from .history import retry_later
+        retry_later(job_id, e)  # kutilmagan xato — joyidan avtomatik davom (3 marta); odam kerak bo'lsa — "Xato"
     finally:
         close_old_connections()
 

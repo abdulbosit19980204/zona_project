@@ -456,7 +456,8 @@ function HistorySection({ t }: { t: ST }) {
   const [at, setAt] = useState("");
   const [night, setNight] = useState<{ a: number; b: number } | null>(null);
   const saveNight = useSupportMutation((b: { history_night_from: number; history_night_to: number }) => supportApi.saveSettings(b), t("saved"));
-  const act = useSupportMutation((v: { id: number; action: "cancel" | "now" | "resume" }) => supportApi.historyAction(v.id, v.action), t("saved"));
+  const act = useSupportMutation((v: { id: number; action: "cancel" | "now" | "continue" }) => supportApi.historyAction(v.id, v.action), t("saved"));
+  const contAll = useSupportMutation(() => supportApi.historyContinue("all"), (r) => t("jContinued", { n: r.continued }));
   const send = useSupportMutation(() => supportApi.mtSendCode(phone), (r) => (r.need_password ? t("mtNeedPassword") : t("mtCodeSent", { p: r.mtproto_phone })));
   const sign = useSupportMutation(() => supportApi.mtSignIn(code, password),
     (r) => (r.need_password ? t("mtNeedPassword") : t("mtConnected", { u: r.mtproto_user })));
@@ -576,7 +577,13 @@ function HistorySection({ t }: { t: ST }) {
 
         {(jobs.data ?? []).length > 0 && (
           <div className="grid gap-2">
-            <div className="text-sm font-medium">{t("histJobs")}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-sm font-medium">{t("histJobs")}</div>
+              <Button size="sm" variant="outline" className="ml-auto h-7" disabled={contAll.isPending}
+                title={t("jContinueAllHint")} onClick={() => contAll.mutate(undefined)}>
+                <History className="size-4" />{t("jContinueAll")}
+              </Button>
+            </div>
             {jobs.data!.map((j) => (
               <div key={j.id} className="grid gap-1 rounded-lg border p-2 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
@@ -597,9 +604,10 @@ function HistorySection({ t }: { t: ST }) {
                     {(j.status === "queued" || j.status === "running") && (
                       <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" disabled={act.isPending}
                         onClick={() => act.mutate({ id: j.id, action: "cancel" })}>{t("jCancel")}</Button>)}
-                    {(j.status === "failed" || j.status === "canceled") && (
+                    {(j.status === "failed" || j.status === "canceled" || j.status === "done") && (
                       <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={act.isPending}
-                        onClick={() => act.mutate({ id: j.id, action: "resume" })}>{t("jResume")}</Button>)}
+                        title={t(j.status === "done" ? "jContinueDoneHint" : "jContinueHint")}
+                        onClick={() => act.mutate({ id: j.id, action: "continue" })}>{t("jResume")}</Button>)}
                   </span>
                 </div>
                 <div className="text-muted-foreground">

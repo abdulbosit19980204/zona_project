@@ -186,6 +186,52 @@ class ScheduleTests(HistBase):
         self.assertEqual((seen["start"].month, seen["end"].month), (1, 2))
 
 
+class ContinueTests(HistBase):
+    def test_failed_and_canceled_continue_from_saved_place(self):
+        j = HistoryJob.objects.create(group=self.group, status=HistoryJob.FAILED, cursor=500, error="x",
+                                      progress={"messages": 500, "attempts": 3})
+        self.assertEqual(history.continue_job(j).pk, j.pk)
+        j.refresh_from_db()
+        self.assertEqual((j.status, j.cursor, j.error, j.progress["messages"]), (HistoryJob.QUEUED, 500, "", 500))
+
+    def test_done_continues_from_last_message_up_to_now(self):
+        j = HistoryJob.objects.create(group=self.group, status=HistoryJob.DONE, cursor=900, days=30,
+                                      date_to=tz.now() - timedelta(days=5))
+        n = history.continue_job(j)
+        self.assertNotEqual(n.pk, j.pk)
+        self.assertEqual((n.status, n.cursor, n.date_to), (HistoryJob.QUEUED, 900, None))
+
+    def test_no_second_job_for_busy_group(self):
+        old = HistoryJob.objects.create(group=self.group, status=HistoryJob.FAILED, cursor=10)
+        HistoryJob.objects.create(group=self.group, status=HistoryJob.QUEUED)
+        self.assertIsNone(history.continue_job(old))
+        old.refresh_from_db()
+        self.assertEqual(old.status, HistoryJob.FAILED)
+
+    def test_continue_all_api_takes_latest_job_per_group(self):
+        g2 = Group.objects.create(bot=self.bot, chat_id=-1009, title="G9")
+        HistoryJob.objects.create(group=self.group, status=HistoryJob.FAILED, cursor=1)
+        HistoryJob.objects.create(group=self.group, status=HistoryJob.CANCELED, cursor=70)  # oxirgisi
+        HistoryJob.objects.create(group=g2, status=HistoryJob.DONE, cursor=40)
+        self.login("admin")
+        r = self.call("post", "support/history/continue/", {"groups": "all"})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["continued"], 2)
+        q = HistoryJob.objects.filter(status=HistoryJob.QUEUED)
+        self.assertEqual(sorted(q.values_list("cursor", flat=True)), [40, 70])
+        self.assertEqual(self.call("post", "support/history/continue/", {"groups": "all"}).json()["continued"], 0)
+
+    def test_unexpected_error_retries_from_place_but_access_errors_stop(self):
+        j = HistoryJob.objects.create(group=self.group, status=HistoryJob.RUNNING, cursor=300)
+        history.retry_later(j.id, RuntimeError("boom"))
+        j.refresh_from_db()
+        self.assertEqual((j.status, j.cursor, j.progress["attempts"]), (HistoryJob.QUEUED, 300, 1))
+        self.assertGreater(j.run_after, tz.now() + timedelta(minutes=9))
+        history.retry_later(j.id, ValueError("Ulangan Telegram akkaunt bu guruhda emas"))
+        j.refresh_from_db()
+        self.assertEqual(j.status, HistoryJob.FAILED)
+
+
 class ScreenshotMessageTests(ControlsBase):
     def test_main_message_skips_status_bar_and_menu(self):
         self.assertEqual(ocr.main_message(OCR_ERR), "Данные контрагента не получены. Сохранение отменено; попробуйте ещё раз.")
