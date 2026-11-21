@@ -652,6 +652,10 @@ class Handler:
             pg.phase("think")
             d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
                               asker=_asker(q), fast=True)  # avval tez (shablon/baza)
+            if d is None and self.history:
+                # tarix: eski savolga AI taklifi kerak emas (o'rganish xodimning haqiqiy javobidan) — tez va
+                # AI kunlik limiti jonli guruhlardagi javoblar uchun qoladi
+                d = engine.Decision("", None, 0, "", True, [])
             if d is None:
                 pg.phase("write")  # AI kutilayotganda matn almashib turadi
                 try:

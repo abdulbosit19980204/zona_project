@@ -67,6 +67,17 @@ class ConversationHistoryTests(HistBase):
         self.assertEqual((q.status, stats["processed"]), (Message.ANSWERED, 5))
 
 
+class HistoryAiQuotaTests(HistBase):
+    def test_history_does_not_spend_ai(self):
+        Settings.objects.update(ai_enabled=True)
+        t0 = tz.now() - timedelta(days=2)
+        job = HistoryJob.objects.create(group=self.group, days=7)
+        with mock.patch("support.engine.ai_answer") as ai:
+            self.run_job(job, [item(1, t0, "Kassa apparati chek chiqarmayapti nima qilish kerak")])
+        ai.assert_not_called()  # AI limiti jonli guruhlar uchun qoladi
+        self.assertEqual(Message.objects.filter(kind=Message.QUESTION).count(), 1)
+
+
 class ResumeTests(HistBase):
     def items(self, n=120):
         t0 = tz.now() - timedelta(days=5)
