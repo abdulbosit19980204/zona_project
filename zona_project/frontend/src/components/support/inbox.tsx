@@ -16,7 +16,7 @@ import { useCan } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
 
 import { supportApi, SYS_APPS, SYS_CATEGORIES, SYS_ORIGINS, type MsgStatus, type Resolution, type SupportMessage } from "./api";
-import { fmtDate, Initials, Metric, MsgBadge, Segmented, stageLabel, useSupportMutation } from "./common";
+import { fmtDate, Initials, MsgBadge, Segmented, stageLabel, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { MediaRow } from "./media";
 import { SupportShell } from "./shell";
@@ -89,13 +89,15 @@ function InboxInner() {
 
   return (
     <SupportShell title={t("inboxTitle")} description={t("inboxDesc2")} fill>
-      <div className="mb-4 grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
-        <Metric label={t("kpiTotal")} value={s?.total ?? "—"} hint={t("last7")} icon={Inbox} tone="primary" />
-        <Metric label={t("kpiBot")} value={botClosed} hint={s?.total ? `${Math.round((100 * botClosed) / s.total)}%` : undefined} icon={Bot} tone="success" />
-        <Metric label={t("kpiHuman")} value={bs.escalated ?? 0} icon={UserRound} tone="warning" />
-        <Link href="/support/review" className="rounded-xl outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring">
-          <Metric label={t("kpiQueue")} value={queue} hint={t("openReview")} icon={CheckCheck} />
-        </Link>
+      <div className="mb-2 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5"><Inbox className="size-3.5 text-primary" />{t("kpiTotal")}:
+          <b className="tabular-nums text-foreground">{s?.total ?? "—"}</b></span>
+        <span className="inline-flex items-center gap-1.5"><Bot className="size-3.5 text-success" />{t("kpiBot")}:
+          <b className="tabular-nums text-foreground">{botClosed}</b>{s?.total ? ` (${Math.round((100 * botClosed) / s.total)}%)` : ""}</span>
+        <span className="inline-flex items-center gap-1.5"><UserRound className="size-3.5 text-warning" />{t("kpiHuman")}:
+          <b className="tabular-nums text-foreground">{bs.escalated ?? 0}</b></span>
+        <Link href="/support/review" className="inline-flex items-center gap-1.5 hover:text-foreground hover:underline">
+          <CheckCheck className="size-3.5" />{t("kpiQueue")}: <b className="tabular-nums text-foreground">{queue}</b></Link>
       </div>
 
       <div className="grid min-h-[560px] flex-1 overflow-hidden rounded-xl border bg-card shadow-xs lg:grid-cols-[minmax(300px,360px)_1fr] 2xl:grid-cols-[360px_1fr_300px]">

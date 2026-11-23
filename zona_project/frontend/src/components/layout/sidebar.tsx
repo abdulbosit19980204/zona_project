@@ -6,6 +6,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import { useQuery } from "@tanstack/react-query";
+
+import { supportApi } from "@/components/support/api";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOrg } from "@/hooks/use-org";
 import { useQrNotifications } from "@/hooks/use-qrdrive";
@@ -167,7 +170,14 @@ export function Sidebar() {
   const org = useOrg();
   const model = org.model;
   const qr = useQrNotifications();
+  const pathname = usePathname();
+  // support bo'limida: javob kutayotgan savollar va tasdiqlash navbati (support sahifalari bilan bitta kesh)
+  const sup = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7), refetchInterval: 30_000,
+    enabled: pathname === "/support" || pathname.startsWith("/support/") });
+  const ss = sup.data;
   const counts: Record<string, number | undefined> = {
+    supInbox: ss ? (ss.by_status.escalated ?? 0) + (ss.by_status.drafted ?? 0) || undefined : undefined,
+    supReview: ss ? (ss.entries.new ?? 0) + (ss.entries.review ?? 0) + (ss.pending_edits ?? 0) || undefined : undefined,
     approvals: model?.state.meta.pending_approvals || undefined,
     gaps: model ? model.issueProcesses.length + (model.unassignedTasks.length ? 1 : 0) || undefined : undefined,
     employees: model?.state.members.length,

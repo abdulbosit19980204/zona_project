@@ -265,7 +265,7 @@ class EntrySerializer(serializers.ModelSerializer):
         fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first",
                   "attachments", "attachments_info", "image_examples_count", "sources_info", "zone", "zone_name", "creates_task", "task_assignee", "variants", "answer_mode",
                   "responsible", "responsible_name", "responsible_tg", "status", "source", "priority", "pending", "author",
-                  "claude_kind", "claude_note", "claude_target", "claude_target_title", "claude_covers_count",
+                  "claude_kind", "claude_note", "claude_target", "claude_target_title", "claude_covers_count", "auto_close",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
         read_only_fields = ["claude_kind", "claude_note", "claude_target",
                             "status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",

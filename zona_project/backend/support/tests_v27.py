@@ -149,9 +149,10 @@ class StaffButtonsTests(OpenBase):
         self.assertIn("@agent1", last["text"])
         self.qq.refresh_from_db()
         self.assertEqual(self.qq.staff_msg_id, 1000 + len(self.tg.sent))
-        # savol egasi endi bosdi — ikkala so'rov ham yopiladi
+        self.assertIsNone(self.qq.confirm_msg_id)  # savol egasiga oldingi so'rov o'chirildi — guruhda bitta so'rov
+        # savol egasi endi xodimga yuborilgan so'rovdagi tugmani bosdi — so'rov yopiladi
         self.h().handle(press(1, f"rs:{self.qq.id}:1", username="agent1"))
-        self.assertEqual({e["id"] for e in self.tg.edits[-2:]}, {self.qq.confirm_msg_id, self.qq.staff_msg_id})
+        self.assertEqual(self.tg.edits[-1]["id"], self.qq.staff_msg_id)
 
     def test_night_no_followups(self):
         night = dt.datetime(2026, 11, 20, 18, 0, tzinfo=dt.timezone.utc)

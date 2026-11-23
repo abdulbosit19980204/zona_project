@@ -1,10 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, BookOpenCheck, BotMessageSquare, CheckCircle2, ChevronRight, Circle, Images, Inbox, Settings2 } from "lucide-react";
+import { BarChart3, BookOpenCheck, BotMessageSquare, ChevronRight, Circle, Images, Inbox, Settings2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useCan } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
@@ -26,8 +26,9 @@ const MODE_DOT: Record<Mode, string> = { live: "bg-success", shadow: "bg-violet-
 const isActive = (href: string, pathname: string) => (href === "/support" ? pathname === "/support" : pathname.startsWith(href));
 
 /**
- * Support bo'limining umumiy qobig'i. Yuqorida — ixcham sarlavha, bot holati va bo'limlar menyusi (sanoqlar bilan);
- * pastda — aylanadigan tarkib. `fill` — tarkib butun balandlikni egallaydi (masalan, savollar suhbati).
+ * Support bo'limining umumiy qobig'i: bitta ixcham qator (sarlavha, amallar, bot holati) va aylanadigan tarkib.
+ * Bo'limlar menyusi — chapdagi yig'iladigan asosiy menyuda (sanoqlar bilan), ekran ma'lumot uchun bo'sh qoladi.
+ * `fill` — tarkib butun balandlikni egallaydi (masalan, savollar suhbati).
  */
 export function SupportShell({ title, description, actions, children, fill }: {
   title: string; description?: string; actions?: ReactNode; children: ReactNode; fill?: boolean;
@@ -37,23 +38,19 @@ export function SupportShell({ title, description, actions, children, fill }: {
   const can = useCan();
   const stats = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7), refetchInterval: 30_000 });
   const s = stats.data;
-  const counts: Partial<Record<SKey, number>> = {
-    tabInbox: (s?.by_status.escalated ?? 0) + (s?.by_status.drafted ?? 0),
-    tabReview: (s?.entries.new ?? 0) + (s?.entries.review ?? 0) + (s?.pending_edits ?? 0),
-  };
   const bot = s?.bots[0];
   const Icon = TABS.find((x) => isActive(x.href, pathname))?.icon ?? BotMessageSquare;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2 px-4 pt-4 sm:px-6 lg:px-8">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-primary/20 to-violet-500/20 text-primary">
-            <Icon className="size-[18px]" />
+        <div className="mx-auto flex w-full max-w-[1800px] flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 sm:px-5">
+          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <Icon className="size-4" />
           </span>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold leading-tight tracking-tight sm:text-lg">{title}</h1>
-            {description && <p className="truncate text-xs text-muted-foreground" title={description}>{description}</p>}
+          <div className="flex min-w-0 flex-1 items-baseline gap-2">
+            <h1 className="shrink-0 text-[15px] font-semibold leading-tight tracking-tight">{title}</h1>
+            {description && <p className="hidden truncate text-xs text-muted-foreground lg:block" title={description}>{description}</p>}
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
           {bot ? (
@@ -71,28 +68,9 @@ export function SupportShell({ title, description, actions, children, fill }: {
             <Link href="/support/settings" className="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs text-warning">{t("botMissing")}</Link>
           )}
         </div>
-        <nav className="mx-auto flex w-full max-w-[1600px] gap-1 overflow-x-auto px-3 pt-3 sm:px-5 lg:px-7" aria-label={t("tabsLabel")}>
-          {TABS.filter((x) => !x.admin || can.admin).map((x) => {
-            const active = isActive(x.href, pathname);
-            const n = counts[x.key];
-            return (
-              <Link key={x.href} href={x.href} aria-current={active ? "page" : undefined}
-                className={cn("group relative flex shrink-0 items-center gap-2 px-2.5 pb-2.5 pt-1.5 text-[13px] transition-colors",
-                  active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}>
-                <span className={cn("grid size-6 place-items-center rounded-md transition-colors",
-                  active ? "bg-primary text-primary-foreground" : "bg-muted group-hover:bg-muted-foreground/15")}>
-                  <x.icon className="size-3.5" />
-                </span>
-                {t(x.key)}
-                {!!n && <span className="rounded-full bg-warning/15 px-1.5 text-[10px] font-semibold tabular-nums text-warning">{n}</span>}
-                {active && <span className="absolute inset-x-1.5 -bottom-px h-0.5 rounded-full bg-primary" />}
-              </Link>
-            );
-          })}
-        </nav>
       </header>
       <div className={cn("min-h-0 flex-1", fill ? "flex flex-col" : "overflow-y-auto")}>
-        <div className={cn("mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8", fill && "flex min-h-0 flex-1 flex-col")}>
+        <div className={cn("mx-auto w-full max-w-[1800px] px-3 py-3 sm:px-5", fill && "flex min-h-0 flex-1 flex-col")}>
           {can.admin && pathname === "/support" && <SetupGuide />}
           {children}
         </div>
@@ -101,9 +79,14 @@ export function SupportShell({ title, description, actions, children, fill }: {
   );
 }
 
-/** Sozlash yo'riqnomasi: hammasi tayyor bo'lsa ko'rinmaydi. */
+const GUIDE_KEY = "support.setupGuide.hidden";
+
+/** Sozlash yo'riqnomasi: bitta ixcham qator (qolgan qadamlar), yopib qo'yiladi; hammasi tayyor bo'lsa ko'rinmaydi. */
 function SetupGuide() {
   const t = useSt();
+  const [hidden, setHidden] = useState(() => {
+    try { return localStorage.getItem(GUIDE_KEY) === "1"; } catch { return false; }
+  });
   const bots = useQuery({ queryKey: ["support", "bots"], queryFn: supportApi.bots });
   const groups = useQuery({ queryKey: ["support", "groups"], queryFn: supportApi.groups });
   if (!bots.data || !groups.data) return null;
@@ -117,28 +100,19 @@ function SetupGuide() {
     { done: active.some((g) => g.effective_mode === "live"), key: "stepLive" },
   ];
   const done = steps.filter((x) => x.done).length;
-  if (done === steps.length) return null;
+  if (done === steps.length || hidden) return null;
+  const hide = () => { setHidden(true); try { localStorage.setItem(GUIDE_KEY, "1"); } catch { /* saqlanmasa ham yopiladi */ } };
   return (
-    <div className="mb-4 shrink-0 rounded-xl border border-primary/25 bg-gradient-to-r from-primary/[0.07] to-violet-500/[0.05] p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="text-sm font-semibold">{t("setupTitle")}</div>
-        <div className="h-1.5 w-28 overflow-hidden rounded-full bg-primary/15">
-          <div className="h-full rounded-full bg-primary" style={{ width: `${(100 * done) / steps.length}%` }} />
-        </div>
-        <span className="text-xs text-muted-foreground">{t("setupProgress", { d: done, n: steps.length })}</span>
-        <Link href="/support/settings" className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-          {t("setupOpen")}<ChevronRight className="size-4" />
-        </Link>
-      </div>
-      <ol className="mt-3 flex flex-wrap gap-2">
-        {steps.map((x) => (
-          <li key={x.key} className={cn("flex items-center gap-1.5 rounded-full border bg-background/70 px-2.5 py-1 text-xs",
-            x.done && "text-muted-foreground line-through")}>
-            {x.done ? <CheckCircle2 className="size-3.5 text-success" /> : <Circle className="size-3.5 text-primary" />}
-            {t(x.key)}
-          </li>
-        ))}
-      </ol>
+    <div className="mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-primary/25 bg-primary/[0.05] px-3 py-1.5 text-xs">
+      <span className="font-medium">{t("setupProgress", { d: done, n: steps.length })}</span>
+      {steps.filter((x) => !x.done).map((x) => (
+        <span key={x.key} className="inline-flex items-center gap-1 text-muted-foreground"><Circle className="size-3 text-primary" />{t(x.key)}</span>
+      ))}
+      <Link href="/support/settings" className="ml-auto inline-flex items-center gap-0.5 font-medium text-primary hover:underline">
+        {t("setupOpen")}<ChevronRight className="size-3.5" />
+      </Link>
+      <button type="button" onClick={hide} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label={t("close")} title={t("close")}><X className="size-3.5" /></button>
     </div>
   );
 }

@@ -1658,6 +1658,10 @@ class BotWorker(threading.Thread):
                 resolution.followups(client, bot_id=self.bot_id)
             except Exception:  # noqa: BLE001
                 log.exception("resolution followups failed")
+            try:  # ma'lumot xabarlari (moderatsiyaga yuborildi) — vaqt o'tib avtomatik yopiladi
+                resolution.auto_close_due(client, bot_id=self.bot_id)
+            except Exception:  # noqa: BLE001
+                log.exception("auto close failed")
             try:  # guruh uzun javoblar bilan to'lib ketmasin: o'qib bo'lingan javob yig'iladi
                 review.collapse_due(client, bot_id=self.bot_id)
             except Exception:  # noqa: BLE001

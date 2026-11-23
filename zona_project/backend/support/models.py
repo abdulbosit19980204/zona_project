@@ -221,6 +221,9 @@ class Entry(models.Model):
                                    max_length=3, blank=True, default="", db_default="")
     variants = models.JSONField("Javobning qayta yozilgan variantlari (AI, mazmuni bir xil)", null=True, blank=True)
     creates_task = models.BooleanField("Bu turdagi savolga PRBC vazifa yaratiladi", default=False, db_default=False)
+    # ma'lumot xabari (masalan, "nuqta moderatsiyaga yuborildi") — muammo emas: "hal bo'ldimi?" so'ralmaydi,
+    # N daqiqadan keyin savol avtomatik "hal bo'ldi" deb yopiladi (0 — odatdagidek)
+    auto_close = models.PositiveSmallIntegerField("Avto yopish (daqiqa)", default=0, db_default=0)
     task_assignee = models.CharField("Vazifa ijrochisi (username, bo'sh — mas'ul)", max_length=64, blank=True, default="",
                                      db_default="")
     ask_first = models.TextField("Javobdan oldin so'raladigan ma'lumot", blank=True,

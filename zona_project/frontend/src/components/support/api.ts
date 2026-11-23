@@ -37,7 +37,7 @@ export interface Entry {
   image_examples_count?: number; zone: number | null; zone_name: string; responsible: number | null;
   responsible_name: string; responsible_tg?: string[]; status: EntryStatus;
   claude_kind?: ClaudeKind; claude_note?: string; claude_target?: number | null; claude_target_title?: string;
-  claude_covers_count?: number; source: string; priority: boolean; pending: PendingEdit | null;
+  claude_covers_count?: number; auto_close?: number; source: string; priority: boolean; pending: PendingEdit | null;
   author: string; approved_by: string; approved_at: string | null; uses: number; likes: number; dislikes: number;
   last_used_at: string | null; created_at: string; updated_at: string;
   sources_info?: EntrySource[];

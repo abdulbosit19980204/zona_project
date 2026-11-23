@@ -352,6 +352,9 @@ def followups(tg, s=None, now=None, limit=5, bot_id=None):
         if q.group_id is None or q.group.effective_mode() != MODE_LIVE or is_final(q) or q.user_id is None:
             Message.objects.filter(pk=q.pk).update(**stop)
             continue
+        if q.entry_id and q.entry.auto_close:  # ma'lumot xabari — auto_close_due() yopadi, eslatilmaydi
+            Message.objects.filter(pk=q.pk).update(**stop)
+            continue
         staff = staff_mentions(q)
         persistent = q.resolution in (NO, WORK)  # rad etilgan / jarayondagi savol — yechim chiqquncha so'raladi
         cap = max(1, s.remind_max)
@@ -381,18 +384,14 @@ def followups(tg, s=None, now=None, limit=5, bot_id=None):
             Message.objects.filter(pk=q.pk).update(**stop)  # guruhni qayta-qayta urinish bilan to'ldirmaymiz
             continue
         mid = (sent or {}).get("message_id")
+        drop_prompts(tg, q, keep=mid)
         every = s.reask_after or 120
         if q.remind_count + 1 >= cap:  # ko'p eslatilgan — oraliq uzayadi (guruh to'lib ketmasin), lekin to'xtamaydi
             every = min(every * 2, 480)
         upd = {"remind_count": q.remind_count + 1, "next_ask_at": now + timezone.timedelta(minutes=every)}
-        old = q.staff_msg_id if to_staff else q.confirm_msg_id
         upd["staff_msg_id" if to_staff else "confirm_msg_id"] = mid
+        upd["confirm_msg_id" if to_staff else "staff_msg_id"] = None  # o'chirildi
         Message.objects.filter(pk=q.pk).update(**upd)
-        if old and old != mid and q.resolution != NO:
-            try:  # eski so'rovdagi tugmalar olib tashlanadi — faol so'rov bitta
-                tg.edit_buttons(q.chat_id, old)
-            except Exception as e:  # noqa: BLE001
-                log.info("old prompt buttons: %s", e)
         n += 1
     return n
 
@@ -403,6 +402,47 @@ WORK_HOURS = (9, 20)  # kechasi odamlarni bezovta qilmaymiz (Toshkent vaqti)
 ASK_WINDOW_HOURS = 3  # xodim javobidan keyin shu vaqt ichida so'raladi (keyin — kech, so'ralmaydi)
 
 
+def drop_prompts(tg, q, keep=None):
+    """Savol bo'yicha botning oldingi "hal bo'ldimi?" xabarlari o'chiriladi (guruhda ochiq so'rov qolib ketmasin).
+    O'chirib bo'lmasa (48 soatdan eski) — tugmalari olib tashlanadi."""
+    if tg is None:
+        return
+    for mid in sorted({q.confirm_msg_id, q.staff_msg_id} - {None, keep}):
+        try:
+            tg.delete(q.chat_id, mid)
+        except Exception as e:  # noqa: BLE001
+            log.info("drop prompt q=%s: %s", q.pk, e)
+            try:
+                tg.edit_buttons(q.chat_id, mid)
+            except Exception:  # noqa: BLE001
+                pass
+
+
+AUTO = "avto: ma'lumot xabari"
+
+
+def auto_close_due(tg, now=None, limit=20, bot_id=None):
+    """Ma'lumot xabarlari (yozuvda auto_close > 0, masalan, nuqta moderatsiyaga yuborildi): ko'rsatilgan daqiqadan
+    keyin savol "hal bo'ldi" deb yopiladi, guruhdagi so'rov xabari (bo'lsa) o'chiriladi. Qaytaradi: nechta yopildi."""
+    now = now or timezone.now()
+    qs = (Message.objects.filter(kind=Message.QUESTION, entry__auto_close__gt=0, resolution__in=["", ASKED],
+                                 created_at__gte=now - timezone.timedelta(days=3))
+          .exclude(status=Message.IGNORED).select_related("entry"))
+    if bot_id:
+        qs = qs.filter(bot_id=bot_id)
+    n = 0
+    for q in qs.order_by("created_at")[:200]:
+        if q.created_at > now - timezone.timedelta(minutes=q.entry.auto_close) or is_final(q):
+            continue
+        drop_prompts(tg, q)
+        mark(q, YES, AUTO)
+        Message.objects.filter(pk=q.pk).update(confirm_msg_id=None, staff_msg_id=None)
+        n += 1
+        if n >= limit:
+            break
+    return n
+
+
 def due(now=None, s=None):
     """Tasdiq so'raladigan savollar: xodim javob bergan (confirm_after daqiqa o'tgan) yoki vazifa ochilgan
     (TASK_WAIT_HOURS o'tgan), holati noma'lum, savol egasi xodim emas, oxirgi 2 kun ichida."""
@@ -411,7 +451,8 @@ def due(now=None, s=None):
     base = (Message.objects.filter(kind=Message.QUESTION, source="live", resolution="", user__isnull=False,
                                    user__member__isnull=True, user__contact__isnull=True,
                                    created_at__gte=now - timezone.timedelta(days=2))
-            .exclude(stage="dup").exclude(status__in=[Message.IGNORED, Message.NEW]))
+            .exclude(stage="dup").exclude(status__in=[Message.IGNORED, Message.NEW])
+            .exclude(entry__auto_close__gt=0))  # ma'lumot xabari — so'ralmaydi, avtomatik yopiladi
     # eski savollar haqida so'ralmaydi (kecha javob berilgan savolga bugun "hal bo'ldimi?" — g'alati)
     staff = base.filter(status=Message.ANSWERED, answered_at__lte=now - timezone.timedelta(minutes=s.confirm_after or 0),
                         answered_at__gte=now - timezone.timedelta(hours=ASK_WINDOW_HOURS)).exclude(answered_by="bot")
