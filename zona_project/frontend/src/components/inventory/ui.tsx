@@ -159,7 +159,7 @@ export function Picker({ value, options, onChange, placeholder = "Tanlang", titl
   return (
     <>
       <button type="button" disabled={disabled} onClick={() => setOpen(true)}
-        className={cn("flex h-12 w-full min-w-0 items-center gap-2 rounded-xl border bg-card px-3 text-left text-[15px] shadow-xs transition-colors hover:border-primary/40 disabled:opacity-60",
+        className={cn("flex h-12 w-full min-w-0 items-center gap-2 rounded-xl border bg-card px-3 text-left text-[15px] shadow-xs md:h-10 md:rounded-lg md:text-sm transition-colors hover:border-primary/40 disabled:opacity-60",
           invalid && "border-destructive ring-2 ring-destructive/15", className)}>
         {icon && <span className="shrink-0 text-muted-foreground">{icon}</span>}
         <span className={cn("min-w-0 flex-1 truncate", !label && "text-muted-foreground")}>{label || placeholder}</span>
@@ -243,7 +243,7 @@ export function Field({ label, hint, children, required, className }: {
   );
 }
 
-export const inputCls = "h-12 w-full min-w-0 rounded-xl border bg-card px-3 text-[15px] shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/15";
+export const inputCls = "h-12 w-full min-w-0 rounded-xl border bg-card px-3 text-[15px] shadow-xs md:h-10 md:rounded-lg md:text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/15";
 
 export function Btn({ children, onClick, variant = "primary", size = "md", disabled, loading, type = "button", className, title }: {
   children: ReactNode; onClick?: () => void; variant?: "primary" | "outline" | "ghost" | "danger" | "success" | "soft";

@@ -29,7 +29,8 @@
       "qrConfig": "Настройка",
       "supMain": "Вопросы",
       "supConfig": "Настройка",
-      "invMain": "Инвентаризация"
+      "invMain": "Инвентаризация",
+      "invConfig": "Управление"
     },
     "staff": "Контакты",
     "qrOverview": "Главная",
@@ -60,7 +61,15 @@
     "supAnalytics": "Аналитика",
     "supImages": "Типы изображений",
     "aiHistory": "AI-анализы",
-    "invOpen": "Инвентаризация филиалов"
+    "invOverview": "Итоги и аналитика",
+    "invItems": "Устройства",
+    "invEmployees": "Сотрудники",
+    "invBranches": "Филиалы",
+    "invHistory": "История",
+    "invExchange": "Импорт / экспорт",
+    "invUsers": "Логины и доступ",
+    "invCatalog": "Справочник",
+    "invMobile": "Мобильный вид"
   },
   "top": {
     "search": "Поиск…",

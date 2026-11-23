@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState, type ReactNode } from "react";
+import { use, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { browser } from "react-dom";
 import { toast } from "sonner";
 
@@ -189,6 +189,22 @@ function App() {
   const stats = useQuery({ queryKey: ["inv", "stats", 30], queryFn: () => inv.stats({ days: 30 }), enabled: !!boot.data });
 
   const restricted = boot.data?.me.restricted;
+  // platforma foydalanuvchisi kompyuterda kirsa — odatiy (chap menyuli) ko'rinish; ?mobile=1 — mobil ko'rinishda qolish
+  useEffect(() => {
+    if (restricted !== false) return;
+    const stay = new URLSearchParams(window.location.search).get("mobile") === "1";
+    if (!stay && window.matchMedia("(min-width: 1024px)").matches) router.replace("/inv");
+  }, [restricted, router]);
+  // sarlavha balandligi: ro'yxatlarning yopishqoq qidiruv qatori uning ostida turadi
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerH, setHeaderH] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeaderH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [boot.data]);
   useEffect(() => {
     // filial xodimlari uchun birinchi kirishda kunduzgi (yorug') rejim — telefonda o'qish oson
     if (!restricted) return;
@@ -237,11 +253,11 @@ function App() {
   const subtitle = me.level === "collector" ? b.branches.map((x) => x.name).join(", ") || LEVEL_LABEL[me.level] : LEVEL_LABEL[me.level];
 
   return (
-    <div id="inv-scroll" className="h-full overflow-y-auto bg-background">
-      <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+    <div id="inv-scroll" className="h-full overflow-y-auto bg-background" style={{ "--inv-top": `${headerH}px` } as CSSProperties}>
+      <header ref={headerRef} className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 pb-2 pt-3 sm:px-4">
           {!me.restricted && (
-            <button onClick={() => router.push("/")} className="grid size-10 shrink-0 place-items-center rounded-xl hover:bg-muted" title="Platformaga qaytish"><ArrowLeft className="size-5" /></button>
+            <button onClick={() => router.push("/inv")} className="grid size-10 shrink-0 place-items-center rounded-xl hover:bg-muted" title="Odatiy (kompyuter) ko'rinish"><ArrowLeft className="size-5" /></button>
           )}
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-600 text-sm font-bold text-white">{initials}</span>
           <div className="min-w-0 flex-1 leading-tight">

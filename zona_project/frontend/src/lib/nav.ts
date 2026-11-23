@@ -1,5 +1,5 @@
 import {
-  Activity, BadgeCheck, ClipboardCheck, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
+  Activity, BadgeCheck, ClipboardCheck, FileSpreadsheet, KeyRound, Laptop, Smartphone, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
   LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert,
   Inbox, Signpost, Sparkles, SlidersHorizontal, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, type LucideIcon,
 } from "lucide-react";
@@ -110,7 +110,25 @@ export const SUPPORT_NAV: NavGroup[] = [
 
 /** IT inventarizatsiya: alohida mustaqil sahifa (/inventory) — faqat huquqi borlarga ko'rinadi. */
 export const INVENTORY_NAV: NavGroup[] = [
-  { key: "invMain", items: [{ href: "/inventory", key: "invOpen", icon: ClipboardCheck }] },
+  {
+    key: "invMain",
+    items: [
+      { href: "/inv", key: "invOverview", icon: ChartColumn },
+      { href: "/inv/items", key: "invItems", icon: Laptop },
+      { href: "/inv/employees", key: "invEmployees", icon: Users },
+      { href: "/inv/branches", key: "invBranches", icon: Building2 },
+      { href: "/inv/history", key: "invHistory", icon: History },
+    ],
+  },
+  {
+    key: "invConfig",
+    items: [
+      { href: "/inv/exchange", key: "invExchange", icon: FileSpreadsheet },
+      { href: "/inv/users", key: "invUsers", icon: KeyRound, perm: "admin" },
+      { href: "/inv/catalog", key: "invCatalog", icon: SlidersHorizontal, perm: "admin" },
+      { href: "/inventory?mobile=1", key: "invMobile", icon: Smartphone },
+    ],
+  },
 ];
 
 export interface NavModule {
@@ -138,6 +156,7 @@ export function activeNav(pathname: string): NavItem | undefined {
 export function moduleOf(pathname: string): NavModule {
   if (pathname === "/qr" || pathname.startsWith("/qr/")) return MODULES[1];
   if (pathname === "/support" || pathname.startsWith("/support/")) return MODULES[2];
+  if (pathname === "/inv" || pathname.startsWith("/inv/")) return MODULES[3];
   return MODULES[0];
 }
 

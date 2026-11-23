@@ -23,7 +23,9 @@ const S3 = "#1baf7a";
 
 type SortKey = "name" | "qty" | "today" | "week" | "coverage" | "photo_pct" | "last_at" | "problems";
 
-export function AnalyticsView({ onOpenBranch }: { onOpenBranch: (branchId: number, extra?: Record<string, boolean | string>) => void }) {
+export function AnalyticsView({ onOpenBranch, embedded }: {
+  onOpenBranch: (branchId: number, extra?: Record<string, boolean | string>) => void; embedded?: boolean;
+}) {
   const [days, setDays] = useState(30);
   const [sort, setSort] = useState<SortKey>("week");
   const [asc, setAsc] = useState(false);
@@ -62,10 +64,10 @@ export function AnalyticsView({ onOpenBranch }: { onOpenBranch: (branchId: numbe
   );
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-4 p-3 pb-28 sm:p-4">
+    <div className={cn("mx-auto w-full space-y-4", embedded ? "max-w-[1800px] pb-6" : "max-w-7xl p-3 pb-28 sm:p-4")}>
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto">
-          <h2 className="text-lg font-bold">Inventarizatsiya natijalari</h2>
+          {!embedded && <h2 className="text-lg font-bold">Inventarizatsiya natijalari</h2>}
           <p className="text-xs text-muted-foreground">Yangilandi: {ago(s.generated_at)} · har daqiqada o'zi yangilanadi</p>
         </div>
         <div className="flex rounded-xl border bg-card p-0.5">

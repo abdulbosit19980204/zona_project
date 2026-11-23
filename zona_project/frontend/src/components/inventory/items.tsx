@@ -462,7 +462,7 @@ function ItemFormBody({ boot, onClose, item, preset }: {
 /* ------------------------------------------------------------------ ro'yxat */
 function Chip({ active, onClick, children }: { active?: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button onClick={onClick} className={cn("h-9 shrink-0 whitespace-nowrap rounded-full border px-3 text-[13px] font-medium transition-colors",
+    <button onClick={onClick} className={cn("h-9 shrink-0 whitespace-nowrap rounded-full border px-3 text-[13px] font-medium transition-colors md:h-8 md:text-xs",
       active ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
       {children}
     </button>
@@ -511,7 +511,52 @@ export interface ItemFilters {
   no_serial?: boolean; no_employee?: boolean; no_photo?: boolean; mine?: boolean; deleted?: boolean;
 }
 
-export function ItemsView({ initial, onAdd }: { initial?: ItemFilters; onAdd: () => void }) {
+function ItemsTable({ rows, onOpen }: { rows: Item[]; onOpen: (it: Item) => void }) {
+  return (
+    <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
+      <table className="w-full text-sm">
+        <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+          <tr>
+            <th className="w-14 px-3 py-2.5" />
+            <th className="px-2 py-2.5 font-semibold">Inv. raqam</th>
+            <th className="px-2 py-2.5 font-semibold">Qurilma</th>
+            <th className="px-2 py-2.5 font-semibold">Seriya (S/N)</th>
+            <th className="px-2 py-2.5 text-right font-semibold">Soni</th>
+            <th className="px-2 py-2.5 font-semibold">Holati</th>
+            <th className="px-2 py-2.5 font-semibold">Kimda</th>
+            <th className="px-2 py-2.5 font-semibold">Filial · joy</th>
+            <th className="px-3 py-2.5 font-semibold">Yangilangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((it) => (
+            <tr key={it.id} onClick={() => onOpen(it)} className={cn("cursor-pointer border-b last:border-0 hover:bg-muted/40", it.is_deleted && "opacity-60")}>
+              <td className="px-3 py-1.5">
+                <div className="relative size-10 overflow-hidden rounded-lg bg-muted">
+                  {it.photos[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={it.photos[0].thumb} alt="" loading="lazy" className="size-full object-cover" />
+                  ) : <div className="grid size-full place-items-center text-muted-foreground"><GroupIcon group={it.group} className="size-4" /></div>}
+                  {it.photos.length > 1 && <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[9px] font-semibold text-white">{it.photos.length}</span>}
+                </div>
+              </td>
+              <td className="whitespace-nowrap px-2 font-mono text-xs font-semibold text-primary">{it.inv_number}</td>
+              <td className="px-2"><div className="font-medium">{it.device_type_name}</div><div className="text-xs text-muted-foreground">{[it.brand, it.model].filter(Boolean).join(" ") || "—"}</div></td>
+              <td className="px-2 font-mono text-xs">{it.serial || <span className="font-sans text-amber-600">yo'q</span>}</td>
+              <td className="px-2 text-right tabular-nums">{it.quantity}</td>
+              <td className="px-2"><CondBadge value={it.condition} label={it.condition_label} />{it.is_deleted && <div className="mt-0.5 text-[11px] text-red-600">o'chirilgan</div>}</td>
+              <td className="px-2">{it.employee_name ? <><div>{it.employee_name}</div><div className="text-xs text-muted-foreground">{it.employee_position}</div></> : <span className="text-xs text-amber-600">biriktirilmagan</span>}</td>
+              <td className="px-2"><div>{it.branch_name}</div><div className="text-xs text-muted-foreground">{it.location || "—"}</div></td>
+              <td className="whitespace-nowrap px-3 text-xs text-muted-foreground">{ago(it.updated_at)}<div>{it.updated_by}</div></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function ItemsView({ initial, onAdd, table }: { initial?: ItemFilters; onAdd: () => void; table?: boolean }) {
   const boot = useBoot().data!;
   const [f, setF] = useState<ItemFilters>(initial ?? {});
   const [q, setQ] = useState(initial?.q ?? "");
@@ -541,24 +586,24 @@ export function ItemsView({ initial, onAdd }: { initial?: ItemFilters; onAdd: ()
   const typeOpts = boot.device_types.map((d) => ({ value: String(d.id), label: d.name, group: d.group }));
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <div className="sticky top-0 z-20 space-y-2 border-b bg-background/95 px-3 py-3 backdrop-blur sm:px-4">
+    <div className={cn("mx-auto w-full", table ? "max-w-[1800px]" : "max-w-5xl")}>
+      <div className="sticky top-[var(--inv-top,0px)] z-20 space-y-2 border-b bg-background/95 px-3 py-3 backdrop-blur sm:px-4">
         <div className="flex gap-2">
-          <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary">
+          <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary md:h-10 md:rounded-lg">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Raqam, seriya, model, xodim…"
               className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none" />
             {q && <button onClick={() => setQ("")}><X className="size-4 text-muted-foreground" /></button>}
           </div>
           <button onClick={() => setShowFilters((s) => !s)}
-            className={cn("relative grid size-11 shrink-0 place-items-center rounded-xl border bg-card", (showFilters || activeCount) && "border-primary text-primary")}>
+            className={cn("relative grid size-11 shrink-0 place-items-center rounded-xl border bg-card", (showFilters || activeCount) && "border-primary text-primary", table && "hidden")}>
             <Filter className="size-4" />
             {!!activeCount && <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{activeCount}</span>}
           </button>
-          {boot.me.can.write && <Btn className="hidden sm:inline-flex" onClick={onAdd}><Plus className="size-4" />Qo'shish</Btn>}
+          {boot.me.can.write && !table && <Btn className="hidden sm:inline-flex" onClick={onAdd}><Plus className="size-4" />Qo'shish</Btn>}
         </div>
-        {showFilters && (
-          <div className="grid gap-2 sm:grid-cols-3">
+        {(showFilters || table) && (
+          <div className={cn("grid gap-2 sm:grid-cols-3", table && "lg:grid-cols-4")}>
             {boot.branches.length > 1 && (
               <Picker title="Filial" placeholder="Barcha filiallar" value={f.branch ?? ""} options={branchOpts}
                 onChange={(v) => setF((x) => ({ ...x, branch: v || undefined }))} />
@@ -603,7 +648,8 @@ export function ItemsView({ initial, onAdd }: { initial?: ItemFilters; onAdd: ()
             hint={boot.me.can.write ? "Birinchi qurilmani qo'shing — «+» tugmasini bosing." : undefined}
             action={boot.me.can.write ? <Btn onClick={onAdd}><Plus className="size-4" />Qurilma qo'shish</Btn> : undefined} />
         )}
-        {rows.map((it) => <ItemCard key={it.id} it={it} onClick={() => setEdit(it)} />)}
+        {table && !!rows.length && <ItemsTable rows={rows} onOpen={setEdit} />}
+        {rows.map((it) => <div key={it.id} className={cn(table && "md:hidden")}><ItemCard it={it} onClick={() => setEdit(it)} /></div>)}
         {list.hasNextPage && (
           <Btn variant="outline" className="w-full" loading={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>Yana ko'rsatish</Btn>
         )}

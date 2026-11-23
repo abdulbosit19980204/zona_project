@@ -100,7 +100,7 @@ function EmployeeFormBody({ open, onClose, emp, onShowItems }: {
   );
 }
 
-export function EmployeesView({ onShowItems }: { onShowItems: (employeeId: number) => void }) {
+export function EmployeesView({ onShowItems, table }: { onShowItems: (employeeId: number) => void; table?: boolean }) {
   const boot = useBoot().data!;
   const qc = useQueryClient();
   const [q, setQ] = useState("");
@@ -142,10 +142,10 @@ export function EmployeesView({ onShowItems }: { onShowItems: (employeeId: numbe
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <div className="sticky top-0 z-20 space-y-2 border-b bg-background/95 px-3 py-3 backdrop-blur sm:px-4">
+    <div className={cn("mx-auto w-full", table ? "max-w-[1800px]" : "max-w-5xl")}>
+      <div className="sticky top-[var(--inv-top,0px)] z-20 space-y-2 border-b bg-background/95 px-3 py-3 backdrop-blur sm:px-4">
         <div className="flex gap-2">
-          <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary">
+          <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary md:h-10 md:rounded-lg">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ism, telefon, lavozim…" className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none" />
             {q && <button onClick={() => setQ("")}><X className="size-4 text-muted-foreground" /></button>}
@@ -189,9 +189,42 @@ export function EmployeesView({ onShowItems }: { onShowItems: (employeeId: numbe
               hint="Shablonni yuklab olib to'ldiring va Import qiling yoki «Xodim» tugmasi bilan qo'shing." />
           </div>
         )}
+        {table && !!rows.length && (
+          <div className="hidden overflow-x-auto rounded-xl border bg-card sm:col-span-2 md:block">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2.5 font-semibold">F.I.Sh.</th><th className="px-2 font-semibold">Lavozimi</th>
+                  <th className="px-2 font-semibold">Telefon</th><th className="px-2 font-semibold">Filial</th>
+                  <th className="px-2 font-semibold">Tashkilot</th><th className="px-2 font-semibold">Loyiha</th>
+                  <th className="px-2 font-semibold">Bo'lim</th><th className="px-3 text-right font-semibold">Qurilmalar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, limit).map((e) => (
+                  <tr key={e.id} onClick={() => setEdit(e)} className="cursor-pointer border-b last:border-0 hover:bg-muted/40">
+                    <td className="px-3 py-2.5 font-medium">{e.full_name}</td>
+                    <td className="px-2 text-muted-foreground">{e.position || "—"}</td>
+                    <td className="whitespace-nowrap px-2 text-muted-foreground">{e.phone || "—"}</td>
+                    <td className="px-2">{e.branch_name || <span className="text-amber-600">filialsiz</span>}</td>
+                    <td className="px-2 text-muted-foreground">{e.org_name || "—"}</td>
+                    <td className="px-2 text-muted-foreground">{e.project || "—"}</td>
+                    <td className="px-2 text-muted-foreground">{e.department || "—"}</td>
+                    <td className="px-3 text-right">
+                      <button onClick={(ev) => { ev.stopPropagation(); onShowItems(e.id); }} disabled={!e.devices}
+                        className={cn("rounded-lg px-2 py-1 text-xs font-bold tabular-nums", e.devices ? "bg-emerald-500/12 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+                        <Laptop className="mr-1 inline size-3" />{e.devices}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         {rows.slice(0, limit).map((e) => (
           <button key={e.id} onClick={() => setEdit(e)}
-            className="flex items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-xs hover:border-primary/40">
+            className={cn("flex items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-xs hover:border-primary/40", table && "md:hidden")}>
             <span className="grid size-11 shrink-0 place-items-center rounded-full bg-indigo-500/10 text-sm font-bold text-indigo-600 dark:text-indigo-400">
               {e.full_name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()}
             </span>

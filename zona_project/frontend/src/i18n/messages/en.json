@@ -29,7 +29,8 @@
       "qrConfig": "Configuration",
       "supMain": "Questions",
       "supConfig": "Configuration",
-      "invMain": "Inventory"
+      "invMain": "Inventory",
+      "invConfig": "Management"
     },
     "staff": "Contacts",
     "qrOverview": "Overview",
@@ -60,7 +61,15 @@
     "supAnalytics": "Analytics",
     "supImages": "Image types",
     "aiHistory": "AI analyses",
-    "invOpen": "Branch inventory"
+    "invOverview": "Results & analytics",
+    "invItems": "Devices",
+    "invEmployees": "Employees",
+    "invBranches": "Branches",
+    "invHistory": "History",
+    "invExchange": "Import / export",
+    "invUsers": "Logins & access",
+    "invCatalog": "Catalog",
+    "invMobile": "Mobile view"
   },
   "top": {
     "search": "Search…",

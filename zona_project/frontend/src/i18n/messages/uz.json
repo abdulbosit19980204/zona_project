@@ -29,7 +29,8 @@
       "qrConfig": "Sozlash",
       "supMain": "Savollar",
       "supConfig": "Sozlash",
-      "invMain": "Inventarizatsiya"
+      "invMain": "Inventarizatsiya",
+      "invConfig": "Boshqaruv"
     },
     "staff": "Kontaktlar",
     "qrOverview": "Bosh sahifa",
@@ -60,7 +61,15 @@
     "supAnalytics": "Tahlil",
     "supImages": "Rasm turlari",
     "aiHistory": "AI tahlillar",
-    "invOpen": "Filiallar inventarizatsiyasi"
+    "invOverview": "Natijalar va analitika",
+    "invItems": "Qurilmalar",
+    "invEmployees": "Xodimlar",
+    "invBranches": "Filiallar",
+    "invHistory": "Tarix",
+    "invExchange": "Import / Eksport",
+    "invUsers": "Loginlar va huquqlar",
+    "invCatalog": "Katalog",
+    "invMobile": "Mobil ko'rinish"
   },
   "top": {
     "search": "Qidirish…",
