@@ -200,3 +200,24 @@ class SpeedTests(FlowBase):
                 c.call("getMe", retries=2)
         self.assertEqual(len(calls), 3)
         self.assertLess(time.monotonic() - t, 2.5)
+
+
+class BotCommandTests(ThreadBase):
+    def test_slash_commands_are_never_questions_or_followups(self):
+        self.h().handle(group_msg(40, 1, "Nuqta отправлена на модерацию"))
+        q = Message.objects.get(message_id=40)
+        sent = len(self.tg.sent)
+        self.h().handle(group_msg(41, 1, "/vazifa JN NAVOIY SR 1"))  # PRBC botiga vazifa buyrug'i — suhbat davomi emas
+        self.h().handle(group_msg(42, 3, "/start@prbc_bot"))
+        self.assertEqual(len(self.tg.sent), sent)  # bot hech narsa yozmadi (qayta javob ham yo'q)
+        self.assertFalse(Message.objects.filter(message_id__in=[41, 42]).exists())
+        q.refresh_from_db()
+        self.assertEqual(q.status, Message.ANSWERED)
+
+    def test_staff_command_reply_is_not_learned_as_answer(self):
+        q = self.escalated()
+        from zona.models import Department, Member
+        Member.objects.create(name="Test Xodim", role="r", department=Department.objects.create(name="IT c"), telegram="test_op")
+        self.h().handle(group_msg(11, 2, "/vazifa @test_op shu savolni ko'ring", username="test_op", reply_to=10))
+        q.refresh_from_db()
+        self.assertEqual(q.status, Message.ESCALATED)  # vazifa buyrug'i javob emas — savol hali javob kutadi

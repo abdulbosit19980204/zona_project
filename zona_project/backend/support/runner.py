@@ -227,6 +227,10 @@ class Handler:
             uname = self.bot.username or "bot"
             return self._safe_send(chat["id"], engine.html.escape(f"Kontakt qidiruvi faqat shaxsiy chatda: @{uname} ga yozing."),
                                    reply_to=msg["message_id"])
+        if text.startswith("/"):
+            # boshqa botlarga buyruq (/vazifa — PRBC vazifasi, /start@... va h.k.): savol ham, suhbat davomi ham,
+            # xodim javobi ham emas — bot javob bermaydi va o'rganmaydi
+            return None
         if user.is_staff:
             return self.on_staff(msg, group, user, text, reply_to)
 
