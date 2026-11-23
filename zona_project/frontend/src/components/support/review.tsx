@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
 
 import { supportApi, type Entry } from "./api";
-import { EntryBadge, EntryPicker, fmtDate, Segmented, useSupportMutation } from "./common";
+import { EntryBadge, EntryPicker, fmtDate, OwnerSelect, Segmented, useSupportMutation } from "./common";
 import { AISuggestions } from "./ai-suggestions";
 import { BotAnswers } from "./bot-answers";
 import { Duplicates } from "./duplicates";
@@ -172,6 +172,24 @@ function Diff({ e, t }: { e: Entry; t: ST }) {
 }
 
 /* ---------------------------------------------------------------- 1. navbat (ro'yxat, ommaviy) */
+/** Savol kimga tegishli: mas'ul (belgilash va eslatmalar uchun) — shu yerning o'zida almashtiriladi. */
+function Owner({ e, t }: { e: Entry; t: ST }) {
+  const can = useCan();
+  const save = useSupportMutation((id: number | null) => supportApi.updateEntry(e.id, { responsible: id }), t("saved"));
+  const tg = e.responsible_tg ?? [];
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted-foreground">{t("owner")}:</span>
+      {can.edit ? (
+        <OwnerSelect t={t} value={e.responsible} disabled={save.isPending} onChange={(id) => save.mutate(id)} className="h-7 text-xs" />
+      ) : (
+        <span className="font-medium">{e.responsible_name || t("ownerNone")}</span>
+      )}
+      {tg.length > 0 && <span className="text-xs text-primary">{tg.map((x) => "@" + x).join(" ")}</span>}
+    </div>
+  );
+}
+
 function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: number) => void }) {
   const can = useCan();
   const [sel, setSel] = useState<Set<number>>(new Set());
@@ -206,6 +224,7 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
               {(e.questions ?? []).length > 1 && <div className="text-xs text-muted-foreground">{e.questions.slice(1).join(" · ")}</div>}
               <Sources e={e} t={t} />
               <Diff e={e} t={t} />
+              <Owner e={e} t={t} />
               <div className="flex flex-wrap gap-2 border-t pt-3">
                 {can.edit && <Button size="sm" onClick={() => one.mutate(() => supportApi.approve(e.id))}><Check className="size-4" />{t("approve")}</Button>}
                 {can.edit && <Button size="sm" variant="outline" onClick={() => one.mutate(() => supportApi.reject(e.id))}><X className="size-4" />{t("reject")}</Button>}

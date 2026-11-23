@@ -110,7 +110,7 @@ def not_an_answer(text):
     if REWRITE_ASK.search(t) and len(t) <= 200:
         return True
     # "Готово", "Tekshiring", "Qayta tekwiring, limit qowildi", "Eldar можете помочь" — qayta ishlatib bo'lmaydi
-    return is_handoff(t) or len(_handoff_rest(t)) <= 1 or status_reply(t)
+    return is_handoff(t) or len(_handoff_rest(t)) <= 1 or status_reply(t) or handoff_to(t) is not None
 
 
 # Xodimning holat xabari: ishni O'ZI bajardi va "tekshiring" dedi yoki boshqa xodimni chaqirdi. Bu bilim emas —
@@ -143,6 +143,72 @@ def _staff_first_names():
         names.update(w for w in re.findall(r"[a-z]+", fold(n or "")) if len(w) >= 3)
     _NAMES.update(at=_t.monotonic(), set=names)
     return names
+
+
+_ENDINGS = ("ning", "ga", "ka", "qa", "ni", "da", "om", "em", "u", "a", "e", "y", "i", "ya", "yu")
+
+
+def _people_index():
+    """[(Member, nom so'zlari, telegram username'lar)] — jamoa kontaktlari o'z jamoasiga (Eldar, Guzel -> Pro-target)."""
+    import time as _t
+    if _t.monotonic() - _PEOPLE_IDX["at"] < 600 and _PEOPLE_IDX["rows"]:
+        return _PEOPLE_IDX["rows"]
+    rows = []
+    for m in Member.objects.all():
+        rows.append((m, {w for w in re.findall(r"[a-z]+", fold(m.name or "")) if len(w) >= 4},
+                     {_norm_username(m.telegram)} - {""}))
+    for c in TeamContact.objects.select_related("member"):
+        if c.member_id:
+            rows.append((c.member, {w for w in re.findall(r"[a-z]+", fold(c.name or "")) if len(w) >= 4},
+                         {_norm_username(c.telegram)} - {""}))
+    _PEOPLE_IDX.update(at=_t.monotonic(), rows=rows)
+    return rows
+
+
+_PEOPLE_IDX = {"at": 0.0, "rows": []}
+
+
+def _who(word):
+    """So'z xodim ismimi ("Саиду" -> Saidabror, "Saidga", "Eldar", "Гузель") — mos Member'lar to'plami."""
+    stems = {word}
+    for end in _ENDINGS:
+        if word.endswith(end) and len(word) - len(end) >= 4:
+            stems.add(word[: -len(end)])
+    out = set()
+    for m, names, _u in _people_index():
+        if any(n == st or (len(st) >= 4 and n.startswith(st)) for n in names for st in stems):
+            out.add(m)
+    return out
+
+
+def handoff_to(text):
+    """Xodim savolni boshqa xodimga uzatdi: "К Саиду", "Saidabrorga", "Eldar можете помочь", "@StargroupSaid".
+    Qaytaradi: o'sha mas'ul (Member) — aniq bitta bo'lsa; aks holda None. Bu javob emas — savol mas'ulga tegishli."""
+    t = (text or "").strip()
+    if not t or len(t) > 80:
+        return None
+    hits, rest = set(), 0
+    for u in re.findall(r"@(\w+)", t):
+        un = _norm_username(u)
+        found = {m for m, _n, users in _people_index() if un in users}
+        if not found:
+            return None  # tanilmagan odam chaqirildi — kimga tegishli ekanini bilmaymiz
+        hits |= found
+    for w in re.findall(r"[a-z]+", fold(re.sub(r"@\w+", " ", t))):
+        if len(w) < 3 or w in GREETING or w in _SHORT or w.startswith(_HELP) or w.startswith(_GREET) or w.startswith(_CHECK):
+            continue
+        found = _who(w)
+        if found:
+            hits |= found
+        else:
+            rest += 1
+    return next(iter(hits)) if len(hits) == 1 and rest == 0 else None
+
+
+HANDOFF_UZ = ("Bu so'rovni **{n}** bajaradi — so'rov unga yuborildi. Kerak bo'lsa nuqta kodi va nomini yozing; "
+              "bajarilgach shu yerda javob beriladi.")
+HANDOFF_RU = ("Этот запрос выполняет **{n}** — запрос передан. При необходимости напишите код и название ТТ; "
+              "когда будет готово, ответим здесь.")
 
 
 def status_reply(text):

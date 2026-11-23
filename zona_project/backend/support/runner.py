@@ -886,8 +886,21 @@ class Handler:
             Message.objects.filter(pk=a.pk).update(created_at=when)
         if clarify:
             return a
-        if engine.is_handoff(text):
-            return a  # boshqa xodimga yo'naltirish ("@operator", "Vali помогите") — savol hali javob kutadi, o'rganilmaydi
+        target = engine.handoff_to(text)
+        if engine.is_handoff(text) or target is not None:
+            # boshqa xodimga yo'naltirish ("@operator", "К Саиду", "Eldar можете помочь") — savol hali javob kutadi.
+            # Matn javob sifatida o'rganilmaydi; lekin kimga tegishli ekani o'rganiladi (bilim bazasida mas'ul) va
+            # eslatmalar endi shu mas'ulni belgilaydi
+            if target is not None and not self.history:
+                tu = (TgUser.objects.filter(member=target).first()
+                      or (TgUser.objects.filter(username__iexact=target.telegram.lstrip("@")).first() if target.telegram else None)
+                      or TgUser.objects.filter(contact__member=target).exclude(username="").first())
+                if tu is not None:
+                    Message.objects.filter(pk=q.pk).update(handler=tu)
+            if target is not None and settings.learn_from_staff and not loose:
+                learn(q, engine.HANDOFF_UZ.format(n=target.name), staff_name, source="history" if self.history else "staff",
+                      responsible=target, answer_ru=engine.HANDOFF_RU.format(n=target.name))
+            return a
         if not self.history:
             # xodim javob berdi — savolni qabul qilgan; "hal bo'lmadi" / "jarayonda" bo'lsa — savol egasidan qayta so'raladi
             resolution.accept(q, user, now=when)
@@ -1244,7 +1257,7 @@ class Handler:
 
 
 # ====================================================================== bilim bazasi amallari
-def learn(q, answer, staff_name, priority=False, ask_first="", source="staff"):
+def learn(q, answer, staff_name, priority=False, ask_first="", source="staff", responsible=None, answer_ru=""):
     """Xodim javobidan bilim bazasiga nomzod (status=new). Tasdiqlanmaguncha bot uni ishlatmaydi.
 
     Qaytaradi: (yozuv, yangimi). Juda o'xshash nomzod bor bo'lsa — yangisi ochilmaydi, savol ko'rinishi unga qo'shiladi;
@@ -1268,7 +1281,9 @@ def learn(q, answer, staff_name, priority=False, ask_first="", source="staff"):
             match.questions = list(dict.fromkeys([*(match.questions or []), question[:1000]]))[:50]
             if ask_first and not match.ask_first:
                 match.ask_first = ask_first[:1000]
-            if not match.responsible_id:
+            if responsible is not None:
+                match.responsible = responsible  # xodim aniq kimga uzatgan bo'lsa — o'sha mas'ul
+            elif not match.responsible_id:
                 match.responsible = learn_owner(question)
             match.priority = match.priority or priority
             match.sources = _add_source(match.sources, q)
@@ -1276,8 +1291,9 @@ def learn(q, answer, staff_name, priority=False, ask_first="", source="staff"):
             return match, False
     title = question.splitlines()[0][:190]
     return Entry.objects.create(kind=Entry.FAQ, title=title, questions=[question[:1000]], answer=answer.strip(),
-                                ask_first=ask_first[:1000], status=Entry.NEW, source=source, author=staff_name,
-                                priority=priority, sources=_add_source(None, q), responsible=learn_owner(question)), True
+                                answer_ru=(answer_ru or "").strip(), ask_first=ask_first[:1000], status=Entry.NEW,
+                                source=source, author=staff_name, priority=priority, sources=_add_source(None, q),
+                                responsible=responsible or learn_owner(question)), True
 
 
 def learn_owner(text):

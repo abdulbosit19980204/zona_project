@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, Bot, BookOpen, CheckCheck, CircleCheck, CircleX, ExternalLink, Hourglass, Image as ImageIcon, Inbox, Loader2, MessageSquareReply, Search, Send, Sparkles, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/common/page";
 import { Button } from "@/components/ui/button";
@@ -41,8 +42,28 @@ const STATUS_DOT: Record<MsgStatus, string> = {
 };
 
 /** Guruh savollari: chapda ro'yxat, o'rtada suhbat va javob yozish, keng ekranda o'ngda tafsilotlar. */
+const DRILL_LABEL: Record<string, SKey> = {
+  total: "anQuestions", yes: "r_yes", no: "r_no", work: "r_work", asked: "r_asked", unknown: "r_", bot: "kpiBot",
+  staff: "kpiStaff", unanswered: "anUnanswered", open: "anOpenNow",
+};
+
 export function SupportInbox() {
+  return <Suspense><InboxInner /></Suspense>;
+}
+
+/** Tahlildan o'tilgan bo'lsa (?drill=...&days=30) — aynan tahlil sanagan savollar ro'yxati. */
+function useDrill() {
+  const p = useSearchParams();
+  const drill = p.get("drill");
+  if (!drill || !DRILL_LABEL[drill]) return null;
+  const params: Record<string, string> = { drill };
+  for (const k of ["days", "from", "to"]) { const v = p.get(k); if (v) params[k] = v; }
+  return params;
+}
+
+function InboxInner() {
   const t = useSt();
+  const drill = useDrill();
   const [filter, setFilter] = useState<Filter>("open");
   const [res, setRes] = useState<ResFilter>("any");
   const [q, setQ] = useState("");
@@ -50,8 +71,9 @@ export function SupportInbox() {
   const status = filter === "open" ? "escalated,drafted,new" : filter;
   const stats = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7), refetchInterval: 30_000 });
   const list = useQuery({
-    queryKey: ["support", "messages", status, res],
-    queryFn: () => supportApi.messages({ status, limit: 300, ...(res === "any" ? {} : { resolution: res }) }),
+    queryKey: ["support", "messages", status, res, drill],
+    queryFn: () => supportApi.messages(drill ? { ...drill, limit: 500 }
+      : { status, limit: 300, ...(res === "any" ? {} : { resolution: res }) }),
     refetchInterval: 15_000,
   });
   const shown = useMemo(() => (list.data ? smartFilter(list.data, q,
@@ -84,22 +106,35 @@ export function SupportInbox() {
               <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} className="h-9 bg-muted/40 pl-8" />
             </div>
-            <Segmented size="sm" value={filter} onChange={(f) => { setFilter(f); setSelected(null); }} className="w-full" options={[
+            {drill && (
+              <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs">
+                <span className="min-w-0 flex-1">
+                  <span className="text-muted-foreground">{t("drillFrom")}: </span>
+                  <b>{t(DRILL_LABEL[drill.drill])}</b>
+                  <span className="text-muted-foreground"> · {drill.from ? `${drill.from} — ${drill.to ?? drill.from}` : t("drillDays", { n: drill.days ?? 30 })}
+                    {list.data ? ` · ${list.data.length}` : ""}</span>
+                </span>
+                <Link href="/support" className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={t("drillClear")} title={t("drillClear")}>
+                  <X className="size-3.5" />
+                </Link>
+              </div>
+            )}
+            {!drill && <Segmented size="sm" value={filter} onChange={(f) => { setFilter(f); setSelected(null); }} className="w-full" options={[
               { value: "open", label: t("needsAnswer"), count: (bs.escalated ?? 0) + (bs.drafted ?? 0) + (bs.new ?? 0) },
               { value: "escalated", label: t("m_escalated"), count: bs.escalated },
               { value: "drafted", label: t("m_drafted"), count: bs.drafted },
               { value: "answered", label: t("m_answered") },
               { value: "closed", label: t("m_closed") },
               { value: "all", label: t("all") },
-            ]} />
-            <Segmented size="sm" value={res} onChange={(v) => { setRes(v); setSelected(null); }} className="w-full" options={[
+            ]} />}
+            {!drill && <Segmented size="sm" value={res} onChange={(v) => { setRes(v); setSelected(null); }} className="w-full" options={[
               { value: "any", label: t("r_any") },
               { value: "open", label: t("r_open") },
               { value: "asked", label: t("r_asked"), icon: Hourglass },
               { value: "yes", label: t("r_yes"), icon: CircleCheck },
               { value: "no", label: t("r_no"), icon: CircleX },
-            ]} />
-            {can.edit && (res === "asked" || res === "open") && !!shown?.length && (
+            ]} />}
+            {!drill && can.edit && (res === "asked" || res === "open") && !!shown?.length && (
               <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/50 px-2 py-1.5 text-xs">
                 <span className="text-muted-foreground">{t("bulkShown", { n: shown.length })}</span>
                 <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-success" disabled={bulk.isPending}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, type LucideIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -12,11 +12,27 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-import type { EntryStatus, Mode, MsgStatus } from "./api";
+import { supportApi, type EntryStatus, type Mode, type MsgStatus } from "./api";
 import { smartFilter } from "./smart-search";
 import type { SKey, ST } from "./i18n";
 
 export { fmtDate } from "@/components/qrdrive/common";
+
+/** Mas'ulni tanlash (xodim yoki jamoa). Bo'sh — mas'ul belgilanmagan. */
+export function OwnerSelect({ value, onChange, t, disabled, className }: {
+  value: number | null; onChange: (id: number | null) => void; t: ST; disabled?: boolean; className?: string;
+}) {
+  const owners = useQuery({ queryKey: ["support", "owners"], queryFn: supportApi.owners, staleTime: 5 * 60_000 });
+  return (
+    <select className={cn("h-8 max-w-full rounded-md border bg-background px-2 text-sm", className)} disabled={disabled}
+      value={value ?? ""} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} aria-label={t("owner")}>
+      <option value="">{t("ownerNone")}</option>
+      {(owners.data ?? []).map((m) => (
+        <option key={m.id} value={m.id}>{m.name}{m.telegram.length ? ` · @${m.telegram.slice(0, 2).join(" @")}` : ""}</option>
+      ))}
+    </select>
+  );
+}
 
 const MSG_TONE: Record<MsgStatus, string> = {
   new: "border-primary/50 text-primary",

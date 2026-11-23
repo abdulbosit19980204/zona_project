@@ -15,17 +15,17 @@ import { useCan } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
 
 import { supportApi, type Entry, type EntryKind, type MediaInfo } from "./api";
-import { EntryBadge, fmtDate, lines, Segmented, unlines, useSupportMutation } from "./common";
+import { EntryBadge, fmtDate, lines, OwnerSelect, Segmented, unlines, useSupportMutation } from "./common";
 import { MediaThumb } from "./media";
 import { useSt, type SKey } from "./i18n";
 
 interface Draft {
   kind: EntryKind; title: string; questions: string; triggers: string; extract: string; answer: string; answer_ru: string;
-  ask_first: string; creates_task: boolean; task_assignee: string; answer_mode: "" | "on" | "off";
+  ask_first: string; creates_task: boolean; task_assignee: string; answer_mode: "" | "on" | "off"; responsible: number | null;
 }
 
 const blank: Draft = { kind: "faq", title: "", questions: "", triggers: "", extract: "", answer: "", answer_ru: "", ask_first: "",
-  creates_task: false, task_assignee: "", answer_mode: "" };
+  creates_task: false, task_assignee: "", answer_mode: "", responsible: null };
 
 function toDraft(e?: Entry): Draft {
   if (!e) return blank;
@@ -35,6 +35,7 @@ function toDraft(e?: Entry): Draft {
     extract: unlines(p.extract ?? e.extract), answer: p.answer ?? e.answer, answer_ru: p.answer_ru ?? e.answer_ru,
     ask_first: (p as { ask_first?: string }).ask_first ?? e.ask_first ?? "",
     creates_task: !!e.creates_task, task_assignee: e.task_assignee ?? "", answer_mode: e.answer_mode ?? "",
+    responsible: e.responsible ?? null,
   };
 }
 
@@ -67,7 +68,7 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
     kind: d.kind, title: d.title.trim(), questions: lines(d.questions), triggers: lines(d.triggers), extract: lines(d.extract),
     answer: d.answer.trim(), answer_ru: d.answer_ru.trim(), ask_first: d.ask_first.trim(),
     creates_task: d.creates_task, task_assignee: d.task_assignee.trim().replace(/^@/, ""), answer_mode: d.answer_mode,
-    attachments: files.map((f) => f.id),
+    attachments: files.map((f) => f.id), responsible: d.responsible,
   });
   const save = useSupportMutation(
     (approve: boolean) => (e ? supportApi.updateEntry(e.id, body()).then((r) => (approve ? supportApi.approve(r.id) : r))
@@ -111,6 +112,9 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
             </FormRow>
             <FormRow label={t("answerRu")}>
               <Textarea rows={5} value={d.answer_ru} onChange={(x) => set("answer_ru")(x.target.value)} />
+            </FormRow>
+            <FormRow label={t("owner")} hint={t("ownerHint")}>
+              <OwnerSelect t={t} value={d.responsible} onChange={(id) => setD({ ...d, responsible: id })} className="h-9 w-full" />
             </FormRow>
             <FormRow label={t("askFirst")} hint={t("askFirstHint")}>
               <Textarea rows={2} value={d.ask_first} onChange={(x) => set("ask_first")(x.target.value)} />

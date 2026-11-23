@@ -35,7 +35,7 @@ export interface Entry {
   answer_mode?: "" | "on" | "off";
   creates_task?: boolean; task_assignee?: string; variants?: { uz: string; ru: string }[] | null;
   image_examples_count?: number; zone: number | null; zone_name: string; responsible: number | null;
-  responsible_name: string; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
+  responsible_name: string; responsible_tg?: string[]; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
   author: string; approved_by: string; approved_at: string | null; uses: number; likes: number; dislikes: number;
   last_used_at: string | null; created_at: string; updated_at: string;
   sources_info?: EntrySource[];
@@ -223,9 +223,13 @@ const get = async <T>(url: string, params?: Record<string, string | number>) => 
 const post = async <T>(url: string, body: unknown = {}) => (await api.post<T>(B + url, body)).data;
 const patch = async <T>(url: string, body: unknown) => (await api.patch<T>(B + url, body)).data;
 
+/** Mas'ul (xodim yoki jamoa) — bilim bazasi yozuvi kimga tegishli; belgilash uchun Telegram'lari bilan. */
+export interface Owner { id: number; name: string; role: string; level: string; telegram: string[]; is_team: boolean }
+
 export const supportApi = {
   stats: (days = 7) => get<SupportStats>("stats/", { days }),
   staff: () => get<StaffRow[]>("staff/"),
+  owners: () => get<Owner[]>("owners/"),
   settings: () => get<SupportSettings>("settings/"),
   saveSettings: (body: Partial<SupportSettings> & { api_hash?: string }) => patch<SupportSettings>("settings/", body),
   bots: () => get<SupportBot[]>("bots/"),

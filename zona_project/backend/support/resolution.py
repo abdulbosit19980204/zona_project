@@ -38,6 +38,16 @@ NOT_YET = re.compile(
 
 DONE_TEXT = {"uz": "✅ Rahmat! Savol yopildi.", "ru": "✅ Спасибо! Вопрос закрыт."}
 AGAIN_TEXT = {"uz": "❌ Tushunarli — mutaxassis qayta ko'rib chiqadi.", "ru": "❌ Понятно — специалист посмотрит ещё раз."}
+AGAIN_WHO = {"uz": "❌ Tushunarli — {who} qayta ko'rib chiqadi. Hal bo'lguncha qayta so'rab turamiz.",
+             "ru": "❌ Понятно — {who} посмотрит ещё раз. Будем спрашивать, пока вопрос не решится."}
+
+
+def again_text(q):
+    """«Hal bo'lmadi»: kim qayta ko'radi — xodim belgilanadi (bildirishnoma boradi), bo'lmasa umumiy matn."""
+    staff = staff_mentions(q)
+    if staff:
+        return AGAIN_WHO[_lang(q)].format(who=", ".join(staff))
+    return html.escape(AGAIN_TEXT[_lang(q)])
 
 
 def feedback_kind(text):
@@ -118,7 +128,7 @@ def _lang(q):
 
 def close_prompt(tg, q, value):
     """"Hal bo'ldimi?" xabari javobga aylanadi (tugmalarsiz)."""
-    close_prompts(tg, q, (DONE_TEXT if value == YES else AGAIN_TEXT)[_lang(q)])
+    close_prompts(tg, q, DONE_TEXT[_lang(q)] if value == YES else again_text(q))
 
 
 def close_prompts(tg, q, text):
@@ -321,7 +331,9 @@ def notify_open(tg, q, admin_chat_id, staff):
 def followups(tg, s=None, now=None, limit=5, bot_id=None):
     """Ishchi sikl chaqiradi: savol egasi belgilamagan — xodimdan so'raladi; "hal bo'lmadi" — savol egasidan qayta
     so'raladi (xodim hali harakat qilmagan bo'lsa — u ham eslatiladi); "jarayonda" — xodim eslatiladi.
-    remind_max marta eslatilsa ham ochiq qolsa — admin chatiga bir marta xabar, keyin eslatilmaydi."""
+    "Hal bo'lmadi" / "jarayonda" — yechim chiqquncha qayta-qayta so'raladi (ish vaqtida; remind_max dan keyin admin
+    chatiga bir marta xabar va oraliq 2 baravar uzayadi). Savol egasi belgilamagan savol — remind_max dan keyin
+    admin hal qiladi (eslatish to'xtaydi)."""
     s = s or Settings.load()
     if not s.confirm_resolution or tg is None:
         return 0
@@ -330,7 +342,7 @@ def followups(tg, s=None, now=None, limit=5, bot_id=None):
         return 0
     qs = (Message.objects.filter(kind=Message.QUESTION, source="live", resolution__in=[ASKED, NO, WORK],
                                  next_ask_at__isnull=False, next_ask_at__lte=now,
-                                 created_at__gte=now - timezone.timedelta(days=7))
+                                 created_at__gte=now - timezone.timedelta(days=PERSIST_DAYS))
           .select_related("user", "group", "handler__member", "handler__contact", "entry", "bot").order_by("next_ask_at"))
     if bot_id:
         qs = qs.filter(bot_id=bot_id)
@@ -341,10 +353,17 @@ def followups(tg, s=None, now=None, limit=5, bot_id=None):
             Message.objects.filter(pk=q.pk).update(**stop)
             continue
         staff = staff_mentions(q)
-        if q.remind_count >= max(1, s.remind_max):
-            notify_open(tg, q, q.bot.admin_chat_id, staff)
+        persistent = q.resolution in (NO, WORK)  # rad etilgan / jarayondagi savol — yechim chiqquncha so'raladi
+        cap = max(1, s.remind_max)
+        if not persistent and q.created_at < now - timezone.timedelta(days=7):
             Message.objects.filter(pk=q.pk).update(**stop)
             continue
+        if q.remind_count >= cap:
+            if q.remind_count == cap:
+                notify_open(tg, q, q.bot.admin_chat_id, staff)
+            if not persistent:
+                Message.objects.filter(pk=q.pk).update(**stop)
+                continue
         if q.resolution == NO:
             acted = bool(q.resolved_at) and Message.objects.filter(question=q, kind=Message.STAFF,
                                                                    created_at__gt=q.resolved_at).exists()
@@ -362,7 +381,10 @@ def followups(tg, s=None, now=None, limit=5, bot_id=None):
             Message.objects.filter(pk=q.pk).update(**stop)  # guruhni qayta-qayta urinish bilan to'ldirmaymiz
             continue
         mid = (sent or {}).get("message_id")
-        upd = {"remind_count": q.remind_count + 1, "next_ask_at": now + timezone.timedelta(minutes=s.reask_after or 120)}
+        every = s.reask_after or 120
+        if q.remind_count + 1 >= cap:  # ko'p eslatilgan — oraliq uzayadi (guruh to'lib ketmasin), lekin to'xtamaydi
+            every = min(every * 2, 480)
+        upd = {"remind_count": q.remind_count + 1, "next_ask_at": now + timezone.timedelta(minutes=every)}
         old = q.staff_msg_id if to_staff else q.confirm_msg_id
         upd["staff_msg_id" if to_staff else "confirm_msg_id"] = mid
         Message.objects.filter(pk=q.pk).update(**upd)
@@ -375,6 +397,7 @@ def followups(tg, s=None, now=None, limit=5, bot_id=None):
     return n
 
 
+PERSIST_DAYS = 14  # rad etilgan savol shuncha kungacha qayta so'raladi (undan eskisi — admin ro'yxatida)
 TASK_WAIT_HOURS = 2  # vazifa ochilgan, guruhda xodim javobi yo'q — shuncha vaqtdan keyin so'raladi
 WORK_HOURS = (9, 20)  # kechasi odamlarni bezovta qilmaymiz (Toshkent vaqti)
 ASK_WINDOW_HOURS = 3  # xodim javobidan keyin shu vaqt ichida so'raladi (keyin — kech, so'ralmaydi)

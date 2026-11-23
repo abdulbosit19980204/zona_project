@@ -197,7 +197,18 @@ class VersionSerializer(serializers.ModelSerializer):
 class EntrySerializer(serializers.ModelSerializer):
     zone_name = serializers.CharField(source="zone.name", read_only=True, default="")
     responsible_name = serializers.CharField(source="responsible.name", read_only=True, default="")
+    responsible_tg = serializers.SerializerMethodField()
     attachments_info = serializers.SerializerMethodField()
+
+    def get_responsible_tg(self, obj):
+        """Mas'ulning Telegram'lari (belgilash uchun): o'zi yoki jamoa a'zolari."""
+        m = obj.responsible
+        if m is None:
+            return []
+        tgs = [c.telegram.lstrip("@") for c in m.contacts.all() if c.telegram] if m.is_team else []
+        if m.telegram:
+            tgs.insert(0, m.telegram.lstrip("@"))
+        return list(dict.fromkeys(tgs))[:4]
     image_examples_count = serializers.SerializerMethodField()
     sources_info = serializers.SerializerMethodField()
 
@@ -248,7 +259,7 @@ class EntrySerializer(serializers.ModelSerializer):
         model = Entry
         fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first",
                   "attachments", "attachments_info", "image_examples_count", "sources_info", "zone", "zone_name", "creates_task", "task_assignee", "variants", "answer_mode",
-                  "responsible", "responsible_name", "status", "source", "priority", "pending", "author",
+                  "responsible", "responsible_name", "responsible_tg", "status", "source", "priority", "pending", "author",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
         read_only_fields = ["status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",
                             "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
@@ -284,7 +295,7 @@ class EntryViewSet(ZonaViewSet):
     permission_classes = [CanView]  # viewer ham taklif qila oladi; tasdiqlash — editor
 
     def get_queryset(self):
-        qs = Entry.objects.select_related("zone", "responsible")
+        qs = Entry.objects.select_related("zone", "responsible").prefetch_related("responsible__contacts")
         p = self.request.query_params
         if p.get("status") and p["status"] != "all":
             qs = qs.filter(status__in=p["status"].split(","))
@@ -566,6 +577,26 @@ class MessageViewSet(ZonaViewSet):
             qs = qs.filter(group_id=p["group"])
         if p.get("stage"):
             qs = qs.filter(stage=p["stage"])
+        if p.get("drill"):
+            # tahlildan o'tish: aynan tahlil sanagan savollar (jonli, tahlilga qo'shilgan guruhlar, o'sha davr)
+            from .workload import BOT_STAGES, period, scoped
+            since, end, _info = period(p)
+            qs = scoped(qs.filter(created_at__gte=since, created_at__lt=end)).exclude(status=Message.IGNORED)
+            done = Q(status__in=[Message.ANSWERED, Message.CLOSED])
+            d = p["drill"]
+            if d == "bot":
+                qs = qs.filter(done, stage__in=BOT_STAGES)
+            elif d == "staff":
+                qs = qs.filter(done, stage__in=["staff", "panel", "react"])
+            elif d == "unanswered":
+                qs = qs.exclude(done)
+            elif d == "open":
+                qs = qs.filter(resolution__in=[Message.NO, Message.WORK, Message.ASKED])
+            elif d == "unknown":
+                qs = qs.filter(resolution="")
+            elif d in (Message.YES, Message.NO, Message.WORK, Message.ASKED):
+                qs = qs.filter(resolution=d)
+            return qs.order_by("-created_at")
         if p.get("resolution"):  # yes / no / asked / open (holati noma'lum yoki so'ralgan)
             r = p["resolution"]
             qs = qs.filter(resolution__in=["", "asked", "work"]) if r == "open" else qs.filter(resolution=r)
@@ -653,6 +684,13 @@ def stats(request):
     return Response({"total": qs.count(), "by_status": by_status, "by_stage": by_stage, "entries": entries,
                      "pending_edits": Entry.objects.filter(pending__isnull=False).count(),
                      "top": top, "bots": bots, "modes": dict(MODES)})
+
+
+@zona_api(["GET"], [CanView])
+def owners(request):
+    """Mas'ul tanlash ro'yxati: barcha xodimlar va jamoalar (Supervayzerlar, Pro-target...) — Telegram'lari bilan."""
+    from .engine import _person
+    return Response([{**_person(m), "role": m.role} for m in Member.objects.prefetch_related("contacts").order_by("name")])
 
 
 @zona_api(["GET"], [CanView])

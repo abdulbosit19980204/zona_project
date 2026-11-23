@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Bot, CircleCheck, Clock3, Zap, HelpCircle, Image as ImageIcon, Inbox, ListChecks, MessageCircleQuestion, Tags, Target, UserRound, Users } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,14 +55,14 @@ export function SupportAnalytics() {
       {a && (
         <div className="grid gap-5">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Metric label={t("anQuestions")} value={a.questions} hint={`${t("anPhoto")}: ${a.with_photo}`} icon={Inbox} tone="primary" />
-            <Metric label={t("resRate")} value={a.resolution?.rate != null ? `${a.resolution.rate}%` : "—"}
-              hint={a.resolution ? `${t("r_yes")} ${a.resolution.yes} · ${t("r_no")} ${a.resolution.no}` : undefined} icon={CircleCheck} tone="success" />
-            <Metric label={t("kpiBot")} value={sm?.bot ?? 0} hint={sm?.bot_share != null ? `${sm.bot_share}%` : undefined} icon={Bot} tone="success" />
-            <Metric label={t("kpiStaff")} value={sm?.staff ?? 0}
-              hint={sm ? `${sm.staff_share ?? 0}% · ${t("kpiReacts", { n: sm.react })}` : undefined} icon={UserRound} />
-            <Metric label={t("anUnanswered")} value={sm?.unanswered ?? a.unanswered} icon={HelpCircle} tone="warning" />
-            <Metric label={t("anOpenNow")} value={sm?.open ?? 0} hint={t("anOpenHint")} icon={ListChecks} tone="warning" />
+            <Drill to="total" range={range}><Metric label={t("anQuestions")} value={a.questions} hint={`${t("anPhoto")}: ${a.with_photo}`} icon={Inbox} tone="primary" /></Drill>
+            <Drill to="yes" range={range}><Metric label={t("resRate")} value={a.resolution?.rate != null ? `${a.resolution.rate}%` : "—"}
+              hint={a.resolution ? `${t("r_yes")} ${a.resolution.yes} · ${t("r_no")} ${a.resolution.no}` : undefined} icon={CircleCheck} tone="success" /></Drill>
+            <Drill to="bot" range={range}><Metric label={t("kpiBot")} value={sm?.bot ?? 0} hint={sm?.bot_share != null ? `${sm.bot_share}%` : undefined} icon={Bot} tone="success" /></Drill>
+            <Drill to="staff" range={range}><Metric label={t("kpiStaff")} value={sm?.staff ?? 0}
+              hint={sm ? `${sm.staff_share ?? 0}% · ${t("kpiReacts", { n: sm.react })}` : undefined} icon={UserRound} /></Drill>
+            <Drill to="unanswered" range={range}><Metric label={t("anUnanswered")} value={sm?.unanswered ?? a.unanswered} icon={HelpCircle} tone="warning" /></Drill>
+            <Drill to="open" range={range}><Metric label={t("anOpenNow")} value={sm?.open ?? 0} hint={t("anOpenHint")} icon={ListChecks} tone="warning" /></Drill>
           </div>
           <Scope a={a} t={t} />
 
@@ -75,7 +75,7 @@ export function SupportAnalytics() {
             { value: "topics", label: t("anTabTopics"), icon: Tags },
           ]} />
 
-          {tab === "overview" && <Overview a={a} t={t} />}
+          {tab === "overview" && <Overview a={a} t={t} range={range} />}
           {tab === "speed" && <Speed range={range} t={t} />}
           {tab === "workload" && <Workload range={range} t={t} />}
           {tab === "staff" && <StaffTable a={a} t={t} />}
@@ -130,8 +130,26 @@ function Scope({ a, t }: { a: Analytics; t: ST }) {
   );
 }
 
+/** Tahlildagi raqam -> «Savollar» sahifasida aynan shu savollar (o'sha davr va tahlil doirasi bilan). */
+export function drillHref(to: string, range: Range) {
+  const p = new URLSearchParams({ drill: to });
+  if ("days" in range && range.days) p.set("days", String(range.days));
+  if ("from" in range && range.from) p.set("from", range.from);
+  if ("to" in range && range.to) p.set("to", range.to);
+  return `/support?${p.toString()}`;
+}
+
+function Drill({ to, range, children }: { to: string; range: Range; children: ReactNode }) {
+  return (
+    <Link href={drillHref(to, range)}
+      className="rounded-xl outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring">
+      {children}
+    </Link>
+  );
+}
+
 /** Savollar yakuni: hal bo'ldi / hal bo'lmadi / jarayonda / tasdiq kutilmoqda / noma'lum — bitta ulushli chiziq va raqamlar. */
-function Outcomes({ a, t }: { a: Analytics; t: ST }) {
+function Outcomes({ a, t, range }: { a: Analytics; t: ST; range: Range }) {
   const r = a.resolution;
   if (!r) return null;
   const parts = [
@@ -153,12 +171,13 @@ function Outcomes({ a, t }: { a: Analytics; t: ST }) {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {parts.map((p) => (
-          <div key={p.key} className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+          <Link key={p.key} href={drillHref(p.key, range)} title={t("anDrill")}
+            className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 transition-colors hover:bg-muted">
             <span className={`size-2.5 shrink-0 rounded-sm ${p.cls}`} />
             <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{p.label}</span>
             <span className="font-semibold tabular-nums">{p.n}</span>
             <span className="text-[11px] tabular-nums text-muted-foreground">{Math.round((100 * p.n) / total)}%</span>
-          </div>
+          </Link>
         ))}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
@@ -252,11 +271,11 @@ function Systems({ a, t }: { a: Analytics; t: ST }) {
   );
 }
 
-function Overview({ a, t }: { a: Analytics; t: ST }) {
+function Overview({ a, t, range }: { a: Analytics; t: ST; range: Range }) {
   const maxDay = Math.max(1, ...a.daily.map((d) => d.total));
   return (
     <div className="grid gap-4">
-      <Outcomes a={a} t={t} />
+      <Outcomes a={a} t={t} range={range} />
       <Systems a={a} t={t} />
       <Panel title={t("anDaily")} icon={BarChart3}
         actions={(

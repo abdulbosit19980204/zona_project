@@ -132,12 +132,12 @@ class StaffButtonsTests(OpenBase):
         self.assertIn("@test_op", self.tg.sent[-1]["text"])
         self.assertEqual(self.tg.sent[-1]["reply_to"], 5)
         self.assertEqual(resolution.followups(self.tg, now=NOON + dt.timedelta(minutes=242)), 1)
-        # remind_max=2 marta eslatildi — keyingisi admin chatiga, so'ng to'xtaydi
-        self.assertEqual(resolution.followups(self.tg, now=NOON + dt.timedelta(minutes=363)), 0)
+        # remind_max=2 marta eslatildi — admin chatiga bir marta xabar; "jarayonda" savol yechilguncha eslatiladi
+        self.assertEqual(resolution.followups(self.tg, now=NOON + dt.timedelta(hours=22)), 1)  # ertasi kuni 10:00
         self.assertTrue(any(m["chat"] == 555 and "ochiq qolmoqda" in m["text"] for m in self.tg.sent))
         self.qq.refresh_from_db()
-        self.assertIsNone(self.qq.next_ask_at)
-        self.assertEqual(len([m for m in self.tg.sent[n0:] if m["chat"] == -100]), 2)
+        self.assertIsNotNone(self.qq.next_ask_at)
+        self.assertEqual(len([m for m in self.tg.sent[n0:] if m["chat"] == -100]), 3)
 
     def test_asker_silent_staff_is_asked(self):
         Message.objects.create(bot=self.bot, group=self.g, chat_id=-100, message_id=6, question=self.qq, source="live",

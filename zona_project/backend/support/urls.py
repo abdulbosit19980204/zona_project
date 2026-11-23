@@ -16,6 +16,7 @@ urlpatterns = [
     path("settings/", views.settings_view, name="settings"),
     path("stats/", views.stats, name="stats"),
     path("staff/", views.staff, name="staff"),
+    path("owners/", views.owners, name="owners"),
     path("analytics/", views.analytics, name="analytics"),
     path("analytics/workload/", views.analytics_workload, name="analytics-workload"),
     path("analytics/speed/", views.analytics_speed, name="analytics-speed"),
