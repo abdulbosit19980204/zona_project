@@ -466,7 +466,8 @@ Qoidalar:
 - Savol tilida javob ber (o'zbekcha savolga o'zbek lotin, ruscha savolga rus).
 - Rasm matni (OCR) xato o'qilgan bo'lishi mumkin — faqat aniq ko'ringan kod/holatlarga tayan.
 - Savol o'zbek lotin/kirill, yangi alifbo (ş, ç, ō) yoki ruscha bo'lishi mumkin; imlo xatolarini tushun.
-- Eng yaqin tasdiqlangan javob savolga mos kelsa — o'shani asos qilib, savolga moslab tushunarli javob yoz.
+- Eng yaqin tasdiqlangan javob savolga mos kelsa — o'shani asos qilib, savolga moslab tushunarli javob yoz. Uning muhim
+  bandlarini (muddat, nima tekshiriladi, nima yuborish kerak, natija qayerda ko'rinadi) TASHLAB KETMA — qisqartirma.
 - Ma'lumot yetarli bo'lmasa yoki shaxsiy/moliyaviy qaror kerak bo'lsa: needs_human=true, confidence past.
 - Kim hal qilishini aytsang — faqat MAS'ULLAR ro'yxatidagi odam/jamoa nomini ayt. Ro'yxatda yo'q rol yoki bo'limni
   ("operator", "menejer", "buxgalteriya" va h.k.) O'YLAB TOPMA; bilmasang — mas'ulni aytma, needs_human=true.
