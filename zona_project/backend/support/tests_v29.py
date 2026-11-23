@@ -37,6 +37,8 @@ class HandoffTests(PeopleBase):
         self.assertIsNone(engine.handoff_to("@kimdir посмотрите"))  # tanilmagan odam
         self.assertIsNone(engine.handoff_to("Saidabror va Eldar"))  # ikki xil mas'ul
         self.assertIsNone(engine.handoff_to("Перезайдите в приложение"))
+        self.assertIsNone(engine.handoff_to("Вы супер"))  # maqtov — uzatish emas
+        self.assertIsNone(engine.handoff_to("Said"))  # belgisiz bitta ism — aniq emas
         self.assertTrue(engine.not_an_answer("К Саиду"))
 
     def test_staff_handoff_is_not_learned_as_answer_but_as_owner(self):

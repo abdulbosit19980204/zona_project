@@ -169,16 +169,20 @@ _PEOPLE_IDX = {"at": 0.0, "rows": []}
 
 
 def _who(word):
-    """So'z xodim ismimi ("Саиду" -> Saidabror, "Saidga", "Eldar", "Гузель") — mos Member'lar to'plami."""
+    """So'z xodim ismimi ("Саиду" -> Saidabror, "Saidga", "Eldar", "Гузель"): (mos Member'lar, aniq ismmi yoki
+    "-ga/-ka" qo'shimchali — o'zi uzatish belgisi)."""
     stems = {word}
     for end in _ENDINGS:
         if word.endswith(end) and len(word) - len(end) >= 4:
             stems.add(word[: -len(end)])
-    out = set()
+    out, exact = set(), False
     for m, names, _u in _people_index():
-        if any(n == st or (len(st) >= 4 and n.startswith(st)) for n in names for st in stems):
-            out.add(m)
-    return out
+        for n in names:
+            for st in stems:
+                if n == st or (len(st) >= 4 and n.startswith(st)):
+                    out.add(m)
+                    exact = exact or n == word or (st != word and word.endswith(("ga", "ka", "qa")))
+    return out, exact
 
 
 def handoff_to(text):
@@ -188,6 +192,7 @@ def handoff_to(text):
     if not t or len(t) > 80:
         return None
     hits, rest = set(), 0
+    signal = "@" in t  # "К Саиду", "Saidga", "Eldar можете помочь", @username — "Вы супер" esa maqtov, uzatish emas
     for u in re.findall(r"@(\w+)", t):
         un = _norm_username(u)
         found = {m for m, _n, users in _people_index() if un in users}
@@ -195,14 +200,21 @@ def handoff_to(text):
             return None  # tanilmagan odam chaqirildi — kimga tegishli ekanini bilmaymiz
         hits |= found
     for w in re.findall(r"[a-z]+", fold(re.sub(r"@\w+", " ", t))):
-        if len(w) < 3 or w in GREETING or w in _SHORT or w.startswith(_HELP) or w.startswith(_GREET) or w.startswith(_CHECK):
+        if w in ("k", "ko"):
+            signal = True
             continue
-        found = _who(w)
+        if w.startswith(_HELP) or w.startswith(_CHECK):
+            signal = True
+            continue
+        if len(w) < 3 or w in GREETING or w in _SHORT or w.startswith(_GREET):
+            continue
+        found, exact = _who(w)
         if found:
             hits |= found
+            signal = signal or exact
         else:
             rest += 1
-    return next(iter(hits)) if len(hits) == 1 and rest == 0 else None
+    return next(iter(hits)) if len(hits) == 1 and rest == 0 and signal else None
 
 
 HANDOFF_UZ = ("Bu so'rovni **{n}** bajaradi — so'rov unga yuborildi. Kerak bo'lsa nuqta kodi va nomini yozing; "
