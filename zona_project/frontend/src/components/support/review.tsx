@@ -37,7 +37,7 @@ export function SupportReview() {
 function ReviewInner() {
   const t = useSt();
   const params = useSearchParams();
-  const [view, setView] = useState<View>("queue");
+  const [view, setView] = useState<View>(() => (params.get("view") as View) || "queue");
   const [editing, setEditing] = useState<number | null>(() => Number(params.get("entry")) || null);
   const [open, setOpen] = useState(() => !!Number(params.get("entry")));
   // navbat backend'da sahifalanadi (20 tadan): manba savollar va fayllar faqat ko'rinayotgan sahifa uchun keladi

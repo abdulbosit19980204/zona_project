@@ -141,6 +141,8 @@ def _work(users, start, end):
                     .values_list("handler_id", "created_at")):
         open_now[hid] += 1
         oldest[hid] = min(oldest.get(hid, at), at)
+    from .rating import summary
+    stars = summary(ids)
     out = {}
     for uid in ids:
         p = per[uid]
@@ -151,6 +153,8 @@ def _work(users, start, end):
                     "reactions": reacts.get(uid, 0), "working": working.get(uid, 0), "closed": closed.get(names[uid], 0),
                     "median_s": round(median(p["times"]), 1) if p["times"] else None,
                     "open_now": open_now.get(uid, 0),
+                    "rating": stars.get(uid, {}).get("avg"), "ratings": stars.get(uid, {}).get("n", 0),
+                    "rating_dist": stars.get(uid, {}).get("dist", [0] * 5),
                     "oldest_open_h": round((now - oldest[uid]).total_seconds() / 3600, 1) if uid in oldest else None,
                     "groups": [{"title": g, "n": n} for g, n in p["groups"].most_common(6)]}
     return out
@@ -217,3 +221,86 @@ def detail(user, start, end, info=None):
             "messages": sum(v["count"] for v in days.values()), "active_days": len(days),
             "heatmap": heat, "timeline": timeline, "groups": [{"title": g, "n": n} for g, n in groups.most_common(10)],
             "recent": recent, **work}
+
+
+# ====================================================================== baholash va tavsiyalar
+def _topics(user, start, end):
+    """Xodim qatnashgan savollar mavzu bo'yicha: soni, hal bo'lmagan, uzatgan, median javob vaqti."""
+    from .engine import handoff_to, is_handoff
+    per = defaultdict(lambda: {"n": 0, "no": 0, "handoff": 0, "times": []})
+    seen = set()
+    for m in (Message.objects.filter(kind__in=WORK_KINDS, user=user, created_at__gte=start, created_at__lt=end, question__isnull=False)
+              .select_related("question__entry").order_by("created_at")):
+        q = m.question
+        t = q.entry.title if q.entry_id else "Turi aniqlanmagan"
+        p = per[t]
+        if q.pk not in seen:
+            seen.add(q.pk)
+            p["n"] += 1
+            p["no"] += q.resolution == Message.NO
+            p["times"].append(max(0.0, (m.created_at - q.created_at).total_seconds()))
+        if m.kind == Message.STAFF and (is_handoff(m.text) or handoff_to(m.text) is not None):
+            p["handoff"] += 1
+    return [{"topic": t, "n": v["n"], "no": v["no"], "handoff": v["handoff"],
+             "median_s": round(median(v["times"]), 1) if v["times"] else None} for t, v in per.items()]
+
+
+def insights(me, team, topics):
+    """Ish holati (0–100) va tavsiyalar: kuchli (+), zaif (−), o'rgatish, yordam. Kodlar — tarjimani frontend qiladi."""
+    def med(key):
+        vals = sorted(x[key] for x in team if x.get(key) is not None and (x.get("answers") or x.get("messages")))
+        return vals[len(vals) // 2] if vals else None
+    t_speed, t_answers = med("median_s"), med("answers")
+    out = []
+    speed = me.get("median_s")
+    decided = (me.get("resolved") or 0) + (me.get("unresolved") or 0)
+    res_rate = (me["resolved"] / decided) if decided else None
+    hand_share = me["handoffs"] / max(1, me["answers"] + me["handoffs"])
+    rating = me.get("rating")
+    if speed is not None and t_speed and speed <= 0.7 * t_speed:
+        out.append({"kind": "plus", "code": "fast", "v": speed, "team": t_speed})
+    if speed is not None and t_speed and speed >= 1.5 * t_speed:
+        out.append({"kind": "minus", "code": "slow", "v": speed, "team": t_speed})
+    if res_rate is not None and decided >= 3:
+        out.append({"kind": "plus" if res_rate >= 0.8 else "minus" if res_rate < 0.6 else "info", "code": "resolve",
+                    "v": round(100 * res_rate)})
+    if rating is not None and me.get("ratings", 0) >= 2:
+        out.append({"kind": "plus" if rating >= 4.5 else "minus" if rating < 3.5 else "info", "code": "rating", "v": rating,
+                    "n": me["ratings"]})
+    if t_answers and me["answers"] >= 1.3 * t_answers:
+        out.append({"kind": "plus", "code": "active", "v": me["answers"], "team": t_answers})
+    if me["answers"] + me["handoffs"] >= 5 and hand_share >= 0.3:
+        out.append({"kind": "minus", "code": "handoffs", "v": round(100 * hand_share)})
+    if (me.get("oldest_open_h") or 0) >= 24:
+        out.append({"kind": "minus", "code": "open_old", "v": me["oldest_open_h"], "n": me.get("open_now", 0)})
+    train = [t for t in sorted(topics, key=lambda x: -(x["no"] + x["handoff"])) if t["no"] + t["handoff"] >= 2][:5]
+    for t in train:
+        out.append({"kind": "train", "code": "topic", "topic": t["topic"], "no": t["no"], "handoff": t["handoff"]})
+    slow = [t for t in sorted(topics, key=lambda x: -(x["median_s"] or 0)) if (t["median_s"] or 0) >= 3600 and t["n"] >= 2][:3]
+    for t in slow:
+        out.append({"kind": "help", "code": "slow_topic", "topic": t["topic"], "v": t["median_s"], "n": t["n"]})
+    # ish holati: tezlik, hal qilish, baho, faollik — jamoaga nisbatan (har biri 0..25)
+    parts = []
+    if speed is not None and t_speed:
+        parts.append(max(0.0, min(25.0, 25 * min(1.5, t_speed / max(speed, 1)) / 1.5)))
+    if res_rate is not None:
+        parts.append(25 * res_rate)
+    if rating is not None:
+        parts.append(25 * (rating - 1) / 4)
+    if t_answers:
+        parts.append(min(25.0, 25 * me["answers"] / max(t_answers, 1) / 1.3))
+    score = round(sum(parts) * 4 / len(parts)) if parts else None
+    return {"score": score, "items": out}
+
+
+def evaluate(user, start, end):
+    """Bitta xodim uchun: jamoa bilan solishtirib, ish holati va tavsiyalar."""
+    team = board(start, end)["staff"]
+    me = next((x for x in team if x["id"] == user.pk), None)
+    if me is None:
+        return {"score": None, "items": [], "topics": []}
+    topics = _topics(user, start, end)
+    res = insights(me, team, topics)
+    res["topics"] = sorted(topics, key=lambda x: -x["n"])[:15]
+    res["me"] = me
+    return res

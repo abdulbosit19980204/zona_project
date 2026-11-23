@@ -80,6 +80,8 @@ export interface SupportMessage {
   problem: string; resolution: Resolution; resolved_at: string | null; resolved_by: string;
   app: SysApp; origin: SysOrigin; category: SysCategory; solution: string; labeled_by: "" | "rule" | "ai" | "staff"; train: boolean | null;
   task?: { id: number; status: string; assignee: string; reply: string; error: string } | null;
+  ratings?: { stars: number; staff: string; by: string; source: string; comment: string; at: string }[];
+  user_real?: { name: string; role: string; project: string; territory: string; phone: string } | null;
 }
 export interface SupportSettings {
   api_id: string; api_hash: string; has_api_hash: boolean; ai_enabled: boolean; ai_daily_limit: number;
@@ -233,7 +235,17 @@ export interface StaffBoardRow {
   start: string | null; end: string | null; span_h: number; last_seen: string | null; answers: number;
   clarifications: number; handoffs: number; questions: number; resolved: number; unresolved: number; reactions: number;
   working: number; closed: number; median_s: number | null; groups: { title: string; n: number }[];
-  open_now?: number; oldest_open_h?: number | null;
+  open_now?: number; oldest_open_h?: number | null; rating?: number | null; ratings?: number; rating_dist?: number[];
+}
+/** Tavsiya: kuchli (+) / zaif (−) / o'rgatish / yordam — kod va qiymatlar, matnni frontend tarjima qiladi. */
+export interface Insight { kind: "plus" | "minus" | "train" | "help" | "info"; code: string; v?: number; team?: number; n?: number; topic?: string; no?: number; handoff?: number }
+export interface AskerDetail {
+  id: number; from: string; to: string;
+  who: { name: string; username: string; role: string; project: string; territory: string; supervisor: string; phone: string };
+  metrics: Record<string, number | null>; photo_only: number; insights: Insight[];
+  topics: { topic: string; n: number; no: number; unanswered: number; bot: number }[];
+  staff: { name: string; n: number }[]; daily: { date: string; n: number }[]; hours: number[];
+  recent: { id: number; at: string; text: string; status: MsgStatus; resolution: Resolution; stage: string; photo: boolean; link: string; group: string }[];
 }
 export interface StaffBoard {
   from: string; to: string; days: number; staff: StaffBoardRow[];
@@ -246,6 +258,7 @@ export interface StaffDay {
 export interface StaffDetail extends Omit<StaffBoardRow, "team" | "start" | "end" | "span_h" | "last_seen"> {
   from: string; to: string; heatmap: number[][]; timeline: StaffDay[]; groups: { title: string; n: number }[];
   recent: { id: number; at: string; kind: string; text: string; group: string; question: string; question_id: number | null; link: string }[];
+  eval?: { score: number | null; items: Insight[]; topics: { topic: string; n: number; no: number; handoff: number; median_s: number | null }[]; me?: StaffBoardRow };
 }
 
 /** Konstruktor natijasi: k0/k1 — guruhlash kaliti, l0/l1 — yorlig'i, qolganlari — tanlangan ko'rsatkichlar. */
@@ -268,6 +281,8 @@ export const supportApi = {
   staffBoard: (r: Range) => get<StaffBoard>("analytics/staff/", r),
   explore: (params: Record<string, string>) => get<Explore>("analytics/explore/", params),
   staffOne: (id: number, r: Range) => get<StaffDetail>(`analytics/staff/${id}/`, r),
+  askerOne: (id: number, r: Range) => get<AskerDetail>(`analytics/asker/${id}/`, r),
+  rate: (id: number, stars: number, comment = "") => post<{ stars: number; staff: string }>(`messages/${id}/rate/`, { stars, comment }),
   settings: () => get<SupportSettings>("settings/"),
   saveSettings: (body: Partial<SupportSettings> & { api_hash?: string }) => patch<SupportSettings>("settings/", body),
   bots: () => get<SupportBot[]>("bots/"),

@@ -93,6 +93,8 @@ class Handler:
             return self.on_callback(upd["callback_query"])
         if "message_reaction" in upd:
             return self.on_reaction(upd["message_reaction"])
+        if "chat_member" in upd:  # guruhga kimdir qo'shildi / chiqdi — u kim ekanini oldindan bilib olamiz
+            return self.on_member(upd["chat_member"])
         msg = upd.get("message")
         if not msg:
             return None
@@ -108,6 +110,14 @@ class Handler:
         if chat.get("type") in ("group", "supergroup"):
             return self.on_group(msg)
         return None
+
+    def on_member(self, data):
+        """Guruh a'zosi o'zgardi (qo'shildi, chiqdi, admin bo'ldi): foydalanuvchi bazaga yoziladi va Telegram ID bo'yicha
+        xodim kartasiga bog'lanadi — u birinchi savolini yozganda allaqachon tanilgan bo'ladi."""
+        u = ((data.get("new_chat_member") or {}).get("user")) or {}
+        if not u.get("id") or u.get("is_bot"):
+            return None
+        return engine.identify(u["id"], u.get("username", ""), _full_name(u))
 
     # ---------------------------------------------------------------- guruhga qo'shilish
     def on_membership(self, data):
@@ -964,11 +974,13 @@ class Handler:
         who = user.staff_name() if user.is_staff else f"{user.name or user.username or 'foydalanuvchi'} (agent)"
         review.mark(q, review.WRONG, who, note="tuzatilgan javob ham xato" if refix else "")
         if first and self.bot.admin_chat_id:
-            link = q.group.message_link(q.message_id) if q.group_id else ""
-            title = "Tuzatilgan javob ham xato" if refix else "Xato javob"
-            body = (f"⚠️ <b>{title}</b> — belgiladi: {engine.html.escape(who)}\n"
-                    f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((shown or '')[:400])}")
-            self._safe_send(self.bot.admin_chat_id, body, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
+            from . import adminmsg
+            title = "⚠️ Tuzatilgan javob ham xato" if refix else "⚠️ Xato javob"
+            body = adminmsg.card(q, title, extra=[f"🚩 Belgiladi: {engine.html.escape(who)}"], answer=shown or "",
+                                 answer_label="💬 Bot javobi")
+            url = panel_url(f"/support/review?view=answers&q={q.id}")
+            adminmsg.send(self.tg, self.bot.admin_chat_id, q, body,
+                          buttons=[[{"text": "✏️ Tuzatish (panel)", "url": url}]] if url else None)
         # guruhda xato javob ko'rsatilmaydi ("yangilanishga yuborildi"); asl javob — belgilagan xodimga shaxsan
         hidden = review.hide(self.tg, q)
         if first and hidden and user.tg_id and user.is_staff:  # asl javob — faqat xodimga shaxsan
@@ -1023,8 +1035,9 @@ class Handler:
                     from . import selflearn
                     selflearn.on_feedback(q)
                 if q.feedback < 0 and self.bot.admin_chat_id:
-                    self._safe_send(self.bot.admin_chat_id, f"👎 Javob yoqmadi:\n❓ {engine.html.escape(q.text[:300])}\n"
-                                                            f"💬 {engine.html.escape(q.answer_text[:500])}")
+                    from . import adminmsg
+                    adminmsg.send(self.tg, self.bot.admin_chat_id, q,
+                                  adminmsg.card(q, "👎 Javob yoqmadi", answer=q.answer_text or "", answer_label="💬 Bot javobi"))
                 if q.resolution != Message.YES and not resolution.is_final(q):  # 👍 — hal bo'ldi, 👎 — hal bo'lmadi
                     resolution.mark(q, Message.YES if q.feedback > 0 else Message.NO, "savol egasi (👍/👎)")
             return self.tg.answer_callback(cb["id"], "Rahmat!")
@@ -1041,6 +1054,22 @@ class Handler:
             text, alert = resolution.press(self.tg, q, user, val, (cb.get("message") or {}).get("message_id"),
                                            self.bot.admin_chat_id)
             return self.tg.answer_callback(cb["id"], text, alert=alert)
+
+        if kind == "st":  # ⭐ baho — faqat savol egasi
+            from . import rating
+            mid, _, val = rest.partition(":")
+            q = Message.objects.filter(pk=int(mid or 0), bot=self.bot).select_related("user", "handler").first()
+            if not q or q.user_id != user.id:
+                return self.tg.answer_callback(cb["id"], "Baholashni savol egasi qiladi", alert=True)
+            r = rating.rate(q, int(val or 5), by_user=user, source="asker")
+            if r is not None:
+                lang = "ru" if q.lang == "ru" else "uz"
+                try:
+                    self.tg.edit_text(q.chat_id, (cb.get("message") or {}).get("message_id"),
+                                      rating.THANKS[lang].format(stars="⭐" * r.stars, who=engine.html.escape(r.staff_name)))
+                except Exception as e:  # noqa: BLE001
+                    log.info("rating thanks: %s", e)
+            return self.tg.answer_callback(cb["id"], "Rahmat!")
 
         # quyidagilar faqat admin chatidan va xodimlar uchun
         if chat_id != self.bot.admin_chat_id or not user.is_staff:
@@ -1189,18 +1218,13 @@ class Handler:
     def _send_draft(self, q, d, escalated=False):
         if not self.bot.admin_chat_id:
             return None
+        from . import adminmsg
         esc = engine.html.escape
-        who = q.user.name if q.user else "?"
         head = "🚨 Odamga uzatildi" if escalated else "🕶 Soya rejimi"
-        parts = [f"{head} · <b>{esc(q.group.title if q.group else '')}</b>", f"👤 {esc(who)}:", f"❓ {esc(q.text[:700])}"]
-        if q.ocr_text:
-            parts.append(f"🖼 <i>{esc(q.ocr_text[:400])}</i>")
-        if d.text:
-            label = {"template": "Shablon", "faq": "Bazadan", "rule": "Qoida", "ai": "AI"}.get(d.stage, "Taklif")
-            warn = " · ⚠️ tasdiqlanmagan" if d.unapproved else ""
-            parts.append(f"— — —\n💬 <b>{label}</b> ({d.confidence}%){warn}:\n{esc(d.text[:1500])}")
-        else:
-            parts.append("— — —\n❔ Javob topilmadi")
+        parts = []
+        label = {"template": "Shablon", "faq": "Bazadan", "rule": "Qoida", "ai": "AI"}.get(d.stage, "Taklif")
+        if not d.text:
+            parts.append("❔ Javob topilmadi")
         if d.entry and d.entry.attachments:
             parts.append(f"📎 {len(d.entry.attachments)} ta fayl javob bilan yuboriladi")
         if d.stage == "image":
@@ -1214,21 +1238,24 @@ class Handler:
         if d.text and not escalated:
             buttons.append({"text": "✅ Guruhga yuborish", "callback_data": f"send:{q.id}"})
         buttons.append({"text": "✖️ Yopish", "callback_data": f"skip:{q.id}"})
-        return self._safe_send(self.bot.admin_chat_id, "\n".join(parts), buttons=[buttons])
+        warn = " · ⚠️ tasdiqlanmagan" if d.unapproved else ""
+        body = adminmsg.card(q, head, extra=parts, answer=d.text or "",
+                             answer_label=f"💬 <b>{label}</b> ({d.confidence}%){warn}")
+        return adminmsg.send(self.tg, self.bot.admin_chat_id, q, body, buttons=[buttons])
 
     def _send_candidate(self, entry, q, staff_name):
         if not self.bot.admin_chat_id or not entry:
             return None
+        from . import adminmsg
         esc = engine.html.escape
-        star = "⭐ Ustuvor (bot javobi tuzatildi)\n" if entry.priority else ""
-        text = (f"📚 <b>Yangi javob nomzodi</b>\n{star}❓ {esc(q.text[:600])}\n"
-                + (f"🖼 <i>{esc(q.ocr_text[:300])}</i>\n" if q.ocr_text else "")
-                + f"💬 {esc(entry.answer[:1500])}\n👤 {esc(staff_name)}")
+        text = adminmsg.card(q, "📚 Yangi javob nomzodi",
+                             extra=["⭐ Ustuvor (bot javobi tuzatildi)" if entry.priority else "", f"🧑‍💼 Javob bergan: {esc(staff_name)}"],
+                             answer=entry.answer, answer_label="💬 Xodim javobi")
         row = [{"text": "✅ Tasdiqlash", "callback_data": f"ap:{entry.id}"},
                {"text": "❌ Rad etish", "callback_data": f"rj:{entry.id}"}]
         url = panel_url(f"/support/review?entry={entry.id}")
         buttons = [row] + ([[{"text": "✏️ Panelda tahrirlash", "url": url}]] if url else [])
-        return self._safe_send(self.bot.admin_chat_id, text, buttons=buttons)
+        return adminmsg.send(self.tg, self.bot.admin_chat_id, q, text, buttons=buttons)
 
     def _dup_note(self, q, prev):
         """Bir xil ekran/savol qayta kelsa — qisqa eslatma (oldingi javobga havola bilan)."""

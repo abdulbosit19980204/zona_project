@@ -549,3 +549,22 @@ class Activity(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "group", "date"], name="support_activity_unique")]
         indexes = [models.Index(fields=["user", "date"])]
+
+
+class StaffRating(models.Model):
+    """Xodim javobiga baho (⭐ 1–5): savol egasi (Telegram) yoki admin (panel). Xodimda yig'ilib boradi."""
+
+    question = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="ratings")
+    staff = models.ForeignKey(TgUser, null=True, blank=True, on_delete=models.SET_NULL, related_name="ratings")
+    staff_name = models.CharField(max_length=150, blank=True)
+    stars = models.PositiveSmallIntegerField()
+    source = models.CharField(max_length=8, default="asker")  # asker / panel
+    by_user = models.ForeignKey(TgUser, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    by_name = models.CharField(max_length=150, blank=True)
+    comment = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(fields=["question", "source", "by_name"], name="support_rating_unique")]

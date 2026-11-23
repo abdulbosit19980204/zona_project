@@ -23,6 +23,7 @@ urlpatterns = [
     path("analytics/explore/", views.analytics_explore, name="analytics-explore"),
     path("analytics/staff/", views.analytics_staff, name="analytics-staff"),
     path("analytics/staff/<int:pk>/", views.analytics_staff_one, name="analytics-staff-one"),
+    path("analytics/asker/<int:pk>/", views.analytics_asker_one, name="analytics-asker-one"),
     path("media/upload/", views.media_upload, name="media-upload"),
     path("media/<int:pk>/file/", views.media_file, name="media-file"),
     path("images/", views.image_types, name="images"),

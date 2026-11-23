@@ -555,6 +555,22 @@ class MessageSerializer(serializers.ModelSerializer):
     media = serializers.SerializerMethodField()
     link = serializers.SerializerMethodField()
     task = serializers.SerializerMethodField()
+    ratings = serializers.SerializerMethodField()
+    user_real = serializers.SerializerMethodField()
+
+    def get_ratings(self, obj):
+        return [{"stars": r.stars, "staff": r.staff_name, "by": r.by_name, "source": r.source, "comment": r.comment,
+                 "at": r.created_at} for r in obj.ratings.all()]
+
+    def get_user_real(self, obj):
+        """Savol beruvchi asli kim: xodim kartasi (rol, loyiha, hudud) yoki PRBC dagi ism va lavozim."""
+        u = obj.user
+        if u is None:
+            return None
+        sp = u.staff_person if u.staff_person_id else None
+        return {"name": sp.name if sp else u.real_name, "role": sp.get_role_display() if sp else u.position,
+                "project": sp.project.name if sp and sp.project_id else u.department, "territory": sp.territory if sp else "",
+                "phone": (sp.phone if sp else "") or u.phone}
 
     def get_task(self, obj):
         t = getattr(obj, "task", None)
@@ -571,7 +587,7 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "media", "link", "lang",
                   "status", "stage", "entry", "entry_title", "confidence", "answer_text", "answered_by", "feedback",
                   "created_at", "answered_at", "staff_answers", "task", "problem", "resolution", "resolved_at",
-                  "resolved_by", "app", "origin", "category", "solution", "labeled_by", "train"]
+                  "resolved_by", "app", "origin", "category", "solution", "labeled_by", "train", "ratings", "user_real"]
 
     def get_has_photo(self, obj):
         return bool(obj.photo_file_id)
@@ -590,7 +606,7 @@ class MessageViewSet(ZonaViewSet):
 
     def get_queryset(self):
         qs = (Message.objects.filter(kind=Message.QUESTION).exclude(stage="dup")
-              .select_related("group", "user", "entry").prefetch_related("media", "staff_replies__media",
+              .select_related("group", "user__staff_person__project", "entry").prefetch_related("media", "ratings", "staff_replies__media",
                                                                           "staff_replies__user__member",
                                                                           "staff_replies__user__contact"))
         p = self.request.query_params
@@ -600,6 +616,8 @@ class MessageViewSet(ZonaViewSet):
             qs = qs.filter(group_id=p["group"])
         if p.get("stage"):
             qs = qs.filter(stage=p["stage"])
+        if p.get("id"):  # admin chatidagi "Panelda" havolasi: aynan shu savol
+            return qs.filter(pk__in=[int(x) for x in str(p["id"]).split(",") if x.strip().isdigit()][:50])
         if p.get("ex"):
             # konstruktordan o'tish: aynan o'sha filtrlar (f_<o'lchov>=...) va davrga mos savollar
             from .explore import question_ids
@@ -640,6 +658,23 @@ class MessageViewSet(ZonaViewSet):
 
     def create(self, request, *args, **kwargs):
         return Response(status=405)
+
+    @action(detail=True, methods=["post"])
+    def rate(self, request, pk=None):
+        """Panelda xodim javobini baholash: {"stars": 1..5, "comment"?: "", "staff"?: tg_user_id}."""
+        from . import rating
+        if not _can_edit(request):
+            return Response({"detail": "Baholash uchun muharrir huquqi kerak."}, status=403)
+        q = Message.objects.select_related("handler__member", "handler__contact").get(pk=pk)
+        try:
+            stars = int(request.data.get("stars"))
+        except (TypeError, ValueError):
+            return Response({"detail": "Baho 1 dan 5 gacha"}, status=400)
+        staff = TgUser.objects.filter(pk=request.data.get("staff")).first() if request.data.get("staff") else None
+        r = rating.rate(q, stars, by_name=_actor(request), source="panel", staff=staff, comment=str(request.data.get("comment") or ""))
+        if r is None:
+            return Response({"detail": "Bu savolga xodim javob bermagan — baholanadigan xodim yo'q"}, status=400)
+        return Response({"stars": r.stars, "staff": r.staff_name})
 
     @action(detail=True, methods=["post"])
     def answer(self, request, pk=None):
@@ -1067,6 +1102,19 @@ def analytics_staff_one(request, pk):
     user = TgUser.objects.filter(pk=pk).select_related("member", "contact").first()
     if user is None or not user.is_staff:
         return Response({"detail": "Xodim topilmadi"}, status=404)
+    start, end, info = period(request.query_params, max_days=3660)
+    from .activity import evaluate
+    return Response({**detail(user, start, end, info), "eval": evaluate(user, start, end)})
+
+
+@zona_api(["GET"], [CanView])
+def analytics_asker_one(request, pk):
+    """Bitta agent: savollari, natijalari, mavzulari, kim javob berdi va tavsiyalar (o'rgatish / yordam)."""
+    from .agents import detail
+    from .workload import period
+    user = TgUser.objects.filter(pk=pk).select_related("staff_person__project").first()
+    if user is None:
+        return Response({"detail": "Topilmadi"}, status=404)
     start, end, info = period(request.query_params, max_days=3660)
     return Response(detail(user, start, end, info))
 

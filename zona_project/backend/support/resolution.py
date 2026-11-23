@@ -145,15 +145,12 @@ def close_prompts(tg, q, text):
 def notify_unresolved(tg, q, admin_chat_id, text=""):
     if not admin_chat_id or tg is None:
         return
-    who = html.escape(q.user.name if q.user_id else "")
-    link = q.group.message_link(q.message_id) if q.group_id else ""
-    body = (f"❌ <b>Hal bo'lmadi</b> — {who}" + (f" · {html.escape(q.group.title)}" if q.group_id else "")
-            + f"\n<blockquote>{html.escape((q.problem or q.text or '')[:300])}</blockquote>"
-            + (f"\n💬 {html.escape(text[:200])}" if text else ""))
-    try:
-        tg.send(admin_chat_id, body, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
-    except Exception as e:  # noqa: BLE001
-        log.info("unresolved notify: %s", e)
+    from . import adminmsg
+    staff = staff_mentions(q)
+    body = adminmsg.card(q, "❌ Hal bo'lmadi", extra=[f"💬 {html.escape(text[:300])}" if text else "",
+                                                     f"🧑‍💼 Mas'ul: {', '.join(staff)}" if staff else "🧑‍💼 Mas'ul topilmadi"],
+                         answer=q.answer_text or "", answer_label="💬 Berilgan javob")
+    adminmsg.send(tg, admin_chat_id, q, body)
 
 
 def _mention(u):
@@ -204,7 +201,20 @@ def press(tg, q, user, val, msg_id=None, admin_chat_id=None):
     if asker:
         value = NO if val == "0" else YES
         mark(q, value, "savol egasi")
-        close_prompt(tg, q, value)
+        from . import rating
+        staff = rating.answerer(q) if value == YES else None
+        if staff is not None and tg is not None and q.confirm_msg_id:
+            # hal bo'ldi va javobni xodim bergan — savol egasidan xodim javobiga baho (⭐ 1–5) so'raladi
+            for mid in sorted({q.confirm_msg_id, q.staff_msg_id} - {None}):
+                try:
+                    if mid == q.confirm_msg_id:
+                        tg.edit_text(q.chat_id, mid, rating.ask_text(q, staff), buttons=rating.buttons(q))
+                    else:
+                        tg.edit_text(q.chat_id, mid, DONE_TEXT[_lang(q)])
+                except Exception as e:  # noqa: BLE001
+                    log.info("rating ask: %s", e)
+        else:
+            close_prompt(tg, q, value)
         if value == NO:
             notify_unresolved(tg, q, admin_chat_id)
         return "Rahmat!", False
@@ -343,16 +353,13 @@ def _work_text(q, staff):
 def notify_open(tg, q, admin_chat_id, staff):
     if not admin_chat_id or tg is None:
         return
-    link = q.group.message_link(q.message_id) if q.group_id else ""
+    from . import adminmsg
     state = {ASKED: "savol egasi belgilamadi", NO: "hal bo'lmadi", WORK: "jarayonda"}.get(q.resolution, q.resolution)
-    body = (f"⏰ <b>Savol ochiq qolmoqda</b> — {elapsed(q)} ({state}, {q.remind_count} marta eslatildi)"
-            + (f" · {html.escape(q.group.title)}" if q.group_id else "")
-            + f"\n<blockquote>{html.escape((q.problem or q.text or '')[:300])}</blockquote>"
-            + (f"\n👤 {', '.join(staff)}" if staff else "\n👤 mas'ul topilmadi"))
-    try:
-        tg.send(admin_chat_id, body, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
-    except Exception as e:  # noqa: BLE001
-        log.info("open notify: %s", e)
+    body = adminmsg.card(q, f"⏰ Savol ochiq qolmoqda — {elapsed(q)}",
+                         extra=[f"📌 Holat: {state}, {q.remind_count} marta eslatildi",
+                                f"🧑‍💼 Mas'ul: {', '.join(staff)}" if staff else "🧑‍💼 Mas'ul topilmadi"],
+                         answer=q.answer_text or "", answer_label="💬 Berilgan javob")
+    adminmsg.send(tg, admin_chat_id, q, body)
 
 
 def followups(tg, s=None, now=None, limit=5, bot_id=None):

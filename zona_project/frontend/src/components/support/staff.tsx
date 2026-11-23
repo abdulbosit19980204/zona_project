@@ -2,10 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, ExternalLink, History, MessageSquare, UserRound, Users } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { supportApi, type Range, type StaffBoardRow, type StaffDetail } from "./api";
@@ -19,12 +19,11 @@ const shade = (v: number, max: number) => (v ? `color-mix(in oklab, var(--primar
 /** Xodimlar: guruhdagi xabarlari, ish vaqti, nima qilgani va tezligi; qatorni bosib — to'liq ish grafigi. */
 export function StaffBoard({ range, t }: { range: Range; t: ST }) {
   const q = useQuery({ queryKey: ["support", "staff-board", range], queryFn: () => supportApi.staffBoard(range) });
-  const [open, setOpen] = useState<StaffBoardRow | null>(null);
   const d = q.data;
   if (!d) return <Skeleton className="h-96" />;
   const columns: Column<StaffBoardRow>[] = [
     { key: "name", header: t("staff"), sort: (s) => s.name.toLowerCase(), cell: (s) => (
-      <button type="button" onClick={() => setOpen(s)} className="flex min-w-48 items-center gap-2.5 text-left hover:underline">
+      <Link href={`/support/staff/${s.id}`} className="flex min-w-48 items-center gap-2.5 text-left hover:underline">
         <Initials name={s.name} className="size-8" />
         <span className="min-w-0">
           <span className="block font-medium">{s.name}</span>
@@ -32,7 +31,7 @@ export function StaffBoard({ range, t }: { range: Range; t: ST }) {
             {[s.team, s.username && "@" + s.username].filter(Boolean).join(" · ")}
           </span>
         </span>
-      </button>
+      </Link>
     ) },
     { key: "msgs", header: t("stMsgs"), align: "right", sort: (s) => s.messages, cell: (s) => <span className="font-mono">{s.messages}</span> },
     { key: "days", header: t("stDays"), align: "right", sort: (s) => s.active_days, cell: (s) => <span className="font-mono">{s.active_days}</span> },
@@ -76,50 +75,13 @@ export function StaffBoard({ range, t }: { range: Range; t: ST }) {
           filters={[{ value: "active", label: t("stOnlyActive"), test: (s) => s.messages + s.answers > 0 },
             { value: "all", label: t("dtAll"), test: () => true }]} />
       </Panel>
-      <Sheet open={!!open} onOpenChange={(v) => !v && setOpen(null)}>
-        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-5xl">
-          {open && <Detail id={open.id} name={open.name} range={range} t={t} />}
-        </SheetContent>
-      </Sheet>
+
     </div>
   );
 }
 
-function Detail({ id, name, range, t }: { id: number; name: string; range: Range; t: ST }) {
-  const q = useQuery({ queryKey: ["support", "staff-one", id, range], queryFn: () => supportApi.staffOne(id, range) });
-  const d = q.data;
-  return (
-    <>
-      <SheetHeader className="border-b">
-        <SheetTitle className="flex items-center gap-2.5 pr-6"><Initials name={name} className="size-8" />{name}</SheetTitle>
-        {d && <p className="text-xs text-muted-foreground">{d.from === d.to ? d.from : `${d.from} — ${d.to}`}{d.username && ` · @${d.username}`}</p>}
-      </SheetHeader>
-      {!d ? <div className="p-4"><Skeleton className="h-96" /></div> : (
-        <div className="grid gap-4 p-4">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Metric label={t("stMsgs")} value={d.messages} hint={t("anDays", { n: d.active_days })} />
-            <Metric label={t("anAnswers")} value={d.answers} hint={`${t("anClar")}: ${d.clarifications}`} />
-            <Metric label={t("stHandoffs")} value={d.handoffs} hint={`${t("anReacts")}: ${d.reactions}`} />
-            <Metric label={t("anSpeed")} value={fmtDur(t, d.median_s)} hint={`${t("colResolved")}: ${d.resolved}${d.unresolved ? ` / ${d.unresolved}` : ""}`} />
-          </div>
-          <Schedule d={d} t={t} />
-          <StaffHeat d={d} t={t} />
-          {d.groups.length > 0 && (
-            <Panel title={t("stGroups")} icon={Users}>
-              <div className="flex flex-wrap gap-1.5">
-                {d.groups.map((g) => <Badge key={g.title} variant="outline" className="font-normal">{g.title} · {g.n}</Badge>)}
-              </div>
-            </Panel>
-          )}
-          <Recent d={d} t={t} />
-        </div>
-      )}
-    </>
-  );
-}
-
 /** Ish grafigi: har kun — birinchi va oxirgi xabar orasidagi oraliq 0–24 soat shkalasida, xabarlar soni bilan. */
-function Schedule({ d, t }: { d: StaffDetail; t: ST }) {
+export function Schedule({ d, t }: { d: StaffDetail; t: ST }) {
   const days = [...d.timeline].reverse();
   return (
     <Panel title={t("stSchedule")} hint={t("stScheduleHint")} icon={CalendarDays}>
@@ -154,7 +116,7 @@ function Schedule({ d, t }: { d: StaffDetail; t: ST }) {
   );
 }
 
-function StaffHeat({ d, t }: { d: StaffDetail; t: ST }) {
+export function StaffHeat({ d, t }: { d: StaffDetail; t: ST }) {
   const max = Math.max(1, ...d.heatmap.flat());
   const [hover, setHover] = useState<{ wd: number; h: number } | null>(null);
   return (
@@ -186,7 +148,7 @@ function StaffHeat({ d, t }: { d: StaffDetail; t: ST }) {
 
 const KIND: Record<string, SKey> = { staff: "stK_staff", clarify: "stK_clarify", info: "stK_info", feedback: "stK_feedback", other: "stK_other" };
 
-function Recent({ d, t }: { d: StaffDetail; t: ST }) {
+export function Recent({ d, t }: { d: StaffDetail; t: ST }) {
   return (
     <Panel title={t("stRecent")} hint={t("stRecentHint")} icon={MessageSquare}>
       {d.recent.length === 0 ? <p className="text-sm text-muted-foreground">{t("empty")}</p> : (

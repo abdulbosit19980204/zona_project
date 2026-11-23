@@ -55,6 +55,7 @@ export function SupportInbox() {
 function useDrill() {
   const p = useSearchParams();
   const drill = p.get("drill");
+  if (p.get("q")) return { id: p.get("q")!, drill: "total" };  // admin chatidan: aynan bitta savol
   if (p.get("ex")) {  // konstruktor / agent tafsilotidan: aynan o'sha filtrlar
     const params: Record<string, string> = { ex: "1", drill: "total" };
     p.forEach((v, k) => { if (v && (k.startsWith("f_") || ["days", "from", "to", "scope"].includes(k))) params[k] = v; });
@@ -69,10 +70,11 @@ function useDrill() {
 function InboxInner() {
   const t = useSt();
   const drill = useDrill();
+  const sp = useSearchParams();
   const [filter, setFilter] = useState<Filter>("open");
   const [res, setRes] = useState<ResFilter>("any");
   const [q, setQ] = useState("");
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(() => Number(sp.get("q")) || null);
   const status = filter === "open" ? "escalated,drafted,new" : filter;
   const stats = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7), refetchInterval: 30_000 });
   const list = useQuery({
@@ -234,6 +236,28 @@ function SystemLabel({ m, t }: { m: SupportMessage; t: ST }) {
   );
 }
 
+/** Xodim javobiga baho (⭐ 1–5): savol egasining bahosi ko'rinadi, admin o'zinikini qo'yadi. */
+function RateStaff({ m, t }: { m: SupportMessage; t: ST }) {
+  const can = useCan();
+  const rate = useSupportMutation((stars: number) => supportApi.rate(m.id, stars), t("saved"));
+  const mine = (m.ratings ?? []).find((r) => r.source === "panel");
+  return (
+    <div className="grid gap-1">
+      {(m.ratings ?? []).map((r, i) => (
+        <div key={i} className="text-xs text-muted-foreground">{"⭐".repeat(r.stars)} · {r.staff} · {r.source === "asker" ? t("rateByAsker") : r.by}</div>
+      ))}
+      {can.edit && (
+        <div className="flex items-center gap-0.5" aria-label={t("dRate")}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} type="button" disabled={rate.isPending} onClick={() => rate.mutate(n)} title={`${n} / 5`}
+              className={`text-lg leading-none transition-transform hover:scale-110 ${mine && mine.stars >= n ? "" : "opacity-30 grayscale"}`}>⭐</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Details({ m, t }: { m: SupportMessage; t: ST }) {
   const row = (label: string, value: ReactNode) => (
     <div className="grid gap-0.5 border-b py-2.5 last:border-b-0">
@@ -250,6 +274,13 @@ function Details({ m, t }: { m: SupportMessage; t: ST }) {
           {m.user_username && <a className="text-xs text-primary hover:underline" href={`https://t.me/${m.user_username}`} target="_blank" rel="noreferrer">@{m.user_username}</a>}
         </div>
       </div>
+      {m.user_real && (m.user_real.name || m.user_real.role) && (
+        <div className="mb-3 rounded-lg border border-primary/25 bg-primary/[0.04] px-3 py-2 text-xs">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("dReal")}</div>
+          <div className="text-sm font-medium">{m.user_real.name || "—"}</div>
+          <div className="text-muted-foreground">{[m.user_real.role, m.user_real.project, m.user_real.territory, m.user_real.phone].filter(Boolean).join(" · ")}</div>
+        </div>
+      )}
       <div className="rounded-lg border bg-card px-3">
         {row(t("dStatus"), <MsgBadge status={m.status} t={t} />)}
         {m.problem && row(t("dProblem"), m.problem)}
@@ -264,6 +295,7 @@ function Details({ m, t }: { m: SupportMessage; t: ST }) {
         {m.stage && row(t("dStage"), `${stageLabel(m.stage, t)}${m.confidence ? ` · ${m.confidence}%` : ""}`)}
         {m.entry_title && row(t("dEntry"), <Link className="text-primary hover:underline" href={`/support/knowledge?entry=${m.entry}`}>{m.entry_title}</Link>)}
         {m.staff_answers.length > 0 && row(t("staffAnswers"), m.staff_answers.length)}
+        {row(t("dRate"), <RateStaff m={m} t={t} />)}
         {m.task && row(t("dTask"), <span className={m.task.status === "sent" ? "text-success" : m.task.status === "failed" ? "text-destructive" : "text-muted-foreground"}>
           {t(`ts_${m.task.status}` as SKey)} · @{m.task.assignee}{m.task.reply ? ` · ${m.task.reply.slice(0, 80)}` : ""}</span>)}
       </div>
