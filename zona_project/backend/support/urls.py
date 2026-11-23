@@ -17,6 +17,7 @@ urlpatterns = [
     path("stats/", views.stats, name="stats"),
     path("staff/", views.staff, name="staff"),
     path("owners/", views.owners, name="owners"),
+    path("tags/", views.tags_list, name="tags"),
     path("analytics/", views.analytics, name="analytics"),
     path("analytics/workload/", views.analytics_workload, name="analytics-workload"),
     path("analytics/speed/", views.analytics_speed, name="analytics-speed"),

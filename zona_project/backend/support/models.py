@@ -392,6 +392,9 @@ class Message(models.Model):
     alert_text = models.TextField(blank=True, default="", db_default="")
     reply_html = models.TextField(blank=True, default="", db_default="")
     collapsed_at = models.DateTimeField(null=True, blank=True)
+    # teglar (savol turlari): ["promo", "1c", ...] — avtomatik; xodim qo'lda tahrirlasa — tags_locked
+    tags = models.JSONField(default=list, blank=True, db_default=[])
+    tags_locked = models.BooleanField(default=False, db_default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
 
@@ -568,3 +571,21 @@ class StaffRating(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [models.UniqueConstraint(fields=["question", "source", "by_name"], name="support_rating_unique")]
+
+
+class Tag(models.Model):
+    """Savol tegi (turi): nomi, kalit so'zlari (avtomatik qo'yish uchun), rangi."""
+
+    key = models.SlugField(max_length=40, unique=True)
+    title = models.CharField(max_length=80)
+    keywords = models.JSONField(default=list, blank=True)
+    color = models.CharField(max_length=16, blank=True, default="")
+    order = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.title

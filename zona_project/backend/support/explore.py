@@ -21,7 +21,7 @@ WD = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
 STAFF_STAGES = ("staff", "panel", "react")
 DATASETS = ("questions", "staff", "activity")
 DIMS = {
-    "questions": ["day", "week", "month", "hour", "weekday", "group", "asker", "role", "project", "territory", "answer",
+    "questions": ["day", "week", "month", "hour", "weekday", "group", "tag", "asker", "role", "project", "territory", "answer",
                   "staff", "status", "resolution", "topic", "responsible", "category", "app", "origin", "source", "photo",
                   "speed"],
     "staff": ["day", "week", "month", "hour", "weekday", "group", "staff", "kind", "topic", "asker", "source"],
@@ -38,6 +38,27 @@ SPEED = [(60, "≤1 daq"), (300, "1–5 daq"), (900, "5–15 daq"), (3600, "15�
 LIMIT = 500
 
 
+def _tag_titles():
+    from .models import Tag
+    return dict(Tag.objects.values_list("key", "title"))
+
+
+def _hit(value, vals):
+    """O'lchov qiymati (teg — ro'yxat) filtrga mosmi."""
+    return any(v in vals for v in value) if isinstance(value, list) else value in vals
+
+
+def _explode(rows, dims):
+    """Teg bo'yicha guruhlashda savol har bir tegida sanaladi (bir savol — bir nechta teg)."""
+    if "tag" not in dims:
+        return rows
+    out = []
+    for k, v in rows:
+        for t in k.get("tag") or ["—"]:
+            out.append(({**k, "tag": t}, v))
+    return out
+
+
 def _time_keys(at):
     lt = local(at)
     y, w, _ = lt.isocalendar()
@@ -46,6 +67,8 @@ def _time_keys(at):
 
 
 def _label(dim, key, names):
+    if dim == "tag":
+        return _tag_titles().get(key, "Tegsiz" if key == "—" else key)
     if dim == "weekday":
         return WD[int(key)] if key.isdigit() else key
     if dim == "hour":
@@ -58,7 +81,7 @@ def _label(dim, key, names):
 def _q_rows(qs):
     """Savollar: har biri — o'lchovlar yorlig'i va hisob uchun maydonlar."""
     rows = list(qs.values("id", "created_at", "answered_at", "status", "stage", "resolution", "source", "photo_file_id",
-                          "category", "app", "origin", "answered_by", "group__title", "entry__title",
+                          "category", "app", "origin", "answered_by", "group__title", "entry__title", "tags",
                           "entry__responsible__name", "user_id", "user__name", "user__username", "user__staff_person__role",
                           "user__staff_person__project__name", "user__staff_person__territory", "handler__member__name",
                           "handler__contact__name"))
@@ -91,6 +114,7 @@ def _q_rows(qs):
              "answer": "Bot" if bot else "Xodim" if staff else "Javobsiz" if not done else "Boshqa",
              "staff": staff_name or "—", "status": r["status"], "resolution": r["resolution"] or "noma'lum",
              "topic": r["entry__title"] or "Turi aniqlanmagan", "responsible": r["entry__responsible__name"] or "—",
+             "tag": list(r["tags"] or []) or ["—"],
              "category": r["category"] or "—", "app": r["app"] or "—", "origin": r["origin"] or "—", "source": r["source"],
              "photo": "Rasmli" if r["photo_file_id"] else "Matnli",
              "speed": next(lbl for lim, lbl in SPEED if secs <= lim) if secs is not None else "Javob yo'q"}
@@ -207,7 +231,7 @@ def rows_for(params):
     else:
         rows, names = _a_rows(start, end)
     flt = filters_of(params, dataset)
-    rows = [(k, v) for k, v in rows if all(k.get(d) in vals for d, vals in flt.items())]
+    rows = [(k, v) for k, v in rows if all(_hit(k.get(d), vals) for d, vals in flt.items())]
     return dataset, scope, info, rows, names
 
 
@@ -224,7 +248,7 @@ def explore(params):
     metrics = [m for m in (params.get("metrics") or "").split(",") if m in METRICS[dataset]] or METRICS[dataset][:4]
     calc = {"questions": _q_metrics, "staff": _s_metrics, "activity": _a_metrics}[dataset]
     groups = defaultdict(list)
-    for k, v in rows:
+    for k, v in _explode(rows, dims):
         groups[tuple(k.get(d, "") for d in dims)].append(v)
     out = []
     for key, items in groups.items():
@@ -241,7 +265,7 @@ def explore(params):
     # filtr tanlash uchun: har bir o'lchovning qiymatlari (eng ko'pi bilan 300 ta, ko'pdan ozga)
     options = {}
     for d in DIMS[dataset]:
-        c = Counter(k.get(d, "") for k, _v in rows)
+        c = Counter(x for k, _v in rows for x in (k.get(d) if isinstance(k.get(d), list) else [k.get(d, "")]))
         options[d] = [{"key": key, "label": _label(d, key, names), "n": n}
                       for key, n in (sorted(c.items()) if d in TIME_DIMS else c.most_common(300))]
     total = calc([v for _k, v in rows])

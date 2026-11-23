@@ -16,6 +16,7 @@ import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 import { Speed } from "./speed";
 import { AskersBoard } from "./askers";
+import { Breakdown } from "./breakdown";
 import { StaffBoard } from "./staff";
 import { Workload } from "./workload";
 
@@ -277,6 +278,13 @@ function Overview({ a, t, range }: { a: Analytics; t: ST; range: Range }) {
   return (
     <div className="grid gap-4">
       <Outcomes a={a} t={t} range={range} />
+      <Breakdown by="tag" title={t("bdTags")} hint={t("bdTagsHint")} icon={Tags} range={range} t={t} limit={20} />
+      <div className="grid gap-4 2xl:grid-cols-2">
+        <Breakdown by="category" title={t("bdCategory")} range={range} t={t} />
+        <Breakdown by="group" title={t("bdGroup")} range={range} t={t} />
+        <Breakdown by="app" title={t("bdApp")} hint={t("sysHint")} range={range} t={t} />
+        <Breakdown by="origin" title={t("bdOrigin")} range={range} t={t} />
+      </div>
       <Systems a={a} t={t} />
       <Panel title={t("anDaily")} icon={BarChart3}
         actions={(

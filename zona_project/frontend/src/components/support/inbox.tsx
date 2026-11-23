@@ -1,13 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Bot, BookOpen, CheckCheck, CircleCheck, CircleX, ExternalLink, Hourglass, Image as ImageIcon, Inbox, Loader2, MessageSquareReply, Search, Send, Sparkles, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, BookOpen, CheckCheck, CircleCheck, CircleX, ExternalLink, Hourglass, Image as ImageIcon, Inbox, Loader2, MessageSquareReply, Search, Send, SlidersHorizontal, Sparkles, Tag as TagIcon, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/common/page";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -16,7 +17,8 @@ import { useCan } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
 
 import { supportApi, SYS_APPS, SYS_CATEGORIES, SYS_ORIGINS, type MsgStatus, type Resolution, type SupportMessage } from "./api";
-import { fmtDate, Initials, MsgBadge, Segmented, stageLabel, useSupportMutation } from "./common";
+import { fmtDate, Initials, MsgBadge, stageLabel, useSupportMutation } from "./common";
+import { dimLabel } from "./explore";
 import { useSt, type SKey, type ST } from "./i18n";
 import { MediaRow } from "./media";
 import { SupportShell } from "./shell";
@@ -75,12 +77,27 @@ function InboxInner() {
   const [res, setRes] = useState<ResFilter>("any");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<number | null>(() => Number(sp.get("q")) || null);
+  const [adv, setAdv] = useState<Record<string, string>>({});
+  const [showAdv, setShowAdv] = useState(false);
+  const [sel, setSel] = useState<Set<number>>(new Set());
   const status = filter === "open" ? "escalated,drafted,new" : filter;
+  const advCount = Object.entries(adv).filter(([k, v]) => v && k !== "scope").length;
+  const exParams = useMemo(() => {
+    if (!advCount) return null;
+    const p: Record<string, string> = { ex: "1", scope: adv.scope || "all", limit: "500" };
+    if (adv.from || adv.to) { p.from = adv.from || adv.to; p.to = adv.to || adv.from; } else p.days = "3650";
+    Object.entries(adv).forEach(([k, v]) => { if (v && k.startsWith("f_")) p[k] = v; });
+    if (filter !== "all") p.f_status = status;
+    if (res !== "any") p.f_resolution = res === "open" ? "noma'lum,asked,work" : res;
+    return p;
+  }, [adv, advCount, filter, res, status]);
+  const tagsQ = useQuery({ queryKey: ["support", "tags"], queryFn: supportApi.tags, staleTime: 5 * 60_000 });
+  const tagTitle = useMemo(() => Object.fromEntries((tagsQ.data ?? []).map((x) => [x.key, x.title])), [tagsQ.data]);
   const stats = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7), refetchInterval: 30_000 });
   const list = useQuery({
-    queryKey: ["support", "messages", status, res, drill],
-    queryFn: () => supportApi.messages(drill ? { ...drill, limit: 500 }
-      : { status, limit: 300, ...(res === "any" ? {} : { resolution: res }) }),
+    queryKey: ["support", "messages", status, res, drill, exParams],
+    queryFn: () => supportApi.messages(drill ? { ...drill, limit: 500 } : exParams
+      ?? { status, limit: 300, ...(res === "any" ? {} : { resolution: res }) }),
     refetchInterval: 15_000,
   });
   const shown = useMemo(() => (list.data ? smartFilter(list.data, q,
@@ -93,6 +110,8 @@ function InboxInner() {
   const can = useCan();
   const bulk = useSupportMutation((v: { ids: number[]; value: "yes" | "no" }) => supportApi.resolveBulk(v.ids, v.value),
     (r) => t("resBulkDone", { n: r.done }));
+  const toggleSel = (id: number) => setSel((x) => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allShown = !!shown?.length && shown.every((m) => sel.has(m.id));
 
   return (
     <SupportShell title={t("inboxTitle")} description={t("inboxDesc2")} fill>
@@ -128,32 +147,48 @@ function InboxInner() {
                 </Link>
               </div>
             )}
-            {!drill && <Segmented size="sm" value={filter} onChange={(f) => { setFilter(f); setSelected(null); }} className="w-full" options={[
-              { value: "open", label: t("needsAnswer"), count: (bs.escalated ?? 0) + (bs.drafted ?? 0) + (bs.new ?? 0) },
-              { value: "escalated", label: t("m_escalated"), count: bs.escalated },
-              { value: "drafted", label: t("m_drafted"), count: bs.drafted },
-              { value: "answered", label: t("m_answered") },
-              { value: "closed", label: t("m_closed") },
-              { value: "all", label: t("all") },
-            ]} />}
-            {!drill && <Segmented size="sm" value={res} onChange={(v) => { setRes(v); setSelected(null); }} className="w-full" options={[
-              { value: "any", label: t("r_any") },
-              { value: "open", label: t("r_open") },
-              { value: "asked", label: t("r_asked"), icon: Hourglass },
-              { value: "yes", label: t("r_yes"), icon: CircleCheck },
-              { value: "no", label: t("r_no"), icon: CircleX },
-            ]} />}
-            {!drill && can.edit && (res === "asked" || res === "open") && !!shown?.length && (
+            {!drill && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <select className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs" value={filter} aria-label={t("dStatus")}
+                  onChange={(e) => { setFilter(e.target.value as Filter); setSelected(null); }}>
+                  <option value="open">{t("needsAnswer")} ({(bs.escalated ?? 0) + (bs.drafted ?? 0) + (bs.new ?? 0)})</option>
+                  <option value="escalated">{t("m_escalated")} ({bs.escalated ?? 0})</option>
+                  <option value="drafted">{t("m_drafted")} ({bs.drafted ?? 0})</option>
+                  <option value="answered">{t("m_answered")}</option>
+                  <option value="closed">{t("m_closed")}</option>
+                  <option value="all">{t("all")}</option>
+                </select>
+                <select className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs" value={res} aria-label={t("dResolution")}
+                  onChange={(e) => { setRes(e.target.value as ResFilter); setSelected(null); }}>
+                  {(["any", "open", "asked", "yes", "no"] as ResFilter[]).map((v) => <option key={v} value={v}>{t(`r_${v}` as SKey)}</option>)}
+                </select>
+                <Button size="sm" variant={showAdv || advCount ? "default" : "outline"} className="h-8 gap-1 px-2 text-xs" onClick={() => setShowAdv(!showAdv)}
+                  aria-expanded={showAdv}>
+                  <SlidersHorizontal className="size-3.5" />{t("fltMore")}{advCount ? ` · ${advCount}` : ""}
+                </Button>
+              </div>
+            )}
+            {!drill && showAdv && <InboxFilters value={adv} onChange={(v) => { setAdv(v); setSelected(null); setSel(new Set()); }} t={t} />}
+            {can.edit && !!shown?.length && (
               <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/50 px-2 py-1.5 text-xs">
-                <span className="text-muted-foreground">{t("bulkShown", { n: shown.length })}</span>
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-success" disabled={bulk.isPending}
-                  onClick={() => window.confirm(t("bulkConfirm", { n: shown.length, v: t("r_yes") })) && bulk.mutate({ ids: shown.map((m) => m.id), value: "yes" })}>
-                  <CircleCheck className="size-3.5" />{t("markYes")}
-                </Button>
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" disabled={bulk.isPending}
-                  onClick={() => window.confirm(t("bulkConfirm", { n: shown.length, v: t("r_no") })) && bulk.mutate({ ids: shown.map((m) => m.id), value: "no" })}>
-                  <CircleX className="size-3.5" />{t("markNo")}
-                </Button>
+                <label className="flex items-center gap-1.5">
+                  <Checkbox checked={allShown ? true : sel.size ? "indeterminate" : false}
+                    onCheckedChange={() => setSel(allShown ? new Set() : new Set(shown.map((m) => m.id)))} aria-label={t("selectAll", { n: shown.length })} />
+                  <span className="text-muted-foreground">{sel.size ? t("selected", { n: sel.size }) : t("selectAll", { n: shown.length })}</span>
+                </label>
+                {sel.size > 0 && (
+                  <>
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-success" disabled={bulk.isPending}
+                      onClick={() => window.confirm(t("bulkConfirm", { n: sel.size, v: t("r_yes") })) && bulk.mutate({ ids: [...sel], value: "yes" }, { onSuccess: () => setSel(new Set()) })}>
+                      <CircleCheck className="size-3.5" />{t("markYes")}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" disabled={bulk.isPending}
+                      onClick={() => window.confirm(t("bulkConfirm", { n: sel.size, v: t("r_no") })) && bulk.mutate({ ids: [...sel], value: "no" }, { onSuccess: () => setSel(new Set()) })}>
+                      <CircleX className="size-3.5" />{t("markNo")}
+                    </Button>
+                  </>
+                )}
+                <span className="ml-auto tabular-nums text-muted-foreground">{shown.length}</span>
               </div>
             )}
           </div>
@@ -161,9 +196,11 @@ function InboxInner() {
             {list.isLoading && <div className="grid gap-2 p-3">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16" />)}</div>}
             {shown?.length === 0 && <div className="p-6"><EmptyState icon={Inbox} title={t("inboxEmpty")} hint={t("inboxEmptyHint")} /></div>}
             {shown?.map((m) => (
-              <button key={m.id} type="button" onClick={() => setSelected(m.id)}
-                className={cn("relative flex w-full gap-3 border-b px-3 py-3 text-left transition-colors hover:bg-muted/50",
-                  selected === m.id && "bg-primary/[0.06] before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary")}>
+              <div key={m.id} className={cn("relative flex border-b transition-colors hover:bg-muted/50",
+                selected === m.id && "bg-primary/[0.06] before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary",
+                sel.has(m.id) && "bg-primary/[0.04]")}>
+              {can.edit && <span className="flex items-start pl-3 pt-4"><Checkbox checked={sel.has(m.id)} onCheckedChange={() => toggleSel(m.id)} aria-label={m.user_name} /></span>}
+              <button type="button" onClick={() => setSelected(m.id)} className="flex min-w-0 flex-1 gap-3 px-3 py-3 text-left">
                 <span className="relative">
                   <Initials name={m.user_name} />
                   <span className={cn("absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-card", STATUS_DOT[m.status])} />
@@ -182,8 +219,14 @@ function InboxInner() {
                     <Users className="size-3 shrink-0" /><span className="truncate">{m.group_title}</span>
                     {m.stage && <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-px">{stageLabel(m.stage, t)}</span>}
                   </span>
+                  {!!m.tags?.length && (
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {m.tags.slice(0, 4).map((k) => <span key={k} className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] text-primary">{tagTitle[k] ?? k}</span>)}
+                    </span>
+                  )}
                 </span>
               </button>
+              </div>
             ))}
           </div>
         </div>
@@ -207,6 +250,68 @@ function InboxInner() {
         </aside>
       </div>
     </SupportShell>
+  );
+}
+
+/** Kengaytirilgan filtrlar (yig'iladigan): sana, doira va istalgan o'lchov — konstruktor bilan bir xil hisob. */
+const FILTER_DIMS = ["group", "tag", "asker", "staff", "project", "role", "territory", "topic", "category", "app", "answer", "speed"];
+
+function InboxFilters({ value, onChange, t }: { value: Record<string, string>; onChange: (v: Record<string, string>) => void; t: ST }) {
+  const base: Record<string, string> = { dataset: "questions", metrics: "count", scope: value.scope || "all" };
+  if (value.from || value.to) { base.from = value.from || value.to; base.to = value.to || value.from; } else base.days = "3650";
+  const opts = useQuery({ queryKey: ["support", "explore", base], queryFn: () => supportApi.explore(base), staleTime: 60_000 });
+  const set = (k: string, v: string) => onChange({ ...value, [k]: v });
+  return (
+    <div className="grid gap-2 rounded-lg border bg-muted/30 p-2">
+      <div className="grid grid-cols-2 gap-1.5">
+        <label className="grid gap-0.5 text-[11px] text-muted-foreground">{t("dateFrom")}
+          <Input type="date" className="h-8 text-xs" value={value.from ?? ""} onChange={(e) => set("from", e.target.value)} /></label>
+        <label className="grid gap-0.5 text-[11px] text-muted-foreground">{t("dateTo")}
+          <Input type="date" className="h-8 text-xs" value={value.to ?? ""} onChange={(e) => set("to", e.target.value)} /></label>
+      </div>
+      <select className="h-8 rounded-md border bg-background px-2 text-xs" value={value.scope || "all"} onChange={(e) => set("scope", e.target.value)}
+        aria-label={t("anScope")}>
+        {["all", "live", "analytics"].map((x) => <option key={x} value={x}>{t(`ex_sc_${x}` as SKey)}</option>)}
+      </select>
+      <div className="grid grid-cols-2 gap-1.5">
+        {FILTER_DIMS.map((dim) => (
+          <select key={dim} className="h-8 min-w-0 rounded-md border bg-background px-2 text-xs" value={value[`f_${dim}`] ?? ""}
+            onChange={(e) => set(`f_${dim}`, e.target.value)} aria-label={t(`ex_d_${dim}` as SKey)}>
+            <option value="">{t(`ex_d_${dim}` as SKey)}: {t("all")}</option>
+            {(opts.data?.options[dim] ?? []).map((o) => <option key={o.key} value={o.key}>{dimLabel(t, dim, o.key, o.label)} ({o.n})</option>)}
+          </select>
+        ))}
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onChange({})}><X className="size-3.5" />{t("fltClear")}</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Teglar: bosib qo'shish / olib tashlash (qo'lda tahrir — avtomatik qayta yozilmaydi). */
+function TagEditor({ m, t }: { m: SupportMessage; t: ST }) {
+  const can = useCan();
+  const tags = useQuery({ queryKey: ["support", "tags"], queryFn: supportApi.tags, staleTime: 5 * 60_000 });
+  const [cur, setCur] = useState<string[]>(m.tags ?? []);
+  const save = useSupportMutation((v: string[]) => supportApi.setTags(m.id, v), t("saved"));
+  const toggle = (k: string) => {
+    const next = cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k];
+    setCur(next);
+    save.mutate(next);
+  };
+  const list = (tags.data ?? []).filter((x) => x.active && (can.edit || cur.includes(x.key)));
+  return (
+    <div className="flex flex-wrap gap-1">
+      {list.map((x) => (
+        <button key={x.key} type="button" disabled={!can.edit || save.isPending} onClick={() => toggle(x.key)}
+          className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+            cur.includes(x.key) ? "border-primary/50 bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>
+          <TagIcon className="size-3" />{x.title}
+        </button>
+      ))}
+      {m.tags_locked && <span className="text-[10px] text-muted-foreground">· {t("tagsManual")}</span>}
+    </div>
   );
 }
 
@@ -289,6 +394,7 @@ function Details({ m, t }: { m: SupportMessage; t: ST }) {
           {m.resolved_at && <span className="text-xs text-muted-foreground">· {fmtDate(m.resolved_at)}{m.resolved_by ? ` · ${m.resolved_by.startsWith("panel: ") ? `${t("byAdmin")}: ${m.resolved_by.slice(7)}` : m.resolved_by}` : ""}</span>}
         </span>)}
         {row(t("dSystem"), <SystemLabel m={m} t={t} />)}
+        {row(t("dTags"), <TagEditor m={m} t={t} />)}
         {row(t("dGroup"), m.group_title)}
         {row(t("dAsked"), fmtDate(m.created_at))}
         {m.answered_at && row(t("dAnswered"), `${fmtDate(m.answered_at)}${m.answered_by ? ` · ${m.answered_by}` : ""}`)}

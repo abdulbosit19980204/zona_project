@@ -587,7 +587,8 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = ["id", "group", "group_title", "user_name", "user_username", "text", "ocr_text", "has_photo", "media", "link", "lang",
                   "status", "stage", "entry", "entry_title", "confidence", "answer_text", "answered_by", "feedback",
                   "created_at", "answered_at", "staff_answers", "task", "problem", "resolution", "resolved_at",
-                  "resolved_by", "app", "origin", "category", "solution", "labeled_by", "train", "ratings", "user_real"]
+                  "resolved_by", "app", "origin", "category", "solution", "labeled_by", "train", "ratings", "user_real",
+                  "tags", "tags_locked"]
 
     def get_has_photo(self, obj):
         return bool(obj.photo_file_id)
@@ -658,6 +659,15 @@ class MessageViewSet(ZonaViewSet):
 
     def create(self, request, *args, **kwargs):
         return Response(status=405)
+
+    @action(detail=True, methods=["post"], url_path="tags", permission_classes=[ReadOrEdit])
+    def set_tags(self, request, pk=None):
+        """Teglarni qo'lda o'rnatish: {"tags": ["promo", "1c"]} — keyin avtomatik qayta yozilmaydi."""
+        from .models import Tag
+        known = set(Tag.objects.values_list("key", flat=True))
+        tags = [t for t in dict.fromkeys(str(x) for x in (request.data.get("tags") or [])) if t in known][:12]
+        Message.objects.filter(pk=pk, kind=Message.QUESTION).update(tags=tags, tags_locked=True)
+        return Response({"tags": tags})
 
     @action(detail=True, methods=["post"])
     def rate(self, request, pk=None):
@@ -748,6 +758,35 @@ def stats(request):
     return Response({"total": qs.count(), "by_status": by_status, "by_stage": by_stage, "entries": entries,
                      "pending_edits": Entry.objects.filter(pending__isnull=False).count(),
                      "top": top, "bots": bots, "modes": dict(MODES)})
+
+
+@zona_api(["GET", "POST"], [CanView])
+def tags_list(request):
+    """Teglar: GET — ro'yxat (savollar soni bilan); POST (admin) — {"tags": [{key, title, keywords, color, active}]} to'liq
+    ro'yxatni saqlash va barcha savollarga avtomatik teglarni qayta qo'yish."""
+    import re as _re
+    from collections import Counter
+
+    from . import tags as T
+    from .models import Tag
+    if request.method == "POST":
+        if not has_role(request, Profile.ADMIN):
+            return Response({"detail": "Faqat administrator"}, status=403)
+        rows = request.data.get("tags") or []
+        keep = []
+        for i, r in enumerate(rows[:60]):
+            key = _re.sub(r"[^a-z0-9_-]", "", str(r.get("key") or "").lower())[:40] or f"tag{i + 1}"
+            Tag.objects.update_or_create(key=key, defaults={
+                "title": str(r.get("title") or key)[:80], "order": i, "color": str(r.get("color") or "")[:16],
+                "active": bool(r.get("active", True)),
+                "keywords": [str(w).strip()[:120] for w in (r.get("keywords") or []) if str(w).strip()][:60]})
+            keep.append(key)
+        Tag.objects.exclude(key__in=keep).delete()
+        T._CACHE["key"] = None
+        T.backfill()
+    counts = Counter(t for tags in Message.objects.filter(kind=Message.QUESTION).values_list("tags", flat=True) for t in (tags or []))
+    return Response([{"key": t.key, "title": t.title, "keywords": t.keywords, "color": t.color, "active": t.active,
+                      "questions": counts.get(t.key, 0)} for t in Tag.objects.all()])
 
 
 @zona_api(["GET"], [CanView])

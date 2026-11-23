@@ -82,7 +82,10 @@ export interface SupportMessage {
   task?: { id: number; status: string; assignee: string; reply: string; error: string } | null;
   ratings?: { stars: number; staff: string; by: string; source: string; comment: string; at: string }[];
   user_real?: { name: string; role: string; project: string; territory: string; phone: string } | null;
+  tags?: string[]; tags_locked?: boolean;
 }
+/** Savol tegi (turi): kalit so'zlar bo'yicha avtomatik qo'yiladi. */
+export interface SupportTag { key: string; title: string; keywords: string[]; color: string; active: boolean; questions?: number }
 export interface SupportSettings {
   api_id: string; api_hash: string; has_api_hash: boolean; ai_enabled: boolean; ai_daily_limit: number;
   ai_min_confidence: number; faq_threshold: number; route_threshold: number; learn_from_staff: boolean;
@@ -277,6 +280,9 @@ export const supportApi = {
   stats: (days = 7) => get<SupportStats>("stats/", { days }),
   staff: () => get<StaffRow[]>("staff/"),
   owners: () => get<Owner[]>("owners/"),
+  tags: () => get<SupportTag[]>("tags/"),
+  saveTags: (tags: Omit<SupportTag, "questions">[]) => post<SupportTag[]>("tags/", { tags }),
+  setTags: (id: number, tags: string[]) => post<{ tags: string[] }>(`messages/${id}/tags/`, { tags }),
   claudeCounts: () => get<Record<string, number>>("entries/claude-counts/"),
   staffBoard: (r: Range) => get<StaffBoard>("analytics/staff/", r),
   explore: (params: Record<string, string>) => get<Explore>("analytics/explore/", params),

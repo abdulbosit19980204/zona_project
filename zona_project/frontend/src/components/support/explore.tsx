@@ -39,6 +39,9 @@ export function fmtMetric(t: ST, m: string, v: number | null | undefined) {
 export function dimLabel(t: ST, dim: string, key: string, label: string) {
   if (dim === "resolution") return t((key === "noma'lum" ? "r_" : `r_${key}`) as SKey);
   if (dim === "status") return t(`m_${key}` as SKey);
+  if (dim === "category" && key && key !== "—") return t(`cat_${key}` as SKey);
+  if (dim === "app" && key && key !== "—") return t(`sys_${key}` as SKey);
+  if (dim === "origin" && key && key !== "—") return t(`org_${key}` as SKey);
   return label || "—";
 }
 

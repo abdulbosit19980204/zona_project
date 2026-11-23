@@ -20,7 +20,8 @@ import { DataTable, type Column } from "./data-table";
 import { fmtDate, ModeBadge, SearchPicker, Segmented, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SettingRow, SupportShell } from "./shell";
-import { TasksPanel } from "./tasks-panel";
+import { TasksPanel } from "./tasks-panel";
+import { TagsEditor } from "./tags-editor";
 
 const MODES: Mode[] = ["collect", "shadow", "live", "off"];
 
@@ -73,7 +74,7 @@ function SettingsInner() {
           </div>
           {tab === "bots" && <BotsSection t={t} />}
           {tab === "groups" && <GroupsSection t={t} />}
-          {tab === "answering" && <SettingsForm t={t} part="answering" />}
+          {tab === "answering" && <div className="grid gap-6"><SettingsForm t={t} part="answering" /><TagsEditor t={t} /></div>}
           {tab === "images" && <SettingsForm t={t} part="images" />}
           {tab === "history" && <HistorySection t={t} />}
           {tab === "tasks" && <TasksPanel t={t} />}

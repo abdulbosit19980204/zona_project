@@ -784,6 +784,8 @@ class Handler:
         q.answer_text = d.text
         q.problem = resolution.problem_of(q, d.entry)  # har bir savol — qisqa muammo (jurnal va tahlil uchun)
         systems.apply(q, d.entry)  # ilova / manba / toifa (tez qoidalar; AI tahlili keyin aniqlashtiradi)
+        from . import tags as _tags
+        _tags.apply(q)  # teglar (savol turlari): aksiya, vizit, PRBC, 1C...
         if d.entry:
             Entry.objects.filter(pk=d.entry.pk).update(uses=d.entry.uses + 1, last_used_at=timezone.now())
 
