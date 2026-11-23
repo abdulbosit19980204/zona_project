@@ -16,6 +16,7 @@ import { DataTable, type Column } from "./data-table";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 import { Speed } from "./speed";
+import { StaffBoard } from "./staff";
 import { Workload } from "./workload";
 
 type Tab = "overview" | "speed" | "workload" | "staff" | "askers" | "topics";
@@ -78,7 +79,7 @@ export function SupportAnalytics() {
           {tab === "overview" && <Overview a={a} t={t} range={range} />}
           {tab === "speed" && <Speed range={range} t={t} />}
           {tab === "workload" && <Workload range={range} t={t} />}
-          {tab === "staff" && <StaffTable a={a} t={t} />}
+          {tab === "staff" && <StaffBoard range={range} t={t} />}
           {tab === "askers" && <Askers a={a} t={t} />}
           {tab === "topics" && <Topics a={a} t={t} />}
         </div>
@@ -335,54 +336,6 @@ function Overview({ a, t, range }: { a: Analytics; t: ST; range: Range }) {
         </div>
       </Panel>
     </div>
-  );
-}
-
-function StaffTable({ a, t }: { a: Analytics; t: ST }) {
-  type R = Analytics["staff"][number];
-  const columns: Column<R>[] = [
-    { key: "name", header: t("staff"), sort: (s) => s.name.toLowerCase(), cell: (s) => (
-      <div className="flex min-w-52 items-center gap-2.5">
-        <Initials name={s.name} className="size-8" />
-        <div className="min-w-0">
-          <div className="font-medium">{s.name}</div>
-          {s.topics.length > 0 && <div className="max-w-72 truncate text-xs text-muted-foreground">{s.topics.map((x) => `${x.title} (${x.n})`).join(" · ")}</div>}
-          <div className="max-w-72 truncate text-[11px] text-muted-foreground">{s.groups.join(", ")}</div>
-        </div>
-      </div>
-    ) },
-    { key: "answers", header: t("anAnswers"), align: "right", sort: (s) => s.answers, cell: (s) => (
-      <span className="font-mono">{s.answers}{s.panel > 0 && <span className="text-xs text-muted-foreground"> ({s.panel} panel)</span>}</span>
-    ) },
-    { key: "share", header: t("anShare"), align: "right", sort: (s) => s.share, cell: (s) => (
-      <div><div className="font-mono text-xs">{s.share}%</div>
-        <div className="ml-auto mt-1 h-1 w-16 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary" style={{ width: `${s.share}%` }} /></div></div>
-    ) },
-    { key: "res", header: t("colResolved"), align: "right", sort: (s) => s.resolved ?? 0, cell: (s) => (
-      <span className="font-mono"><span className="text-success">{s.resolved ?? 0}</span>
-        {(s.unresolved ?? 0) > 0 && <span className="text-destructive"> / {s.unresolved}</span>}</span>
-    ) },
-    { key: "react", header: t("anReacts"), align: "right", sort: (s) => s.reactions ?? 0, cell: (s) => (
-      <span className="font-mono">{s.reactions ?? 0}{(s.working ?? 0) > 0 && <span className="block text-[11px] text-primary">{t("anWorking")}: {s.working}</span>}</span>
-    ) },
-    { key: "clar", header: t("anClar"), align: "right", sort: (s) => s.clarifications, cell: (s) => <span className="font-mono">{s.clarifications}</span> },
-    { key: "speed", header: t("anSpeed"), align: "right", sort: (s) => s.median_s, cell: (s) => (
-      <span className="font-mono text-xs">{fmtDur(t, s.median_s)}
-        {s.avg_s != null && <span className="block text-muted-foreground">⌀ {fmtDur(t, s.avg_s)}</span>}</span>
-    ) },
-    { key: "day", header: t("anPerDay"), align: "right", sort: (s) => s.per_day, cell: (s) => (
-      <span className="font-mono">{s.per_day}<span className="block text-[11px] text-muted-foreground">{t("anDays", { n: s.active_days })}</span></span>
-    ) },
-    { key: "msgs", header: t("anMessages"), align: "right", sort: (s) => s.messages, cell: (s) => <span className="font-mono">{s.messages}</span> },
-    { key: "appr", header: t("anApproved"), align: "right", sort: (s) => s.approved, cell: (s) => <span className="font-mono">{s.approved}/{s.candidates}</span> },
-  ];
-  return (
-    <Panel title={t("anStaff")} icon={UserRound}>
-      <DataTable rows={a.staff} columns={columns} rowKey={(s) => s.name} t={t} initialSort={{ key: "answers", dir: "desc" }}
-        search={(s) => [s.name, ...s.groups, ...s.topics.map((x) => x.title)].join(" ")}
-        filters={[{ value: "all", label: t("dtAll"), test: () => true },
-          { value: "active", label: t("anAnswers"), test: (s) => s.answers > 0 }]} />
-    </Panel>
   );
 }
 

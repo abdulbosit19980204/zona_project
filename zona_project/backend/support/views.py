@@ -198,7 +198,12 @@ class EntrySerializer(serializers.ModelSerializer):
     zone_name = serializers.CharField(source="zone.name", read_only=True, default="")
     responsible_name = serializers.CharField(source="responsible.name", read_only=True, default="")
     responsible_tg = serializers.SerializerMethodField()
+    claude_target_title = serializers.CharField(source="claude_target.title", read_only=True, default="")
+    claude_covers_count = serializers.SerializerMethodField()
     attachments_info = serializers.SerializerMethodField()
+
+    def get_claude_covers_count(self, obj):
+        return obj.claude_covers.filter(status__in=[Entry.NEW, Entry.REVIEW]).count() if obj.claude_kind == "general" else 0
 
     def get_responsible_tg(self, obj):
         """Mas'ulning Telegram'lari (belgilash uchun): o'zi yoki jamoa a'zolari."""
@@ -260,8 +265,10 @@ class EntrySerializer(serializers.ModelSerializer):
         fields = ["id", "kind", "title", "questions", "triggers", "extract", "answer", "answer_ru", "ask_first",
                   "attachments", "attachments_info", "image_examples_count", "sources_info", "zone", "zone_name", "creates_task", "task_assignee", "variants", "answer_mode",
                   "responsible", "responsible_name", "responsible_tg", "status", "source", "priority", "pending", "author",
+                  "claude_kind", "claude_note", "claude_target", "claude_target_title", "claude_covers_count",
                   "approved_by", "approved_at", "uses", "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
-        read_only_fields = ["status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",
+        read_only_fields = ["claude_kind", "claude_note", "claude_target",
+                            "status", "source", "priority", "pending", "author", "approved_by", "approved_at", "uses",
                             "likes", "dislikes", "last_used_at", "created_at", "updated_at"]
 
     def validate_questions(self, v):
@@ -295,8 +302,10 @@ class EntryViewSet(ZonaViewSet):
     permission_classes = [CanView]  # viewer ham taklif qila oladi; tasdiqlash — editor
 
     def get_queryset(self):
-        qs = Entry.objects.select_related("zone", "responsible").prefetch_related("responsible__contacts")
+        qs = Entry.objects.select_related("zone", "responsible", "claude_target").prefetch_related("responsible__contacts")
         p = self.request.query_params
+        if p.get("claude"):  # Claude ko'rib chiqqanlar: any / status / handoff / same / general
+            qs = qs.exclude(claude_kind="") if p["claude"] == "any" else qs.filter(claude_kind=p["claude"])
         if p.get("status") and p["status"] != "all":
             qs = qs.filter(status__in=p["status"].split(","))
         if p.get("kind"):
@@ -491,6 +500,11 @@ class EntryViewSet(ZonaViewSet):
             elif act == "archive":
                 e.status = Entry.ARCHIVED
                 e.save(update_fields=["status", "updated_at"])
+            elif act == "absorb":  # Claude topgan standart javobga qo'shish (javob matni o'zgarmaydi, takror arxivga)
+                from .dedupe import absorb
+                if not e.claude_target_id or e.status not in (Entry.NEW, Entry.REVIEW):
+                    continue
+                absorb(e.claude_target_id, [e.pk], _actor(request))
             elif act in ("kind_template", "kind_faq"):  # turini o'zgartirish (matn o'zgarmaydi)
                 e.kind = Entry.TEMPLATE if act == "kind_template" else Entry.FAQ
                 e.save(update_fields=["kind", "updated_at"])
@@ -506,6 +520,15 @@ class EntryViewSet(ZonaViewSet):
                 continue
             done += 1
         return Response({"done": done})
+
+    @action(detail=False, methods=["get"], url_path="claude-counts")
+    def claude_counts(self, request):
+        """Tasdiqlash navbatida Claude ko'rib chiqqanlar soni: turi bo'yicha."""
+        from django.db.models import Count
+        rows = (Entry.objects.filter(status__in=[Entry.NEW, Entry.REVIEW]).exclude(claude_kind="")
+                .values_list("claude_kind").annotate(n=Count("id")))
+        c = dict(rows)
+        return Response({**c, "any": sum(c.values())})
 
     @action(detail=False, methods=["post"])
     def test(self, request):
@@ -1012,6 +1035,27 @@ def analytics_workload(request):
     from .workload import period
     start, end, info = period(request.query_params)
     return Response(workload(start, end, info))
+
+
+@zona_api(["GET"], [CanView])
+def analytics_staff(request):
+    """Xodimlar: guruhdagi xabarlari, ish vaqti (boshlash / tugatish), ish turlari va tezligi — butun tarix bo'yicha."""
+    from .activity import board
+    from .workload import period
+    start, end, info = period(request.query_params, max_days=3660)
+    return Response(board(start, end, info))
+
+
+@zona_api(["GET"], [CanView])
+def analytics_staff_one(request, pk):
+    """Bitta xodim: kunma-kun ish grafigi, soat × hafta kuni, guruhlar va so'nggi harakatlari."""
+    from .activity import detail
+    from .workload import period
+    user = TgUser.objects.filter(pk=pk).select_related("member", "contact").first()
+    if user is None or not user.is_staff:
+        return Response({"detail": "Xodim topilmadi"}, status=404)
+    start, end, info = period(request.query_params, max_days=3660)
+    return Response(detail(user, start, end, info))
 
 
 @zona_api(["GET"], [CanView])

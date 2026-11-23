@@ -35,7 +35,9 @@ export interface Entry {
   answer_mode?: "" | "on" | "off";
   creates_task?: boolean; task_assignee?: string; variants?: { uz: string; ru: string }[] | null;
   image_examples_count?: number; zone: number | null; zone_name: string; responsible: number | null;
-  responsible_name: string; responsible_tg?: string[]; status: EntryStatus; source: string; priority: boolean; pending: PendingEdit | null;
+  responsible_name: string; responsible_tg?: string[]; status: EntryStatus;
+  claude_kind?: ClaudeKind; claude_note?: string; claude_target?: number | null; claude_target_title?: string;
+  claude_covers_count?: number; source: string; priority: boolean; pending: PendingEdit | null;
   author: string; approved_by: string; approved_at: string | null; uses: number; likes: number; dislikes: number;
   last_used_at: string | null; created_at: string; updated_at: string;
   sources_info?: EntrySource[];
@@ -223,6 +225,28 @@ const get = async <T>(url: string, params?: Record<string, string | number>) => 
 const post = async <T>(url: string, body: unknown = {}) => (await api.post<T>(B + url, body)).data;
 const patch = async <T>(url: string, body: unknown) => (await api.patch<T>(B + url, body)).data;
 
+/** Claude ko'rib chiqqan o'rganilgan yozuv: holat xabari / uzatish / standartga mos / umumlashtirilgan. */
+export type ClaudeKind = "" | "status" | "handoff" | "same" | "general";
+
+export interface StaffBoardRow {
+  id: number; name: string; username: string; team: string; messages: number; active_days: number;
+  start: string | null; end: string | null; span_h: number; last_seen: string | null; answers: number;
+  clarifications: number; handoffs: number; questions: number; resolved: number; unresolved: number; reactions: number;
+  working: number; closed: number; median_s: number | null; groups: { title: string; n: number }[];
+}
+export interface StaffBoard {
+  from: string; to: string; days: number; staff: StaffBoardRow[];
+  totals: { staff: number; messages: number; answers: number; clarifications: number; handoffs: number };
+}
+export interface StaffDay {
+  date: string; weekday: number; messages: number; work: number; first: string; last: string; first_m: number;
+  last_m: number; span_h: number; hours: number[];
+}
+export interface StaffDetail extends Omit<StaffBoardRow, "team" | "start" | "end" | "span_h" | "last_seen"> {
+  from: string; to: string; heatmap: number[][]; timeline: StaffDay[]; groups: { title: string; n: number }[];
+  recent: { id: number; at: string; kind: string; text: string; group: string; question: string; question_id: number | null; link: string }[];
+}
+
 /** Mas'ul (xodim yoki jamoa) — bilim bazasi yozuvi kimga tegishli; belgilash uchun Telegram'lari bilan. */
 export interface Owner { id: number; name: string; role: string; level: string; telegram: string[]; is_team: boolean }
 
@@ -230,6 +254,9 @@ export const supportApi = {
   stats: (days = 7) => get<SupportStats>("stats/", { days }),
   staff: () => get<StaffRow[]>("staff/"),
   owners: () => get<Owner[]>("owners/"),
+  claudeCounts: () => get<Record<string, number>>("entries/claude-counts/"),
+  staffBoard: (r: Range) => get<StaffBoard>("analytics/staff/", r),
+  staffOne: (id: number, r: Range) => get<StaffDetail>(`analytics/staff/${id}/`, r),
   settings: () => get<SupportSettings>("settings/"),
   saveSettings: (body: Partial<SupportSettings> & { api_hash?: string }) => patch<SupportSettings>("settings/", body),
   bots: () => get<SupportBot[]>("bots/"),
@@ -253,7 +280,7 @@ export const supportApi = {
   archive: (id: number) => post<Entry>(`entries/${id}/archive/`),
   revert: (id: number, vid: number) => post<Entry>(`entries/${id}/revert/${vid}/`),
   merge: (id: number, target: number) => post<Entry>(`entries/${id}/merge/`, { target }),
-  bulk: (ids: number[], action: "approve" | "reject" | "archive" | "review" | "kind_template" | "kind_faq" | "mode_auto" | "mode_on" | "mode_off") => post<{ done: number }>("entries/bulk/", { ids, action }),
+  bulk: (ids: number[], action: "approve" | "reject" | "archive" | "review" | "kind_template" | "kind_faq" | "mode_auto" | "mode_on" | "mode_off" | "absorb") => post<{ done: number }>("entries/bulk/", { ids, action }),
   test: (text: string, all = true) => post<TestResult>("entries/test/", { text, all }),
   messages: (params: Record<string, string | number> = {}) => get<SupportMessage[]>("messages/", params),
   answer: (id: number, text: string, save = true, approve = false) =>

@@ -226,6 +226,10 @@ class Entry(models.Model):
     ask_first = models.TextField("Javobdan oldin so'raladigan ma'lumot", blank=True,
                                  help_text="Xodimlar odatda avval nimani so'raydi (masalan: STIR, skrinshot)")
     author = models.CharField(max_length=150, blank=True)
+    # Claude ko'rib chiqqan o'rganilgan yozuv: nima qilingani (tasdiqlashda tez ajratish uchun) va mos standart javob
+    claude_kind = models.CharField(max_length=10, blank=True, default="", db_default="", db_index=True)  # status/handoff/same/general
+    claude_note = models.CharField(max_length=300, blank=True, default="", db_default="")
+    claude_target = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="claude_covers")
     approved_by = models.CharField(max_length=150, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     uses = models.PositiveIntegerField(default=0)
@@ -520,3 +524,20 @@ class SupportTask(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class Activity(models.Model):
+    """Foydalanuvchining guruhdagi kunlik faolligi (har bir xabar): xodimlar ish grafigi va to'liq statistikasi uchun.
+    Kun — Toshkent vaqti bilan; hours — 24 soat bo'yicha xabarlar soni."""
+
+    user = models.ForeignKey(TgUser, on_delete=models.CASCADE, related_name="activity")
+    group = models.ForeignKey(Group, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    date = models.DateField(db_index=True)
+    count = models.PositiveIntegerField(default=0)
+    first_at = models.DateTimeField()
+    last_at = models.DateTimeField()
+    hours = models.JSONField(default=list)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "group", "date"], name="support_activity_unique")]
+        indexes = [models.Index(fields=["user", "date"])]

@@ -234,6 +234,11 @@ class Handler:
         if not self.history:  # faollik hisobi (har bir guruh xabari) — xodimlar ishini tahlil qilish uchun
             from django.db.models import F as _F
             TgUser.objects.filter(pk=user.pk).update(msg_count=_F("msg_count") + 1, last_msg_at=timezone.now())
+            try:  # kunlik faollik: xodimlar ish grafigi va statistikasi
+                from . import activity
+                activity.record(user, group, timezone.now())
+            except Exception:  # noqa: BLE001 — hisob xatosi xabarni qayta ishlashni to'xtatmasin
+                log.exception("activity record failed")
         text = (msg.get("text") or msg.get("caption") or "").strip()
         loc = "" if text else conversation.location_text(msg)  # lokatsiya — suhbatning bir qismi (matn sifatida)
         text = text or loc
@@ -1339,6 +1344,10 @@ def approve(entry, by):
     entry.approved_by, entry.approved_at = by or "", timezone.now()
     entry.priority = False
     entry.save()
+    if entry.claude_kind == "general":
+        # Claude umumlashtirgan standart javob tasdiqlandi — u qamragan takror savollar shunga qo'shiladi (arxivga)
+        from .dedupe import absorb
+        absorb(entry.pk, list(entry.claude_covers.values_list("pk", flat=True)), by)
     return entry
 
 

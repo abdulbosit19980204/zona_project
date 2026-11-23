@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
 
-import { supportApi, type Entry } from "./api";
+import { supportApi, type ClaudeKind, type Entry } from "./api";
 import { EntryBadge, EntryPicker, fmtDate, OwnerSelect, Segmented, useSupportMutation } from "./common";
 import { AISuggestions } from "./ai-suggestions";
 import { BotAnswers } from "./bot-answers";
@@ -44,10 +44,13 @@ function ReviewInner() {
   const [page, setPage] = useState(0);
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
+  const [cf, setCf] = useState<"" | "any" | Exclude<ClaudeKind, "">>("");
+  const counts = useQuery({ queryKey: ["support", "entries", "claude-counts"], queryFn: supportApi.claudeCounts, staleTime: 30_000 });
   useEffect(() => { const h = setTimeout(() => { setSearch(q.trim()); setPage(0); }, 350); return () => clearTimeout(h); }, [q]);
   const fresh = useQuery({
-    queryKey: ["support", "entries", "queue", page, search],
-    queryFn: () => supportApi.entriesPage({ status: "new,review", limit: PAGE, offset: page * PAGE, sources: 1, ...(search ? { q: search } : {}) }),
+    queryKey: ["support", "entries", "queue", page, search, cf],
+    queryFn: () => supportApi.entriesPage({ status: "new,review", limit: PAGE, offset: page * PAGE, sources: 1,
+      ...(search ? { q: search } : {}), ...(cf ? { claude: cf } : {}) }),
     placeholderData: keepPreviousData,
   });
   const edits = useQuery({ queryKey: ["support", "entries", "pending"], queryFn: () => supportApi.entries({ status: "approved", pending: 1 }) });
@@ -57,8 +60,24 @@ function ReviewInner() {
   const total = fresh.data?.count ?? 0;
   const rv = useQuery({ queryKey: ["support", "reviews", "count"], queryFn: () => supportApi.reviews({ status: "open", limit: 1 }), staleTime: 30_000 });
   const openReviews = (rv.data?.counts.wrong ?? 0) + (rv.data?.counts.check ?? 0);
-  const items = useMemo(() => [...(page === 0 && !search ? edits.data ?? [] : []), ...(fresh.data?.results ?? [])]
-    .sort((a, b) => Number(b.priority) - Number(a.priority)), [fresh.data, edits.data, page, search]);
+  const items = useMemo(() => [...(page === 0 && !search && !cf ? edits.data ?? [] : []), ...(fresh.data?.results ?? [])]
+    .sort((a, b) => Number(b.priority) - Number(a.priority)), [fresh.data, edits.data, page, search, cf]);
+  const cc = counts.data ?? {};
+  const claudeBar = (cc.any ?? 0) > 0 && (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] px-3 py-2">
+      <Sparkles className="size-4 text-violet-500" />
+      <span className="text-sm font-medium">{t("clTitle")}</span>
+      <Segmented size="sm" value={cf} onChange={(v) => { setCf(v); setPage(0); }} options={[
+        { value: "", label: t("dtAll") },
+        { value: "any", label: t("clAny"), count: cc.any },
+        { value: "same", label: t("cl_same"), count: cc.same ?? 0 },
+        { value: "general", label: t("cl_general"), count: cc.general ?? 0 },
+        { value: "status", label: t("cl_status"), count: cc.status ?? 0 },
+        { value: "handoff", label: t("cl_handoff"), count: cc.handoff ?? 0 },
+      ]} />
+      {cf && <span className="text-xs text-muted-foreground">{t(`clHint_${cf}` as SKey)}</span>}
+    </div>
+  );
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const edit = (id: number) => { setEditing(id); setOpen(true); };
   const pager = (
@@ -97,6 +116,7 @@ function ReviewInner() {
       {view === "answers" && <BotAnswers t={t} />}
       {view === "dups" && <Duplicates t={t} />}
       {view === "recheck" && <Recheck t={t} onEdit={edit} />}
+      {(view === "queue" || view === "cards") && claudeBar}
       {(view === "queue" || view === "cards") && pager}
       {(view === "queue" || view === "cards") && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
       {(view === "queue" || view === "cards") && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
@@ -172,6 +192,28 @@ function Diff({ e, t }: { e: Entry; t: ST }) {
 }
 
 /* ---------------------------------------------------------------- 1. navbat (ro'yxat, ommaviy) */
+/** Claude nima qilgani: holat xabari / uzatish almashtirildi, standart javobga mos, umumlashtirilgan. */
+function ClaudeNote({ e, t }: { e: Entry; t: ST }) {
+  const can = useCan();
+  const one = useSupportMutation(() => supportApi.bulk([e.id], "absorb"), t("clAbsorbed"));
+  if (!e.claude_kind) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/[0.05] px-2.5 py-1.5 text-xs">
+      <Badge variant="outline" className="gap-1 border-violet-500/40 font-normal text-violet-600 dark:text-violet-400">
+        <Sparkles className="size-3" />{t(`cl_${e.claude_kind}` as SKey)}
+      </Badge>
+      <span className="min-w-0 flex-1 text-muted-foreground">{e.claude_note}
+        {e.claude_kind === "general" && !!e.claude_covers_count && <> · {t("clCovers", { n: e.claude_covers_count })}</>}
+      </span>
+      {can.edit && e.claude_target && e.claude_kind !== "general" && (
+        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={one.isPending} onClick={() => one.mutate(undefined)}>
+          <GitMerge className="size-3.5" />{t("clAbsorb")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /** Savol kimga tegishli: mas'ul (belgilash va eslatmalar uchun) — shu yerning o'zida almashtiriladi. */
 function Owner({ e, t }: { e: Entry; t: ST }) {
   const can = useCan();
@@ -193,7 +235,7 @@ function Owner({ e, t }: { e: Entry; t: ST }) {
 function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: number) => void }) {
   const can = useCan();
   const [sel, setSel] = useState<Set<number>>(new Set());
-  const bulk = useSupportMutation((a: "approve" | "reject") => supportApi.bulk([...sel], a), (r) => t("bulkDone", { n: r.done }));
+  const bulk = useSupportMutation((a: "approve" | "reject" | "absorb") => supportApi.bulk([...sel], a), (r) => t("bulkDone", { n: r.done }));
   const one = useSupportMutation((fn: () => Promise<unknown>) => fn(), t("saved"));
   const toggle = (id: number) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const all = sel.size === items.length;
@@ -212,6 +254,12 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
           <Button size="sm" variant="outline" disabled={!sel.size || bulk.isPending} onClick={() => bulk.mutate("reject", { onSuccess: () => setSel(new Set()) })}>
             <X className="size-4" />{t("rejectSelected")}
           </Button>
+          {items.some((e) => sel.has(e.id) && e.claude_target) && (
+            <Button size="sm" variant="outline" className="border-violet-500/40 text-violet-600 dark:text-violet-400" disabled={bulk.isPending}
+              onClick={() => bulk.mutate("absorb", { onSuccess: () => setSel(new Set()) })} title={t("clAbsorbHint")}>
+              <GitMerge className="size-4" />{t("clAbsorbSel")}
+            </Button>
+          )}
         </Card>
       )}
       {items.map((e) => (
@@ -224,6 +272,7 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
               {(e.questions ?? []).length > 1 && <div className="text-xs text-muted-foreground">{e.questions.slice(1).join(" · ")}</div>}
               <Sources e={e} t={t} />
               <Diff e={e} t={t} />
+              <ClaudeNote e={e} t={t} />
               <Owner e={e} t={t} />
               <div className="flex flex-wrap gap-2 border-t pt-3">
                 {can.edit && <Button size="sm" onClick={() => one.mutate(() => supportApi.approve(e.id))}><Check className="size-4" />{t("approve")}</Button>}
