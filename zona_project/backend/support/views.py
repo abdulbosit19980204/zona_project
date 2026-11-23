@@ -46,7 +46,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
                    "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction",
-                   "thread_window"]
+                   "thread_window", "category_owners"]
 
 
 def _settings_payload(s):
@@ -77,6 +77,17 @@ def settings_view(request):
             s.api_hash_enc = encrypt(str(data["api_hash"]).strip())
         if data.get("api_hash") == "" and data.get("clear_api_hash"):
             s.api_hash_enc = ""
+        if "category_owners" in data:  # {"promo": member_id} — faqat ma'lum toifalar va mavjud xodimlar
+            from zona.models import Member
+
+            from .systems import CATEGORIES
+            raw = data.get("category_owners") or {}
+            if not isinstance(raw, dict):
+                return Response({"detail": "category_owners: {toifa: xodim id}"}, status=400)
+            clean = {k: int(v) for k, v in raw.items() if k in CATEGORIES and str(v).isdigit()}
+            if Member.objects.filter(pk__in=clean.values()).count() != len(set(clean.values())):
+                return Response({"detail": "Xodim topilmadi"}, status=400)
+            s.category_owners = clean or None
         s.full_clean()
         s.save()
     return Response(_settings_payload(s))

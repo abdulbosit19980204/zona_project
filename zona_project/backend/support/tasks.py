@@ -68,6 +68,9 @@ def decide_task(q, d, s=None):
     e = d.entry
     if e is not None and e.creates_task:
         m = e.responsible if e.responsible_id else None
+        if getattr(d, "owner", False) and d.responsible:  # toifa mas'uli (masalan, aksiya — operator) ustun
+            m = Member.objects.filter(pk=d.responsible[0].get("id")).prefetch_related("contacts").first() or m
+            return True, _tg_of(m, s), "entry"
         return True, (e.task_assignee.lstrip("@") or _tg_of(m, s)), "entry"
     deps, mems = targets(s)
     if not (deps or mems):
@@ -78,7 +81,7 @@ def decide_task(q, d, s=None):
     if e is None and not substantive(CMD_RE.sub("", q.text or "")):
         return False, "", ""  # aniq savol ham, tanilgan holat ham yo'q (salomlashuv, suhbat) — vazifa ochilmaydi
     ids = [r.get("id") for r in d.responsible or [] if r.get("id")]
-    if e is not None and e.responsible_id:
+    if e is not None and e.responsible_id and not getattr(d, "owner", False):
         ids.insert(0, e.responsible_id)
     for m in Member.objects.filter(id__in=ids).prefetch_related("contacts"):
         if _member_matches(m, deps, mems):

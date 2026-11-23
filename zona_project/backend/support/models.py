@@ -86,6 +86,8 @@ class Settings(models.Model):
     # --- guruh tarixi: tungi oyna (Toshkent vaqti) — "faqat tunda" vazifalar shu oraliqda ishlaydi ---
     history_night_from = models.PositiveSmallIntegerField("Tungi oyna boshlanishi (soat)", default=22, db_default=22)
     history_night_to = models.PositiveSmallIntegerField("Tungi oyna tugashi (soat)", default=7, db_default=7)
+    # toifa bo'yicha mas'ul — butun tizimda ustun: {"promo": <Member id>} (masalan, barcha aksiya savollari — operatorga)
+    category_owners = models.JSONField("Toifa bo'yicha mas'ul", null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

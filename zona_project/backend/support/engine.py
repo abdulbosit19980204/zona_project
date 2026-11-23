@@ -36,6 +36,7 @@ class Decision:
     unapproved: bool = False   # soya rejimida tasdiqlanmagan shablon ishlatildi
     note: str = ""
     parts: list = field(default_factory=list)  # albomda turli ekranlar: [(rasm_tartibi, yozuv, ishonch)] — alohida javoblar
+    owner: bool = False        # mas'ul toifa sozlamasidan (category_owners) — butun tizimda ustun, supervayzer belgilanmaydi
 
 
 # ------------------------------------------------------------------ yordamchilar
@@ -233,7 +234,10 @@ SUPERVISOR_HINT = re.compile(r"supervayzer|supervizor|супервайзер", r
 
 
 def needs_supervisor(d):
-    """Javob supervayzer harakatini talab qiladimi (mas'ul — Supervayzerlar yoki javob matnida supervayzer)."""
+    """Javob supervayzer harakatini talab qiladimi (mas'ul — Supervayzerlar yoki javob matnida supervayzer).
+    Toifa mas'uli belgilangan savolda (masalan, aksiya — operator) supervayzer belgilanmaydi."""
+    if getattr(d, "owner", False):
+        return False
     if d.entry and d.entry.responsible_id and SUPERVISOR_HINT.search(d.entry.responsible.name or ""):
         return True
     return bool(SUPERVISOR_HINT.search(d.text or ""))
@@ -542,8 +546,37 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
 
 
 # ------------------------------------------------------------------ yig'ish
-def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False,  # noqa: C901
+def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False,
            asker="", history=""):
+    """Savol -> Decision (_decide) + toifa mas'uli: masalan, barcha aksiya savollari — operatorga (category_owners)."""
+    d = _decide(raw, lang, allow_unapproved, image, text, ocr, images, fast, asker, history)
+    if d is not None:
+        apply_owner(d, text if text is not None else raw, ocr)
+    return d
+
+
+def category_owner(category, settings=None):
+    """Toifa uchun belgilangan mas'ul (Settings.category_owners: {"promo": member_id}) yoki None."""
+    s = settings or Settings.load()
+    mid = (s.category_owners or {}).get(category or "")
+    return Member.objects.filter(pk=mid).prefetch_related("contacts").first() if mid else None
+
+
+def apply_owner(d, text, ocr=""):
+    """Toifa mas'uli belgilangan bo'lsa — javobdagi mas'ul, @belgilash va vazifa ijrochisi faqat u (supervayzer/dasturchi emas)."""
+    s = Settings.load()
+    if not s.category_owners:
+        return d
+    from .systems import detect
+    cat = detect(text or "", ocr or "", d.entry.title if d.entry is not None else "")["category"]
+    m = category_owner(cat, s)
+    if m is not None:
+        d.responsible, d.owner = [_person(m)], True
+    return d
+
+
+def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False,  # noqa: C901
+            asker="", history=""):
     """Savol -> Decision. allow_unapproved: soya rejimida ko'rib chiqilayotgan shablonlar ham.
 
     image: (yozuv, ishonch) yoki images: [(yozuv, ishonch, rasm_tartibi), ...] — rasm turi o'rgatilgan namunadan tanilgan.
@@ -653,6 +686,7 @@ def followup(raw, lang, history, asker="", previous=""):
     ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
     task, _rc, resp = rule_answer(raw.strip()[:200], lang) if raw.strip() else (None, 0, [])
     ai = ai_answer(raw, lang, ranked, task, settings, asker=asker, history=history)
+    resp = apply_owner(Decision("", None, 0, "", True, resp), raw).responsible
     if (ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence
             and " ".join(ai["text"].split()) != " ".join((previous or "").split())):
         return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])

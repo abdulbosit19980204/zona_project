@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import { supportApi, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type StaffRow, type SupportSettings, type TgUserInfo } from "./api";
+import { supportApi, SYS_CATEGORIES, type HistoryJob, type Mode, type SupportBot, type SupportGroup, type StaffRow, type SupportSettings, type TgUserInfo } from "./api";
 import { DataTable, type Column } from "./data-table";
 import { fmtDate, ModeBadge, SearchPicker, Segmented, useSupportMutation } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
@@ -258,6 +258,8 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {field(t("t_threadWindow"), t("t_threadWindowHint"),
             <Input type="number" min={0} max={240} value={f.thread_window} onChange={num("thread_window")}
               onBlur={() => toggle.mutate({ thread_window: f.thread_window })} />)}
+          {field(t("t_owners"), t("t_ownersHint"),
+            <CategoryOwners t={t} value={f.category_owners} onSave={(v) => { setF({ ...f, category_owners: v }); toggle.mutate({ category_owners: v }); }} />)}
           {sw("ask_first_prompt", t("t_askFirst"))}
           {sw("contact_lookup", t("t_contacts"), t("t_contactsHint"))}
         </Card>
@@ -434,6 +436,31 @@ function StaffSection({ t }: { t: ST }) {
 }
 
 /* ---------------------------------------------------------------- guruh tarixi (MTProto, faqat o'qish) */
+/** Toifa bo'yicha mas'ul — butun tizimda ustun (masalan, barcha aksiya savollari — operatorga). Bo'sh — odatdagi mas'ul. */
+function CategoryOwners({ t, value, onSave }: { t: ST; value: Record<string, number> | null; onSave: (v: Record<string, number>) => void }) {
+  const staff = useQuery({ queryKey: ["support", "staff"], queryFn: supportApi.staff, staleTime: 60_000 });
+  const members = (staff.data ?? []).filter((r) => r.type === "member");
+  const cur = value ?? {};
+  const set = (cat: string, id: string) => {
+    const next = { ...cur };
+    if (id) next[cat] = Number(id); else delete next[cat];
+    onSave(next);
+  };
+  return (
+    <div className="grid gap-1.5">
+      {SYS_CATEGORIES.map((c) => (
+        <label key={c} className="grid grid-cols-[minmax(120px,160px)_1fr] items-center gap-2 text-sm">
+          <span className={cn(cur[c] ? "font-medium" : "text-muted-foreground")}>{t(`cat_${c}` as SKey)}</span>
+          <select className="h-8 rounded-md border bg-background px-2 text-sm" value={cur[c] ?? ""} onChange={(e) => set(c, e.target.value)}>
+            <option value="">{t("ownerDefault")}</option>
+            {members.map((m) => <option key={m.id} value={m.id}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>)}
+          </select>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function HistorySection({ t }: { t: ST }) {
   const st = useQuery({ queryKey: ["support", "settings"], queryFn: supportApi.settings });
   const groups = useQuery({ queryKey: ["support", "groups"], queryFn: supportApi.groups });

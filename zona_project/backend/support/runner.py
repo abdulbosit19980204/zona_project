@@ -1168,14 +1168,33 @@ def learn(q, answer, staff_name, priority=False, ask_first="", source="staff"):
             match.questions = list(dict.fromkeys([*(match.questions or []), question[:1000]]))[:50]
             if ask_first and not match.ask_first:
                 match.ask_first = ask_first[:1000]
+            if not match.responsible_id:
+                match.responsible = learn_owner(question)
             match.priority = match.priority or priority
             match.sources = _add_source(match.sources, q)
-            match.save(update_fields=["questions", "ask_first", "priority", "sources", "updated_at"])
+            match.save(update_fields=["questions", "ask_first", "priority", "sources", "responsible", "updated_at"])
             return match, False
     title = question.splitlines()[0][:190]
     return Entry.objects.create(kind=Entry.FAQ, title=title, questions=[question[:1000]], answer=answer.strip(),
                                 ask_first=ask_first[:1000], status=Entry.NEW, source=source, author=staff_name,
-                                priority=priority, sources=_add_source(None, q)), True
+                                priority=priority, sources=_add_source(None, q), responsible=learn_owner(question)), True
+
+
+def learn_owner(text):
+    """O'rganilgan savolning mas'uli: toifa mas'uli (masalan, aksiya — operator), bo'lmasa zona qidiruvidagi aniq mas'ul."""
+    from zona.models import Member
+
+    from . import systems
+    m = engine.category_owner(systems.detect(text or "")["category"])
+    if m is not None:
+        return m
+    try:
+        _task, conf, resp = engine.rule_answer((text or "")[:200], "uz")
+    except Exception:  # noqa: BLE001 — qidiruv yiqilsa ham o'rganish to'xtamasin
+        return None
+    if resp and conf >= Settings.load().route_threshold:
+        return Member.objects.filter(pk=resp[0].get("id")).first()
+    return None
 
 
 def _add_source(ids, q):
