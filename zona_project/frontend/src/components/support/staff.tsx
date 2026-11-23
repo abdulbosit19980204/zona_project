@@ -72,7 +72,7 @@ export function StaffBoard({ range, t }: { range: Range; t: ST }) {
             { value: "all", label: t("dtAll"), test: () => true }]} />
       </Panel>
       <Sheet open={!!open} onOpenChange={(v) => !v && setOpen(null)}>
-        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-3xl">
+        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-5xl">
           {open && <Detail id={open.id} name={open.name} range={range} t={t} />}
         </SheetContent>
       </Sheet>
@@ -123,8 +123,9 @@ function Schedule({ d, t }: { d: StaffDetail; t: ST }) {
           <div className="grid grid-cols-[86px_1fr_120px] items-end gap-2 text-[10px] text-muted-foreground">
             <span />
             <div className="relative h-3">
-              {[0, 6, 9, 12, 15, 18, 21, 24].map((h) => (
-                <span key={h} className="absolute -translate-x-1/2 tabular-nums" style={{ left: `${(100 * h) / 24}%` }}>{h}</span>
+              {[0, 6, 12, 18, 24].map((h) => (
+                <span key={h} className={`absolute tabular-nums ${h === 0 ? "" : h === 24 ? "-translate-x-full" : "-translate-x-1/2"}`}
+                  style={{ left: `${(100 * h) / 24}%` }}>{String(h).padStart(2, "0")}:00</span>
               ))}
             </div>
             <span />

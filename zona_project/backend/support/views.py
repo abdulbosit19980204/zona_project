@@ -600,6 +600,10 @@ class MessageViewSet(ZonaViewSet):
             qs = qs.filter(group_id=p["group"])
         if p.get("stage"):
             qs = qs.filter(stage=p["stage"])
+        if p.get("ex"):
+            # konstruktordan o'tish: aynan o'sha filtrlar (f_<o'lchov>=...) va davrga mos savollar
+            from .explore import question_ids
+            return qs.filter(pk__in=question_ids(p)).order_by("-created_at")
         if p.get("drill"):
             # tahlildan o'tish: aynan tahlil sanagan savollar (jonli, tahlilga qo'shilgan guruhlar, o'sha davr)
             from .workload import BOT_STAGES, period, scoped
@@ -1035,6 +1039,13 @@ def analytics_workload(request):
     from .workload import period
     start, end, info = period(request.query_params)
     return Response(workload(start, end, info))
+
+
+@zona_api(["GET"], [CanView])
+def analytics_explore(request):
+    """Konstruktor: ma'lumot turi, davr, 1–2 guruhlash, ko'rsatkichlar va filtrlar bo'yicha istalgan statistika."""
+    from .explore import explore
+    return Response(explore(request.query_params))
 
 
 @zona_api(["GET"], [CanView])

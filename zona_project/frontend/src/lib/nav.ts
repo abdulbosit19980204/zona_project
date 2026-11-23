@@ -100,6 +100,7 @@ export const SUPPORT_NAV: NavGroup[] = [
       { href: "/support/knowledge", key: "supKnowledge", icon: BotMessageSquare },
       { href: "/support/images", key: "supImages", icon: QrCode },
       { href: "/support/analytics", key: "supAnalytics", icon: ChartColumn },
+      { href: "/support/explore", key: "supExplore", icon: Grid3x3 },
     ],
   },
   {

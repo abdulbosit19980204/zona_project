@@ -55,6 +55,11 @@ export function SupportInbox() {
 function useDrill() {
   const p = useSearchParams();
   const drill = p.get("drill");
+  if (p.get("ex")) {  // konstruktor / agent tafsilotidan: aynan o'sha filtrlar
+    const params: Record<string, string> = { ex: "1", drill: "total" };
+    p.forEach((v, k) => { if (v && (k.startsWith("f_") || ["days", "from", "to", "scope"].includes(k))) params[k] = v; });
+    return params;
+  }
   if (!drill || !DRILL_LABEL[drill]) return null;
   const params: Record<string, string> = { drill };
   for (const k of ["days", "from", "to"]) { const v = p.get(k); if (v) params[k] = v; }

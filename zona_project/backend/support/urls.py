@@ -20,6 +20,7 @@ urlpatterns = [
     path("analytics/", views.analytics, name="analytics"),
     path("analytics/workload/", views.analytics_workload, name="analytics-workload"),
     path("analytics/speed/", views.analytics_speed, name="analytics-speed"),
+    path("analytics/explore/", views.analytics_explore, name="analytics-explore"),
     path("analytics/staff/", views.analytics_staff, name="analytics-staff"),
     path("analytics/staff/<int:pk>/", views.analytics_staff_one, name="analytics-staff-one"),
     path("media/upload/", views.media_upload, name="media-upload"),

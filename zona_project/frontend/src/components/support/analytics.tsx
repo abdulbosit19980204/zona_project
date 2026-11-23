@@ -11,11 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supportApi, type Analytics, type Range } from "./api";
 import { Input } from "@/components/ui/input";
 
-import { fmtDur, Initials, Metric, Panel, Segmented, stageLabel } from "./common";
-import { DataTable, type Column } from "./data-table";
+import { fmtDur, Metric, Panel, Segmented, stageLabel } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 import { Speed } from "./speed";
+import { AskersBoard } from "./askers";
 import { StaffBoard } from "./staff";
 import { Workload } from "./workload";
 
@@ -80,7 +80,7 @@ export function SupportAnalytics() {
           {tab === "speed" && <Speed range={range} t={t} />}
           {tab === "workload" && <Workload range={range} t={t} />}
           {tab === "staff" && <StaffBoard range={range} t={t} />}
-          {tab === "askers" && <Askers a={a} t={t} />}
+          {tab === "askers" && <div className="grid gap-4"><AskersBoard range={range} t={t} /><TopAsks a={a} t={t} /></div>}
           {tab === "topics" && <Topics a={a} t={t} />}
         </div>
       )}
@@ -339,24 +339,19 @@ function Overview({ a, t, range }: { a: Analytics; t: ST; range: Range }) {
   );
 }
 
-function Askers({ a, t }: { a: Analytics; t: ST }) {
+/** Xodimlar javobdan oldin qanday ma'lumot so'raydi (aniqlashtirishlar). */
+function TopAsks({ a, t }: { a: Analytics; t: ST }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
-      <Panel title={t("anAskers")} hint={t("anAskersHint")} icon={Users}>
-        <DataTable rows={a.askers} columns={askerCols(t)} rowKey={(u) => u.user} t={t} initialSort={{ key: "q", dir: "desc" }}
-          search={(u) => [u.name, u.username, u.staff_person, ...u.top_types.map((x) => x.title)].join(" ")} />
-      </Panel>
-      <Panel title={t("anAsks")} hint={t("anAsksHint")} icon={MessageCircleQuestion}>
-        {a.top_asks.length === 0 && <p className="text-sm text-muted-foreground">{t("empty")}</p>}
-        <div className="grid gap-2">
-          {a.top_asks.map((x, i) => (
-            <div key={i} className="flex items-start gap-2 text-sm">
-              <Badge variant="outline" className="shrink-0 font-mono">{x.count}</Badge><span className="leading-snug">{x.text}</span>
-            </div>
-          ))}
-        </div>
-      </Panel>
-    </div>
+    <Panel title={t("anAsks")} hint={t("anAsksHint")} icon={MessageCircleQuestion}>
+      {a.top_asks.length === 0 && <p className="text-sm text-muted-foreground">{t("empty")}</p>}
+      <div className="grid gap-2 md:grid-cols-2">
+        {a.top_asks.map((x, i) => (
+          <div key={i} className="flex items-start gap-2 text-sm">
+            <Badge variant="outline" className="shrink-0 font-mono">{x.count}</Badge><span className="leading-snug">{x.text}</span>
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }
 
@@ -373,20 +368,3 @@ function Topics({ a, t }: { a: Analytics; t: ST }) {
   );
 }
 
-function askerCols(t: ST): Column<Analytics["askers"][number]>[] {
-  return [
-    { key: "name", header: t("anAsker"), sort: (u) => (u.name || "").toLowerCase(), cell: (u) => (
-      <div className="flex min-w-52 items-center gap-2.5">
-        <Initials name={u.name} className="size-8" />
-        <div className="min-w-0">
-          <div className="font-medium">{u.name || "—"}{u.username && <span className="font-normal text-muted-foreground"> @{u.username}</span>}</div>
-          {u.staff_person && <div className="text-xs text-muted-foreground">{u.staff_person}</div>}
-          {u.top_types.length > 0 && <div className="max-w-md truncate text-xs text-muted-foreground">{u.top_types.map((x) => `${x.title} (${x.n})`).join(" · ")}</div>}
-        </div>
-      </div>
-    ) },
-    { key: "q", header: t("anQuestions"), align: "right", sort: (u) => u.questions, cell: (u) => <span className="font-mono">{u.questions}</span> },
-    { key: "bot", header: t("kpiBot"), align: "right", sort: (u) => u.bot, cell: (u) => <span className="font-mono text-success">{u.bot}</span> },
-    { key: "esc", header: t("kpiHuman"), align: "right", sort: (u) => u.escalated, cell: (u) => <span className="font-mono text-warning">{u.escalated}</span> },
-  ];
-}

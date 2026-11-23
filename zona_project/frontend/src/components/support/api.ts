@@ -247,6 +247,15 @@ export interface StaffDetail extends Omit<StaffBoardRow, "team" | "start" | "end
   recent: { id: number; at: string; kind: string; text: string; group: string; question: string; question_id: number | null; link: string }[];
 }
 
+/** Konstruktor natijasi: k0/k1 — guruhlash kaliti, l0/l1 — yorlig'i, qolganlari — tanlangan ko'rsatkichlar. */
+export type ExploreRow = { k0?: string; k1?: string; l0?: string; l1?: string } & Record<string, string | number | null | undefined>;
+export interface Explore {
+  from: string; to: string; days: number; dataset: "questions" | "staff" | "activity"; scope: string; by: string[];
+  metrics: string[]; rows: ExploreRow[]; total_rows: number; totals: Record<string, number | null>;
+  options: Record<string, { key: string; label: string; n: number }[]>; dims: string[]; all_metrics: string[];
+  asker_meta: Record<string, { username: string; role: string; project: string; territory: string; staff: boolean }>;
+}
+
 /** Mas'ul (xodim yoki jamoa) — bilim bazasi yozuvi kimga tegishli; belgilash uchun Telegram'lari bilan. */
 export interface Owner { id: number; name: string; role: string; level: string; telegram: string[]; is_team: boolean }
 
@@ -256,6 +265,7 @@ export const supportApi = {
   owners: () => get<Owner[]>("owners/"),
   claudeCounts: () => get<Record<string, number>>("entries/claude-counts/"),
   staffBoard: (r: Range) => get<StaffBoard>("analytics/staff/", r),
+  explore: (params: Record<string, string>) => get<Explore>("analytics/explore/", params),
   staffOne: (id: number, r: Range) => get<StaffDetail>(`analytics/staff/${id}/`, r),
   settings: () => get<SupportSettings>("settings/"),
   saveSettings: (body: Partial<SupportSettings> & { api_hash?: string }) => patch<SupportSettings>("settings/", body),
