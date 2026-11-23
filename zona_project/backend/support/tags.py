@@ -80,14 +80,31 @@ def apply(q, save=False):
     return q
 
 
-def backfill(batch=500):
-    """Barcha savollarga avtomatik teglar (qo'lda tahrirlanganlardan tashqari). Qaytaradi: nechta yangilandi."""
-    n = 0
+def backfill(batch=200):
+    """Barcha savollarga avtomatik teglar (qo'lda tahrirlanganlardan tashqari). Qaytaradi: nechta yangilandi.
+
+    Avval hammasi hisoblanadi (o'qish kursori yopiladi), keyin kichik paketlarda yoziladi — bot bir vaqtda
+    yozayotgan bo'lsa ham SQLite "database is locked" bermasligi uchun; band bo'lsa — biroz kutib qayta uriniladi."""
+    import time
+
+    from django.db import OperationalError, transaction
     qs = Message.objects.filter(kind=Message.QUESTION, tags_locked=False).select_related("entry").only(
         "id", "text", "ocr_text", "alert_text", "problem", "tags", "tags_locked", "entry__title")
-    for q in qs.iterator(chunk_size=batch):
+    todo = []
+    for q in list(qs):
         new = detect(q.text, q.ocr_text, q.alert_text, q.entry.title if q.entry_id else "", q.problem)
         if new != (q.tags or []):
-            Message.objects.filter(pk=q.pk).update(tags=new)
-            n += 1
-    return n
+            q.tags = new
+            todo.append(q)
+    for i in range(0, len(todo), batch):
+        part = todo[i:i + batch]
+        for attempt in range(8):
+            try:
+                with transaction.atomic():
+                    Message.objects.bulk_update(part, ["tags"])
+                break
+            except OperationalError:
+                if attempt == 7:
+                    raise
+                time.sleep(1 + attempt)
+    return len(todo)
