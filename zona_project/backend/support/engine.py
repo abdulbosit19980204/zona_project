@@ -522,6 +522,9 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
         "\n".join(ctx) or "(hozircha yo'q)")
     if people:
         system += "\n\nMAS'ULLAR (faqat shulardan ayt):\n" + people
+    owner = owner_line(raw, ocr)
+    if owner:
+        system += "\n\n" + owner
     if asker:
         system += f"\n\nSAVOL BERUVCHI: {asker}"
     if examples:
@@ -560,6 +563,19 @@ def category_owner(category, settings=None):
     s = settings or Settings.load()
     mid = (s.category_owners or {}).get(category or "")
     return Member.objects.filter(pk=mid).prefetch_related("contacts").first() if mid else None
+
+
+def owner_line(text, ocr=""):
+    """AI uchun: savol toifasining mas'uli bo'lsa — faqat u; agent zaxiradagi odamlarga yo'naltirilmaydi
+    (mas'ul hal qila olmasa, o'zi keyingi navbatdagiga uzatadi)."""
+    from .systems import detect
+    m = category_owner(detect(text or "", ocr or "")["category"])
+    if m is None:
+        return ""
+    tg = f" (@{m.telegram.lstrip('@')})" if m.telegram else ""
+    return (f"BU SAVOLNING MAS'ULI — FAQAT {m.name}{tg}. Savol beruvchini boshqa odam yoki jamoaga (dasturchi, "
+            f"supervayzer, Pro-target, zaxiradagi mas'ullar) YO'NALTIRMA va \"ular tekshiradi\" kabi bosqichlarni yozma: "
+            f"{m.name} o'zi hal qiladi, hal qila olmasa — kerakli odamga o'zi uzatadi.")
 
 
 def apply_owner(d, text, ocr=""):

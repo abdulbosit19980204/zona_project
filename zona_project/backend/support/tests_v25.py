@@ -74,3 +74,19 @@ class ScreenTextBeatsLookalikeTests(ControlsBase):
         # o'z ekrani — o'zi (matn ham shuni aytadi)
         d2 = engine.decide("", "ru", images=[(inactive, 80, 0)], text="", ocr="Inactive user account\nПопробовать снова")
         self.assertEqual(d2.entry, inactive)
+
+
+class OwnerPromptTests(OwnerTests):
+    def test_ai_is_told_only_the_owner_no_reserve_people(self):
+        from unittest import mock
+        Settings.objects.update(ai_enabled=True, ai_daily_limit=1000)
+        with mock.patch("zona.ai.service.run", return_value=({"answer": "x", "confidence": 0.9, "needs_human": False,
+                                                              "reason": ""}, {})) as run:
+            engine.ai_answer("Klientda aksiya ishlamayapti", "uz", [], None, Settings.load())
+        system = run.call_args[0][3]
+        self.assertIn("FAQAT TEST_OPERATOR (@test_op)", system)
+        self.assertIn("YO'NALTIRMA", system)
+        with mock.patch("zona.ai.service.run", return_value=({"answer": "x", "confidence": 0.9, "needs_human": False,
+                                                              "reason": ""}, {})) as run:
+            engine.ai_answer("Marshrut ochilmayapti", "uz", [], None, Settings.load())
+        self.assertNotIn("FAQAT TEST_OPERATOR", run.call_args[0][3])  # boshqa toifa — cheklov yo'q
