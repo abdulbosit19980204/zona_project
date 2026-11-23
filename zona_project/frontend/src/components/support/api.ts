@@ -99,6 +99,7 @@ export interface SupportSettings {
   answer_policy: "standard" | "kb" | "all";
   confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number; category_owners: Record<string, number> | null; answer_keep_days: number; answer_test_note: boolean; review_button: boolean;
   react_accept: boolean; ask_staff_after: number; reask_after: number; remind_max: number;
+  collapse_after: number;
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;

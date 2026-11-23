@@ -47,7 +47,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
                    "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction",
                    "thread_window", "category_owners", "answer_keep_days", "answer_test_note", "review_button",
-                   "react_accept", "ask_staff_after", "reask_after", "remind_max"]
+                   "react_accept", "ask_staff_after", "reask_after", "remind_max", "collapse_after"]
 
 
 def _settings_payload(s):

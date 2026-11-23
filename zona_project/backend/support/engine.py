@@ -109,7 +109,63 @@ def not_an_answer(text):
         return True
     if REWRITE_ASK.search(t) and len(t) <= 200:
         return True
-    return is_handoff(t) or len(_handoff_rest(t)) <= 1  # "Готово", "Tekshiring" — qayta ishlatib bo'lmaydi
+    # "Готово", "Tekshiring", "Qayta tekwiring, limit qowildi", "Eldar можете помочь" — qayta ishlatib bo'lmaydi
+    return is_handoff(t) or len(_handoff_rest(t)) <= 1 or status_reply(t)
+
+
+# Xodimning holat xabari: ishni O'ZI bajardi va "tekshiring" dedi yoki boshqa xodimni chaqirdi. Bu bilim emas —
+# agentga "qayta tekshiring" deyish xato; to'g'ri javob — so'rovni bajaradigan odamni belgilash.
+_CHECK = ("prover", "perepro", "posmotr", "glyan", "tekshir", "tekwir", "tekshr", "tekwr", "teksh", "tekw", "korib",
+          "korin", "koring", "korvor", "qayta", "snova", "seychas", "sichas",
+          "hozir", "xozir", "moment", "minut", "check", "poprob", "urinib", "chiqdimi", "vyshl", "polucil", "poluchil")
+_DONE = ("gotov", "sdelal", "sdelan", "ispravil", "ispravlen", "dobavil", "dobavlen", "zakrepil", "otkryl", "otkril",
+         "vklyuchil", "qoshild", "qowild", "qoshdim", "qowdim", "yoqild", "yoqdim", "ochild", "ochdim", "tayyor", "boldi",
+         "tuzatil", "togrila", "qildim", "qilindi", "okey", "reshen", "reshil", "postavil", "pomenyal", "izmenil")
+_HELP = ("mozhet", "mojet", "pomoch", "pomog", "prosh", "pozh", "pojal", "iltimos", "plz", "pls", "kollegi")
+_GREET = ("dobr", "utr", "vecher", "zdravst", "assalom", "asalom", "aleykum", "alaykum", "alekum", "salom",
+          "privet", "uzur", "izvin", "rahmat", "raxmat", "spasib", "segodn", "bugun")
+# o'zi bajaradigan amal (qayta kirish, sinxronlash, bildirishnoma...) — bu haqiqiy ko'rsatma, holat xabari emas
+_SELF = ("perezayd", "perezagruz", "vyyd", "vyxod", "zayd", "zaxod", "obnov", "sinxron", "sinhron", "sinxr", "chiqib",
+         "kirib", "kiring", "kirvol", "yopib", "yoping", "uvedoml", "bildirish", "oblak", "oblok", "kesh", "udal",
+         "ochirib", "ustanov", "ornat", "nastroy", "sozlam", "sbros", "zakroy", "zakrit", "zakryt", "vyklyuch")
+_SHORT = {"yana", "eshe", "esho", "eshyo", "raz", "den", "dnya", "aka", "opa", "brat", "uka", "ok", "oke", "okey", "xop"}
+_NAMES = {"at": 0.0, "set": set()}
+
+
+def _staff_first_names():
+    """Xodimlar ismlari (Eldar, Гузель, Saidabror...) — "Eldar можете помочь" da ism mazmun emas (10 daqiqa kesh)."""
+    import time as _t
+    if _t.monotonic() - _NAMES["at"] < 600 and _NAMES["set"]:
+        return _NAMES["set"]
+    names = set()
+    for n in [*Member.objects.values_list("name", flat=True), *TeamContact.objects.values_list("name", flat=True)]:
+        names.update(w for w in re.findall(r"[a-z]+", fold(n or "")) if len(w) >= 3)
+    _NAMES.update(at=_t.monotonic(), set=names)
+    return names
+
+
+def status_reply(text):
+    """Xodim xabari faqat holatmi: "Проверьте", "Готово, прошу проверить", "Qayta tekwiring, limit qowildi",
+    "Можете проверить? На сегодняшний день закрепил", "Eldar можете помочь". "Перезайдите и проверьте",
+    "В уведомлениях проверьте" — haqiqiy ko'rsatma (agent o'zi qiladi), holat emas."""
+    t = (text or "").strip()
+    if not t or len(t) > 140:
+        return False
+    words = re.findall(r"[a-z]+", fold(re.sub(r"@\w+", " ", t)))
+    if any(w.startswith(_SELF) for w in words):
+        return False
+    names = _staff_first_names()
+    signal, rest = False, 0
+    for w in words:
+        if len(w) < 3 or w in GREETING or w in _SHORT:
+            continue
+        if w.startswith(_CHECK) or w.startswith(_DONE) or w.startswith(_HELP):
+            signal = True
+        elif w.startswith(_GREET) or w in names:
+            continue
+        else:
+            rest += 1
+    return (signal and rest <= 1) or ("@" in t and rest == 0)
 
 
 def _handoff_rest(t):
@@ -173,7 +229,7 @@ def identify(tg_id, username="", name=""):
     if (contact.pk if contact else None) != user.contact_id or (member.pk if member else None) != user.member_id:
         user.contact, user.member, changed = contact, member, True
     if not user.staff_person_id and not user.staff_link and not (contact or member):
-        sp = match_staff_person(name)
+        sp = match_staff_person(name, username)
         if sp:
             user.staff_person, user.staff_link, changed = sp, "auto", True
     if changed:
@@ -184,13 +240,15 @@ def identify(tg_id, username="", name=""):
 
 
 def _name_tokens(name):
-    return {t for t in re.findall(r"[a-z]+", fold(name or "")) if len(t) >= 3}
+    # Haydarov = Xaydarov = Хайдаров (h/x yozilishi turlicha)
+    return {t.replace("kh", "x").replace("h", "x") for t in re.findall(r"[a-z]+", fold(name or "")) if len(t) >= 3}
 
 
-def match_staff_person(tg_name):
-    """Telegram ismini kontaktlardagi dala xodimiga ehtiyotkorlik bilan bog'lash: kamida 2 so'z (familiya va ism)
-    mos kelishi va nomzod YAGONA bo'lishi shart. Shubha bo'lsa — bog'lanmaydi (paneldan qo'lda bog'lanadi)."""
-    tn = _name_tokens(tg_name)
+def match_staff_person(tg_name, username=""):
+    """Telegram ismi (va username: "Haydarov010") ni kontaktlardagi dala xodimiga ehtiyotkorlik bilan bog'lash: kamida
+    2 so'z (familiya va ism) mos kelishi va nomzod YAGONA bo'lishi shart. Shubha bo'lsa — bog'lanmaydi (paneldan qo'lda).
+    Masalan: ism «Жасур» + username «Haydarov010» -> «Xaydarov Jasur Lazizovich» (SVR)."""
+    tn = _name_tokens(tg_name) | _name_tokens(re.sub(r"[\d_]+", " ", username or ""))
     if len(tn) < 2:
         return None
     hits = []
@@ -473,6 +531,11 @@ Qoidalar:
   ("operator", "menejer", "buxgalteriya" va h.k.) O'YLAB TOPMA; bilmasang — mas'ulni aytma, needs_human=true.
 - SAVOL BERUVCHI rolini hisobga ol: agentga — "supervayzeringizga murojaat qiling" kabi; supervayzer yoki rahbarning
   o'ziga "supervayzeringizga yozing" dema — u bajaradigan amalni ayt.
+- Agentga HECH QACHON faqat "qayta tekshiring / проверьте / tekshirib ko'ring" deb javob berma: bu xodim ishni o'zi
+  bajarib bo'lgach aytadigan gap. So'rov xodim amalini talab qilsa (aksiya/skidka yoqish, marshrut, perechisleniye,
+  limit, dostup) — kim bajarishini (MAS'ULLAR ro'yxatidan) ayt va kerakli ma'lumotni (nuqta kodi, nomi) so'ra.
+- EKRANDAGI QIZIL XATO XABARI berilgan bo'lsa — bu eng muhim belgi: javobni aynan shu xabar sababiga qarab ber
+  (ekrandagi boshqa so'zlar — menyu, to'lov turlari, tugmalar — sabab emas).
 - confidence: 0..1 — javob aynan shu savolga to'g'ri ekaniga ishonching."""
 
 
@@ -498,7 +561,7 @@ def people_text():
     return _PEOPLE["text"]
 
 
-def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=(), asker="", history=""):
+def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=(), asker="", history="", alert=""):
     """AI javobi o'zimizning ma'lumotlarga tayanadi: bilim bazasidagi eng yaqin javoblar, rasmdan tanilgan ekranlar,
     xodimlarning o'xshash savollarga bergan haqiqiy javoblari (misol sifatida) va qoida."""
     from zona import conf
@@ -538,6 +601,8 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
         message += ("\n\nSUHBAT (shu odam bilan shu mavzu bo'yicha, eskidan yangiga). Butun suhbatni tushunib, "
                     "OXIRGI xabarga javob ber; oldin aytilganni takrorlama:\n" + history[-3000:])
     message += f"\n\nSAVOL:\n{raw[:2000]}"
+    if alert:
+        message += f"\n\nEKRANDAGI QIZIL XATO XABARI (eng muhim — javob shu sababga):\n{alert[:500]}"
     if ocr:
         message += f"\n\nRASMDAGI MATN (OCR, xato o'qilgan bo'lishi mumkin):\n{ocr[:1500]}"
     try:
@@ -551,12 +616,50 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
 
 # ------------------------------------------------------------------ yig'ish
 def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False,
-           asker="", history=""):
-    """Savol -> Decision (_decide) + toifa mas'uli: masalan, barcha aksiya savollari — operatorga (category_owners)."""
-    d = _decide(raw, lang, allow_unapproved, image, text, ocr, images, fast, asker, history)
-    if d is not None:
-        apply_owner(d, text if text is not None else raw, ocr)
+           asker="", history="", alert="", leader=False):
+    """Savol -> Decision (_decide) + toifa mas'uli: masalan, barcha aksiya savollari — operatorga (category_owners).
+
+    alert — skrinshotdagi QIZIL xato yozuvi (ocr.red_text): ekrandagi boshqa so'zlardan ustun.
+    leader — savol beruvchi o'zi supervayzer/rahbar: unga "supervayzeringizga yozing" degan javob berilmaydi
+    (AI uning o'zi bajaradigan amalni aytadi; bo'lmasa — xodimga uzatiladi)."""
+    d = _decide(raw, lang, allow_unapproved, image, text, ocr, images, fast, asker, history, alert)
+    if d is None:
+        return d
+    if leader and not d.needs_human and needs_supervisor(d):
+        if fast:
+            return None  # AI kerak — sekin yo'lda
+        d = _for_leader(d, raw, lang, text, ocr, asker, history, alert)
+    if not d.needs_human and status_reply(d.text):
+        # "Проверьте", "qayta tekshiring" — agentga javob emas: so'rovni bajaradigan mas'ulga uzatiladi (belgilanadi)
+        d.needs_human, d.note = True, ("javob faqat holat xabari — mas'ulga uzatildi. " + d.note)[:300]
+    apply_owner(d, text if text is not None else raw, ocr)
     return d
+
+
+LEADER_ROLES = ("SVR", "RSM", "ASM", "ROP")
+
+
+def is_leader(user):
+    """Savol beruvchi supervayzer yoki undan yuqori rahbarmi (kontaktlardagi dala xodimi roli bo'yicha)."""
+    sp = user.staff_person if user is not None and user.staff_person_id else None
+    return bool(sp and sp.role in LEADER_ROLES)
+
+
+def _for_leader(d, raw, lang, text, ocr, asker, history, alert=""):
+    """Supervayzerga supervayzerni ko'rsatuvchi javob o'rniga: AI shu yozuv asosida uning o'zi nima qilishini aytadi.
+    AI ham supervayzerga yo'naltirsa yoki ishonmasa — odam javob beradi (savol ochiq qolmaydi, eslatmalar bor)."""
+    settings = Settings.load()
+    ctx = [d.entry] if d.entry is not None else []
+    who = (asker or "supervayzer") + " — U O'ZI SUPERVAYZER/RAHBAR: uni supervayzerga yo'naltirma"
+    ai = ai_answer(text if text is not None and substantive(text) else raw, lang, ctx, None, settings, ocr=ocr,
+                   asker=who, history=history, alert=alert)
+    if (ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence
+            and not SUPERVISOR_HINT.search(ai["text"])):
+        return Decision("ai", d.entry, ai["confidence"], ai["text"], False, d.responsible,
+                        note=("savol beruvchi supervayzer. " + ai["reason"])[:300])
+    resp = [r for r in d.responsible if not SUPERVISOR_HINT.search(r.get("name") or "")]
+    return Decision("", d.entry, d.confidence, d.text, True, resp,
+                    note="savol beruvchi supervayzer — supervayzerga yo'naltiruvchi javob berilmadi, xodimga uzatildi")
 
 
 def category_owner(category, settings=None):
@@ -593,7 +696,7 @@ def apply_owner(d, text, ocr=""):
 
 
 def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False,  # noqa: C901
-            asker="", history=""):
+            asker="", history="", alert=""):
     """Savol -> Decision. allow_unapproved: soya rejimida ko'rib chiqilayotgan shablonlar ham.
 
     image: (yozuv, ishonch) yoki images: [(yozuv, ishonch, rasm_tartibi), ...] — rasm turi o'rgatilgan namunadan tanilgan.
@@ -630,6 +733,18 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
         if te and all(te.pk != x[0].pk for x in distinct):
             return Decision("template", te, tconf, render_answer(te, tfields, lang), False, own(te), tfields,
                             te.status != Entry.APPROVED, note="ekrandagi matn (OCR) rasm o'xshashligidan ustun")
+    if alert and len(meaningful(alert)) >= 2 and not (strong_text and match_template(text, templates)[0]):
+        # skrinshotdagi QIZIL xato yozuvi — eng aniq belgi ("Для данной ТТ не найдены активные маршруты доставки"):
+        # ekrandagi boshqa so'zlar (to'lov turlari, menyu) emas, shu xabar bo'yicha javob
+        te, tfields, tconf = match_template(alert, templates)
+        if te:
+            tfields = extract_fields(te, raw)
+            return Decision("template", te, tconf, render_answer(te, tfields, lang), False, own(te), tfields,
+                            te.status != Entry.APPROVED, note="qizil xato yozuvi: " + alert[:120])
+        fe, fscore = match_faq(alert, faqs)
+        if fe and fscore >= settings.faq_threshold:
+            return Decision("faq", fe, fscore, render_answer(fe, {}, lang), False, own(fe), {}, fe.status != Entry.APPROVED,
+                            note="qizil xato yozuvi: " + alert[:120])
     if strong_text and ocr and match_template(text, templates)[0] is None:
         # matn — umumiy alomat ("zakaz o'tmayapti"), ekrandagi xabar esa aniq sababni aytadi ("Заказ не оформлен:
         # на складе недостаточно остатка") — aniq holat shabloni ustun (matn shu mavzuda bo'lsa: umumiy so'z bor)
@@ -680,7 +795,7 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
     # qidiruvga faqat savolning boshi (uzun rasm matni qidiruvni sekinlashtiradi, mas'ulni aniqlashga qo'shmaydi)
     query = qtext.strip()[:200]
     task, rule_conf, resp = rule_answer(query, lang) if query else (None, 0, [])
-    raw_t = list(dict.fromkeys(toks(qtext)))[:MAX_TOKENS]
+    raw_t = list(dict.fromkeys(toks(alert + " " + qtext if alert else qtext)))[:MAX_TOKENS]
     index = _entry_tokens(faqs)
     ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
     approved_ctx = [x for x in ranked if x.status == Entry.APPROVED]
@@ -689,7 +804,7 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
     if ai_first:
         # AI asosiy: javobni bilim bazasidagi eng yaqin javoblar va qoidaga tayanib tuzadi (Claude; zaxira — Gemini)
         ai = ai_answer(qtext, lang, approved_ctx, task, settings, ocr=ocr if strong_text else "",
-                       image_entries=[d[0] for d in distinct], asker=asker, history=history)
+                       image_entries=[d[0] for d in distinct], asker=asker, history=history, alert=alert)
         if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
             top = e if faq_ok else None
             return Decision("ai", top, ai["confidence"], ai["text"], False, own(top) if top else resp, note=ai["reason"])
@@ -699,7 +814,7 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
         return Decision("rule", None, rule_conf, rule_text(task, lang), False, resp, note=f"task:{task.id}")
     if ai is None:
         ai = ai_answer(qtext, lang, approved_ctx, task, settings, ocr=ocr if strong_text else "",
-                       image_entries=[d[0] for d in distinct], asker=asker, history=history)
+                       image_entries=[d[0] for d in distinct], asker=asker, history=history, alert=alert)
         if ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence:
             return Decision("ai", None, ai["confidence"], ai["text"], False, resp, note=ai["reason"])
     d = Decision("", None, max(score, rule_conf), "", True, resp)
@@ -769,8 +884,8 @@ def staff_examples(query, k=3, min_score=35):
         for m in (Message.objects.filter(kind=Message.STAFF, question__isnull=False, question__kind=Message.QUESTION)
                   .select_related("question").order_by("-id")[:1500]):
             qt = (m.question.text or m.question.ocr_text[:300]).strip()
-            if len(m.text.strip()) < 12 or not qt:
-                continue
+            if len(m.text.strip()) < 12 or not qt or not_an_answer(m.text):
+                continue  # "Проверьте", "Готово", "Eldar можете помочь" — namuna emas (AI agentga shuni takrorlamasin)
             rows.append((list(dict.fromkeys(toks(qt)))[:MAX_TOKENS], qt[:300], m.text.strip()[:500]))
         _STAFF["rows"], _STAFF["key"] = rows, key
     qt = list(dict.fromkeys(toks(query or "")))[:MAX_TOKENS]

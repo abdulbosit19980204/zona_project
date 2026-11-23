@@ -284,6 +284,9 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {f.confirm_resolution && field(t("t_remindMax"), t("t_remindMaxHint"),
             <Input type="number" min={1} max={10} value={f.remind_max} onChange={num("remind_max")}
               onBlur={() => toggle.mutate({ remind_max: f.remind_max })} />)}
+          {field(t("t_collapse"), t("t_collapseHint"),
+            <Input type="number" min={0} max={1440} value={f.collapse_after} onChange={num("collapse_after")}
+              onBlur={() => toggle.mutate({ collapse_after: f.collapse_after })} />)}
           {field(t("t_threadWindow"), t("t_threadWindowHint"),
             <Input type="number" min={0} max={240} value={f.thread_window} onChange={num("thread_window")}
               onBlur={() => toggle.mutate({ thread_window: f.thread_window })} />)}

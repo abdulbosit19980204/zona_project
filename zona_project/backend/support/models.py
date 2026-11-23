@@ -102,6 +102,8 @@ class Settings(models.Model):
     reask_after = models.PositiveIntegerField("Hal bo'lmadi / jarayonda — qayta so'rash va eslatish (daqiqa)", default=120,
                                               db_default=120)
     remind_max = models.PositiveSmallIntegerField("Bitta savol bo'yicha ko'pi bilan eslatma", default=3, db_default=3)
+    # guruh uzun javoblar bilan to'lib ketmasin: N daqiqadan keyin javob yig'iladi (bosib ochiladigan iqtibos); 0 — o'chiq
+    collapse_after = models.PositiveSmallIntegerField("Javobni yig'ish (daqiqa, 0 — yig'ilmaydi)", default=3, db_default=3)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -374,6 +376,10 @@ class Message(models.Model):
     next_ask_at = models.DateTimeField(null=True, blank=True, db_index=True)
     remind_count = models.PositiveSmallIntegerField(default=0, db_default=0)
     staff_msg_id = models.BigIntegerField(null=True, blank=True)  # xodimga "javob berildimi?" xabari
+    # skrinshotdagi qizil xato yozuvi (eng muhim belgi); guruhga yuborilgan javob HTML'i va u qachon yig'ilgani
+    alert_text = models.TextField(blank=True, default="", db_default="")
+    reply_html = models.TextField(blank=True, default="", db_default="")
+    collapsed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
 

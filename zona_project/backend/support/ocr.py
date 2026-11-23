@@ -66,6 +66,114 @@ def read_text(image_bytes, timeout=25):
     return "\n".join(line for line in lines if len(line) > 1)[:4000]
 
 
+# ------------------------------------------------------------------ qizil yozuv (xato izohi)
+# Ilovalar xato sababini qizil rangda yozadi ("Для данной ТТ не найдены активные маршруты доставки. Обратитесь к
+# своему администратору"). Butun ekran matnida bu qator boshqa so'zlar (to'lov turlari, menyu) orasida yo'qolib
+# ketadi — shu sabab qizil piksellar alohida ajratiladi va faqat ular o'qiladi.
+RED_MIN_DENSITY = 0.004   # qatordagi qizil piksellar ulushi: matn qatori
+RED_MAX_DENSITY = 0.45    # bundan ko'pi — qizil tugma/fon (matn emas)
+
+
+def _red_layers(image_bytes, max_side=1600):
+    """(niqob, qizillik): niqob — aniq qizil piksellar (qator izlash uchun); qizillik — R - max(G, B) kulrang
+    tasvirda (qizil matn qora, oq fon va qora/kulrang matn oq): siqilgan JPEG'dagi ingichka harflar ham saqlanadi."""
+    try:
+        import io
+
+        from PIL import Image, ImageChops
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        if max(img.size) > max_side:
+            k = max_side / max(img.size)
+            img = img.resize((int(img.width * k), int(img.height * k)))
+        r, g, b = img.split()
+        redness = ImageChops.subtract(r, ImageChops.lighter(g, b))
+        mask = ImageChops.multiply(redness.point(lambda v: 255 if v >= 55 else 0), r.point(lambda v: 255 if v >= 140 else 0))
+        return mask, redness
+    except Exception:  # noqa: BLE001
+        return None, None
+
+
+def red_mask(image_bytes, max_side=1600):
+    """Qizil piksellar niqobi (L rejim: 255 — qizil). PIL'siz yoki rasm buzuq bo'lsa — None."""
+    return _red_layers(image_bytes, max_side)[0]
+
+
+def red_bands(mask):
+    """Qizil matn qatorlari: [(y0, y1), ...] — yaqin qatorlar bitta xabarga birlashtiriladi."""
+    from PIL import Image
+    w, h = mask.size
+    col = mask.resize((1, h), Image.Resampling.BOX).getdata()
+    rows = [v / 255 for v in col]
+    bands, start, gap = [], None, 0
+    for y, dens in enumerate(rows + [0.0] * 8):
+        text_row = RED_MIN_DENSITY <= dens <= RED_MAX_DENSITY
+        if text_row:
+            if start is None:
+                start = y
+            gap = 0
+        elif start is not None:
+            gap += 1
+            if gap > 10:
+                bands.append((start, y - gap + 1))
+                start, gap = None, 0
+    merged = []
+    for a, b in bands:  # bir xabarning qatorlari (orasi bo'sh joy, qizil tugma emas) — birlashtiriladi
+        if merged and a - merged[-1][1] <= 24 and max(rows[merged[-1][1]:a] or [0]) <= RED_MAX_DENSITY:
+            merged[-1] = (merged[-1][0], b)
+        else:
+            merged.append((a, b))
+    return [(a, b) for a, b in merged if 9 <= b - a <= 160]
+
+
+def _tesseract(img, langs, timeout):
+    fd, path = tempfile.mkstemp(suffix=".png")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            img.save(f, "PNG")
+        res = subprocess.run(["tesseract", path, "stdout", "-l", langs, "--psm", "6"],
+                             capture_output=True, text=True, timeout=timeout)
+        return res.stdout or ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def red_text(image_bytes, timeout=15):
+    """Skrinshotdagi qizil yozuv (xato sababi). Bo'lmasa yoki o'qilmasa — bo'sh satr."""
+    langs = languages()
+    if not langs or not image_bytes:
+        return ""
+    mask, redness = _red_layers(image_bytes)
+    if mask is None:
+        return ""
+    try:
+        from PIL import Image, ImageOps
+        out = []
+        for a, b in red_bands(mask)[:3]:
+            y0, y1 = max(0, a - 6), min(mask.height, b + 6)
+            box = mask.crop((0, y0, mask.width, y1)).getbbox()
+            if not box:
+                continue
+            x0, x1 = max(0, box[0] - 8), min(mask.width, box[2] + 8)
+            crop = redness.crop((x0, y0, x1, y1)).point(lambda v: 255 - min(255, v * 2))  # qizil -> qora, qolgani oq
+            k = 3 if crop.height < 80 else 2 if crop.height < 160 else 1
+            if k > 1:
+                crop = crop.resize((crop.width * k, crop.height * k), Image.Resampling.LANCZOS)
+            crop = ImageOps.expand(crop, border=16, fill=255)
+            lines = [" ".join(ln.split()) for ln in _tesseract(crop, langs, timeout).splitlines()]
+            msg = " ".join(ln for ln in lines if _clean(ln))
+            # qizil yorliqlar ("Скидка на корзину", "Активный визит") — xato emas: xato so'zi yoki to'liq gap bo'lsin
+            if msg and (ERROR_WORDS.search(msg) or len(re.findall(r"[^\W\d_]{3,}", msg)) >= 5):
+                out.append(msg)
+        return " ".join(out)[:500].strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 # ------------------------------------------------------------------ skrinshotdagi asosiy xabar
 # Agent skrinshoti: yuqorida telefon holat qatori (soat, %, belgilar), o'rtada ilova ekrani va eng muhimi — xato
 # yoki holat xabari ("Ошибка...", "Awaiting approval", "Клиент уже есть", "moderatsiyaga yuborildi").

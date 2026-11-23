@@ -592,7 +592,8 @@ class Handler:
             sent = self._safe_send(root.chat_id, body, reply_to=info.message_id, buttons=buttons)
             if sent:
                 Message.objects.filter(pk=root.pk).update(answer_text=d.text, answered_at=timezone.now(), stage="ai",
-                                                          bot_reply_id=sent.get("message_id"), confidence=d.confidence)
+                                                          bot_reply_id=sent.get("message_id"), confidence=d.confidence,
+                                                          reply_html=body, collapsed_at=None)
             return sent
         # bot yordam bera olmadi — mutaxassis butun suhbatni ko'radi
         Message.objects.filter(pk=root.pk).update(status=Message.ESCALATED)
@@ -668,14 +669,19 @@ class Handler:
         if mode == MODE_LIVE:
             self.tg.typing(q.chat_id)
         d = None
+        if media and media.kind == Media.PHOTO and settings.ocr_enabled and not q.alert_text and not self.history:
+            self._alert(q, media)  # qizil xato yozuvi (~0.5 s): bor bo'lsa — javob shu bo'yicha, tez yo'l emas
+            mark("alert")
+        leader = engine.is_leader(q.user)
         if media and media.kind == Media.PHOTO and not q.ocr_text:
-            strong = engine.substantive(q.text)
+            strong = engine.substantive(q.text) and not q.alert_text
             # OCR'siz tez javob faqat ekran deyarli aynan bir xil bo'lsa: o'xshash xato oynalari (bir xil dizayn, boshqa
             # matn) adashtirmasin — aks holda avval ekrandagi matn o'qiladi (1–2 s) va matn hal qiladi
             exact = image and image[1] >= SURE_IMAGE
             if strong or (exact and not image[0].extract and len({e.pk for e, _c, _i in images}) == 1):
                 # tez yo'l: aniq matnli savol yoki tanilgan ekran — OCR'ni kutmasdan javob, OCR keyin (tahlil uchun)
-                d = engine.decide(q.text or "", q.lang, allow_unapproved=unapproved, text=q.text, images=images, fast=True)
+                d = engine.decide(q.text or "", q.lang, allow_unapproved=unapproved, text=q.text, images=images, fast=True,
+                                  leader=leader)
                 deferred_ocr = d is not None and mode == MODE_LIVE
                 mark("decide")
             if settings.ocr_enabled and not deferred_ocr:
@@ -692,7 +698,7 @@ class Handler:
             q.lang = engine.detect_lang(q.text or q.ocr_text)
             pg.phase("think")
             d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
-                              asker=_asker(q), fast=True)  # avval tez (shablon/baza)
+                              asker=_asker(q), fast=True, alert=q.alert_text, leader=leader)  # avval tez (shablon/baza)
             if d is None and self.history:
                 # tarix: eski savolga AI taklifi kerak emas (o'rganish xodimning haqiqiy javobidan) — tez va
                 # AI kunlik limiti jonli guruhlardagi javoblar uchun qoladi
@@ -701,7 +707,7 @@ class Handler:
                 pg.phase("write")  # AI kutilayotganda matn almashib turadi
                 try:
                     d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
-                                      asker=_asker(q))
+                                      asker=_asker(q), alert=q.alert_text, leader=leader)
                 finally:
                     pg.stop()
             mark("decide")
@@ -717,7 +723,7 @@ class Handler:
         finally:
             if deferred_ocr and settings.ocr_enabled:
                 self._ocr(q, media)
-                Message.objects.filter(pk=q.pk).update(ocr_text=q.ocr_text)
+                Message.objects.filter(pk=q.pk).update(ocr_text=q.ocr_text, alert_text=q.alert_text)
 
     def _duplicate_of(self, q, d):
         """Shu xodim qisqa vaqt ichida (album_window) shu savolni yuborgan va javob olgan/uzatilgan bo'lsa — takror."""
@@ -813,10 +819,12 @@ class Handler:
             if line and settings.mention_responsible:
                 body += "\n\n" + line
             buttons = review.buttons(q, settings)
-            sent = self._send_answer(q, self._decorate(q, d, engine.to_html(body, settings.signature)), d.entry, buttons)
+            html_text = self._decorate(q, d, engine.to_html(body, settings.signature))
+            sent = self._send_answer(q, html_text, d.entry, buttons)
             if sent:
                 q.status, q.answered_by, q.answered_at = Message.ANSWERED, "bot", timezone.now()
                 q.bot_reply_id = sent.get("message_id")
+                q.reply_html, q.collapsed_at = html_text, None
             q.save()
             return q
 
@@ -1059,6 +1067,17 @@ class Handler:
             q.ocr_text = ocr.read_text(data or b"")
         Media.objects.filter(pk=media.pk).update(ocr_text=q.ocr_text)
 
+    def _alert(self, q, media):
+        """Skrinshotdagi qizil yozuv (xato sababi) — alohida o'qiladi va savolga yoziladi."""
+        try:
+            data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
+        except OSError:
+            data = self.photo_bytes.get(q.message_id)
+        if not data:
+            return
+        with _OCR_SLOTS:
+            q.alert_text = ocr.red_text(data)
+
     def _autolabel(self, media, d):
         """Ishonchli moslik (tasdiqlangan shablon/javob, ≥90%) — rasmni shu yozuvning namunasi qilib o'rganadi."""
         if (media and media.kind == Media.PHOTO and not media.label_id and not media.ignored and self.settings.image_autolabel and d.entry
@@ -1077,7 +1096,7 @@ class Handler:
         if s.mention_responsible:
             body_html = engine.tag_people(body_html)
         tail = ""
-        if s.mention_supervisor and q.user and engine.needs_supervisor(d):
+        if s.mention_supervisor and q.user and engine.needs_supervisor(d) and not engine.is_leader(q.user):
             line = engine.supervisor_line(q.user, q.lang)
             if line:
                 tail = "\n\n" + line
@@ -1196,6 +1215,8 @@ class Handler:
             html_text = self._decorate(q, part, engine.to_html(body, settings.signature))
             if first is None:
                 first = self._send_answer(q, html_text, e, buttons)
+                if first:
+                    q.reply_html, q.collapsed_at = html_text, None
             else:
                 self._safe_send(q.chat_id, html_text, reply_to=q.message_id)
                 if e.attachments:
@@ -1612,6 +1633,10 @@ class BotWorker(threading.Thread):
                 resolution.followups(client, bot_id=self.bot_id)
             except Exception:  # noqa: BLE001
                 log.exception("resolution followups failed")
+            try:  # guruh uzun javoblar bilan to'lib ketmasin: o'qib bo'lingan javob yig'iladi
+                review.collapse_due(client, bot_id=self.bot_id)
+            except Exception:  # noqa: BLE001
+                log.exception("collapse failed")
         close_old_connections()
 
     @staticmethod

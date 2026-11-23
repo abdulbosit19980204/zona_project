@@ -29,14 +29,79 @@ def note_html(lang):
 
 
 def buttons(q, settings):
-    """Bot javobi ostidagi tugmalar: 👍 / 👎 (savol egasi) va ⚠️ Xato javob (har kim: javob yashiriladi, tuzatishga tushadi)."""
-    rows = []
+    """Bot javobi ostidagi tugmalar — bitta ixcham qatorda: 👍 / 👎 (savol egasi) va ⚠️ Xato (har kim: javob yashiriladi,
+    tuzatishga tushadi). Guruhda katta-katta tugmalar joy egallamasin."""
+    row = []
     if settings.feedback_buttons:
-        rows.append([{"text": "👍", "callback_data": f"fb:{q.id}:1"}, {"text": "👎", "callback_data": f"fb:{q.id}:-1"}])
+        row += [{"text": "👍", "callback_data": f"fb:{q.id}:1"}, {"text": "👎", "callback_data": f"fb:{q.id}:-1"}]
     if settings.review_button:
-        label = "⚠️ Неверный ответ" if q.lang == "ru" else "⚠️ Xato javob"
-        rows.append([{"text": label, "callback_data": f"bad:{q.id}"}])
-    return rows or None
+        row.append({"text": "⚠️ Неверно" if q.lang == "ru" else "⚠️ Xato", "callback_data": f"bad:{q.id}"})
+    return [row] if row else None
+
+
+# ------------------------------------------------------------------ uzun javobni yig'ish
+# Guruh uzun bot javoblari bilan to'lib ketmasin: javob o'qib bo'lingach (Settings.collapse_after daqiqa), birinchi
+# qatordan keyingi qismi Telegram'ning bosib ochiladigan iqtibosiga (expandable blockquote) o'raladi — har kim o'zi
+# uchun bosib to'liq o'qiydi, ortiqcha tugma kerak emas. Test rejimi izohi yig'ilganda olib tashlanadi.
+_TAGS = ("b", "i", "u", "s", "code", "pre", "a", "tg-spoiler")
+
+
+def _balanced(fragment):
+    import re
+    for t in _TAGS:
+        if len(re.findall(rf"<{t}[\s>]", fragment)) != fragment.count(f"</{t}>"):
+            return False
+    return True
+
+
+def collapse_html(text, min_chars=220, min_lines=4):
+    """Javob HTML'i -> yig'ilgan ko'rinish. Qisqa javob (yoki allaqachon yig'ilgan) — None."""
+    if not text or "<blockquote" in text:
+        return None
+    for lang in ("uz", "ru"):
+        text = text.replace(note_html(lang), "")
+    text = text.rstrip()
+    visible = len(text.replace("<b>", "").replace("</b>", ""))
+    if visible < min_chars and text.count("\n") + 1 < min_lines:
+        return None
+    head, _, rest = text.partition("\n")
+    if not _balanced(head):
+        head, rest = "", text
+    rest = rest.strip("\n")
+    if not rest:
+        return None
+    return (head + "\n" if head else "") + f"<blockquote expandable>{rest}</blockquote>"
+
+
+def collapse_due(tg, now=None, bot_id=None, limit=20):
+    """O'qib bo'lingan uzun javoblarni yig'ish (daqiqada bir chaqiriladi). Qaytaradi: nechta yig'ildi."""
+    from datetime import timedelta
+
+    from django.db.models import Q
+
+    from .models import Settings
+    s = Settings.load()
+    if tg is None or not s.collapse_after:
+        return 0
+    now = now or timezone.now()
+    cut = now - timedelta(minutes=s.collapse_after)
+    qs = (Message.objects.filter(kind=Message.QUESTION, collapsed_at__isnull=True, answer_hidden=False,
+                                 created_at__gte=now - timedelta(days=2))
+          .filter(Q(fixed_at__isnull=False, fixed_at__lte=cut) | Q(fixed_at__isnull=True, answered_at__lte=cut))
+          .exclude(reply_html=""))
+    if bot_id:
+        qs = qs.filter(bot_id=bot_id)
+    done = 0
+    for q in qs.order_by("id")[:limit]:
+        short = collapse_html(q.reply_html)
+        if short and shown_id(q):
+            try:
+                tg.edit_text(q.chat_id, shown_id(q), short, buttons=buttons(q, s))
+                done += 1
+            except Exception as e:  # noqa: BLE001 — o'chirilgan / juda eski / o'zgarmagan: qayta urinilmaydi
+                log.info("collapse failed q=%s: %s", q.pk, e)
+        Message.objects.filter(pk=q.pk).update(collapsed_at=now)
+    return done
 
 
 def mark(q, value, by, note=""):
@@ -107,7 +172,7 @@ def restore(tg, q, settings=None):
     except Exception as e:  # noqa: BLE001
         log.info("restore answer failed q=%s: %s", q.pk, e)
         return False
-    Message.objects.filter(pk=q.pk).update(answer_hidden=False)
+    Message.objects.filter(pk=q.pk).update(answer_hidden=False, reply_html=body, collapsed_at=None)
     q.answer_hidden = False
     return True
 
@@ -147,6 +212,8 @@ def fix(q, text, by, tg=None, send=True, learn_kb=False):
                 log.warning("fix send failed q=%s: %s", q.pk, e)
                 raise
         upd["fixed_msg_id"] = sent_id
+        if sent_id:
+            upd["reply_html"], upd["collapsed_at"] = body, None
     Message.objects.filter(pk=q.pk).update(**upd)
     for k, v in upd.items():
         setattr(q, k, v)
