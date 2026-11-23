@@ -37,10 +37,12 @@ class ReviewTests(FlowBase):
         self.assertIn("тестовый режим", texts.lower())  # savol ruscha — yozuv ham ruscha
         self.assertEqual(texts.lower().count("🤖"), texts.lower().count("тестовый режим"))  # eski imzo takrorlanmaydi
 
-    def test_staff_wrong_button_and_agent_cannot(self):
-        self.h().handle(cb(1, f"bad:{self.q.id}", 1))  # savol egasi (agent) — ruxsat yo'q
+    def test_anyone_can_press_wrong_and_staff_gets_original(self):
+        self.h().handle(cb(1, f"bad:{self.q.id}", 1))  # agent (savol egasi) ham bosa oladi
         self.q.refresh_from_db()
-        self.assertEqual(self.q.review, "")
+        self.assertEqual((self.q.review, self.q.review_by, self.q.answer_hidden), ("wrong", "U1 (agent)", True))
+        self.assertFalse(any(m["chat"] == 1 and "yashirildi" in m["text"] for m in self.tg.sent))  # agentga asl javob yo'q
+        Message.objects.filter(pk=self.q.pk).update(review="", answer_hidden=False)
         upd = cb(2, f"bad:{self.q.id}", 2)
         upd["callback_query"]["from"]["username"] = "test_op"
         self.h().handle(upd)

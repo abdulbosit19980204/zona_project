@@ -29,7 +29,7 @@ def note_html(lang):
 
 
 def buttons(q, settings):
-    """Bot javobi ostidagi tugmalar: 👍 / 👎 (savol egasi) va ⚠️ Xato javob (admin / xodim)."""
+    """Bot javobi ostidagi tugmalar: 👍 / 👎 (savol egasi) va ⚠️ Xato javob (har kim: javob yashiriladi, tuzatishga tushadi)."""
     rows = []
     if settings.feedback_buttons:
         rows.append([{"text": "👍", "callback_data": f"fb:{q.id}:1"}, {"text": "👎", "callback_data": f"fb:{q.id}:-1"}])

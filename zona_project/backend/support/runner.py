@@ -887,15 +887,16 @@ class Handler:
     def _mark_wrong(self, cb, q, user):
         """Xodim/admin bot javobini xato deb belgiladi: tuzatish ro'yxatiga; admin chatiga — havola bilan (bir marta)."""
         first = q.review not in (review.WRONG, review.FIXED)
-        review.mark(q, review.WRONG, user.staff_name() or user.name)
+        who = user.staff_name() if user.is_staff else f"{user.name or user.username or 'foydalanuvchi'} (agent)"
+        review.mark(q, review.WRONG, who)
         if first and self.bot.admin_chat_id:
             link = q.group.message_link(q.message_id) if q.group_id else ""
-            body = (f"⚠️ <b>Xato javob</b> — belgiladi: {engine.html.escape(user.staff_name() or user.name)}\n"
+            body = (f"⚠️ <b>Xato javob</b> — belgiladi: {engine.html.escape(who)}\n"
                     f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((q.answer_text or '')[:400])}")
             self._safe_send(self.bot.admin_chat_id, body, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
         # guruhda xato javob ko'rsatilmaydi ("yangilanishga yuborildi"); asl javob — belgilagan xodimga shaxsan
         hidden = review.hide(self.tg, q)
-        if first and hidden and user.tg_id:
+        if first and hidden and user.tg_id and user.is_staff:  # asl javob — faqat xodimga shaxsan
             try:
                 self.tg.send(user.tg_id, "⚠️ Siz xato deb belgilagan javob guruhda yashirildi (Panel → Tasdiqlash → Bot javoblari):\n"
                              f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((q.answer_text or '')[:1500])}",
@@ -942,12 +943,10 @@ class Handler:
                 if q.resolution != Message.YES and not resolution.is_final(q):  # 👍 — hal bo'ldi, 👎 — hal bo'lmadi
                     resolution.mark(q, Message.YES if q.feedback > 0 else Message.NO, "savol egasi (👍/👎)")
             return self.tg.answer_callback(cb["id"], "Rahmat!")
-        if kind == "bad":  # ⚠️ Xato javob — faqat admin va xodimlar
+        if kind == "bad":  # ⚠️ Xato javob — har kim bosa oladi (agent ham): javob yashiriladi va tuzatishga tushadi
             q = Message.objects.filter(pk=int(rest or 0), bot=self.bot).select_related("group", "user").first()
             if not q:
                 return self.tg.answer_callback(cb["id"], "Topilmadi")
-            if not (user.is_staff or chat_id == self.bot.admin_chat_id):
-                return self.tg.answer_callback(cb["id"], "Bu tugma xodimlar uchun. Javob yoqmasa — 👎 bosing.", alert=True)
             return self._mark_wrong(cb, q, user)
         if kind == "rs":  # "hal bo'ldimi?" tugmalari
             mid, _, val = rest.partition(":")
