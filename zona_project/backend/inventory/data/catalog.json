@@ -1,0 +1,572 @@
+{
+ "orgs": [
+  {
+   "name": "STAR BEVERAGE",
+   "code": "STAR_BEVERAGE"
+  },
+  {
+   "name": "Star Distribution",
+   "code": "STAR_DISTRIBUTION"
+  },
+  {
+   "name": "STAR FMCG",
+   "code": "STAR_FMCG"
+  },
+  {
+   "name": "Support Samarqand",
+   "code": "SUPPORT_SAMARQAND"
+  }
+ ],
+ "conditions": [
+  "Ishlayapti",
+  "Ta'mirga muhtoj",
+  "Ishlamaydi",
+  "Ishlatilmayapti (zaxirada)",
+  "Topilmadi"
+ ],
+ "locations": [
+  "Ofis",
+  "Rahbariyat",
+  "Buxgalteriya",
+  "Savdo bo'limi",
+  "Ombor",
+  "Kassa",
+  "Qabulxona",
+  "Majlislar xonasi",
+  "Server xonasi",
+  "Boshqa"
+ ],
+ "branch_statuses": [
+  "Rejada",
+  "Jarayonda",
+  "Yakunlandi"
+ ],
+ "device_types": [
+  {
+   "name": "Stol kompyuteri (sistem blok)",
+   "group": "Kompyuter",
+   "description": "Stol ostida yoki ustida turadigan alohida quti; monitor, klaviatura unga ulanadi",
+   "serial_hint": "Quti yon yoki orqa tomonidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "",
+   "brands": [
+    "HP",
+    "Lenovo",
+    "Dell",
+    "Asus",
+    "Acer",
+    "Yig'ma (brendsiz)",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Monoblok",
+   "group": "Kompyuter",
+   "description": "Ekran va kompyuter bitta korpusda (alohida sistem blok yo'q)",
+   "serial_hint": "Qurilma orqa tomonidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "",
+   "brands": [
+    "HP",
+    "Lenovo",
+    "Dell",
+    "Asus",
+    "Acer",
+    "Apple",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Noutbuk",
+   "group": "Kompyuter",
+   "description": "Ochilib-yopiladigan ko'chma kompyuter",
+   "serial_hint": "Qurilma tagidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "Zaryadlovchisi bormi — Izohga yozing",
+   "brands": [
+    "Lenovo",
+    "HP",
+    "Dell",
+    "Asus",
+    "Acer",
+    "Apple",
+    "Huawei",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Monitor",
+   "group": "Kompyuter",
+   "description": "Kompyuterga ulangan alohida ekran",
+   "serial_hint": "Qurilma orqa tomonidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "Diagonalini Izohga yozing (masalan: 24 dyuym)",
+   "brands": [
+    "Samsung",
+    "LG",
+    "Dell",
+    "HP",
+    "Philips",
+    "AOC",
+    "Lenovo",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Klaviatura va sichqoncha",
+   "group": "Periferiya",
+   "description": "Kompyuterning klaviaturasi va sichqonchasi",
+   "serial_hint": "Seriya raqami shart emas — bo'sh qoldiring",
+   "extra_hint": "Nechta ekanini Soni ustuniga yozing",
+   "brands": [
+    "Logitech",
+    "A4Tech",
+    "Genius",
+    "HP",
+    "Dell",
+    "Defender",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Veb-kamera",
+   "group": "Periferiya",
+   "description": "Monitor ustiga qo'yiladigan kichik kamera (videoqo'ng'iroq uchun)",
+   "serial_hint": "Kabel yoki korpusdagi yorliqda; bo'lmasa bo'sh qoldiring",
+   "extra_hint": "",
+   "brands": [
+    "Logitech",
+    "A4Tech",
+    "Genius",
+    "Defender",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Garnitura / quloqchin",
+   "group": "Periferiya",
+   "description": "Mikrofonli quloqchin",
+   "serial_hint": "Seriya raqami shart emas — bo'sh qoldiring",
+   "extra_hint": "",
+   "brands": [
+    "Logitech",
+    "Jabra",
+    "Poly (Plantronics)",
+    "A4Tech",
+    "Defender",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Kolonka / mikrofon",
+   "group": "Periferiya",
+   "description": "Ovoz kolonkasi yoki stol mikrofoni",
+   "serial_hint": "Seriya raqami shart emas — bo'sh qoldiring",
+   "extra_hint": "",
+   "brands": [
+    "Logitech",
+    "Sven",
+    "Genius",
+    "JBL",
+    "Defender",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Printer",
+   "group": "Printer",
+   "description": "Faqat chop etadi (ustida skaner qopqog'i yo'q)",
+   "serial_hint": "Orqa tomonida yoki old qopqoq ichidagi yorliqda",
+   "extra_hint": "Kartrij modelini Izohga yozing (masalan: 85A)",
+   "brands": [
+    "HP",
+    "Canon",
+    "Pantum",
+    "Epson",
+    "Brother",
+    "Xerox",
+    "Kyocera",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "MFU (printer + skaner + nusxa)",
+   "group": "Printer",
+   "description": "Chop etadi, skanerlaydi, nusxa ko'chiradi (ustida skaner qopqog'i bor)",
+   "serial_hint": "Orqa tomonida yoki old qopqoq ichidagi yorliqda",
+   "extra_hint": "Kartrij modelini Izohga yozing (masalan: 85A)",
+   "brands": [
+    "HP",
+    "Canon",
+    "Pantum",
+    "Epson",
+    "Brother",
+    "Xerox",
+    "Kyocera",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Etiketka / shtrix-kod printeri",
+   "group": "Printer",
+   "description": "Yopishqoq etiketka va shtrix-kod chop etuvchi kichik printer",
+   "serial_hint": "Qurilma tagidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "",
+   "brands": [
+    "Zebra",
+    "Xprinter",
+    "TSC",
+    "Godex",
+    "Argox",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Chek printeri",
+   "group": "Printer",
+   "description": "Kassada chek chiqaradigan kichik printer",
+   "serial_hint": "Qurilma tagidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "",
+   "brands": [
+    "Xprinter",
+    "Epson",
+    "Rongta",
+    "Sunmi",
+    "Atol",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Router (internet qurilmasi)",
+   "group": "Tarmoq",
+   "description": "Internet kabeli kiradigan asosiy qurilma, chiroqchalari yonib turadi",
+   "serial_hint": "Qurilma tagidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "Qaysi provayder interneti ulanganini Izohga yozing",
+   "brands": [
+    "MikroTik",
+    "TP-Link",
+    "Cisco",
+    "Keenetic",
+    "Huawei",
+    "ZTE",
+    "Asus",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Switch (kommutator)",
+   "group": "Tarmoq",
+   "description": "Ko'p kabel ulangan taqsimlovchi quti (8 / 16 / 24 port)",
+   "serial_hint": "Tagida yoki orqa tomonidagi yorliqda",
+   "extra_hint": "Portlar sonini Izohga yozing (8, 16, 24, 48)",
+   "brands": [
+    "TP-Link",
+    "MikroTik",
+    "Cisco",
+    "D-Link",
+    "HP / Aruba",
+    "Ubiquiti",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Wi-Fi qurilmasi (Access Point)",
+   "group": "Tarmoq",
+   "description": "Shift yoki devorga o'rnatilgan, Wi-Fi tarqatuvchi qurilma",
+   "serial_hint": "Tagidagi yorliqda; yechmasdan ko'rinmasa bo'sh qoldiring",
+   "extra_hint": "Qayerga o'rnatilganini Izohga yozing",
+   "brands": [
+    "TP-Link",
+    "Ubiquiti",
+    "MikroTik",
+    "Cisco",
+    "Huawei",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "VPN qurilmasi (filial – bosh ofis)",
+   "group": "Tarmoq",
+   "description": "Filialni bosh ofis bilan bog'laydigan qurilma (IT bo'limi o'rnatgan)",
+   "serial_hint": "Qurilma tagidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "Aniqlay olmasangiz IT bo'limidan so'rang",
+   "brands": [
+    "MikroTik",
+    "Cisco",
+    "Fortinet",
+    "TP-Link",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "UPS (uzluksiz quvvat manbai)",
+   "group": "Elektr",
+   "description": "Tok o'chganda kompyuterga batareyadan quvvat beradigan quti",
+   "serial_hint": "Orqa tomonida yoki tagidagi yorliqda",
+   "extra_hint": "Quvvatini (masalan 650VA) va nimaga ulanganini Izohga yozing",
+   "brands": [
+    "APC",
+    "PowerCom",
+    "Eaton",
+    "Ippon",
+    "CyberPower",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "SKUD (eshik nazorati)",
+   "group": "Xavfsizlik",
+   "description": "Eshikni karta yoki kod bilan ochadigan tizim",
+   "serial_hint": "Korpusdagi yorliqda",
+   "extra_hint": "Qaysi eshikdaligini Izohga yozing",
+   "brands": [
+    "ZKTeco",
+    "Hikvision",
+    "Dahua",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Davomat terminali (FaceID / barmoq izi)",
+   "group": "Xavfsizlik",
+   "description": "Ishga kelib-ketishni yuz yoki barmoq izi bilan qayd etuvchi ekranli qurilma",
+   "serial_hint": "Qurilma orqa tomonidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "",
+   "brands": [
+    "ZKTeco",
+    "Hikvision",
+    "Dahua",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Signalizatsiya paneli (ohrana)",
+   "group": "Xavfsizlik",
+   "description": "Qo'riqlash tizimining boshqaruv paneli yoki klaviaturasi",
+   "serial_hint": "Seriya raqami shart emas — bo'sh qoldiring",
+   "extra_hint": "Qaysi qo'riqlash xizmatiga ulanganini Izohga yozing",
+   "brands": [
+    "Ajax",
+    "Hikvision",
+    "Paradox",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Korporativ mobil telefon",
+   "group": "Aloqa",
+   "description": "Kompaniya bergan smartfon",
+   "serial_hint": "Seriya o'rniga IMEI yozing: telefonda *#06# tering — ekranda chiqadi",
+   "extra_hint": "",
+   "brands": [
+    "Samsung",
+    "Xiaomi / Redmi",
+    "Apple",
+    "Honor",
+    "Tecno",
+    "Vivo",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Korporativ SIM-karta",
+   "group": "Aloqa",
+   "description": "Kompaniya nomidagi SIM-karta",
+   "serial_hint": "Seriya o'rniga telefon raqamini yozing (+998 ...)",
+   "extra_hint": "Qaysi qurilmada turganini Izohga yozing; Brend = operator",
+   "brands": [
+    "Beeline",
+    "Ucell",
+    "Mobiuz",
+    "Uzmobile",
+    "Humans",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Ratsiya",
+   "group": "Aloqa",
+   "description": "Qisqa masofali radio aloqa qurilmasi",
+   "serial_hint": "Batareya ostidagi yorliqda",
+   "extra_hint": "",
+   "brands": [
+    "Motorola",
+    "Baofeng",
+    "Kenwood",
+    "Hytera",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "POS-terminal / kassa kompyuteri",
+   "group": "Savdo",
+   "description": "Kassadagi sensorli ekranli kompyuter",
+   "serial_hint": "Tagida yoki orqa tomonidagi yorliqda",
+   "extra_hint": "",
+   "brands": [
+    "Sunmi",
+    "Posiflex",
+    "Atol",
+    "iMin",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Onlayn kassa / fiskal modul",
+   "group": "Savdo",
+   "description": "Soliqqa ulangan kassa apparati yoki unga ulangan fiskal modul",
+   "serial_hint": "Fiskal modul raqami — chekda yoki qurilma yorlig'ida",
+   "extra_hint": "",
+   "brands": [
+    "Sunmi",
+    "Atol",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Bank to'lov terminali",
+   "group": "Savdo",
+   "description": "Plastik karta (Uzcard / Humo) bilan to'lov qabul qiluvchi terminal",
+   "serial_hint": "Qurilma tagidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "Qaysi bank terminali ekanini Izohga yozing",
+   "brands": [
+    "PAX",
+    "Verifone",
+    "Ingenico",
+    "Sunmi",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Shtrix-kod skaneri",
+   "group": "Savdo",
+   "description": "Tovar shtrix-kodini o'quvchi qo'l skaneri",
+   "serial_hint": "Dastasidagi yorliqda",
+   "extra_hint": "",
+   "brands": [
+    "Zebra",
+    "Honeywell",
+    "Datalogic",
+    "Newland",
+    "Xprinter",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "TSD (ombor terminali)",
+   "group": "Savdo",
+   "description": "Omborda ishlatiladigan, ekranli va skanerli qo'l kompyuteri",
+   "serial_hint": "Batareya ostida yoki orqa tomonidagi yorliqda",
+   "extra_hint": "",
+   "brands": [
+    "Urovo",
+    "Zebra",
+    "Honeywell",
+    "Newland",
+    "Chainway",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Proyektor",
+   "group": "Multimedia",
+   "description": "Devorga tasvir chiqaradigan qurilma",
+   "serial_hint": "Qurilma tagidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "",
+   "brands": [
+    "Epson",
+    "BenQ",
+    "Optoma",
+    "Acer",
+    "ViewSonic",
+    "Boshqa"
+   ]
+  },
+  {
+   "name": "Televizor / displey",
+   "group": "Multimedia",
+   "description": "Ofis yoki savdo zalidagi televizor / reklama ekrani",
+   "serial_hint": "Qurilma orqa tomonidagi yorliqda (S/N yoki Serial No)",
+   "extra_hint": "Diagonalini Izohga yozing (masalan: 55 dyuym)",
+   "brands": [
+    "Samsung",
+    "LG",
+    "Artel",
+    "Shivaki",
+    "Hofmann",
+    "Xiaomi",
+    "Boshqa"
+   ]
+  }
+ ],
+ "branches": [
+  {
+   "code": "AND",
+   "name": "Andijon",
+   "region": "Andijon viloyati",
+   "note": ""
+  },
+  {
+   "code": "BUX",
+   "name": "Buxoro",
+   "region": "Buxoro viloyati",
+   "note": ""
+  },
+  {
+   "code": "FRG",
+   "name": "Farg'ona",
+   "region": "Farg'ona viloyati",
+   "note": ""
+  },
+  {
+   "code": "NAM",
+   "name": "Namangan",
+   "region": "Namangan viloyati",
+   "note": ""
+  },
+  {
+   "code": "NAV",
+   "name": "Navoi",
+   "region": "Navoiy viloyati",
+   "note": ""
+  },
+  {
+   "code": "NS",
+   "name": "Nukus",
+   "region": "Qoraqalpog'iston Resp.",
+   "note": ""
+  },
+  {
+   "code": "QSH",
+   "name": "Qarshi",
+   "region": "Qashqadaryo viloyati",
+   "note": ""
+  },
+  {
+   "code": "QQN",
+   "name": "Qo'qon",
+   "region": "Farg'ona viloyati",
+   "note": ""
+  },
+  {
+   "code": "SAM",
+   "name": "Samarqand",
+   "region": "Samarqand viloyati",
+   "note": ""
+  },
+  {
+   "code": "TRM",
+   "name": "Termiz",
+   "region": "Surxondaryo viloyati",
+   "note": ""
+  },
+  {
+   "code": "TSH",
+   "name": "Toshkent",
+   "region": "Toshkent sh.",
+   "note": "BOSH OFIS"
+  },
+  {
+   "code": "URG",
+   "name": "Urganch",
+   "region": "Xorazm viloyati",
+   "note": ""
+  }
+ ]
+}

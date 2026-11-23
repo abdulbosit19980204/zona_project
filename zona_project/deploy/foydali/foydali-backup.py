@@ -19,6 +19,21 @@ for name, src in DBS.items():
     with sqlite3.connect(f"file:{src}?mode=ro", uri=True) as s, sqlite3.connect(day / name) as d:
         s.backup(d)
     print(f"zaxira: {day / name}")
+
+# IT inventarizatsiya rasmlari: fayllar o'zgarmaydi (noyob nom) — bitta nusxaga faqat yangilari qo'shiladi
+MEDIA, MEDIA_OUT = DATA / "inventory-media", OUT / "inventory-media"
+copied = 0
+if MEDIA.is_dir():
+    for src in MEDIA.rglob("*.jpg"):
+        dst = MEDIA_OUT / src.relative_to(MEDIA)
+        if not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            copied += 1
+    print(f"inventarizatsiya rasmlari: {copied} ta yangi fayl")
+
 for old in OUT.iterdir():
+    if old == MEDIA_OUT:
+        continue
     if old.is_dir() and time.time() - old.stat().st_mtime > KEEP_DAYS * 86400:
         shutil.rmtree(old, ignore_errors=True)

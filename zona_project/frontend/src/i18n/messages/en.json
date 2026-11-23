@@ -28,7 +28,8 @@
       "qrReliability": "Monitoring",
       "qrConfig": "Configuration",
       "supMain": "Questions",
-      "supConfig": "Configuration"
+      "supConfig": "Configuration",
+      "invMain": "Inventory"
     },
     "staff": "Contacts",
     "qrOverview": "Overview",
@@ -45,7 +46,8 @@
     "modules": {
       "zona": "Responsibility platform",
       "qrdrive": "QR Drive",
-      "support": "Support bot"
+      "support": "Support bot",
+      "inventory": "IT inventory"
     },
     "serviceDown": "Service unavailable",
     "qrAnalytics": "Analytics",
@@ -57,7 +59,8 @@
     "supSettings": "Bots & settings",
     "supAnalytics": "Analytics",
     "supImages": "Image types",
-    "aiHistory": "AI analyses"
+    "aiHistory": "AI analyses",
+    "invOpen": "Branch inventory"
   },
   "top": {
     "search": "Search…",
@@ -128,7 +131,8 @@
   "appRoles": {
     "admin": "Administrator",
     "editor": "Editor",
-    "viewer": "Viewer"
+    "viewer": "Viewer",
+    "inventory": "Inventory only"
   },
   "login": {
     "title": "Sign in",

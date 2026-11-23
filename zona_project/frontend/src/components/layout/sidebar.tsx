@@ -196,7 +196,8 @@ export function Sidebar() {
         <Brand collapsed={collapsed} />
       </div>
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
-        {MODULES.map((m) => <ModuleSection key={m.key} module={m} counts={counts} down={down[m.key]} />)}
+        {MODULES.filter((m) => m.key !== "inventory" || (model?.state.me && !model.state.me.anonymous && model.state.me.inventory))
+          .map((m) => <ModuleSection key={m.key} module={m} counts={counts} down={down[m.key]} />)}
       </nav>
       <ControlCenterLink collapsed={collapsed} />
       <button

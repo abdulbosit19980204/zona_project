@@ -39,5 +39,7 @@ def verify_sso(token: str) -> Principal:
     if claims.get("token_type") != "access":
         raise AuthError("Token yaroqsiz")
     username = str(claims.get("username") or f"user-{claims.get('user_id')}")
+    if str(claims.get("zrole") or "") == "inventory":  # faqat IT inventarizatsiya logini — QR Drive yopiq
+        raise AuthError("Bu foydalanuvchiga QR Drive ruxsati yo'q")
     role = ZONA_ROLE_MAP.get(str(claims.get("zrole") or "viewer"), "viewer")
     return Principal(username=username, name=str(claims.get("name") or username), role=role, user_id=claims.get("user_id"))

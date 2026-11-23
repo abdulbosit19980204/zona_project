@@ -22,6 +22,12 @@ GROUP = "zona"
 
 
 @database_sync_to_async
+def _inventory_only(user):
+    from .permissions import role_of
+    return role_of(user) == "inventory"
+
+
+@database_sync_to_async
 def _user_from_token(raw):
     auth = JWTAuthentication()
     try:
@@ -50,6 +56,9 @@ class EventsConsumer(AsyncJsonWebsocketConsumer):
         user = self.scope.get("user")
         if not (user and user.is_authenticated) and not conf.get("PUBLIC_READ"):
             await self.close(code=4401)
+            return
+        if user and user.is_authenticated and await _inventory_only(user):
+            await self.close(code=4403)  # faqat inventarizatsiya logini: tuzilma yangilanishlari unga yuborilmaydi
             return
         await self.channel_layer.group_add(GROUP, self.channel_name)
         await self.accept()

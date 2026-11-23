@@ -80,12 +80,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const access = useAuth((s) => s.access);
   const refresh = useAuth((s) => s.refresh);
+  const inventoryOnly = useAuth((s) => s.user?.role === "inventory");
 
   useEffect(() => {
     if (!access && !refresh) router.replace("/login");
-  }, [access, refresh, router]);
+    else if (inventoryOnly) router.replace("/inventory");  // faqat inventarizatsiya logini — boshqa sahifalar yopiq
+  }, [access, refresh, inventoryOnly, router]);
 
-  if (!access && !refresh) return <ShellSkeleton />;
+  if ((!access && !refresh) || inventoryOnly) return <ShellSkeleton />;
   return (
     <I18nProvider>
       <Shell>{children}</Shell>

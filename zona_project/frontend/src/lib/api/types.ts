@@ -2,7 +2,7 @@
 
 export type RoleKey = "owner" | "executor" | "approver" | "supervisor" | "contributor" | "backup";
 export type ProcessRoleKey = Exclude<RoleKey, "executor">;
-export type AppRole = "admin" | "editor" | "viewer";
+export type AppRole = "admin" | "editor" | "viewer" | "inventory";
 
 /** AI tarjimalari: {"ru": {"title": "..."}, "en": {...}}. Faqat asl matnga mos (yaroqli) tarjimalar keladi. */
 export type I18n = Partial<Record<"uz" | "ru" | "en", Record<string, string>>>;
@@ -181,6 +181,7 @@ export interface Me {
   last_login: string | null;
   date_joined: string;
   can: Permissions;
+  inventory?: "manager" | "director" | "collector" | null; // IT inventarizatsiya moduliga kirish darajasi
   anonymous?: false;
 }
 

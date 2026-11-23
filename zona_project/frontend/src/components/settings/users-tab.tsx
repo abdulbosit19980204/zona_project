@@ -26,7 +26,7 @@ const schema = z.object({
   first_name: z.string().max(150),
   last_name: z.string().max(150),
   email: z.union([z.literal(""), z.email()]),
-  role: z.enum(["admin", "editor", "viewer"]),
+  role: z.enum(["admin", "editor", "viewer", "inventory"]),
   member: z.string(),
   position: z.string().max(200),
   phone: z.string().max(50),

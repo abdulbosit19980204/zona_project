@@ -1,10 +1,12 @@
-"""Rollar: admin (hammasi) > editor (tuzilmani tahrirlash) > viewer (ko'rish, savol berish)."""
+"""Rollar: admin (hammasi) > editor (tuzilmani tahrirlash) > viewer (ko'rish, savol berish) > inventory.
+
+inventory — faqat IT inventarizatsiya moduli uchun login (0-daraja): Zona va Support API'lari unga yopiq."""
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from . import conf
 from .models import Profile
 
-RANK = {Profile.VIEWER: 1, Profile.EDITOR: 2, Profile.ADMIN: 3}
+RANK = {Profile.INVENTORY: 0, Profile.VIEWER: 1, Profile.EDITOR: 2, Profile.ADMIN: 3}
 
 
 def role_of(user):
@@ -22,7 +24,7 @@ def has_role(request, role):
     current = role_of(getattr(request, "user", None))
     if current is None:
         return role == Profile.VIEWER and conf.get("PUBLIC_READ") and request.method in SAFE_METHODS
-    return RANK[current] >= RANK[role]
+    return RANK.get(current, 0) >= RANK[role]
 
 
 class CanView(BasePermission):

@@ -25,24 +25,32 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
+/** Kirgandan keyin: faqat inventarizatsiya logini — o'z moduliga; ?next= bo'lsa — o'sha sahifaga. */
+function home(role?: string) {
+  if (role === "inventory") return "/inventory";
+  const next = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null;
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+}
+
 function LoginForm() {
   const t = useTranslations("login");
   const router = useRouter();
   const setSession = useAuth((s) => s.setSession);
   const access = useAuth((s) => s.access);
+  const role = useAuth((s) => s.user?.role);
   const [error, setError] = useState("");
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { username: "", password: "" } });
 
   useEffect(() => {
-    if (access) router.replace("/");
-  }, [access, router]);
+    if (access) router.replace(home(role));
+  }, [access, role, router]);
 
   const onSubmit = form.handleSubmit(async ({ username, password }) => {
     setError("");
     try {
       const r = await authApi.login(username, password);
       setSession(r, r.user);
-      router.replace("/");
+      router.replace(home(r.user.role));
     } catch (e) {
       setError(errorMessage(e));
     }

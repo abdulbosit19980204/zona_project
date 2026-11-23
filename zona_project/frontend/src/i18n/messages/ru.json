@@ -28,7 +28,8 @@
       "qrReliability": "Контроль",
       "qrConfig": "Настройка",
       "supMain": "Вопросы",
-      "supConfig": "Настройка"
+      "supConfig": "Настройка",
+      "invMain": "Инвентаризация"
     },
     "staff": "Контакты",
     "qrOverview": "Главная",
@@ -45,7 +46,8 @@
     "modules": {
       "zona": "Платформа ответственности",
       "qrdrive": "QR Drive",
-      "support": "Support бот"
+      "support": "Support бот",
+      "inventory": "ИТ-инвентаризация"
     },
     "serviceDown": "Сервис недоступен",
     "qrAnalytics": "Аналитика",
@@ -57,7 +59,8 @@
     "supSettings": "Боты и настройки",
     "supAnalytics": "Аналитика",
     "supImages": "Типы изображений",
-    "aiHistory": "AI-анализы"
+    "aiHistory": "AI-анализы",
+    "invOpen": "Инвентаризация филиалов"
   },
   "top": {
     "search": "Поиск…",
@@ -128,7 +131,8 @@
   "appRoles": {
     "admin": "Администратор",
     "editor": "Редактор",
-    "viewer": "Наблюдатель"
+    "viewer": "Наблюдатель",
+    "inventory": "Только инвентаризация"
   },
   "login": {
     "title": "Вход в систему",

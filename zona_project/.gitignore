@@ -23,3 +23,6 @@ services/qrdrive/data/
 services/qrdrive/.env
 .pytest_cache/
 services/control/data/
+
+# IT inventarizatsiya: lokal rasmlar (serverda /var/lib/foydali/inventory-media)
+backend/inventory-media/

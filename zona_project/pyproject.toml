@@ -33,7 +33,7 @@ support = ["telethon>=1.36,<2"]                                   # support bot:
 
 [tool.setuptools.packages.find]
 where = ["backend"]
-include = ["zona*", "support*"]
+include = ["zona*", "support*", "inventory*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "zona.__version__" }

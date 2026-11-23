@@ -1,5 +1,5 @@
 import {
-  Activity, BadgeCheck, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
+  Activity, BadgeCheck, ClipboardCheck, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
   LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert,
   Inbox, Signpost, Sparkles, SlidersHorizontal, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, type LucideIcon,
 } from "lucide-react";
@@ -108,8 +108,13 @@ export const SUPPORT_NAV: NavGroup[] = [
   },
 ];
 
+/** IT inventarizatsiya: alohida mustaqil sahifa (/inventory) — faqat huquqi borlarga ko'rinadi. */
+export const INVENTORY_NAV: NavGroup[] = [
+  { key: "invMain", items: [{ href: "/inventory", key: "invOpen", icon: ClipboardCheck }] },
+];
+
 export interface NavModule {
-  key: "zona" | "qrdrive" | "support"; // nav.modules.<key>
+  key: "zona" | "qrdrive" | "support" | "inventory"; // nav.modules.<key>
   icon: LucideIcon;
   groups: NavGroup[];
 }
@@ -119,6 +124,7 @@ export const MODULES: NavModule[] = [
   { key: "zona", icon: Orbit, groups: NAV },
   { key: "qrdrive", icon: QrCode, groups: QR_NAV },
   { key: "support", icon: BotMessageSquare, groups: SUPPORT_NAV },
+  { key: "inventory", icon: ClipboardCheck, groups: INVENTORY_NAV },
 ];
 
 export const ALL_NAV = MODULES.flatMap((m) => m.groups.flatMap((g) => g.items));

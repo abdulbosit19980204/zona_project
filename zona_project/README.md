@@ -124,6 +124,27 @@ QR Drive — alohida servis (FastAPI + o'z bazasi + worker + Telegram bot): xodi
 tushadi → havola QR kod bilan qaytadi. Boshqa loyihalar uchun REST API, webhook, Python SDK va aiogram plagini bor.
 Batafsil: **[services/qrdrive/README.md](services/qrdrive/README.md)**.
 
+## IT inventarizatsiya (filiallar)
+
+Mustaqil, mobilga moslangan sahifa: **`/inventory`** (platforma menyusisiz). Backend — `backend/inventory/`
+(alohida `inventory_*` jadvallari), API — `/api/inventory/`. Katalog (30 qurilma turi va brendlari, 12 filial,
+tashkilotlar, joylar) `StarGroup_IT_inventarizatsiya_shablon.xlsx` dan olingan va migratsiya bilan avtomatik to'ladi.
+
+| Daraja | Kim | Nima qila oladi |
+|---|---|---|
+| Boshqaruvchi (IT) | platforma administratorlari avtomatik + tayinlanganlar | hammasi: loginlar, filiallar, katalog, import/eksport |
+| Rahbar | direktorlar | barcha filiallar natijasi, analitika, eksport — o'zgartira olmaydi |
+| Filial xodimi | `inv.sam`, `inv.and`... | faqat o'z filiali: qurilma (rasm bilan) va xodim qo'shadi |
+
+Filial loginlari Zona'da `inventory` rolida bo'ladi: platformaning boshqa sahifalari, API'lari, WebSocket va QR Drive
+ularga yopiq. Eksport: CSV, Excel va **asl shablon formatida** (formulalar, Xulosa, ochiluvchi ro'yxatlar bilan);
+import — to'ldirilgan shablon yoki eksport qilingan jadval (avval tekshiruv, keyin tasdiq). Rasmlar baza yonidagi
+`inventory-media/` da (`ZONA_INVENTORY_MEDIA`), siqilgan holda; havolalari imzolangan.
+
+```bash
+python backend/manage.py inv_setup --logins --out /root/inventarizatsiya_loginlar.xlsx   # filial loginlari + fayl
+```
+
 ## Hammasini bitta buyruq bilan ishga tushirish
 
 ```bash

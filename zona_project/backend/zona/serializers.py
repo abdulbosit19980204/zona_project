@@ -381,7 +381,17 @@ def user_payload(user):
         **{f: getattr(profile, f) for f in PROFILE_FIELDS},
         "last_login": user.last_login, "date_joined": user.date_joined,
         "can": {"edit": role in (Profile.ADMIN, Profile.EDITOR), "admin": role == Profile.ADMIN},
+        "inventory": _inventory_level(user),
     }
+
+
+def _inventory_level(user):
+    """IT inventarizatsiya moduliga kirish darajasi (modul o'rnatilmagan bo'lsa — None)."""
+    from django.apps import apps
+    if not apps.is_installed("inventory"):
+        return None
+    from inventory.access import level_of
+    return level_of(user)
 
 
 class UserAdminSerializer(serializers.Serializer):

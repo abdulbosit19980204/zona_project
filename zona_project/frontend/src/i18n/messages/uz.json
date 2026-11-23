@@ -28,7 +28,8 @@
       "qrReliability": "Nazorat",
       "qrConfig": "Sozlash",
       "supMain": "Savollar",
-      "supConfig": "Sozlash"
+      "supConfig": "Sozlash",
+      "invMain": "Inventarizatsiya"
     },
     "staff": "Kontaktlar",
     "qrOverview": "Bosh sahifa",
@@ -45,7 +46,8 @@
     "modules": {
       "zona": "Masʼuliyat platformasi",
       "qrdrive": "QR Drive",
-      "support": "Support bot"
+      "support": "Support bot",
+      "inventory": "IT inventarizatsiya"
     },
     "serviceDown": "Servis ishlamayapti",
     "qrAnalytics": "Analitika",
@@ -57,7 +59,8 @@
     "supSettings": "Botlar va sozlamalar",
     "supAnalytics": "Tahlil",
     "supImages": "Rasm turlari",
-    "aiHistory": "AI tahlillar"
+    "aiHistory": "AI tahlillar",
+    "invOpen": "Filiallar inventarizatsiyasi"
   },
   "top": {
     "search": "Qidirish…",
@@ -128,7 +131,8 @@
   "appRoles": {
     "admin": "Administrator",
     "editor": "Muharrir",
-    "viewer": "Kuzatuvchi"
+    "viewer": "Kuzatuvchi",
+    "inventory": "Faqat inventarizatsiya"
   },
   "login": {
     "title": "Tizimga kirish",

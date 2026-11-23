@@ -337,8 +337,10 @@ class Synonym(models.Model):
 class Profile(models.Model):
     """Saytdagi foydalanuvchi: roli va aloqa ma'lumotlari."""
 
-    ADMIN, EDITOR, VIEWER = "admin", "editor", "viewer"
-    ROLES = [(ADMIN, "Administrator"), (EDITOR, "Muharrir"), (VIEWER, "Kuzatuvchi")]
+    ADMIN, EDITOR, VIEWER, INVENTORY = "admin", "editor", "viewer", "inventory"
+    # INVENTORY — faqat IT inventarizatsiya moduli (filial xodimlari): platformaning boshqa sahifalari yopiq
+    ROLES = [(ADMIN, "Administrator"), (EDITOR, "Muharrir"), (VIEWER, "Kuzatuvchi"),
+             (INVENTORY, "Faqat inventarizatsiya")]
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="zona_profile")
     role = models.CharField("Rol", max_length=10, choices=ROLES, default=VIEWER)
