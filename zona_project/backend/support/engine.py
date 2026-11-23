@@ -307,10 +307,16 @@ def identify(tg_id, username="", name=""):
         TeamContact.objects.filter(pk=contact.pk).update(telegram_id=tg_id)  # username o'zgarsa ham taniladi
     if (contact.pk if contact else None) != user.contact_id or (member.pk if member else None) != user.member_id:
         user.contact, user.member, changed = contact, member, True
-    if not user.staff_person_id and not user.staff_link and not (contact or member):
-        sp = match_staff_person(name, username)
-        if sp:
-            user.staff_person, user.staff_link, changed = sp, "auto", True
+    if user.staff_link not in ("manual", "none") and not (contact or member):
+        # aniq belgi — Telegram ID (PRBC / jamoa tuzilmasidan); bo'lmasa — ism va username bo'yicha ehtiyotkor moslik
+        from .staffsync import staff_by_tg
+        sp = staff_by_tg(tg_id, username)
+        if sp and sp.pk != user.staff_person_id:
+            user.staff_person, user.staff_link, changed = sp, "prbc", True
+        elif not sp and not user.staff_person_id and not user.staff_link:
+            sp = match_staff_person(name, username)
+            if sp:
+                user.staff_person, user.staff_link, changed = sp, "auto", True
     if changed:
         user.save()
     else:

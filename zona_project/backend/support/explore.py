@@ -251,9 +251,10 @@ def explore(params):
         ids = {r[f"k{dims.index('asker')}"] for r in out[:LIMIT] if r.get(f"k{dims.index('asker')}")}
         for u in TgUser.objects.filter(pk__in=[int(i) for i in ids if i.isdigit()]).select_related("staff_person__project"):
             sp = u.staff_person
-            asker_meta[str(u.pk)] = {"username": u.username, "role": sp.get_role_display() if sp else "",
-                                     "project": sp.project.name if sp and sp.project_id else "",
-                                     "territory": sp.territory if sp else "", "staff": u.is_staff}
+            asker_meta[str(u.pk)] = {"username": u.username, "role": sp.get_role_display() if sp else u.position,
+                                     "project": sp.project.name if sp and sp.project_id else u.department,
+                                     "territory": sp.territory if sp else "", "staff": u.is_staff,
+                                     "real_name": (sp.name if sp else u.real_name)}
     return {**info, "dataset": dataset, "scope": scope, "by": dims, "metrics": metrics, "rows": out[:LIMIT],
             "total_rows": len(out), "totals": {x: total.get(x) for x in metrics}, "options": options,
             "dims": DIMS[dataset], "all_metrics": METRICS[dataset], "asker_meta": asker_meta}

@@ -30,7 +30,8 @@ from .models import StaffPerson, StaffProject, StaffUnit
 
 FORMAT = "zona-staff"
 ROLES = {r for r, _ in StaffPerson.ROLES}
-FIELDS = ["name", "role", "position", "territory", "region", "city", "phone", "email", "telegram", "note", "vacancy", "unit", "manager"]
+FIELDS = ["name", "role", "position", "territory", "region", "city", "phone", "email", "telegram", "telegram_id", "note",
+          "vacancy", "unit", "manager"]
 MAX_BYTES = 5 * 1024 * 1024
 
 
@@ -79,7 +80,7 @@ VACANCY_WORDS = ("вакансия", "vacancy", "vakansiya", "вакант")
 
 def _is_vacancy_name(name):
     n = fold(name)
-    return not n or any(w in n for w in VACANCY_WORDS)
+    return not n or any(fold(w) in n for w in VACANCY_WORDS)  # fold() kirill harflarini lotinga yaqinlashtiradi
 
 
 def _role(value, default="TP"):
@@ -100,6 +101,7 @@ def _person(**kw):
     p.update(kw)
     p["phone"] = phone(p["phone"])
     p["telegram"] = telegram(p["telegram"])
+    p["telegram_id"] = re.sub(r"\D", "", str(p.get("telegram_id") or ""))[:15]
     for f in FIELDS:
         if f != "vacancy":
             p[f] = str(p[f] or "").strip()
@@ -197,6 +199,83 @@ def from_artifact(data, rop=None, branches_meta=None, name="", source_url=""):
                 add(m, key, h or boss, "TP")
         for d in b.get("direct") or []:
             add(d, key, boss, "TP")
+    return out
+
+
+# ------------------------------------------------------------------ artifact: qatorlar jadvali (PRBC + 1C)
+TABLE_ROLE = [  # (qisqa rol prefiksi, bizdagi rol)
+    (("РП", "BDM"), "ROP"), (("РМ",), "RSM"), (("ТМ",), "ASM"), (("СТС", "ТС"), "SVR"), (("КАМ", "FEM"), "KAM"),
+    (("ТА",), "TP"), (("ТОП-МЕРЧ", "МЕРЧ", "MERCH"), "MER"),
+]
+
+
+def _table_role(raw):
+    r = str(raw or "").strip().upper()
+    for prefixes, role in TABLE_ROLE:
+        if r.startswith(prefixes):
+            return role
+    return "OTHER"
+
+
+def from_table_artifact(tabs, name="", source_url="", proj=None):
+    """Jamoa sahifasidagi qatorlar: [F.I.Sh., rol, hudud, telefon, PRBC ismi, @telegram, telegram ismi, telegram ID,
+    holat, lavozim, guruhlar, izoh, brend, ishga kirgan sana, qo'shimcha ТС] — bitta loyiha (MDLZ) yoki bir nechta tab
+    (Cosmoprof: Eveline / Vivienne Sabo / qolganlari). Bo'ysunish sahifadagi tartib bo'yicha: ТС dan keyingi ТА va
+    merchendayzerlar — o'sha ТС ga, ТС — hududdagi ТМ/РМ ga, ular — loyiha rahbariga (РП / BDM)."""
+    out = empty(name, source_url)
+    titles = {str(p[0]): str(p[1]) for p in (proj or []) if isinstance(p, list) and len(p) >= 2}
+    seen = {}  # F.I.Sh. -> key (bir odam bir nechta tabda bo'lishi mumkin)
+    seq = [0]
+    for tab, rows in tabs.items():
+        tab_title = (titles.get(tab) or (tab if len(tabs) > 1 else "")).replace(" — остальные", "")
+        heads, cur_svr, cur_unit, top = {}, "", None, ""
+        for r in rows or []:
+            if not isinstance(r, list) or not r:
+                continue
+            r = (r + [None] * 15)[:15]
+            raw_name, raw_role, region = str(r[0] or "").strip(), str(r[1] or "").strip(), str(r[2] or "").strip()
+            if raw_name == "__NOSUP__":
+                cur_svr = ""
+                continue
+            unit_title = " · ".join(x for x in (tab_title, region or "—") if x)
+            ukey = slug(unit_title)
+            if not any(u["key"] == ukey for u in out["units"]):
+                out["units"].append({"key": ukey, "title": unit_title})
+            if ukey != cur_unit:
+                cur_unit, cur_svr = ukey, ""
+            role = _table_role(raw_role)
+            vacancy = _is_vacancy_name(raw_name)
+            nkey = fold(raw_name)
+            if not vacancy and nkey in seen:  # boshqa tabda ham bor — bitta yozuv
+                if role == "SVR":
+                    cur_svr = seen[nkey]
+                elif role == "ROP":
+                    top = top or seen[nkey]
+                elif role in ("RSM", "ASM"):
+                    heads.setdefault(region, seen[nkey])
+                continue
+            seq[0] += 1
+            key = f"t{seq[0]}"
+            if not vacancy:
+                seen[nkey] = key
+            if role == "ROP":
+                manager = top
+                top = top or key
+            elif role in ("RSM", "ASM"):
+                manager = heads.get(region) or top
+                heads.setdefault(region, key)
+            elif role == "SVR":
+                manager = heads.get(region) or top
+                if not r[14] or not cur_svr:  # qo'shimcha ТС (bir jamoada ikki ТС) — agentlar asosiy ТС da qoladi
+                    cur_svr = key
+            else:
+                manager = cur_svr or heads.get(region) or top
+            note = str(r[11] or "")
+            out["people"].append(_person(
+                key=key, name="" if vacancy else raw_name, role=role if role != "OTHER" or vacancy else "OTHER",
+                position=(str(r[9] or "").split(" · ")[0] or raw_role)[:80], territory=raw_role if role == "OTHER" else "",
+                region=region, city="", phone=r[3] or "", telegram=r[5] or "", telegram_id=r[7] or "",
+                note=("" if note in ("", "Aniq") else note)[:250], vacancy=vacancy, unit=ukey, manager=manager))
     return out
 
 
@@ -320,8 +399,16 @@ def parse(content, filename="", name="", source_url=""):
         except ValueError as e:
             raise StaffImportError(f"JSON xato: {e}") from None
         return _from_json(data, name, source_url)
-    if "const DATA" in text or "<html" in text[:2000].lower() or "<!doctype" in text[:200].lower():
+    if "const ALL" in text or "const DATA" in text or "<html" in text[:2000].lower() or "<!doctype" in text[:200].lower():
+        tabs = _grab_json(text, "ALL")
         data = _grab_json(text, "DATA")
+        if isinstance(tabs, dict) or (isinstance(data, list) and data and isinstance(data[0], list)):
+            proj = [list(m) for m in re.findall(r"\[\s*'([^']+)'\s*,\s*'([^']+)'", text.split("const PROJ", 1)[1][:2000])]                 if "const PROJ" in text else None
+            doc = from_table_artifact(tabs if isinstance(tabs, dict) else {"": data}, name or _title_name(text), source_url,
+                                      proj)
+            if not doc["project"]["name"]:
+                raise StaffImportError("Loyiha nomini kiriting.")
+            return {doc["project"]["name"]: doc}
         if not data:
             plain = _html_text(text)
             if staff_text.looks_like(plain):
@@ -414,7 +501,8 @@ def snapshot(project):
     for p in project.people.all():
         doc["people"].append(_person(
             key=str(p.id), name=p.name, role=p.role, position=p.position, territory=p.territory, region=p.region,
-            city=p.city, phone=p.phone, email=p.email, telegram=p.telegram, note=p.note, vacancy=p.is_vacancy,
+            city=p.city, phone=p.phone, email=p.email, telegram=p.telegram, telegram_id=p.telegram_id or "", note=p.note,
+            vacancy=p.is_vacancy,
             unit=units.get(p.unit_id, ""), manager=str(p.manager_id or "")))
     return doc
 
@@ -547,6 +635,8 @@ def apply(doc, project=None):
             obj.telegram = p["telegram"]
         obj.name, obj.role, obj.territory = p["name"], p["role"], p["territory"]
         obj.city, obj.phone, obj.email = p["city"], p["phone"], p["email"]
+        if p.get("telegram_id"):
+            obj.telegram_id = int(p["telegram_id"])
         for f in ("position", "region"):
             if p[f] or f not in keep or obj.pk is None:
                 setattr(obj, f, p[f])

@@ -579,6 +579,8 @@ class StaffPerson(models.Model):
     phone = models.CharField("Telefon", max_length=40, blank=True)
     email = models.EmailField("Email", blank=True)
     telegram = models.CharField("Telegram", max_length=64, blank=True, help_text="@username; bo'sh bo'lsa telefon raqami orqali")
+    # Telegram ID (PRBC / 1C dan): guruhda yozgan odamni aniq tanish uchun (username o'zgarsa ham)
+    telegram_id = models.BigIntegerField("Telegram ID", null=True, blank=True, db_index=True)
     since = models.DateField("Shu o'rinda", null=True, blank=True)
     note = models.CharField("Izoh", max_length=255, blank=True)
     is_vacancy = models.BooleanField("Vakansiya", default=False)

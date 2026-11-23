@@ -1554,7 +1554,8 @@ def _tg_user(u):
             "staff_person_role": sp.get_role_display() if sp else "", "project": sp.project.name if sp else "",
             "supervisor": sv.name if sv else "", "link": u.staff_link,
             "questions": u.n_questions if hasattr(u, "n_questions") else u.messages.filter(kind=Message.QUESTION).count(),
-            "last_seen": u.last_seen, "msg_count": u.msg_count}
+            "last_seen": u.last_seen, "msg_count": u.msg_count, "tg_id": u.tg_id,
+            "real_name": u.real_name, "position": u.position, "department": u.department, "phone": u.phone}
 
 
 @zona_api(["GET"], [CanView])

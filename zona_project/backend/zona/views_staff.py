@@ -248,6 +248,13 @@ def _run_import(request, data, project=None):
     out = []
     for name, doc in docs.items():
         obj, result = staff_io.apply(doc, targets[name])
+        try:  # Telegram ID bor xodimlar — guruhdagi foydalanuvchilarga darhol bog'lanadi
+            from django.apps import apps
+            if apps.is_installed("support"):
+                from support.staffsync import link_staff
+                result["telegram"] = link_staff(obj.people.filter(telegram_id__isnull=False, is_vacancy=False))
+        except Exception:  # noqa: BLE001 — bog'lash xatosi importni bekor qilmasin
+            pass
         s = result["summary"]
         log(request, Event.MEMBER, subject=obj.name,
             text=f"Tuzilma import qilindi: {s['total']} o'rin, +{s['added']} −{s['removed']}, almashdi {s['replaced']}, o'zgardi {s['changed']}")

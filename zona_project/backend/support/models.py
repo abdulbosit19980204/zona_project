@@ -290,6 +290,11 @@ class TgUser(models.Model):
     # kontaktlardagi dala xodimi (agent/supervayzer): supervayzerini topish uchun. auto — ism bo'yicha aniq moslik, manual — paneldan
     staff_person = models.ForeignKey(StaffPerson, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     staff_link = models.CharField(max_length=8, blank=True)
+    # "asli kim" — PRBC / 1C dagi ma'lumot (strukturada bo'lmagan xodim ham tanilsin): to'liq ism, lavozim, bo'lim, telefon
+    real_name = models.CharField(max_length=150, blank=True, default="", db_default="")
+    position = models.CharField(max_length=120, blank=True, default="", db_default="")
+    department = models.CharField(max_length=200, blank=True, default="", db_default="")
+    phone = models.CharField(max_length=40, blank=True, default="", db_default="")
     msg_count = models.PositiveIntegerField("Guruhlardagi xabarlari", default=0)  # faollik (xodimlar ishi tahlili uchun)
     last_msg_at = models.DateTimeField(null=True, blank=True)
     first_seen = models.DateTimeField(auto_now_add=True)
