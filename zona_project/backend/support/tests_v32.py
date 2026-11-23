@@ -6,6 +6,7 @@ from django.utils import timezone
 from zona.models import Department, Member, StaffPerson, StaffProject
 
 from .models import Activity, Group, Message, TgUser
+from .workload import local
 from .tests_v27 import OpenBase
 
 
@@ -32,7 +33,7 @@ class ExploreTests(OpenBase):
         r = mk(bot=self.bot, group=self.g, chat_id=-100, message_id=200, kind="staff", text="Skidka yoqildi, 10 blokdan",
                question=self.qs[1], user=self.staff_u, source="live")
         Message.objects.filter(pk=r.pk).update(created_at=self.qs[1].created_at + dt.timedelta(minutes=4))
-        Activity.objects.create(user=self.staff_u, group=self.g, date=timezone.localdate(), count=7, first_at=now, last_at=now,
+        Activity.objects.create(user=self.staff_u, group=self.g, date=local(now).date(), count=7, first_at=now, last_at=now,
                                 hours=[0] * 24)
         self.login("viewer")
 

@@ -99,12 +99,14 @@ class PersistentTests(PeopleBase):
         q.refresh_from_db()
         self.assertEqual((q.resolution, q.next_ask_at), ("yes", None))
 
-    def test_silent_asker_still_stops_after_max(self):
+    def test_silent_asker_keeps_being_followed_up(self):
         q = self.answered()
         for minutes in (61, 182, 423):
             resolution.followups(self.tg, now=NOON + dt.timedelta(minutes=minutes))
         q.refresh_from_db()
-        self.assertIsNone(q.next_ask_at)
+        self.assertIsNotNone(q.next_ask_at)  # savol ochiq qolib ketmaydi — xodimdan so'rash davom etadi
+        admin = [m for m in self.tg.sent if m["chat"] == 555 and "ochiq qolmoqda" in m["text"]]
+        self.assertEqual(len(admin), 1)
 
 
 class OwnerApiTests(PeopleBase):

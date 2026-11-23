@@ -132,6 +132,15 @@ def _work(users, start, end):
     for by in qs.filter(resolution=Message.YES, resolved_by__startswith="xodim: ").values_list("resolved_by", flat=True):
         closed[by[len("xodim: "):]] += 1
     res = dict(Message.objects.filter(pk__in={q for p in per.values() for q in p["questions"]}).values_list("pk", "resolution"))
+    from django.utils import timezone as _tz
+    now = _tz.now()
+    open_now, oldest = Counter(), {}
+    for hid, at in (Message.objects.filter(kind=Message.QUESTION, handler_id__in=ids, source="live",
+                                           created_at__gte=now - _tz.timedelta(days=30))
+                    .filter(Q(resolution__in=[Message.ASKED, Message.NO, Message.WORK]) | Q(status=Message.ESCALATED, resolution=""))
+                    .values_list("handler_id", "created_at")):
+        open_now[hid] += 1
+        oldest[hid] = min(oldest.get(hid, at), at)
     out = {}
     for uid in ids:
         p = per[uid]
@@ -141,6 +150,8 @@ def _work(users, start, end):
                     "unresolved": sum(1 for q in p["questions"] if res.get(q) == Message.NO),
                     "reactions": reacts.get(uid, 0), "working": working.get(uid, 0), "closed": closed.get(names[uid], 0),
                     "median_s": round(median(p["times"]), 1) if p["times"] else None,
+                    "open_now": open_now.get(uid, 0),
+                    "oldest_open_h": round((now - oldest[uid]).total_seconds() / 3600, 1) if uid in oldest else None,
                     "groups": [{"title": g, "n": n} for g, n in p["groups"].most_common(6)]}
     return out
 

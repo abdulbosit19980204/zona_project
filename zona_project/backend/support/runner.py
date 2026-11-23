@@ -818,6 +818,21 @@ class Handler:
             return q
         if not d.needs_human and d.text and len(d.parts) > 1:
             return self._respond_parts(q, d, settings)
+        member = self._owner_member(d)
+        if not d.needs_human and d.text and member is not None and (self._addressed(q, member) or self._handoff_answer(d)):
+            # agent so'rovni mas'ulning o'ziga yo'llagan (yoki javob — "X bajaradi"): takrorlamasdan — yetkazildi,
+            # yuklamasi va taxminiy vaqt; savol nazoratga olinadi (xodimdan "bajarildimi?", agentdan "hal bo'ldimi?")
+            body = resolution.handoff_text(q, member, ask_first=engine.ask_first_text(d.entry, q.lang) if d.entry else "")
+            head = engine.mention_html(q.user) + ", " if settings.mention_asker and q.user else ""
+            html_text = head + body
+            sent = self._pg().finish(html_text) or self._safe_send(q.chat_id, html_text, reply_to=q.message_id)
+            q.status, q.stage, q.answered_by = Message.ESCALATED, "handoff", ""
+            if sent:
+                q.bot_reply_id = sent.get("message_id")
+            q.save()
+            resolution.track(q, handler=resolution.staff_users(member).exclude(username="").first()
+                             or resolution.staff_users(member).first(), s=settings)
+            return q
         if not d.needs_human and d.text:
             body = self._script(q, engine.vary(d, q.lang, settings))
             line = engine.responsible_line(d.responsible, q.lang) if d.stage == "rule" else ""
@@ -831,10 +846,17 @@ class Handler:
                 q.bot_reply_id = sent.get("message_id")
                 q.reply_html, q.collapsed_at = html_text, None
             q.save()
+            if sent and d.owner and member is not None:
+                # toifa mas'uli bajaradigan so'rov (masalan, aksiya): bot ko'rsatma berdi, lekin ishni mas'ul qiladi —
+                # nazoratga olinadi: vaqt o'tib mas'uldan "bajarildimi?" so'raladi
+                resolution.track(q, handler=resolution.staff_users(member).exclude(username="").first(), s=settings)
             return q
 
         q.status = Message.ESCALATED
         q.save()
+        # odamga uzatilgan savol ochiq qolib ketmasin: vaqt o'tib mas'ul / xodimdan so'raladi, yechim chiqquncha
+        resolution.track(q, handler=resolution.staff_users(member).exclude(username="").first() if member else None,
+                         s=settings)
         if settings.escalation_ack:
             ack = ("Ваш вопрос принят." if q.lang == "ru" else "Savolingiz qabul qilindi.")
             if settings.mention_responsible and d.responsible and d.responsible[0].get("telegram"):
@@ -1215,6 +1237,37 @@ class Handler:
         html_text = f'<a href="{link}">{engine.html.escape(txt)}</a>' if link else engine.html.escape(txt)
         if not (self._pg().finish(html_text)):
             self._safe_send(q.chat_id, html_text, reply_to=q.message_id)
+
+    @staticmethod
+    def _owner_member(d):
+        """Javobdagi mas'ul (shaxs; jamoa — Supervayzerlar kabi — emas)."""
+        from zona.models import Member
+        for r in d.responsible or []:
+            if r.get("id") and not r.get("is_team"):
+                return Member.objects.filter(pk=r["id"]).first()
+        if d.entry is not None and d.entry.responsible_id and not d.entry.responsible.is_team:
+            return d.entry.responsible
+        return None
+
+    @staticmethod
+    def _addressed(q, member):
+        """Agent so'rovni mas'ulning o'ziga yozganmi: @username yoki ismi ("Saidabror", "Саидаброр", "@StargroupSaid")."""
+        text = q.text or ""
+        tgs = [t.lstrip("@").lower() for t in [member.telegram] if t]
+        if any("@" + t in text.lower() for t in tgs):
+            return True
+        if engine.handoff_to(text) == member:
+            return True
+        words = engine.re.findall(r"[a-z]+", engine.fold(text))
+        names = {w for w in engine.re.findall(r"[a-z]+", engine.fold(member.name or "")) if len(w) >= 5}
+        return any(w in names for w in words)
+
+    @staticmethod
+    def _handoff_answer(d):
+        """Javob — faqat "bu so'rovni X bajaradi" (o'rganilgan uzatish): ko'rsatma emas."""
+        t = (d.text or "").strip()
+        return (d.entry is not None and d.entry.claude_kind in ("status", "handoff")) or t.startswith(
+            ("Bu so'rovni **", "Этот запрос выполняет **"))
 
     def _respond_parts(self, q, d, settings):
         """Albomda turli ekranlar — har biriga alohida javob (bir xilini shu odam yaqinda olgan bo'lsa — qisqa eslatma)."""

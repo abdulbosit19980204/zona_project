@@ -246,7 +246,7 @@ def accept(q, user, now=None, react=False):
     upd = {"handler": user, "accepted_at": now}
     if react and q.status in (Message.ESCALATED, Message.DRAFTED) and not q.answered_by:
         upd.update(status=Message.ANSWERED, stage="react", answered_by=user.staff_name()[:150], answered_at=now)
-    if q.resolution in (NO, WORK):
+    if q.resolution in (NO, WORK) or (q.resolution == ASKED and (q.stage == "handoff" or not q.confirm_msg_id)):
         upd.update(resolution="", next_ask_at=None, remind_count=0)
     Message.objects.filter(pk=q.pk).update(**upd)
     for k, v in upd.items():
@@ -291,26 +291,53 @@ def staff_mentions(q, limit=2):
     return out[:limit]
 
 
+def elapsed(q, now=None):
+    """Savol tushganidan beri: "45 daqiqa", "2 soat 10 daqiqa", "3 kun 4 soat" (ru — mos ravishda)."""
+    secs = max(0, int(((now or timezone.now()) - q.created_at).total_seconds()))
+    d, h, m = secs // 86400, secs % 86400 // 3600, secs % 3600 // 60
+    ru = q.lang == "ru"
+    if d:
+        return f"{d} дн. {h} ч" if ru else f"{d} kun {h} soat"
+    if h:
+        return f"{h} ч {m} мин" if ru else f"{h} soat {m} daqiqa"
+    return f"{max(1, m)} мин" if ru else f"{max(1, m)} daqiqa"
+
+
+def _topic(q):
+    t = " ".join((q.problem or q.text or "").split())
+    return html.escape(t[:80] + ("…" if len(t) > 80 else ""))
+
+
 def _staff_prompt(q, staff):
     a = _mention(q.user) if q.user_id else ""
+    ago = elapsed(q)
+    if q.stage == "handoff":  # so'rov xodimga uzatilgan — ish bajarildimi, xodimning o'zidan
+        if q.lang == "ru":
+            return (f"{', '.join(staff)}, запрос {a} «{_topic(q)}» ждёт уже {ago}. Выполнено? "
+                    f"Нажмите «✅ Ответ дан» или «⏳ В работе».")
+        return (f"{', '.join(staff)}, {a} so'rovi «{_topic(q)}» {ago}dan beri kutyapti. Bajarildimi? "
+                f"«✅ Javob berildi» yoki «⏳ Jarayonda» ni bosing.")
     if q.lang == "ru":
-        return f"{', '.join(staff)}, по вопросу {a} ответ дан? Автор ещё не отметил — нажмите «✅ Ответ дан» или «⏳ В работе»."
-    return (f"{', '.join(staff)}, {a} savoli bo'yicha javob berildimi? Savol egasi hali belgilamadi — "
-            f"«✅ Javob berildi» yoki «⏳ Jarayonda» ni bosing.")
+        return (f"{', '.join(staff)}, по вопросу {a} ответ дан? Вопросу уже {ago}, автор ещё не отметил — "
+                f"нажмите «✅ Ответ дан» или «⏳ В работе».")
+    return (f"{', '.join(staff)}, {a} savoli bo'yicha javob berildimi? Savol tushganiga {ago} bo'ldi, savol egasi hali "
+            f"belgilamadi — «✅ Javob berildi» yoki «⏳ Jarayonda» ni bosing.")
 
 
 def _reask_text(q, staff):
     base = prompt_text(q)
     if staff:
-        base += (f"\n{', '.join(staff)} — напоминание: вопрос ещё не решён." if q.lang == "ru"
-                 else f"\n{', '.join(staff)} — eslatma: savol hali hal bo'lmagan.")
+        base += (f"\n{', '.join(staff)} — напоминание: вопрос не решён уже {elapsed(q)}." if q.lang == "ru"
+                 else f"\n{', '.join(staff)} — eslatma: savol {elapsed(q)}dan beri hal bo'lmagan.")
     return base
 
 
 def _work_text(q, staff):
     if q.lang == "ru":
-        return f"{', '.join(staff)}, ⏳ вопрос в работе: решён? Если ответ дан — нажмите «✅ Ответ дан»."
-    return f"{', '.join(staff)}, ⏳ jarayondagi savol: hal bo'ldimi? Javob berilgan bo'lsa — «✅ Javob berildi» ni bosing."
+        return (f"{', '.join(staff)}, ⏳ вопрос в работе уже {elapsed(q)} («{_topic(q)}»): решён? "
+                f"Если ответ дан — нажмите «✅ Ответ дан».")
+    return (f"{', '.join(staff)}, ⏳ jarayondagi savol «{_topic(q)}» — {elapsed(q)} bo'ldi: hal bo'ldimi? "
+            f"Javob berilgan bo'lsa — «✅ Javob berildi» ni bosing.")
 
 
 def notify_open(tg, q, admin_chat_id, staff):
@@ -318,7 +345,7 @@ def notify_open(tg, q, admin_chat_id, staff):
         return
     link = q.group.message_link(q.message_id) if q.group_id else ""
     state = {ASKED: "savol egasi belgilamadi", NO: "hal bo'lmadi", WORK: "jarayonda"}.get(q.resolution, q.resolution)
-    body = (f"⏰ <b>Savol ochiq qolmoqda</b> ({state}, {q.remind_count} marta eslatildi)"
+    body = (f"⏰ <b>Savol ochiq qolmoqda</b> — {elapsed(q)} ({state}, {q.remind_count} marta eslatildi)"
             + (f" · {html.escape(q.group.title)}" if q.group_id else "")
             + f"\n<blockquote>{html.escape((q.problem or q.text or '')[:300])}</blockquote>"
             + (f"\n👤 {', '.join(staff)}" if staff else "\n👤 mas'ul topilmadi"))
@@ -356,17 +383,11 @@ def followups(tg, s=None, now=None, limit=5, bot_id=None):
             Message.objects.filter(pk=q.pk).update(**stop)
             continue
         staff = staff_mentions(q)
-        persistent = q.resolution in (NO, WORK)  # rad etilgan / jarayondagi savol — yechim chiqquncha so'raladi
         cap = max(1, s.remind_max)
-        if not persistent and q.created_at < now - timezone.timedelta(days=7):
-            Message.objects.filter(pk=q.pk).update(**stop)
-            continue
-        if q.remind_count >= cap:
-            if q.remind_count == cap:
-                notify_open(tg, q, q.bot.admin_chat_id, staff)
-            if not persistent:
-                Message.objects.filter(pk=q.pk).update(**stop)
-                continue
+        # savol ochiq qolmasin: yechim chiqquncha eslatiladi (ish vaqtida, oraliq uzayib boradi); remind_max da va
+        # keyin har ADMIN_EVERY eslatmada admin chatiga — necha vaqtdan beri ochiqligi bilan (hafta o'tib ketmasin)
+        if q.remind_count >= cap and (q.remind_count - cap) % ADMIN_EVERY == 0:
+            notify_open(tg, q, q.bot.admin_chat_id, staff)
         if q.resolution == NO:
             acted = bool(q.resolved_at) and Message.objects.filter(question=q, kind=Message.STAFF,
                                                                    created_at__gt=q.resolved_at).exists()
@@ -397,6 +418,7 @@ def followups(tg, s=None, now=None, limit=5, bot_id=None):
 
 
 PERSIST_DAYS = 14  # rad etilgan savol shuncha kungacha qayta so'raladi (undan eskisi — admin ro'yxatida)
+ADMIN_EVERY = 6  # remind_max dan keyin har 6-eslatmada admin chatiga yana xabar
 TASK_WAIT_HOURS = 2  # vazifa ochilgan, guruhda xodim javobi yo'q — shuncha vaqtdan keyin so'raladi
 WORK_HOURS = (9, 20)  # kechasi odamlarni bezovta qilmaymiz (Toshkent vaqti)
 ASK_WINDOW_HOURS = 3  # xodim javobidan keyin shu vaqt ichida so'raladi (keyin — kech, so'ralmaydi)
@@ -441,6 +463,89 @@ def auto_close_due(tg, now=None, limit=20, bot_id=None):
         if n >= limit:
             break
     return n
+
+
+def staff_users(member):
+    """Mas'ul (Member) ning Telegram foydalanuvchilari: o'zi, username bo'yicha, jamoa bo'lsa — a'zolari."""
+    from .models import TgUser
+    if member is None:
+        return TgUser.objects.none()
+    q = Q(member=member) | Q(contact__member=member)
+    if member.telegram:
+        q |= Q(username__iexact=member.telegram.lstrip("@"))
+    return TgUser.objects.filter(q)
+
+
+def queue_of(member, now=None):
+    """Mas'ulning hozirgi yuklamasi: ochiq so'rovlari soni va odatdagi javob vaqti (oxirgi 14 kun, median, soniya)."""
+    from statistics import median
+    now = now or timezone.now()
+    users = list(staff_users(member).values_list("pk", flat=True))
+    since = now - timezone.timedelta(days=PERSIST_DAYS)
+    open_q = (Message.objects.filter(kind=Message.QUESTION, source="live", created_at__gte=since)
+              .filter(Q(handler_id__in=users) | Q(entry__responsible=member))
+              .filter(Q(resolution__in=[ASKED, NO, WORK]) | Q(status=Message.ESCALATED, resolution=""))
+              .exclude(status=Message.IGNORED).count())
+    times = [max(0.0, (at - qat).total_seconds()) for at, qat in
+             Message.objects.filter(kind=Message.STAFF, user_id__in=users, created_at__gte=since, question__isnull=False)
+             .values_list("created_at", "question__created_at")[:500]]
+    return open_q, (median(times) if times else None)
+
+
+def _eta(secs, lang):
+    m = max(10, min(240, int(round((secs or 1800) / 60.0 / 5)) * 5 or 10))
+    if m >= 60:
+        h = round(m / 60 * 2) / 2
+        return (f"≈ {h:g} ч" if lang == "ru" else f"≈ {h:g} soat")
+    return f"≈ {m} мин" if lang == "ru" else f"≈ {m} daqiqa"
+
+
+def handoff_text(q, member, now=None, ask_first=""):
+    """Agent so'rovni mas'ulning o'ziga yo'llagan ("aksiyani yoqing @Said"): "Saidabror yoqadi" deb takrorlamasdan —
+    so'rov yetkazildi, uning hozirgi yuklamasi va taxminiy vaqt; bajarilgach "hal bo'ldimi?" so'ralishi."""
+    now = now or timezone.now()
+    ru = q.lang == "ru"
+    n, med = queue_of(member, now)
+    hour = now.astimezone(TZ).hour
+    who = f"<b>{html.escape(member.name)}</b>"
+    tgs = [t for t in [member.telegram.lstrip("@")] if t] if member.telegram else []
+    tag = (" (" + " ".join("@" + html.escape(t) for t in tgs) + ")") if tgs else ""
+    head = (f"✅ Запрос передан: {who}{tag}." if ru else f"✅ So'rovingiz {who}{tag}ga yetkazildi.")
+    eta_secs = (med or 1800) * (1 + max(0, n - 1) / 3)
+    if not (WORK_HOURS[0] <= hour < WORK_HOURS[1]):
+        load = ("🌙 Сейчас нерабочее время — ответ будет в рабочее время (с 9:00)." if ru
+                else "🌙 Hozir ish vaqti emas — ish vaqtida (9:00 dan) javob beriladi.")
+    elif n >= 3:
+        load = (f"⏳ Сейчас у него много запросов ({n} в очереди) — ответ {_eta(eta_secs, 'ru')}, немного позже обычного."
+                if ru else f"⏳ Hozir unda so'rovlar ko'p ({n} ta navbatda) — {_eta(eta_secs, 'uz')} ichida, odatdagidan "
+                           f"biroz kechroq javob beradi.")
+    else:
+        load = (f"⏱ Обычно отвечает {_eta(eta_secs, 'ru')}." if ru
+                else f"⏱ Odatda {_eta(eta_secs, 'uz')} ichida javob beradi.")
+    tail = ("Когда будет готово, спросим вас «вопрос решён?»." if ru
+            else "Bajarilgach, sizdan «hal bo'ldimi?» deb so'raymiz.")
+    need = ""
+    if ask_first.strip():
+        need = ("\n📎 Если ещё не написали: " if ru else "\n📎 Agar yozmagan bo'lsangiz: ") + html.escape(ask_first.strip()[:200])
+    return f"{head}\n{load}{need}\n{tail}"
+
+
+def track(q, handler=None, now=None, s=None):
+    """Savol nazoratga olinadi: ask_staff_after daqiqadan keyin xodimdan "bajarildimi?" so'raladi, yechim chiqquncha
+    eslatiladi (followups). Xodim javob yozsa / bajarsa — savol egasidan "hal bo'ldimi?" so'raladi."""
+    s = s or Settings.load()
+    if not s.confirm_resolution or q.resolution or q.user_id is None or q.user.is_staff:
+        return q
+    if q.entry_id and q.entry.auto_close:
+        return q
+    now = now or timezone.now()
+    upd = {"resolution": ASKED, "next_ask_at": now + timezone.timedelta(minutes=s.ask_staff_after or 60), "remind_count": 0}
+    if handler is not None:
+        upd["handler"] = handler
+    Message.objects.filter(pk=q.pk).update(**upd)
+    for k, v in upd.items():
+        setattr(q, k, v)
+    return q
 
 
 def due(now=None, s=None):

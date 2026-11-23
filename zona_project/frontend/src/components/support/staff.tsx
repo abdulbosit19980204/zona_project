@@ -51,6 +51,11 @@ export function StaffBoard({ range, t }: { range: Range; t: ST }) {
         {s.unresolved > 0 && <span className="text-destructive"> / {s.unresolved}</span>}
         {s.closed > 0 && <span className="block text-[11px] text-muted-foreground">{t("stClosed", { n: s.closed })}</span>}</span>
     ) },
+    { key: "open", header: t("stOpen"), align: "right", sort: (s) => s.open_now ?? 0, cell: (s) => (
+      s.open_now ? <span className="font-mono"><span className={(s.oldest_open_h ?? 0) >= 24 ? "text-destructive" : "text-warning"}>{s.open_now}</span>
+        <span className="block text-[11px] text-muted-foreground">{t("stOldest", { d: fmtDur(t, (s.oldest_open_h ?? 0) * 3600) })}</span></span>
+        : <span className="text-muted-foreground">0</span>
+    ) },
     { key: "speed", header: t("anSpeed"), align: "right", sort: (s) => s.median_s ?? 1e12, cell: (s) => <span className="font-mono text-xs">{fmtDur(t, s.median_s)}</span> },
     { key: "seen", header: t("stLastSeen"), align: "right", sort: (s) => s.last_seen ?? "", cell: (s) => (
       <span className="text-xs tabular-nums text-muted-foreground">{s.last_seen ? fmtDate(s.last_seen) : "—"}</span>

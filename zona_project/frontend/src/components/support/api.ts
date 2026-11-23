@@ -233,6 +233,7 @@ export interface StaffBoardRow {
   start: string | null; end: string | null; span_h: number; last_seen: string | null; answers: number;
   clarifications: number; handoffs: number; questions: number; resolved: number; unresolved: number; reactions: number;
   working: number; closed: number; median_s: number | null; groups: { title: string; n: number }[];
+  open_now?: number; oldest_open_h?: number | null;
 }
 export interface StaffBoard {
   from: string; to: string; days: number; staff: StaffBoardRow[];

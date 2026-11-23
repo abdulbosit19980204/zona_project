@@ -655,6 +655,8 @@ class MessageViewSet(ZonaViewSet):
         except TelegramError as e:
             return Response({"detail": f"Telegram: {e}"}, status=502)
         q.status, q.stage, q.answered_by, q.answered_at = Message.ANSWERED, "panel", who, timezone.now()
+        if q.resolution == "asked" and not q.confirm_msg_id:  # nazoratdagi savol: endi savol egasidan "hal bo'ldimi?"
+            q.resolution, q.next_ask_at, q.remind_count = "", None, 0
         q.answer_text = text
         q.bot_reply_id = sent.get("message_id")
         q.save()
