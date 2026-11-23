@@ -734,7 +734,8 @@ def meaningful(text):
     if not _FILLER:
         _FILLER.update(toks(FILLER_TEXT))
         _FILLER.update(toks(" ".join(GREETING)))
-    return [w for w in dict.fromkeys(toks(text or "")) if w not in _FILLER and len(w) >= 2 and not w.isdigit()]
+    text = re.sub(r"@\w+", " ", text or "")  # "@StargroupSaid нима бовоти" — murojaat (kimga), savol mazmuni emas
+    return [w for w in dict.fromkeys(toks(text)) if w not in _FILLER and len(w) >= 2 and not w.isdigit()]
 
 
 def substantive(text):

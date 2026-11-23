@@ -90,3 +90,15 @@ class OwnerPromptTests(OwnerTests):
                                                               "reason": ""}, {})) as run:
             engine.ai_answer("Marshrut ochilmayapti", "uz", [], None, Settings.load())
         self.assertNotIn("FAQAT TEST_OPERATOR", run.call_args[0][3])  # boshqa toifa — cheklov yo'q
+
+
+class MentionIsNotContentTests(ControlsBase):
+    def test_mention_plus_generic_words_lets_the_screenshot_decide(self):
+        self.assertFalse(engine.substantive("@StargroupSaid нима бовоти"))
+        self.assertTrue(engine.substantive("@StargroupSaid klientga aksiya qo'shilmayapti"))
+        stock = Entry.objects.create(kind=Entry.TEMPLATE, title="Заказ не оформлен — qoldiq yetarli emas", triggers=["недостаточно остатка"],
+                                     extract=[r"Заказ\s*№\s*(?P<zakaz>\d{4,})"], answer="Zakaz: №{zakaz}\nZakazni oching",
+                                     answer_ru="Заказ: №{zakaz}\nОткройте заказ", status=Entry.APPROVED)
+        ocr = "Уведомления\nЗаказ не оформлен\nЗаказ №377340 не оформлен: на складе «0.1 L'Oreal» недостаточно остатка"
+        d = engine.decide(ocr, "uz", text="@StargroupSaid нима бовоти", ocr=ocr)
+        self.assertEqual((d.stage, d.entry, d.fields.get("zakaz")), ("template", stock, "377340"))
