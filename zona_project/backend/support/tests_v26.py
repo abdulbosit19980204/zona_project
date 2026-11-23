@@ -135,3 +135,20 @@ class HideWrongAnswerTests(ReviewTests):
         self.q.refresh_from_db()
         self.assertFalse(self.q.answer_hidden)
         self.assertTrue(self.tg.edits[-1]["buttons"])  # 👍/👎 qaytdi
+
+
+class HideAfterStaffAnswerTests(ReviewTests):
+    def test_hidden_even_if_staff_answered_after_the_bot(self):
+        # bot javob berdi, keyin xodim ham javob yozdi (answered_by — xodim nomi), so'ng bot javobi xato deb belgilandi
+        Message.objects.filter(pk=self.q.pk).update(answered_by="Test Xodim", stage="staff")
+        upd = cb(2, f"bad:{self.q.id}", 20)
+        upd["callback_query"]["from"]["username"] = "test_op"
+        self.h().handle(upd)
+        self.q.refresh_from_db()
+        self.assertTrue(self.q.answer_hidden)
+
+    def test_escalation_ack_is_not_hidden(self):
+        from . import review
+        Message.objects.filter(pk=self.q.pk).update(status=Message.ESCALATED, answered_by="")
+        self.q.refresh_from_db()
+        self.assertFalse(review.hide(self.tg, self.q))

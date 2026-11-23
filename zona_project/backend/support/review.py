@@ -65,7 +65,10 @@ def _lang(q):
 def hide(tg, q):
     """Xodim/admin xato degan javob guruhda ko'rsatilmaydi: bot xabari "yangilanishga yuborildi" ga almashadi (tugmalarsiz).
     Asl javob bazada (answer_text) — panelda va xodimlarga ko'rinadi. Qaytaradi: yashirildimi."""
-    if tg is None or not q.bot_reply_id or q.answer_hidden or q.answered_by != "bot":
+    # bot javob bergan (keyin xodim ham javob yozgan bo'lishi mumkin — answered_by xodim nomiga almashadi);
+    # mutaxassisga uzatilgan savoldagi "qabul qilindi" xabari yashirilmaydi
+    bot_answered = bool((q.answer_text or "").strip()) and (q.answered_by == "bot" or q.status in (Message.ANSWERED, Message.CLOSED))
+    if tg is None or not q.bot_reply_id or q.answer_hidden or not bot_answered:
         return False
     try:
         tg.edit_text(q.chat_id, q.bot_reply_id, f"<i>{html.escape(HIDDEN[_lang(q)])}</i>")
