@@ -39,7 +39,8 @@ class StatusReplyTests(TestCase):
         for t in ["Перезайдите в приложение и проверьте", "programmadan chiqib qayta kirib tekshirib koring",
                   "В уведомлениях проверьте", "Assalomu aleykum. Programmani yopib qayta kiringchi",
                   "Кредитный лимит клиента исчерпан, нужна оплата долга — тогда заказ пройдёт",
-                  "Aksiya faqat 10 ta blokdan keyin yonadi, savatni tekshiring"]:
+                  "Aksiya faqat 10 ta blokdan keyin yonadi, savatni tekshiring", "qayta bosing",
+                  "Нажмите ещё раз и проверьте"]:
             self.assertFalse(engine.status_reply(t), t)
 
     def test_named_staff_call_is_not_an_answer(self):

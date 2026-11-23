@@ -127,7 +127,8 @@ _GREET = ("dobr", "utr", "vecher", "zdravst", "assalom", "asalom", "aleykum", "a
 # o'zi bajaradigan amal (qayta kirish, sinxronlash, bildirishnoma...) — bu haqiqiy ko'rsatma, holat xabari emas
 _SELF = ("perezayd", "perezagruz", "vyyd", "vyxod", "zayd", "zaxod", "obnov", "sinxron", "sinhron", "sinxr", "chiqib",
          "kirib", "kiring", "kirvol", "yopib", "yoping", "uvedoml", "bildirish", "oblak", "oblok", "kesh", "udal",
-         "ochirib", "ustanov", "ornat", "nastroy", "sozlam", "sbros", "zakroy", "zakrit", "zakryt", "vyklyuch")
+         "ochirib", "ustanov", "ornat", "nastroy", "sozlam", "sbros", "zakroy", "zakrit", "zakryt", "vyklyuch",
+         "bosing", "bosib", "bosvor", "nazhm", "najm", "tanlang", "vyber", "otkroy", "oching", "ochib")
 _SHORT = {"yana", "eshe", "esho", "eshyo", "raz", "den", "dnya", "aka", "opa", "brat", "uka", "ok", "oke", "okey", "xop"}
 _NAMES = {"at": 0.0, "set": set()}
 
