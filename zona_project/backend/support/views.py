@@ -1000,7 +1000,7 @@ def _review_row(q, media):
             "entry": q.entry_id, "entry_title": q.entry.title if q.entry_id else "", "feedback": q.feedback,
             "review": q.review, "review_by": q.review_by, "review_at": q.review_at, "review_note": q.review_note,
             "fixed_text": q.fixed_text, "fixed_by": q.fixed_by, "fixed_at": q.fixed_at, "sent": bool(q.fixed_msg_id),
-            "category": q.category, "app": q.app, "media": [media_dict(m) for m in media]}
+            "category": q.category, "app": q.app, "hidden": q.answer_hidden, "media": [media_dict(m) for m in media]}
 
 
 @zona_api(["GET"], [CanView])
@@ -1033,6 +1033,15 @@ def reviews(request):
     return Response({"count": total, "counts": counts, "results": [_review_row(q, media.get(q.pk, [])[:12]) for q in rows]})
 
 
+def _bot_client(q):
+    """Savol kelgan botning Telegram klienti (guruhdagi xabarni tahrirlash / yuborish uchun) yoki None."""
+    from zona.crypto import decrypt
+
+    from .telegram import Client
+    token = decrypt(q.bot.token_enc) if q.bot_id else ""
+    return Client(token) if token else None
+
+
 @zona_api(["POST"], [ReadOrEdit])
 def review_action(request, pk):
     """{"action": "wrong"|"ok"|"check"|"clear", "note"} yoki {"action": "fix", "text", "send": true, "learn": false}."""
@@ -1043,21 +1052,22 @@ def review_action(request, pk):
     act, actor = request.data.get("action"), _actor(request)
     if act in ("wrong", "ok", "check"):
         review.mark(q, act, actor, str(request.data.get("note") or ""))
+        if act == "wrong":  # guruhda xato javob ko'rsatilmaydi ("yangilanishga yuborildi")
+            review.hide(_bot_client(q), q)
+        elif act == "ok":  # aslida to'g'ri edi — guruhda qayta ko'rsatiladi
+            review.restore(_bot_client(q), q)
     elif act == "clear":
         Message.objects.filter(pk=pk).update(review="", review_by="", review_at=None, review_note="")
+        review.restore(_bot_client(q), q)
     elif act == "fix":
         text = str(request.data.get("text") or "").strip()
         if not text:
             return Response({"detail": "To'g'ri javobni yozing"}, status=400)
         send, tg = bool(request.data.get("send", True)), None
         if send:
-            from zona.crypto import decrypt
-
-            from .telegram import Client
-            token = decrypt(q.bot.token_enc) if q.bot_id else ""
-            if not token:
+            tg = _bot_client(q)
+            if tg is None:
                 return Response({"detail": "Bot tokeni yo'q — guruhga yuborib bo'lmaydi"}, status=400)
-            tg = Client(token)
         try:
             _q, entry = review.fix(q, text, actor, tg=tg, send=send, learn_kb=bool(request.data.get("learn")))
         except Exception as e:  # noqa: BLE001

@@ -356,6 +356,7 @@ class Message(models.Model):
     fixed_by = models.CharField(max_length=150, blank=True, default="", db_default="")
     fixed_at = models.DateTimeField(null=True, blank=True)
     fixed_msg_id = models.BigIntegerField(null=True, blank=True)  # guruhga yuborilgan tuzatilgan javob
+    answer_hidden = models.BooleanField(default=False, db_default=False)  # xato deb belgilangan javob guruhda yashirilgan
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
 

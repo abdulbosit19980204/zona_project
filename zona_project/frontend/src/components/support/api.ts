@@ -66,6 +66,7 @@ export interface ReviewRow {
   answered_at: string | null; answer_text: string; answered_by: string; stage: string; confidence: number;
   entry: number | null; entry_title: string; feedback: number; review: ReviewStatus; review_by: string; review_at: string | null;
   review_note: string; fixed_text: string; fixed_by: string; fixed_at: string | null; sent: boolean; category: string; app: string;
+  hidden?: boolean;
   media: MediaInfo[]; kb_entry?: number | null;
 }
 export interface SupportMessage {

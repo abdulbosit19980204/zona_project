@@ -96,3 +96,42 @@ class ReviewTests(FlowBase):
         Message.objects.filter(pk=self.q.pk).update(review="fixed")
         vision.cleanup(30)
         self.assertEqual(Media.objects.get(pk=m.pk).path, "")
+
+
+class HideWrongAnswerTests(ReviewTests):
+    def press_bad(self, n=10):
+        upd = cb(2, f"bad:{self.q.id}", n)
+        upd["callback_query"]["from"]["username"] = "test_op"
+        self.h().handle(upd)
+        self.q.refresh_from_db()
+
+    def test_staff_mark_hides_answer_in_group_and_dms_staff(self):
+        self.press_bad()
+        self.assertTrue(self.q.answer_hidden)
+        edit = [e for e in self.tg.edits if e["id"] == self.q.bot_reply_id][-1]
+        self.assertIn("обновление", edit["text"])  # savol ruscha — yozuv ham ruscha
+        self.assertIsNone(edit["buttons"])  # tugmalar olib tashlandi
+        self.assertTrue(any(m["chat"] == 2 and "yashirildi" in m["text"] for m in self.tg.sent))  # xodimga asl javob
+        self.assertTrue(self.q.answer_text)  # asl javob bazada saqlanadi
+
+    def test_asker_thumbs_down_does_not_hide(self):
+        self.h().handle(cb(1, f"fb:{self.q.id}:-1", 11))
+        self.q.refresh_from_db()
+        self.assertEqual((self.q.review, self.q.answer_hidden), ("wrong", False))
+
+    def test_fix_replaces_hidden_message_and_ok_restores(self):
+        self.press_bad()
+        self.login("editor")
+        with mock.patch("support.telegram.Client", return_value=self.tg):
+            r = self.call("post", f"support/reviews/{self.q.id}/", {"action": "fix", "text": "Moderatsiya 1 kun davom etadi", "send": True})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.q.refresh_from_db()
+        self.assertEqual((self.q.fixed_msg_id, self.q.answer_hidden), (self.q.bot_reply_id, False))  # o'sha xabar o'rnida
+        self.assertIn("Moderatsiya 1 kun davom etadi", self.tg.edits[-1]["text"])
+        # boshqa javob: xato deb yashirildi, keyin "aslida to'g'ri" — qayta ko'rsatiladi
+        Message.objects.filter(pk=self.q.pk).update(review="wrong", answer_hidden=True, fixed_msg_id=None)
+        with mock.patch("support.telegram.Client", return_value=self.tg):
+            self.call("post", f"support/reviews/{self.q.id}/", {"action": "ok"})
+        self.q.refresh_from_db()
+        self.assertFalse(self.q.answer_hidden)
+        self.assertTrue(self.tg.edits[-1]["buttons"])  # 👍/👎 qaytdi

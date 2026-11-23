@@ -52,6 +52,49 @@ def mark(q, value, by, note=""):
     return q
 
 
+HIDDEN = {
+    "uz": "♻️ Javob yangilanishga yuborildi — tez orada shu yerda to'g'ri javob yoziladi.",
+    "ru": "♻️ Ответ отправлен на обновление — скоро здесь будет правильный ответ.",
+}
+
+
+def _lang(q):
+    return "ru" if q.lang == "ru" else "uz"
+
+
+def hide(tg, q):
+    """Xodim/admin xato degan javob guruhda ko'rsatilmaydi: bot xabari "yangilanishga yuborildi" ga almashadi (tugmalarsiz).
+    Asl javob bazada (answer_text) — panelda va xodimlarga ko'rinadi. Qaytaradi: yashirildimi."""
+    if tg is None or not q.bot_reply_id or q.answer_hidden or q.answered_by != "bot":
+        return False
+    try:
+        tg.edit_text(q.chat_id, q.bot_reply_id, f"<i>{html.escape(HIDDEN[_lang(q)])}</i>")
+    except Exception as e:  # noqa: BLE001 — xabar o'chirilgan / juda eski bo'lishi mumkin
+        log.info("hide answer failed q=%s: %s", q.pk, e)
+        return False
+    Message.objects.filter(pk=q.pk).update(answer_hidden=True)
+    q.answer_hidden = True
+    return True
+
+
+def restore(tg, q, settings=None):
+    """Javob aslida to'g'ri edi — guruhda qayta ko'rsatiladi (asl matn, 👍/👎 tugmalari bilan)."""
+    if tg is None or not q.answer_hidden or not q.bot_reply_id:
+        return False
+    from .engine import to_html
+    from .models import Settings
+    s = settings or Settings.load()
+    body = to_html(q.answer_text or "") + (note_html(q.lang) if s.answer_test_note else "")
+    try:
+        tg.edit_text(q.chat_id, q.bot_reply_id, body, buttons=buttons(q, s))
+    except Exception as e:  # noqa: BLE001
+        log.info("restore answer failed q=%s: %s", q.pk, e)
+        return False
+    Message.objects.filter(pk=q.pk).update(answer_hidden=False)
+    q.answer_hidden = False
+    return True
+
+
 def fix(q, text, by, tg=None, send=True, learn_kb=False):
     """To'g'ri javob: saqlanadi; send — guruhdagi bot javobiga (bo'lmasa savolga) reply qilib bot yuboradi;
     learn_kb — bilim bazasiga (tasdiqlash navbatiga, muhim deb)."""
@@ -64,12 +107,21 @@ def fix(q, text, by, tg=None, send=True, learn_kb=False):
     if send and tg is not None and text:
         head = "✏️ Уточнённый ответ:" if q.lang == "ru" else "✏️ Aniqlashtirilgan javob:"
         body = f"<b>{head}</b>\n{html.escape(text)}"
-        try:
-            sent = tg.send(q.chat_id, body, reply_to=q.bot_reply_id or q.message_id)
-            sent_id = (sent or {}).get("message_id")
-        except Exception as e:  # noqa: BLE001
-            log.warning("fix send failed q=%s: %s", q.pk, e)
-            raise
+        if q.answer_hidden and q.bot_reply_id:
+            # yashirilgan javob o'rniga — o'sha xabar to'g'ri javobga aylanadi (guruhda ortiqcha xabar chiqmaydi)
+            try:
+                tg.edit_text(q.chat_id, q.bot_reply_id, body)
+                sent_id = q.bot_reply_id
+                upd["answer_hidden"] = False
+            except Exception as e:  # noqa: BLE001 — tahrirlab bo'lmasa, yangi xabar bilan
+                log.info("fix edit failed q=%s: %s", q.pk, e)
+        if sent_id is None:
+            try:
+                sent = tg.send(q.chat_id, body, reply_to=q.bot_reply_id or q.message_id)
+                sent_id = (sent or {}).get("message_id")
+            except Exception as e:  # noqa: BLE001
+                log.warning("fix send failed q=%s: %s", q.pk, e)
+                raise
         upd["fixed_msg_id"] = sent_id
     Message.objects.filter(pk=q.pk).update(**upd)
     for k, v in upd.items():

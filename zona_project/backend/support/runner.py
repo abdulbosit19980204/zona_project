@@ -889,7 +889,16 @@ class Handler:
             body = (f"⚠️ <b>Xato javob</b> — belgiladi: {engine.html.escape(user.staff_name() or user.name)}\n"
                     f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((q.answer_text or '')[:400])}")
             self._safe_send(self.bot.admin_chat_id, body, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
-        return self.tg.answer_callback(cb["id"], "Belgilandi — tuzatish ro'yxatiga qo'shildi. Rahmat!")
+        # guruhda xato javob ko'rsatilmaydi ("yangilanishga yuborildi"); asl javob — belgilagan xodimga shaxsan
+        hidden = review.hide(self.tg, q)
+        if first and hidden and user.tg_id:
+            try:
+                self.tg.send(user.tg_id, "⚠️ Siz xato deb belgilagan javob guruhda yashirildi (Panel → Tasdiqlash → Bot javoblari):\n"
+                             f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((q.answer_text or '')[:1500])}",
+                             timeout=8, retries=0)
+            except Exception as e:  # noqa: BLE001 — xodim botga /start yozmagan bo'lishi mumkin
+                log.info("wrong-answer DM failed: %s", e)
+        return self.tg.answer_callback(cb["id"], "Belgilandi — javob guruhda yashirildi va tuzatish ro'yxatiga qo'shildi. Rahmat!")
 
     # ---------------------------------------------------------------- tugmalar
     def on_callback(self, cb):

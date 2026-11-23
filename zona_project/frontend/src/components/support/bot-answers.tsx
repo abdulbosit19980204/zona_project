@@ -87,6 +87,7 @@ function ReviewCard({ r, t }: { r: ReviewRow; t: ST }) {
     <Card className={cn("gap-3 p-4", tone)}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         {badge}
+        {r.hidden && <Badge variant="outline" className="border-warning/50 font-normal text-warning" title={t("rvHiddenHint")}>{t("rvHidden")}</Badge>}
         {r.feedback > 0 && <span className="inline-flex items-center gap-1"><ThumbsUp className="size-3.5" />{t("rvAskerLiked")}</span>}
         {r.feedback < 0 && <span className="inline-flex items-center gap-1 text-destructive"><ThumbsDown className="size-3.5" />{t("rvAskerDisliked")}</span>}
         {r.review_by && <span>· {r.review_by}{r.review_at ? ` · ${fmtDate(r.review_at)}` : ""}</span>}
