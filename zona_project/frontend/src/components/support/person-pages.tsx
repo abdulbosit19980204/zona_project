@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CircleAlert, CircleCheck, ExternalLink, GraduationCap, HandHelping, Inbox, Star, Tags } from "lucide-react";
+import { ArrowLeft, CircleAlert, CircleCheck, Clock, ExternalLink, GraduationCap, HandHelping, Inbox, Star, Tags, Timer } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -10,7 +10,7 @@ import { axisProps, CHART, tooltipStyle } from "@/components/charts/chart-kit";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { supportApi, type AskerDetail, type Insight, type Range } from "./api";
+import { supportApi, type AskerDetail, type Insight, type Range, type SlowQ, type TypeRow } from "./api";
 import { fmtDate, fmtDur, Initials, Metric, Panel, Segmented } from "./common";
 import { useSt, type SKey, type ST } from "./i18n";
 import { Recent, Schedule, StaffHeat } from "./staff";
@@ -73,6 +73,10 @@ function insightText(t: ST, i: Insight) {
     case "photo_only": return t("inPhotoOnly", { v: i.v ?? 0 });
     case "repeat": return t("inRepeat", { topic: i.topic ?? "", n: i.n ?? 0 });
     case "unsolved_topic": return t("inUnsolvedTopic", { topic: i.topic ?? "", n: i.n ?? 0 });
+    case "tag_train": return t("inTagTrain", { topic: i.topic ?? "", no: i.no ?? 0, h: i.handoff ?? 0, n: i.n ?? 0 });
+    case "slow_tag": return t("inSlowTag", { topic: i.topic ?? "", v: d(i.v), n: i.n ?? 0 });
+    case "tag_often": return t("inTagOften", { topic: i.topic ?? "", v: i.v ?? 0, n: i.n ?? 0 });
+    case "tag_hard": return t("inTagHard", { topic: i.topic ?? "", n: i.n ?? 0, of: i.of ?? 0 });
     default: return i.code;
   }
 }
@@ -162,10 +166,19 @@ export function StaffPage({ id }: { id: number }) {
             <Schedule d={d} t={t} />
             <StaffHeat d={d} t={t} />
           </div>
+          <TypeBreakdown rows={ev?.tags ?? []} t={t} mode="staff" title={t("pTypes")} hint={t("pTypesStaffHint")} />
           <Panel title={t("pTopics")} hint={t("pTopicsHint")} icon={Tags}>
-            <TopicTable rows={(ev?.topics ?? []).map((x) => ({ topic: x.topic, n: x.n, bad: x.no, extra: x.handoff, time: x.median_s }))}
+            <TopicTable rows={(ev?.topics ?? []).map((x) => ({ topic: x.topic, n: x.n, bad: x.no, extra: x.handoff ?? 0, time: x.median_s }))}
               cols={[t("pTopic"), t("ex_m_questions"), t("ex_m_no"), t("stHandoffs"), t("anSpeed")]} t={t} />
           </Panel>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Panel title={t("pSlowTopics")} hint={t("pSlowTopicsHint")} icon={Timer}>
+              <SlowTopicsChart rows={ev?.slow_topics ?? []} t={t} />
+            </Panel>
+            <Panel title={t("pSlowest")} hint={t("pSlowestHint")} icon={Clock}>
+              <SlowList rows={ev?.slowest ?? []} t={t} />
+            </Panel>
+          </div>
           <Recent d={d} t={t} />
         </div>
       )}
@@ -246,6 +259,8 @@ function AskerBody({ d, t, days }: { d: AskerDetail; t: ST; days: string }) {
         <Metric label={t("ex_m_open")} value={m.open ?? 0} />
       </div>
       <Insights items={d.insights} t={t} />
+      <TypeBreakdown rows={d.tags ?? []} t={t} mode="agent" title={t("pTypes")} hint={t("pTypesAgentHint")}
+        link={(key) => `/support?${new URLSearchParams({ ex: "1", scope: "all", f_asker: String(d.id), f_tag: key, days }).toString()}`} />
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel title={t("exByDay")}>
           <div className="h-56">
@@ -276,8 +291,8 @@ function AskerBody({ d, t, days }: { d: AskerDetail; t: ST; days: string }) {
       </div>
       <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
         <Panel title={t("pTopics")} icon={Tags}>
-          <TopicTable rows={d.topics.map((x) => ({ topic: x.topic, n: x.n, bad: x.no + x.unanswered, extra: x.bot }))}
-            cols={[t("pTopic"), t("ex_m_questions"), t("pUnsolved"), t("ex_m_bot")]} t={t} />
+          <TopicTable rows={d.topics.map((x) => ({ topic: x.topic, n: x.n, bad: x.no + (x.unanswered ?? 0), extra: x.bot ?? 0, time: x.median_s }))}
+            cols={[t("pTopic"), t("ex_m_questions"), t("pUnsolved"), t("ex_m_bot"), t("ex_m_median_s")]} t={t} />
         </Panel>
         <Panel title={t("exWhoAnswered")}>
           {d.staff.length === 0 ? <p className="text-sm text-muted-foreground">{t("empty")}</p> : (
@@ -307,6 +322,127 @@ function AskerBody({ d, t, days }: { d: AskerDetail; t: ST; days: string }) {
           ))}
         </div>
       </Panel>
+    </div>
+  );
+}
+
+/** Savol turlari (teglar): grafik (natija bo'yicha ustma-ust) + to'liq jadval (soni, hal bo'lmagan, ochiq / javobsiz, vaqt). */
+function TypeBreakdown({ rows, t, mode, title, hint, link }: {
+  rows: TypeRow[]; t: ST; mode: "staff" | "agent"; title: string; hint?: string; link?: (key: string) => string;
+}) {
+  const data = rows.slice(0, 14).map((r) => {
+    const bad = r.no, open = mode === "staff" ? (r.open ?? 0) : (r.unanswered ?? 0);
+    const bot = mode === "agent" ? (r.bot ?? 0) : 0;
+    return { name: r.tag ?? r.topic, no: bad, open, bot, ok: Math.max(0, r.n - bad - open - bot) };
+  });
+  const cols = mode === "staff"
+    ? [t("pType"), t("ex_m_questions"), t("ex_m_no"), t("stHandoffs"), t("pOpenCol"), t("anSpeed"), t("pTotalTime")]
+    : [t("pType"), t("ex_m_questions"), t("ex_m_no"), t("ex_m_unanswered"), t("ex_m_bot"), t("ex_m_median_s")];
+  return (
+    <Panel title={title} hint={hint} icon={Tags}>
+      {rows.length === 0 ? <p className="text-sm text-muted-foreground">{t("empty")}</p> : (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div style={{ height: Math.max(180, data.length * 28 + 50) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} layout="vertical" margin={{ left: 4, right: 12, top: 4, bottom: 4 }}>
+                <CartesianGrid horizontal={false} stroke={CHART.grid} strokeDasharray="3 3" />
+                <XAxis type="number" {...axisProps} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" {...axisProps} width={130} tickFormatter={(v: string) => (v.length > 18 ? v.slice(0, 17) + "…" : v)} />
+                <Tooltip {...tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {mode === "agent" && <Bar dataKey="bot" name={t("ex_m_bot")} stackId="a" fill={CHART.success} maxBarSize={20} />}
+                <Bar dataKey="ok" name={mode === "staff" ? t("pOk") : t("ex_m_staff")} stackId="a" fill={CHART.primary} maxBarSize={20} />
+                <Bar dataKey="open" name={mode === "staff" ? t("pOpenCol") : t("ex_m_unanswered")} stackId="a" fill={CHART.warning} maxBarSize={20} />
+                <Bar dataKey="no" name={t("ex_m_no")} stackId="a" fill="var(--destructive)" maxBarSize={20} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b text-left text-xs text-muted-foreground">{cols.map((c, i) => <th key={c} className={`py-1.5 font-medium ${i ? "pl-2 text-right" : "pr-2"}`}>{c}</th>)}</tr></thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.key ?? r.topic} className="border-b last:border-0 hover:bg-muted/40">
+                    <td className="max-w-48 py-1.5 pr-2">
+                      {link && r.key && r.key !== "—"
+                        ? <Link href={link(r.key)} className="block truncate hover:text-primary hover:underline">{r.tag ?? r.topic}</Link>
+                        : <span className="block truncate">{r.tag ?? r.topic}</span>}
+                    </td>
+                    <td className="pl-2 text-right font-mono tabular-nums">{r.n}</td>
+                    <td className={`pl-2 text-right font-mono tabular-nums ${r.no ? "text-destructive" : ""}`}>{r.no}</td>
+                    {mode === "staff" ? (
+                      <>
+                        <td className="pl-2 text-right font-mono tabular-nums">{r.handoff ?? 0}</td>
+                        <td className={`pl-2 text-right font-mono tabular-nums ${r.open ? "text-warning" : ""}`}>{r.open ?? 0}</td>
+                        <td className="pl-2 text-right font-mono text-xs tabular-nums">{fmtDur(t, r.median_s)}</td>
+                        <td className="pl-2 text-right font-mono text-xs tabular-nums">{fmtDur(t, r.total_s ?? null)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className={`pl-2 text-right font-mono tabular-nums ${r.unanswered ? "text-warning" : ""}`}>{r.unanswered ?? 0}</td>
+                        <td className="pl-2 text-right font-mono tabular-nums">{r.bot ?? 0}</td>
+                        <td className="pl-2 text-right font-mono text-xs tabular-nums">{fmtDur(t, r.median_s)}</td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/** Qaysi mavzuda javob berishga eng ko'p vaqt ketadi (median, ish vaqti bo'yicha) — grafik va qiymatlar. */
+function SlowTopicsChart({ rows, t }: { rows: TypeRow[]; t: ST }) {
+  if (!rows.length) return <p className="text-sm text-muted-foreground">{t("empty")}</p>;
+  const data = rows.map((r) => ({ name: r.topic, min: Math.round((r.median_s ?? 0) / 60), n: r.n }));
+  return (
+    <div className="grid gap-3">
+      <div style={{ height: Math.max(160, data.length * 26 + 40) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ left: 4, right: 12, top: 4, bottom: 4 }}>
+            <CartesianGrid horizontal={false} stroke={CHART.grid} strokeDasharray="3 3" />
+            <XAxis type="number" {...axisProps} allowDecimals={false} unit=" m" />
+            <YAxis type="category" dataKey="name" {...axisProps} width={150} tickFormatter={(v: string) => (v.length > 22 ? v.slice(0, 21) + "…" : v)} />
+            <Tooltip {...tooltipStyle} formatter={(v) => [`${v} min`, t("anSpeed")]} />
+            <Bar dataKey="min" name={t("anSpeed")} fill={CHART.warning} maxBarSize={18} radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <table className="w-full text-xs">
+        <tbody>{rows.map((r) => (
+          <tr key={r.topic} className="border-t"><td className="max-w-64 truncate py-1 pr-2">{r.topic}</td>
+            <td className="text-right font-mono tabular-nums">{r.n}</td>
+            <td className="pl-3 text-right font-mono tabular-nums">{fmtDur(t, r.median_s)}</td></tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function SlowList({ rows, t }: { rows: SlowQ[]; t: ST }) {
+  if (!rows.length) return <p className="text-sm text-muted-foreground">{t("empty")}</p>;
+  return (
+    <div className="grid max-h-[460px] gap-2 overflow-y-auto pr-1">
+      {rows.map((r) => (
+        <div key={r.id} className="flex items-start gap-3 rounded-lg border p-2.5 text-sm">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="font-mono font-semibold text-warning tabular-nums">{fmtDur(t, r.secs)}</span>
+              {r.tags.map((x) => <Badge key={x} variant="outline" className="h-5 px-1.5 text-[10px] font-normal">{x}</Badge>)}
+              {r.resolution && <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">{t(`r_${r.resolution}` as SKey)}</Badge>}
+            </div>
+            <div className="line-clamp-2">{r.text || "—"}</div>
+          </div>
+          <div className="flex shrink-0 flex-col gap-1 text-xs">
+            <Link href={`/support?q=${r.id}`} className="text-primary hover:underline">{t("exOpen")}</Link>
+            {r.link && <a href={r.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline"><ExternalLink className="size-3" />TG</a>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

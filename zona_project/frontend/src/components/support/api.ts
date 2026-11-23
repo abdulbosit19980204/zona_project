@@ -9,6 +9,13 @@ export interface MediaInfo {
   id: number; kind: "photo" | "video" | "video_note" | "animation" | "document"; name: string; mime: string; size: number;
   width: number; height: number; label: number | null; label_title: string; label_auto: boolean; ocr: string; source: string;
   created_at: string; available: boolean;
+  /** asl nusxa serverda saqlanmaydi (eskiz yoki fayl yo'q) — asli Telegram'da: link / ?full=1 */
+  slim?: boolean; link?: string;
+}
+/** Umumiy rasm turi (ekran): o'xshash skrinshotlar avtomatik guruhlanadi, savollar tur ichida jamlanadi. */
+export interface ScreenTypeInfo {
+  id: number; title: string; locked: boolean; tag: string; tag_title: string; count: number; questions: number;
+  top: { q: string; n: number }[]; entry: number | null; entry_title: string; samples: MediaInfo[];
 }
 
 export interface SupportBot {
@@ -106,7 +113,7 @@ export interface SupportSettings {
   answer_policy: "standard" | "kb" | "all";
   confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number; category_owners: Record<string, number> | null; answer_keep_days: number; answer_test_note: boolean; review_button: boolean;
   react_accept: boolean; ask_staff_after: number; reask_after: number; remind_max: number;
-  collapse_after: number;
+  collapse_after: number; media_full_days: number; work_from: number; work_to: number; work_days: string;
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
@@ -173,7 +180,9 @@ export interface TgUserInfo {
 }
 export interface StaffPersonHit { id: number; name: string; role: string; project: string; territory: string; manager: string }
 export interface ImageTypes {
-  labeled: { entry: number; title: string; status: EntryStatus; count: number; auto: number; samples: MediaInfo[] }[];
+  labeled: { entry: number; title: string; status: EntryStatus; count: number; auto: number; screens: string[] }[];
+  screens: ScreenTypeInfo[];
+  storage: { disk_mb: number; saved_mb: number; slim: number };
   unlabeled: { count: number; ids: number[]; samples: MediaInfo[]; ocr: string; guess: number | null; guess_title: string }[];
   ignored: { count: number; ids: number[]; samples: MediaInfo[] }[];
   threshold: number; total: number;
@@ -241,12 +250,15 @@ export interface StaffBoardRow {
   open_now?: number; oldest_open_h?: number | null; rating?: number | null; ratings?: number; rating_dist?: number[];
 }
 /** Tavsiya: kuchli (+) / zaif (−) / o'rgatish / yordam — kod va qiymatlar, matnni frontend tarjima qiladi. */
-export interface Insight { kind: "plus" | "minus" | "train" | "help" | "info"; code: string; v?: number; team?: number; n?: number; topic?: string; no?: number; handoff?: number }
+export interface Insight { kind: "plus" | "minus" | "train" | "help" | "info"; code: string; v?: number; team?: number; n?: number; topic?: string; no?: number; handoff?: number; of?: number }
+/** Tur (teg) yoki mavzu bo'yicha qator: xodim — hal bo'lmagan / uzatgan / ochiq; agent — hal bo'lmagan / javobsiz / bot. */
+export interface TypeRow { topic: string; tag?: string; key?: string; n: number; no: number; handoff?: number; open?: number; unanswered?: number; bot?: number; median_s: number | null; total_s?: number }
+export interface SlowQ { id: number; text: string; secs: number; topic: string; tags: string[]; resolution: string; link: string }
 export interface AskerDetail {
   id: number; from: string; to: string;
   who: { name: string; username: string; role: string; project: string; territory: string; supervisor: string; phone: string };
   metrics: Record<string, number | null>; photo_only: number; insights: Insight[];
-  topics: { topic: string; n: number; no: number; unanswered: number; bot: number }[];
+  topics: TypeRow[]; tags: TypeRow[];
   staff: { name: string; n: number }[]; daily: { date: string; n: number }[]; hours: number[];
   recent: { id: number; at: string; text: string; status: MsgStatus; resolution: Resolution; stage: string; photo: boolean; link: string; group: string }[];
 }
@@ -261,7 +273,7 @@ export interface StaffDay {
 export interface StaffDetail extends Omit<StaffBoardRow, "team" | "start" | "end" | "span_h" | "last_seen"> {
   from: string; to: string; heatmap: number[][]; timeline: StaffDay[]; groups: { title: string; n: number }[];
   recent: { id: number; at: string; kind: string; text: string; group: string; question: string; question_id: number | null; link: string }[];
-  eval?: { score: number | null; items: Insight[]; topics: { topic: string; n: number; no: number; handoff: number; median_s: number | null }[]; me?: StaffBoardRow };
+  eval?: { score: number | null; items: Insight[]; topics: TypeRow[]; tags?: TypeRow[]; slow_topics?: TypeRow[]; slowest?: SlowQ[]; me?: StaffBoardRow };
 }
 
 /** Konstruktor natijasi: k0/k1 — guruhlash kaliti, l0/l1 — yorlig'i, qolganlari — tanlangan ko'rsatkichlar. */
@@ -355,6 +367,12 @@ export const supportApi = {
   images: () => get<ImageTypes>("images/"),
   label: (ids: number[], entry: number | null) => post<{ done: number }>("images/label/", { ids, entry }),
   ignoreImages: (ids: number[], ignored = true) => post<{ done: number }>("images/ignore/", { ids, ignored }),
+  screenAssign: (body: { ids: number[]; screen?: number; title?: string; tag?: string }) =>
+    post<{ done: number; screen: number }>("images/screens/assign/", body),
+  screenUpdate: (id: number, body: { title?: string; tag?: string; entry?: number | null }) => patch<{ done: boolean }>(`images/screens/${id}/`, body),
+  screenHide: async (id: number) => { await api.delete(`${B}images/screens/${id}/`); },
+  screensRebuild: () => post<{ started: boolean }>("images/screens/rebuild/"),
+  mediaFull: async (id: number) => (await api.get<Blob>(`${B}media/${id}/file/`, { params: { full: 1 }, responseType: "blob" })).data,
   duplicates: (threshold: number) => get<Duplicates>("entries/duplicates/", { threshold }),
   dedupeMerge: (body: { keep: number; merge: number[]; answer?: string; answer_ru?: string; title?: string }) =>
     post<{ entry: Entry; merged: number }>("entries/dedupe-merge/", body),

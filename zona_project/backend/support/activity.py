@@ -12,7 +12,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F, Q
 
 from .models import Activity, Message, TgUser
-from .workload import local
+from .workload import local, work_hours, work_secs
 
 WORK_KINDS = [Message.STAFF, Message.CLARIFY]
 
@@ -111,6 +111,7 @@ def _work(users, start, end):
     rows = (Message.objects.filter(kind__in=WORK_KINDS, user_id__in=ids, created_at__gte=start, created_at__lt=end)
             .select_related("question", "group").order_by("created_at"))
     first_by_q = {}
+    hours = work_hours()
     for m in rows:
         p = per[m.user_id]
         p["groups"][m.group.title if m.group_id else "—"] += 1
@@ -124,7 +125,7 @@ def _work(users, start, end):
             p["questions"].add(m.question_id)
             if m.question_id not in first_by_q and m.question is not None:
                 first_by_q[m.question_id] = m.question_id
-                p["times"].append(max(0.0, (m.created_at - m.question.created_at).total_seconds()))
+                p["times"].append(work_secs(m.question.created_at, m.created_at, hours))
     qs = Message.objects.filter(kind=Message.QUESTION, created_at__gte=start, created_at__lt=end)
     reacts = Counter(qs.filter(handler_id__in=ids, stage="react").values_list("handler_id", flat=True))
     working = Counter(qs.filter(handler_id__in=ids, resolution=Message.WORK).values_list("handler_id", flat=True))
@@ -224,28 +225,59 @@ def detail(user, start, end, info=None):
 
 
 # ====================================================================== baholash va tavsiyalar
+def _tag_titles():
+    from .models import Tag
+    return dict(Tag.objects.values_list("key", "title"))
+
+
 def _topics(user, start, end):
-    """Xodim qatnashgan savollar mavzu bo'yicha: soni, hal bo'lmagan, uzatgan, median javob vaqti."""
+    """Xodimga kelib tushgan savollar (u javob bergan yoki unga biriktirilgan): mavzu va tur (teg) bo'yicha — soni,
+    hal bo'lmagan, uzatgan, median javob vaqti (ish vaqti bo'yicha); eng ko'p vaqt ketgan savollar."""
     from .engine import handoff_to, is_handoff
-    per = defaultdict(lambda: {"n": 0, "no": 0, "handoff": 0, "times": []})
-    seen = set()
+    hours = work_hours()
+    titles = _tag_titles()
+    first, handoff = {}, Counter()
     for m in (Message.objects.filter(kind__in=WORK_KINDS, user=user, created_at__gte=start, created_at__lt=end, question__isnull=False)
-              .select_related("question__entry").order_by("created_at")):
-        q = m.question
-        t = q.entry.title if q.entry_id else "Turi aniqlanmagan"
-        p = per[t]
-        if q.pk not in seen:
-            seen.add(q.pk)
+              .only("question_id", "created_at", "kind", "text").order_by("created_at")):
+        first.setdefault(m.question_id, m.created_at)
+        if m.kind == Message.STAFF and (is_handoff(m.text) or handoff_to(m.text) is not None):
+            handoff[m.question_id] += 1
+    assigned = set(Message.objects.filter(kind=Message.QUESTION, handler=user, created_at__gte=start, created_at__lt=end)
+                   .values_list("pk", flat=True))
+    qs = (Message.objects.filter(pk__in=set(first) | assigned).select_related("entry", "group")
+          .only("id", "text", "problem", "created_at", "resolution", "status", "tags", "entry__title", "group__title",
+                "group__username", "group__chat_id", "message_id"))
+    per = defaultdict(lambda: {"n": 0, "no": 0, "handoff": 0, "open": 0, "times": []})
+    per_tag = defaultdict(lambda: {"n": 0, "no": 0, "handoff": 0, "open": 0, "times": []})
+    slow = []
+    for q in qs:
+        tg = list(q.tags or [])
+        topic = q.entry.title if q.entry_id else (titles.get(tg[0], tg[0]) if tg else "Turi aniqlanmagan")
+        secs = work_secs(q.created_at, first[q.pk], hours) if q.pk in first else None
+        is_open = q.resolution in (Message.NO, Message.WORK, Message.ASKED) or (q.status == Message.ESCALATED and q.resolution != Message.YES)
+        for p in [per[topic]] + [per_tag[k] for k in (tg or ["—"])]:
             p["n"] += 1
             p["no"] += q.resolution == Message.NO
-            p["times"].append(max(0.0, (m.created_at - q.created_at).total_seconds()))
-        if m.kind == Message.STAFF and (is_handoff(m.text) or handoff_to(m.text) is not None):
-            p["handoff"] += 1
-    return [{"topic": t, "n": v["n"], "no": v["no"], "handoff": v["handoff"],
-             "median_s": round(median(v["times"]), 1) if v["times"] else None} for t, v in per.items()]
+            p["handoff"] += bool(handoff.get(q.pk))
+            p["open"] += is_open
+            if secs is not None:
+                p["times"].append(secs)
+        if secs is not None:
+            slow.append({"id": q.pk, "text": (q.problem or q.text or "")[:160], "secs": secs, "topic": topic,
+                         "tags": [titles.get(k, k) for k in tg], "resolution": q.resolution,
+                         "link": q.group.message_link(q.message_id) if q.group_id else ""})
+
+    def pack(d, key, name=None):
+        return [{key: (name(t) if name else t), "key": t, "n": v["n"], "no": v["no"], "handoff": v["handoff"], "open": v["open"],
+                 "median_s": round(median(v["times"]), 1) if v["times"] else None,
+                 "total_s": round(sum(v["times"]), 1)} for t, v in d.items()]
+    topics = pack(per, "topic")
+    tags = pack(per_tag, "tag", lambda k: "Tegsiz" if k == "—" else titles.get(k, k))
+    slow.sort(key=lambda x: -x["secs"])
+    return topics, tags, slow[:12]
 
 
-def insights(me, team, topics):
+def insights(me, team, topics, tags=None):
     """Ish holati (0–100) va tavsiyalar: kuchli (+), zaif (−), o'rgatish, yordam. Kodlar — tarjimani frontend qiladi."""
     def med(key):
         vals = sorted(x[key] for x in team if x.get(key) is not None and (x.get("answers") or x.get("messages")))
@@ -279,6 +311,14 @@ def insights(me, team, topics):
     slow = [t for t in sorted(topics, key=lambda x: -(x["median_s"] or 0)) if (t["median_s"] or 0) >= 3600 and t["n"] >= 2][:3]
     for t in slow:
         out.append({"kind": "help", "code": "slow_topic", "topic": t["topic"], "v": t["median_s"], "n": t["n"]})
+    for t in sorted(tags or [], key=lambda x: -(x["no"] + x["handoff"] + x["open"])):
+        if t["key"] != "—" and t["no"] + t["handoff"] + t["open"] >= 3 and len([i for i in out if i["code"] == "tag_train"]) < 3:
+            out.append({"kind": "train", "code": "tag_train", "topic": t["tag"], "no": t["no"], "handoff": t["handoff"], "n": t["n"]})
+    t_tag = [t for t in (tags or []) if t["key"] != "—" and t["median_s"] and t["n"] >= 3]
+    if speed and t_tag:
+        worst = max(t_tag, key=lambda x: x["median_s"])
+        if worst["median_s"] >= max(1800, 2 * speed):
+            out.append({"kind": "help", "code": "slow_tag", "topic": worst["tag"], "v": worst["median_s"], "n": worst["n"]})
     # ish holati: tezlik, hal qilish, baho, faollik — jamoaga nisbatan (har biri 0..25)
     parts = []
     if speed is not None and t_speed:
@@ -299,8 +339,11 @@ def evaluate(user, start, end):
     me = next((x for x in team if x["id"] == user.pk), None)
     if me is None:
         return {"score": None, "items": [], "topics": []}
-    topics = _topics(user, start, end)
-    res = insights(me, team, topics)
+    topics, tags, slow = _topics(user, start, end)
+    res = insights(me, team, topics, tags)
     res["topics"] = sorted(topics, key=lambda x: -x["n"])[:15]
+    res["tags"] = sorted(tags, key=lambda x: -x["n"])
+    res["slow_topics"] = sorted([t for t in topics if t["median_s"] is not None], key=lambda x: -x["median_s"])[:10]
+    res["slowest"] = slow
     res["me"] = me
     return res

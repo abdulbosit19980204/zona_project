@@ -11,7 +11,7 @@ import { fmtDate, Metric, Panel, stageLabel } from "./common";
 import type { SKey, ST } from "./i18n";
 
 const sec = (v: number | null | undefined) => (v == null ? "—" : `${v} s`);
-const PART_KEYS = ["recv", "wait", "queue", "media", "ocr", "decide", "send", "work"] as const;
+const PART_KEYS = ["recv", "wait", "queue", "media", "ocr", "decide", "reply", "send", "work"] as const;
 
 /** Bot tezligi: savol kelgandan javob yuborilguncha. Qayerda vaqt ketyapti — navbat, OCR, AI yoki yuborish. */
 export function Speed({ range, t }: { range: Range; t: ST }) {

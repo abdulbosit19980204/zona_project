@@ -1,24 +1,42 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Film, ImageOff } from "lucide-react";
+import { ExternalLink, FileText, Film, ImageOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 import { supportApi, type MediaInfo } from "./api";
+import { useSt } from "./i18n";
 
-/** Serverdagi faylni (tizimga kirgan holda) ko'rsatish: rasm — kichik ko'rinish, bosilsa katta; video — pleyer. */
+function useBlobUrl(blob: Blob | undefined) {
+  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  return url;
+}
+
+/** Serverdagi faylni (tizimga kirgan holda) ko'rsatish: rasm — kichik ko'rinish, bosilsa katta; video — pleyer.
+ *  Asl nusxasi serverda saqlanmaydigan rasm (eskiz) bosilganda asli bot orqali Telegram'dan olinadi; bo'lmasa — havola. */
 export function MediaThumb({ m, className }: { m: MediaInfo; className?: string }) {
+  const t = useSt();
   const [open, setOpen] = useState(false);
   const q = useQuery({ queryKey: ["support", "media", m.id], queryFn: () => supportApi.mediaBlob(m.id), enabled: m.available,
     staleTime: Infinity, gcTime: 10 * 60_000 });
-  const url = useMemo(() => (q.data ? URL.createObjectURL(q.data) : null), [q.data]);
-  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  const full = useQuery({ queryKey: ["support", "media-full", m.id], queryFn: () => supportApi.mediaFull(m.id),
+    enabled: open && !!m.slim && m.kind === "photo", staleTime: Infinity, gcTime: 5 * 60_000, retry: false });
+  const url = useBlobUrl(q.data);
+  const fullUrl = useBlobUrl(full.data);
   const box = cn("relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted text-muted-foreground", className);
-  if (!m.available) return <div className={box} title={m.name}><ImageOff className="size-5" /></div>;
+  if (!m.available) {
+    return m.link ? (
+      <a className={cn(box, "hover:text-primary")} href={m.link} target="_blank" rel="noreferrer" title={t("mediaInTelegram")}>
+        <span className="grid place-items-center gap-1 text-[10px]"><ImageOff className="size-5" />Telegram</span>
+      </a>
+    ) : <div className={box} title={m.name}><ImageOff className="size-5" /></div>;
+  }
   if (m.kind === "photo") {
+    const big = fullUrl ?? url;
     return (
       <>
         <button type="button" className={box} onClick={() => setOpen(true)} title={m.label_title || m.name}>
@@ -30,7 +48,15 @@ export function MediaThumb({ m, className }: { m: MediaInfo; className?: string 
           <DialogContent className="max-w-3xl">
             <DialogTitle className="truncate text-sm">{m.label_title || m.name || "Rasm"}</DialogTitle>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {url && <img src={url} alt={m.name || "rasm"} className="max-h-[75vh] w-full object-contain" />}
+            {big && <img src={big} alt={m.name || "rasm"} className="max-h-[75vh] w-full object-contain" />}
+            {m.slim && !fullUrl && (
+              <p className="text-xs text-muted-foreground">{full.isFetching ? t("mediaLoadingFull") : t("mediaThumbOnly")}</p>
+            )}
+            {m.link && (
+              <a href={m.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                {t("mediaInTelegram")}<ExternalLink className="size-3" />
+              </a>
+            )}
             {m.ocr && <p className="line-clamp-4 text-xs text-muted-foreground">{m.ocr}</p>}
           </DialogContent>
         </Dialog>

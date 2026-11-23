@@ -47,7 +47,8 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
                    "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction",
                    "thread_window", "category_owners", "answer_keep_days", "answer_test_note", "review_button",
-                   "react_accept", "ask_staff_after", "reask_after", "remind_max", "collapse_after"]
+                   "react_accept", "ask_staff_after", "reask_after", "remind_max", "collapse_after",
+                   "media_full_days", "work_from", "work_to", "work_days"]
 
 
 def _settings_payload(s):
@@ -1431,9 +1432,12 @@ def _protarget(questions, since, end=None):
 
 # ====================================================================== fayllar va rasm turlari (o'rgatish)
 def media_dict(m):
+    from . import slim
+    lean = m.slim or not m.path  # asl nusxa serverda yo'q — Telegram havolasi (va jonli bo'lsa — bot orqali asli)
     return {"id": m.id, "kind": m.kind, "name": m.name, "mime": m.mime, "size": m.size, "width": m.width, "height": m.height,
             "label": m.label_id, "label_title": m.label.title if m.label_id else "", "label_auto": m.label_auto,
-            "ocr": (m.ocr_text or "")[:300], "source": m.source, "created_at": m.created_at, "available": bool(m.path)}
+            "ocr": (m.ocr_text or "")[:300], "source": m.source, "created_at": m.created_at, "available": bool(m.path),
+            "slim": m.slim, "link": slim.link(m) if lean and m.message_id else ""}
 
 
 def upload_api(fn):
@@ -1482,8 +1486,16 @@ def media_upload(request):
 
 @zona_api(["GET"], [CanView])
 def media_file(request, pk):
-    from django.http import FileResponse, Http404
-    m = Media.objects.filter(pk=pk).first()
+    from django.http import FileResponse, Http404, HttpResponse
+    m = Media.objects.filter(pk=pk).select_related("message__bot").first()
+    if m and m.slim and request.query_params.get("full") == "1":
+        # asl rasm serverda saqlanmaydi — bot orqali Telegram'dan (saqlamasdan) beriladi
+        from . import slim
+        data = slim.full_bytes(m)
+        if data:
+            resp = HttpResponse(data, content_type="image/jpeg")
+            resp["Cache-Control"] = "private, max-age=3600"
+            return resp
     if not m or not m.path:
         raise Http404
     try:
@@ -1506,7 +1518,11 @@ def image_types(request):
     s = Settings.load()
     # belgilash / e'tiborsiz qilish — kalit darhol o'zgaradi; yangi kelgan (belgilanmagan) rasmlar — har 25 tada yoki
     # 5 daqiqada (tarix o'rganilayotganda rasmlar har soniyada qo'shiladi — har so'rovda qayta guruhlamaslik uchun)
-    key = f"support:images:{agg['n'] // 25}:{agg['lab']}:{agg['labsum']}:{agg['ign']}:{s.image_threshold}"
+    from .models import ScreenType
+    st = ScreenType.objects.aggregate(u=Max("updated_at"), n=Count("id"))
+    scr = photos.filter(screen__isnull=False).count()
+    key = (f"support:images2:{agg['n'] // 25}:{agg['lab']}:{agg['labsum']}:{agg['ign']}:{s.image_threshold}:{st['n']}:{st['u'].timestamp() if st['u'] else 0:.0f}:"
+           f"{scr // 25}")
     hit = cache.get(key)
     if hit is not None:
         return Response(hit)
@@ -1516,18 +1532,27 @@ def image_types(request):
 
 
 def _image_types(s):
-    from . import vision
+    from collections import Counter
+
+    from django.db.models import Sum
+
+    from . import screens, vision
     labeled = {}
-    for m in Media.objects.filter(kind=Media.PHOTO, label__isnull=False).select_related("label").order_by("-created_at"):
-        row = labeled.setdefault(m.label_id, {"entry": m.label_id, "title": m.label.title, "status": m.label.status,
-                                              "count": 0, "auto": 0, "samples": []})
+    for lid, title, status, auto, sid in (Media.objects.filter(kind=Media.PHOTO, label__isnull=False)
+                                          .values_list("label_id", "label__title", "label__status", "label_auto", "screen__title")):
+        row = labeled.setdefault(lid, {"entry": lid, "title": title, "status": status, "count": 0, "auto": 0, "screens": Counter()})
         row["count"] += 1
-        row["auto"] += int(m.label_auto)
-        if len(row["samples"]) < 4:
-            row["samples"].append(media_dict(m))
-    unl = (Media.objects.filter(kind=Media.PHOTO, label__isnull=True, ignored=False).exclude(dhash="").exclude(path="")
-           .order_by("-created_at")[:600])
+        row["auto"] += int(auto)
+        if sid:
+            row["screens"][sid] += 1
+    for row in labeled.values():
+        row["screens"] = [t for t, _n in row["screens"].most_common(2)]
+    # turga kirmagan (yangi ekranlar) — guruhlab ko'rsatiladi: yangi tur ochish, mavjud turga qo'shish yoki rad etish
+    unl = (Media.objects.filter(kind=Media.PHOTO, screen__isnull=True, label__isnull=True, ignored=False).exclude(dhash="")
+           .exclude(path="").select_related("message__group").order_by("-created_at")[:600])
     ign = Media.objects.filter(kind=Media.PHOTO, ignored=True).exclude(path="").order_by("-created_at")[:300]
+    disk = Media.objects.exclude(path="").aggregate(n=Sum("size"))["n"] or 0
+    saved = Media.objects.filter(slim=True).aggregate(full=Sum("full_size"), now=Sum("size"))
     ignored = [{"count": len(g), "ids": [m.id for m in g], "samples": [media_dict(m) for m in g[:4]]}
                for g in vision.clusters(list(ign), s.image_threshold)[:40]]
     groups = []
@@ -1537,7 +1562,64 @@ def _image_types(s):
                        "ocr": next((m.ocr_text[:300] for m in g if m.ocr_text), ""),
                        "guess": guess.id if guess else None, "guess_title": guess.title if guess else ""})
     return {"labeled": sorted(labeled.values(), key=lambda r: -r["count"]), "unlabeled": groups, "ignored": ignored,
-            "threshold": s.image_threshold, "total": Media.objects.filter(kind=Media.PHOTO).count()}
+            "screens": screens.listing(media_dict), "threshold": s.image_threshold,
+            "total": Media.objects.filter(kind=Media.PHOTO).count(),
+            "storage": {"disk_mb": round(disk / 1e6, 1),
+                        "saved_mb": round(max(0, (saved["full"] or 0) - (saved["now"] or 0)) / 1e6, 1),
+                        "slim": Media.objects.filter(slim=True).count()}}
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def screen_assign(request):
+    """Rasmlarni ekran turiga qo'shish: mavjud turga (screen) yoki yangi tur (title) ochib."""
+    from . import screens
+    from .models import ScreenType
+    ids = [int(x) for x in request.data.get("ids") or []][:1000]
+    sid, title = request.data.get("screen"), (request.data.get("title") or "").strip()[:200]
+    if sid:
+        t = ScreenType.objects.filter(pk=sid).first()
+        if not t:
+            return Response({"detail": "Tur topilmadi"}, status=400)
+    elif title:
+        t = ScreenType.objects.create(title=title, title_locked=True, tag=(request.data.get("tag") or "")[:40])
+    else:
+        return Response({"detail": "Tur tanlang yoki nom yozing"}, status=400)
+    if t.hidden:
+        ScreenType.objects.filter(pk=t.pk).update(hidden=False)
+    return Response({"done": screens.add_to(ids, t), "screen": t.id})
+
+
+@zona_api(["PATCH", "DELETE"], [ReadOrEdit])
+def screen_detail(request, pk):
+    """Turni tahrirlash: nomi (qulflanadi), tegi, standart javobi; yashirish (rasmlari turga kirmagan bo'lib qoladi)."""
+    from . import screens
+    from .models import ScreenType
+    t = ScreenType.objects.filter(pk=pk).first()
+    if not t:
+        return Response({"detail": "Tur topilmadi"}, status=404)
+    if request.method == "DELETE":
+        Media.objects.filter(screen=t).update(screen=None)
+        ScreenType.objects.filter(pk=pk).update(hidden=True, count=0, hashes=[])
+        screens._CACHE["key"] = None
+        return Response({"done": True})
+    d = request.data
+    if "title" in d and (d.get("title") or "").strip():
+        t.title, t.title_locked = d["title"].strip()[:200], True
+    if "tag" in d:
+        t.tag = (d.get("tag") or "")[:40]
+        t.title_locked = True
+    if "entry" in d:
+        t.entry = Entry.objects.filter(pk=d.get("entry")).first() if d.get("entry") else None
+    t.save()
+    return Response({"done": True})
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def screens_rebuild(request):
+    """Rasmlarni qayta guruhlash (fonda, ~10–20 s)."""
+    from . import screens
+    screens.rebuild_async()
+    return Response({"started": True})
 
 
 @zona_api(["POST"], [ReadOrEdit])
@@ -1563,7 +1645,8 @@ def image_ignore(request):
     ids = [int(x) for x in request.data.get("ids") or []][:1000]
     flag = bool(request.data.get("ignored", True))
     qs = Media.objects.filter(id__in=ids, kind=Media.PHOTO)
-    n = qs.update(ignored=True, label=None, label_auto=False, label_by=_actor(request)) if flag else qs.update(ignored=False)
+    n = (qs.update(ignored=True, label=None, label_auto=False, label_by=_actor(request), screen=None) if flag
+         else qs.update(ignored=False))
     vision._CACHE["key"] = None
     return Response({"done": n})
 

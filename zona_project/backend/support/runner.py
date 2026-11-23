@@ -392,7 +392,9 @@ class Handler:
                 close_old_connections()
                 try:
                     data = self.photo_bytes.get(msg["message_id"]) or self.tg.download(meta[0], max_bytes=(8 if meta[1] == "photo" else 20) * 1024 * 1024)
-                    vision.store(data, kind=meta[1], name=f"album:{msg['message_id']}", mime=meta[3], source=q.source, message=q)
+                    part = vision.store(data, kind=meta[1], name=f"album:{msg['message_id']}", mime=meta[3], source=q.source, message=q)
+                    if meta[0] and meta[0] != "history":  # asli Telegram'da: keyin serverda saqlamasdan olish mumkin
+                        Media.objects.filter(pk=part.pk).update(tg_file_ids={str(self.bot.pk): meta[0]})
                     if self.history and meta[1] == "photo" and self.settings.ocr_enabled:
                         # tarix: har bir rasmdagi matn (xato xabari) ham savolga — o'rganishda hech narsa tashlanmaydi
                         txt = ocr.read_text(data)
@@ -645,7 +647,8 @@ class Handler:
         settings = self.settings
         unapproved = mode in (MODE_SHADOW, MODE_COLLECT)
         media, image, deferred_ocr = None, None, False
-        tick = time.monotonic()
+        tick = t_start = time.monotonic()
+        self._t_reply = None
         pg = self.progress = Progress(self.tg, q, mode == MODE_LIVE and settings.progress_messages and not self.history,
                                       existing=(q.timing or {}).get("ph"))
         if pg.enabled:
@@ -729,7 +732,10 @@ class Handler:
         if len(photos) <= 1:
             self._autolabel(media, d)
         try:
+            self._t_start = t_start
             res = self._respond(q, d, mode, skip_ask)
+            if getattr(self, "_t_reply", None):
+                marks["reply"] = int((self._t_reply - t_start) * 1000)  # qayta ishlash boshidan guruhga javob ketguncha
             mark("send")
             if mode == MODE_LIVE and q.stage not in ("dup", "ask"):
                 from . import tasks
@@ -1121,6 +1127,9 @@ class Handler:
                 q.error = f"Fayl olinmadi: {e}"[:300]
                 return None
         m = vision.store(data, kind=kind, name=name, mime=mime, source="history" if self.history else "question", message=q)
+        if file_id and not self.history:
+            m.tg_file_ids = {str(self.bot.pk): file_id}
+            Media.objects.filter(pk=m.pk).update(tg_file_ids=m.tg_file_ids)
         q.photo_path = m.path
         return m
 
@@ -1220,6 +1229,24 @@ class Handler:
     def _send_draft(self, q, d, escalated=False):
         if not self.bot.admin_chat_id:
             return None
+        if self.executor is not None and not self.history:
+            # admin chatiga kartochka (rasmlar bilan yuklash sekin bo'lishi mumkin) — fonda: guruhdagi javobni kutdirmaydi
+            threading.Thread(target=self._draft_bg, args=(q.pk, d, escalated), name="support-admin", daemon=True).start()
+            return None
+        return self._draft_now(q, d, escalated)
+
+    def _draft_bg(self, qid, d, escalated):
+        close_old_connections()
+        try:
+            q = Message.objects.select_related("user", "group").filter(pk=qid).first()
+            if q is not None:
+                self._draft_now(q, d, escalated)
+        except Exception:  # noqa: BLE001
+            log.exception("admin draft failed")
+        finally:
+            close_old_connections()
+
+    def _draft_now(self, q, d, escalated=False):
         from . import adminmsg
         esc = engine.html.escape
         head = "🚨 Odamga uzatildi" if escalated else "🕶 Soya rejimi"
@@ -1332,11 +1359,20 @@ class Handler:
     def _pg(self):
         """Joriy oraliq xabar (bo'lmasa — hech narsa qilmaydigan bo'sh obyekt)."""
         pg = getattr(self, "progress", None)
+        if pg is not None:
+            pg.on_done = self._replied
         return pg if pg is not None else Progress(self.tg, Message(chat_id=0, message_id=0), False)
+
+    def _replied(self):
+        if getattr(self, "_t_reply", 0) is None:
+            self._t_reply = time.monotonic()
 
     def _safe_send(self, chat_id, text, reply_to=None, buttons=None):
         try:
-            return self.tg.send(chat_id, text, reply_to=reply_to, buttons=buttons)
+            sent = self.tg.send(chat_id, text, reply_to=reply_to, buttons=buttons)
+            if sent and getattr(self, "_t_reply", 0) is None:
+                self._t_reply = time.monotonic()  # guruhga birinchi javob ketgan payt (tezlik o'lchovi)
+            return sent
         except TelegramError as e:
             log.warning("send failed chat=%s: %s", chat_id, e)
             Bot.objects.filter(pk=self.bot.pk).update(last_error=f"sendMessage: {e}"[:500])
@@ -1592,6 +1628,9 @@ class Progress:
         got = self._edit_lock.acquire(timeout=self.LOCK_WAIT)  # yo'ldagi kadr tugashini kutish (tarmoq sekin bo'lsa ham tartib saqlanadi)
         try:
             self.tg.edit_text(self.q.chat_id, self.id, html_text, buttons=buttons)
+            cb = getattr(self, "on_done", None)
+            if cb:
+                cb()
             if self._net_err or not got:
                 self._confirm(html_text, buttons)
             return {"message_id": self.id}
@@ -1898,6 +1937,23 @@ def _nightly_labels(hist):
     return AIJob.objects.create(kind=AIJob.LABELS, params={"limit": 1000}, created_by="avto (tun)")
 
 
+def _media_thread(nightly=False):
+    from . import screens, slim
+    close_old_connections()
+    try:
+        if nightly or not screens.ScreenType.objects.exists():
+            log.info("screens rebuild: %s", screens.rebuild())
+        screens.assign_new()
+        for _ in range(20):  # ko'pi bilan ~6000 ta rasm bir martada (birinchi ishga tushishda eski rasmlar)
+            st = slim.run(limit=300)
+            if st["thumb"] + st["drop"] < 300:
+                break
+    except Exception:  # noqa: BLE001
+        log.exception("media thread failed")
+    finally:
+        close_old_connections()
+
+
 def run_forever(poll=10):
     from . import history as hist
     from .models import AIJob, SupportTask
@@ -1909,6 +1965,7 @@ def run_forever(poll=10):
     AIJob.objects.filter(status=AIJob.RUNNING).update(status=AIJob.QUEUED)
     last_cleanup = 0.0
     last_learn = time.time() - 3000  # ishga tushgandan ~10 daqiqa o'tib birinchi o'qitish
+    media_worker, last_media, last_screens = None, time.time() - 420, 0.0
     # jarayon qayta ishga tushsa, chala qolgan vazifa qayta navbatga qo'yiladi
     HistoryJob.objects.filter(status=HistoryJob.RUNNING).update(status=HistoryJob.QUEUED)
     log.info("support runner started; OCR: %s", ocr.languages() or "yo'q")
@@ -1960,6 +2017,15 @@ def run_forever(poll=10):
             if time.time() - last_cleanup > 86400:
                 vision.cleanup(Settings.load().media_days)
                 last_cleanup = time.time()
+            if (media_worker is None or not media_worker.is_alive()) and time.time() - last_media > 600:
+                # rasmlar: ekran turiga biriktirish va joy (eskiz / Telegram havolasi) — fonda, har 10 daqiqada;
+                # kechasi bir marta — turlarni qayta guruhlash
+                last_media = time.time()
+                nightly = time.time() - last_screens > 20 * 3600 and hist.is_night(None, Settings.load())
+                if nightly:
+                    last_screens = time.time()
+                media_worker = threading.Thread(target=_media_thread, args=(nightly,), name="support-media", daemon=True)
+                media_worker.start()
         except Exception:  # noqa: BLE001
             log.exception("runner loop error")
         time.sleep(poll)

@@ -104,6 +104,13 @@ class Settings(models.Model):
     remind_max = models.PositiveSmallIntegerField("Bitta savol bo'yicha ko'pi bilan eslatma", default=3, db_default=3)
     # guruh uzun javoblar bilan to'lib ketmasin: N daqiqadan keyin javob yig'iladi (bosib ochiladigan iqtibos); 0 — o'chiq
     collapse_after = models.PositiveSmallIntegerField("Javobni yig'ish (daqiqa, 0 — yig'ilmaydi)", default=3, db_default=3)
+    # --- rasmlar joyi: asl nusxa N kun (tanilmagan / ochiq savollar); keyin kichik eskiz + Telegram havolasi ---
+    media_full_days = models.PositiveSmallIntegerField("Asl rasmni saqlash (kun); keyin — eskiz", default=3, db_default=3)
+    # --- ish vaqti: javob vaqti faqat shu oraliqda hisoblanadi (tun va dam olish kunlari kutish hisoblanmaydi) ---
+    work_from = models.PositiveSmallIntegerField("Ish boshlanishi (soat)", default=9, db_default=9)
+    work_to = models.PositiveSmallIntegerField("Ish tugashi (soat)", default=19, db_default=19)
+    work_days = models.CharField("Ish kunlari (0 — dushanba … 6 — yakshanba)", max_length=20, default="0,1,2,3,4",
+                                 db_default="0,1,2,3,4")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -458,6 +465,10 @@ class Media(models.Model):
     # noto'g'ri yuborilgan / keraksiz rasm: tanilmaganlar ro'yxatida ko'rinmaydi va avtomatik o'rgatilmaydi (qaytarsa bo'ladi)
     ignored = models.BooleanField(default=False, db_default=False)
     tg_file_ids = models.JSONField(default=dict, blank=True)  # {bot_id: file_id} — qayta yuklamasdan yuborish
+    # joy: asl nusxa o'rniga kichik eskiz (yoki umuman fayl yo'q) — vizual iz va OCR bazada, asli Telegram'da qoladi
+    slim = models.BooleanField(default=False, db_default=False)
+    full_size = models.PositiveIntegerField(default=0, db_default=0)  # asl fayl hajmi (eskizga almashtirilgunga qadar)
+    screen = models.ForeignKey("ScreenType", null=True, blank=True, on_delete=models.SET_NULL, related_name="media")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -586,6 +597,28 @@ class Tag(models.Model):
 
     class Meta:
         ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.title
+
+
+class ScreenType(models.Model):
+    """Umumiy rasm turi (ekran): "Yangi nuqta moderatsiyada", "Vizitlar", "Savat", "Kirish oynasi"... — o'xshash
+    skrinshotlar avtomatik guruhlanadi (vizual iz bo'yicha). Savollar shu tur ichida jamlanadi; ekranning o'zi savolni
+    hal qilsa — standart javob (entry) biriktiriladi. Namunalar (hashes) — tanish uchun, rasmlarning o'zi saqlanmaydi."""
+
+    title = models.CharField(max_length=200)
+    title_locked = models.BooleanField(default=False)  # admin nomlagan — qayta guruhlashda o'zgarmaydi
+    tag = models.CharField(max_length=40, blank=True, default="")
+    entry = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="screens")
+    hashes = models.JSONField(default=list, blank=True)  # [["dhash", "dhash_mid"], ...] — vakillar
+    count = models.PositiveIntegerField(default=0)
+    hidden = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-count", "id"]
 
     def __str__(self):
         return self.title

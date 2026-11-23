@@ -22,6 +22,47 @@ def local(dt):
     return dt.astimezone(TZ)
 
 
+_HOURS = {"key": None, "v": (9, 19, frozenset(range(5)))}
+
+
+def work_hours():
+    """(boshlanish soati, tugash soati, ish kunlari) — sozlamalardan (bir daqiqa keshlanadi)."""
+    import time as _t
+    slot = int(_t.time() // 60)
+    if _HOURS["key"] != slot:
+        from .models import Settings
+        s = Settings.load()
+        days = frozenset(int(x) for x in str(s.work_days or "").split(",") if x.strip().isdigit() and int(x) < 7)
+        start, end = min(23, s.work_from or 0), min(24, s.work_to or 24)
+        _HOURS.update(key=slot, v=(start, end if end > start else 24, days or frozenset(range(7))))
+    return _HOURS["v"]
+
+
+def work_secs(a, b, hours=None):
+    """Savol va javob orasidagi kutish — faqat ish vaqtida (tun, dam olish kunlari hisoblanmaydi). Kechqurun 21:00 da
+    kelib, ertasi 9:10 da javob berilgan savol — 10 daqiqa. Ikkalasi ham ish vaqtidan tashqarida va o'sha oraliqda ish vaqti
+    bo'lmasa (xodim kechqurun darhol javob bergan) — haqiqiy farq."""
+    if a is None or b is None:
+        return None
+    raw = (b - a).total_seconds()
+    if raw <= 0:
+        return 0.0
+    start, end, days = hours or work_hours()
+    la, lb = local(a), local(b)
+    total, d = 0.0, la.date()
+    for _ in range(400):
+        if d > lb.date():
+            break
+        if d.weekday() in days:
+            ws = datetime.combine(d, time(start), TZ)
+            we = datetime.combine(d, time(end - 1, 59, 59), TZ) + timedelta(seconds=1) if end == 24 else datetime.combine(d, time(end), TZ)
+            lo, hi = max(ws, la), min(we, lb)
+            if hi > lo:
+                total += (hi - lo).total_seconds()
+        d += timedelta(days=1)
+    return round(total if total > 0 else raw, 1)
+
+
 def scoped(qs):
     """Tahlil doirasi: faqat jonli xabarlar (guruh tarixidan o'rganilganlar — faqat bilim uchun, statistikaga kirmaydi)
     va tahlilga qo'shilgan guruhlar (test guruhlari — Sozlamalar → Guruhlar)."""
@@ -201,6 +242,10 @@ def speed(start, end, info=None):
                                               answered_at__isnull=False))
                 .values("id", "created_at", "answered_at", "stage", "photo_file_id", "group__title", "timing", "text"))
     def secs(r):
+        # agent ko'radigan vaqt: Telegram'da yuborilgandan guruhga javob ketguncha (o'lchov bo'lsa — aniq, aks holda bazadagi vaqt)
+        t = r["timing"] or {}
+        if isinstance(t.get("reply"), (int, float)):
+            return round((float(t.get("recv") or 0) + float(t.get("queue") or 0) + t["reply"]) / 1000, 2)
         return max(0.0, (r["answered_at"] - r["created_at"]).total_seconds())
     all_s = [secs(r) for r in rows]
     buckets = Counter(next(label for lim, label in SPEED_BUCKETS if v <= lim) for v in all_s)

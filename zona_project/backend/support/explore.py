@@ -15,7 +15,7 @@ from statistics import median
 from django.db.models import Q
 
 from .models import Activity, Message
-from .workload import BOT_STAGES, local, period
+from .workload import BOT_STAGES, local, period, work_hours, work_secs
 
 WD = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
 STAFF_STAGES = ("staff", "panel", "react")
@@ -23,7 +23,7 @@ DATASETS = ("questions", "staff", "activity")
 DIMS = {
     "questions": ["day", "week", "month", "hour", "weekday", "group", "tag", "asker", "role", "project", "territory", "answer",
                   "staff", "status", "resolution", "topic", "responsible", "category", "app", "origin", "source", "photo",
-                  "speed"],
+                  "speed", "screen"],
     "staff": ["day", "week", "month", "hour", "weekday", "group", "staff", "kind", "topic", "asker", "source"],
     "activity": ["day", "week", "month", "weekday", "group", "person", "who"],
 }
@@ -92,16 +92,26 @@ def _q_rows(qs):
                                                                              "user__contact__name", "user__name")):
         if qid not in first:
             first[qid], first_by[qid] = at, (cname or mname or uname or "")
+    from .models import Media
+    screen = {}
+    for mid, title in (Media.objects.filter(message_id__in=ids, screen__isnull=False).order_by("id")
+                       .values_list("message_id", "screen__title")):
+        screen.setdefault(mid, title)  # savoldagi birinchi rasmning ekran turi
     roles = {"SVR": "Supervayzer", "TP": "Savdo vakili", "MER": "Merchendayzer", "RSM": "RSM", "ASM": "ASM", "ROP": "ROP",
              "KAM": "KAM", "OTHER": "Boshqa"}
     names = {}
     out = []
+    hours = work_hours()
     for r in rows:
-        done = r["status"] in (Message.ANSWERED, Message.CLOSED)
-        bot = done and r["stage"] in BOT_STAGES
-        staff = done and r["stage"] in STAFF_STAGES
-        cands = [x for x in ((r["answered_at"] if bot else None), first.get(r["id"])) if x]
-        secs = max(0.0, (min(cands) - r["created_at"]).total_seconds()) if cands else None
+        fs = first.get(r["id"])
+        # javob berilgan: bot/xodim yopgan, savol egasi "hal bo'ldi" degan yoki xodim javob yozgan (reply bilan)
+        done = r["status"] in (Message.ANSWERED, Message.CLOSED) or r["resolution"] == Message.YES or fs is not None
+        bot = r["status"] in (Message.ANSWERED, Message.CLOSED) and r["stage"] in BOT_STAGES
+        staff = not bot and done and (r["stage"] in STAFF_STAGES or fs is not None)
+        # bot — haqiqiy soniyalar; xodim — faqat ish vaqti (tun va dam olish kunlari kutish hisoblanmaydi)
+        cands = [x for x in ((max(0.0, (r["answered_at"] - r["created_at"]).total_seconds()) if bot and r["answered_at"] else None),
+                             work_secs(r["created_at"], fs, hours) if fs else None) if x is not None]
+        secs = min(cands) if cands else None
         uid = str(r["user_id"] or "")
         if uid:
             names[uid] = r["user__name"] or ("@" + r["user__username"] if r["user__username"] else uid)
@@ -117,6 +127,7 @@ def _q_rows(qs):
              "tag": list(r["tags"] or []) or ["—"],
              "category": r["category"] or "—", "app": r["app"] or "—", "origin": r["origin"] or "—", "source": r["source"],
              "photo": "Rasmli" if r["photo_file_id"] else "Matnli",
+             "screen": screen.get(r["id"]) or ("Turi aniqlanmagan ekran" if r["photo_file_id"] else "Rasmsiz"),
              "speed": next(lbl for lim, lbl in SPEED if secs <= lim) if secs is not None else "Javob yo'q"}
         out.append((k, {"bot": bot, "staff": staff, "done": done, "res": r["resolution"], "secs": secs,
                         "photo": bool(r["photo_file_id"]), "uid": uid, "id": r["id"]}))
@@ -152,6 +163,7 @@ def _s_rows(start, end, scope):
         qs = qs.filter(source="live")
     names = {}
     out = []
+    hours = work_hours()
     for r in qs.values("id", "created_at", "kind", "text", "source", "group__title", "question_id", "question__created_at",
                        "question__entry__title", "question__user_id", "question__user__name", "user__member__name",
                        "user__contact__name", "user__name"):
@@ -160,8 +172,7 @@ def _s_rows(start, end, scope):
         uid = str(r["question__user_id"] or "")
         if uid:
             names[uid] = r["question__user__name"] or uid
-        secs = (max(0.0, (r["created_at"] - r["question__created_at"]).total_seconds())
-                if r["question__created_at"] else None)
+        secs = work_secs(r["question__created_at"], r["created_at"], hours) if r["question__created_at"] else None
         k = {**_time_keys(r["created_at"]), "group": r["group__title"] or "—",
              "staff": r["user__contact__name"] or r["user__member__name"] or r["user__name"] or "—", "kind": kind,
              "topic": r["question__entry__title"] or "Turi aniqlanmagan", "asker": uid, "source": r["source"]}

@@ -245,8 +245,37 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
   );
 
   if (part === "answering") {
+    const days = new Set(String(f.work_days ?? "").split(",").filter(Boolean).map(Number));
+    const toggleDay = (d: number) => {
+      const next = new Set(days);
+      if (next.has(d)) next.delete(d); else next.add(d);
+      setF({ ...f, work_days: [...next].sort().join(",") });
+    };
     return (
       <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="gap-3 p-4 lg:col-span-2">
+          <div>
+            <div className="text-sm font-semibold">{t("workTitle")}</div>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("workHint")}</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="grid gap-1 text-xs">{t("workFrom")}
+              <Input type="number" min={0} max={23} value={f.work_from} onChange={num("work_from")} className="h-9 w-24" /></label>
+            <label className="grid gap-1 text-xs">{t("workTo")}
+              <Input type="number" min={1} max={24} value={f.work_to} onChange={num("work_to")} className="h-9 w-24" /></label>
+            <div className="grid gap-1 text-xs">{t("workDays")}
+              <div className="flex gap-1">
+                {[0, 1, 2, 3, 4, 5, 6].map((d) => (
+                  <button key={d} type="button" onClick={() => toggleDay(d)} aria-pressed={days.has(d)}
+                    className={`h-9 w-10 rounded-md border text-xs ${days.has(d) ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground"}`}>
+                    {t(`wd${d}` as SKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {saveBtn}
+          </div>
+        </Card>
         <Card className="gap-3 p-4 lg:col-span-2">
           <div>
             <div className="text-sm font-semibold">{t("polTitle")}</div>
@@ -335,6 +364,7 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
         {sw("ocr_enabled", t("ocrOn"), s.ocr_available ? t("ocrLangs", { l: s.ocr_languages }) : <span className="text-warning">{t("ocrMissing")}</span>)}
         {field(t("imgThreshold"), t("imgThresholdHint"), <Input type="number" min={2} max={20} value={f.image_threshold} onChange={num("image_threshold")} />)}
         {field(t("mediaDays"), t("mediaDaysHint"), <Input type="number" value={f.media_days} onChange={num("media_days")} />)}
+        {field(t("mediaFullDays"), t("mediaFullDaysHint"), <Input type="number" min={1} max={60} value={f.media_full_days} onChange={num("media_full_days")} />)}
         <div>{saveBtn}</div>
       </Card>
     );

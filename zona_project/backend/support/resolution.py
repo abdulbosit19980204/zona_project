@@ -493,7 +493,8 @@ def queue_of(member, now=None):
               .filter(Q(handler_id__in=users) | Q(entry__responsible=member))
               .filter(Q(resolution__in=[ASKED, NO, WORK]) | Q(status=Message.ESCALATED, resolution=""))
               .exclude(status=Message.IGNORED).count())
-    times = [max(0.0, (at - qat).total_seconds()) for at, qat in
+    from .workload import work_secs
+    times = [work_secs(qat, at) for at, qat in
              Message.objects.filter(kind=Message.STAFF, user_id__in=users, created_at__gte=since, question__isnull=False)
              .values_list("created_at", "question__created_at")[:500]]
     return open_q, (median(times) if times else None)
