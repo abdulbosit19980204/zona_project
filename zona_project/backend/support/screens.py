@@ -21,6 +21,7 @@ MIN_SIZE = 5       # avtomatik tur — kamida shuncha rasm
 MAX_REPS = 24      # turning vakil izlari (tanish uchun)
 WEEKDAYS = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
 NOISE = re.compile(r"\blte\b|кб/с|kb/s|\b4g\b|\b5g\b|%|©|®|›|„", re.I)
+NAV = ("визиты", "каталог", "задания", "корзина", "профиль", "главная", "заказы")  # pastki menyu — sarlavha emas
 _lock = threading.Lock()
 
 
@@ -46,7 +47,7 @@ def _candidates(ocr):
         if sum(1 for w in WEEKDAYS if re.search(rf"(?<!\w){w}(?!\w)", low)) >= 3:
             out.append("Vizitlar (kalendar)")
             continue
-        if NOISE.search(ln):
+        if NOISE.search(ln) or sum(1 for w in NAV if w in low) >= 3:
             continue
         ln = re.sub(r"^[\W\d_]+", "", ln).strip()
         letters = sum(c.isalpha() for c in ln)
@@ -60,8 +61,9 @@ def _candidates(ocr):
     return list(dict.fromkeys(out))
 
 
-def name_of(ocrs):
-    """Eng ko'p rasmda uchraydigan sarlavha qatori (kamida 25% rasmda) — bo'lmasa bo'sh."""
+def name_of(ocrs, loose=False):
+    """Eng ko'p rasmda uchraydigan sarlavha qatori (kamida 15% rasmda; loose — kamida 2 ta). To'liqroq qator ustun:
+    "Вы не в активной зоне" — "Торговой точки" dan yaxshiroq. Bo'lmasa bo'sh."""
     texts = [o for o in ocrs if o]
     if not texts:
         return ""
@@ -70,8 +72,16 @@ def name_of(ocrs):
         df.update(_candidates(o)[:6])
     if not df:
         return ""
-    line, n = df.most_common(1)[0]
-    return line if n >= max(2, 0.25 * len(texts)) else ""
+    need = 2 if loose else max(2, 0.15 * len(texts))
+    best = max(((ln, n * (0.5 + 0.1 * min(5, len(ln.split())))) for ln, n in df.items() if n >= need),
+               key=lambda x: x[1], default=None)
+    return best[0] if best else ""
+
+
+def title_key(title):
+    """Nomlarni solishtirish: "Оформление заказа" = "Оформлении заказа", "Проверьте товары в корзине перед (оформлением)"."""
+    words = [w[:5] for w in re.findall(r"\w+", (title or "").lower()) if len(w) >= 3][:3]
+    return " ".join(words)
 
 
 def tag_of(texts):
@@ -211,16 +221,37 @@ def _rebuild(min_size):
         if tid is None and len(members) < min_size:
             continue
         title = name_of([r["ocr_text"] for r in members])
-        if tid is None and title and title.lower() in by_title:
-            tid = by_title[title.lower()]  # bir xil nomli ekran (boshqa rangda / o'lchamda) — bitta tur
+        if tid is None and title and title_key(title) in by_title:
+            tid = by_title[title_key(title)]  # bir xil nomli ekran (boshqa rangda / o'lchamda) — bitta tur
         if tid is None:
             t = ScreenType.objects.create(title=title or "Nomsiz ekran", count=0)
             existing[t.id] = t
             created += 1
             tid = t.id
             if title:
-                by_title[title.lower()] = tid
+                by_title[title_key(title)] = tid
         assign[tid].extend(members)
+    from .models import Tag
+    tag_titles = dict(Tag.objects.values_list("key", "title"))
+    # nomlar: avtomatik turlar — rasmlardagi matndan; topilmasa — kamroq uchraydigan qator yoki teg nomi
+    names = {}
+    for tid, members in assign.items():
+        t = existing[tid]
+        if t.title_locked:
+            names[tid] = t.title
+            continue
+        ocrs = [r["ocr_text"] for r in members]
+        names[tid] = name_of(ocrs) or name_of(ocrs, loose=True) or ""
+    # bir xil nomli avtomatik turlar — bittasiga (eng kattasiga) birlashtiriladi
+    by_key = {}
+    for tid in sorted(assign, key=lambda x: -len(assign[x])):
+        k = title_key(names[tid])
+        if not k:
+            continue
+        if k in by_key and not existing[tid].title_locked:
+            assign[by_key[k]].extend(assign.pop(tid))
+        else:
+            by_key.setdefault(k, tid)
     with transaction.atomic():
         Media.objects.filter(kind=Media.PHOTO, screen__isnull=False).exclude(
             id__in=[r["id"] for ms in assign.values() for r in ms]).filter(screen__title_locked=False).update(screen=None)
@@ -241,8 +272,8 @@ def _rebuild(min_size):
             t.hashes = reps
             t.count = len(members)
             if not t.title_locked:
-                t.title = name_of([r["ocr_text"] for r in members]) or t.title
                 t.tag = tag_of(["\n".join(x for x in (r["ocr_text"], r["message__text"]) if x) for r in members[:300]]) or t.tag
+                t.title = names.get(tid) or (f"{tag_titles[t.tag]} — ekran" if t.tag in tag_titles else "") or t.title
             t.save()
         # rasmsiz qolgan avtomatik turlar — yashiriladi (o'chirilmaydi)
         ScreenType.objects.exclude(pk__in=assign.keys()).filter(title_locked=False).update(count=0, hidden=True)

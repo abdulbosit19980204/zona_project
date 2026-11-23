@@ -61,7 +61,7 @@ class MediaBase(OpenBase):
         self.addCleanup(p.stop)
         screens._CACHE["key"] = None
 
-    def photo(self, kind="moderation", name="AGENT", ocr="Новая торговая точка\nТорговая точка ABC отправлена на модерацию", age_h=5,
+    def photo(self, kind="moderation", name="AGENT", ocr="Новая торговая точка\nТорговая точка «ABC SHOP» отправлена на модерацию", age_h=5,
               msg=None, **kw):
         m = vision.store(screen(kind=kind, name=name), source="question", message=msg)
         Media.objects.filter(pk=m.pk).update(ocr_text=ocr, created_at=timezone.now() - dt.timedelta(hours=age_h), **kw)
@@ -76,9 +76,9 @@ class ScreenTests(MediaBase):
         res = screens.rebuild()
         self.assertEqual(res["types"], 2)
         t = ScreenType.objects.get(media=mods[0].pk)
-        self.assertEqual(t.title, "Новая торговая точка")
+        self.assertEqual(t.title, "Торговая точка отправлена на модерацию")
         self.assertEqual(t.count, 6)
-        self.assertEqual(Media.objects.get(pk=other[0].pk).screen.title, "Оформление заказа")
+        self.assertEqual(Media.objects.get(pk=other[0].pk).screen.title, "Проверьте товары в корзине")
         new = self.photo(name="YANGI DO'KON")
         self.assertEqual(screens.assign_new(), 1)
         self.assertEqual(Media.objects.get(pk=new.pk).screen_id, t.id)
