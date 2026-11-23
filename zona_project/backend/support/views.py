@@ -3,7 +3,7 @@
 Rollar (zona Profile): viewer — ko'rish, savolga javob yozish, yangi javob taklif qilish;
 editor — javoblarni tasdiqlash/tahrirlash, shablonlar; admin — botlar va sozlamalar.
 """
-from django.db.models import Count, Q
+from django.db.models import Case, Count, Q, When
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import action
@@ -46,7 +46,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
                    "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction",
-                   "thread_window", "category_owners"]
+                   "thread_window", "category_owners", "answer_keep_days", "answer_test_note", "review_button"]
 
 
 def _settings_payload(s):
@@ -990,6 +990,84 @@ def _zones(questions):
         key = zone or ("ProTarget va mobil ilova" if resp == "Pro-target" else "Boshqa")
         out[key] = out.get(key, 0) + 1
     return out
+
+
+def _review_row(q, media):
+    return {"id": q.id, "text": q.text, "ocr": (q.ocr_text or "")[:400], "problem": q.problem,
+            "group": q.group.title if q.group_id else "", "link": q.group.message_link(q.message_id) if q.group_id else "",
+            "user": q.user.name if q.user_id else "", "at": q.created_at, "answered_at": q.answered_at,
+            "answer_text": q.answer_text, "answered_by": q.answered_by, "stage": q.stage, "confidence": q.confidence,
+            "entry": q.entry_id, "entry_title": q.entry.title if q.entry_id else "", "feedback": q.feedback,
+            "review": q.review, "review_by": q.review_by, "review_at": q.review_at, "review_note": q.review_note,
+            "fixed_text": q.fixed_text, "fixed_by": q.fixed_by, "fixed_at": q.fixed_at, "sent": bool(q.fixed_msg_id),
+            "category": q.category, "app": q.app, "media": [media_dict(m) for m in media]}
+
+
+@zona_api(["GET"], [CanView])
+def reviews(request):
+    """Bot javoblari baholash ro'yxati (backend'da sahifalanadi). ?status=open|wrong|check|fixed|ok|all|none; ?q=; limit/offset.
+    none — hali baholanmagan bot javoblari (tahlil uchun ko'rib chiqish)."""
+    p = request.query_params
+    base = Message.objects.filter(kind=Message.QUESTION).exclude(stage="dup").filter(Q(answered_by="bot") | ~Q(review=""))
+    counts = dict(base.exclude(review="").values_list("review").annotate(c=Count("id")))
+    counts["none"] = base.filter(review="").count()
+    st = p.get("status") or "open"
+    qs = base
+    if st == "open":
+        qs = qs.filter(review__in=["wrong", "check"])
+    elif st == "none":
+        qs = qs.filter(review="")
+    elif st != "all":
+        qs = qs.filter(review=st)
+    if p.get("q"):
+        qs = qs.filter(Q(text__icontains=p["q"]) | Q(answer_text__icontains=p["q"]) | Q(ocr_text__icontains=p["q"]))
+    limit, offset = max(1, min(int(p.get("limit") or 20), 100)), max(0, int(p.get("offset") or 0))
+    # xatolar birinchi, keyin yangilari
+    qs = qs.order_by(Case(When(review="wrong", then=0), When(review="check", then=1), default=2), "-review_at", "-created_at")
+    total = qs.count()
+    rows = list(qs.select_related("group", "user", "entry")[offset:offset + limit])
+    infos = dict(Message.objects.filter(question_id__in=[q.pk for q in rows], kind=Message.INFO).values_list("pk", "question_id"))
+    media = {}
+    for m in Media.objects.filter(message_id__in=[*[q.pk for q in rows], *infos]).select_related("label").order_by("id"):
+        media.setdefault(infos.get(m.message_id, m.message_id), []).append(m)
+    return Response({"count": total, "counts": counts, "results": [_review_row(q, media.get(q.pk, [])[:12]) for q in rows]})
+
+
+@zona_api(["POST"], [ReadOrEdit])
+def review_action(request, pk):
+    """{"action": "wrong"|"ok"|"check"|"clear", "note"} yoki {"action": "fix", "text", "send": true, "learn": false}."""
+    from . import review
+    q = Message.objects.filter(pk=pk, kind=Message.QUESTION).select_related("bot", "group", "user", "entry").first()
+    if q is None:
+        return Response({"detail": "Topilmadi"}, status=404)
+    act, actor = request.data.get("action"), _actor(request)
+    if act in ("wrong", "ok", "check"):
+        review.mark(q, act, actor, str(request.data.get("note") or ""))
+    elif act == "clear":
+        Message.objects.filter(pk=pk).update(review="", review_by="", review_at=None, review_note="")
+    elif act == "fix":
+        text = str(request.data.get("text") or "").strip()
+        if not text:
+            return Response({"detail": "To'g'ri javobni yozing"}, status=400)
+        send, tg = bool(request.data.get("send", True)), None
+        if send:
+            from zona.crypto import decrypt
+
+            from .telegram import Client
+            token = decrypt(q.bot.token_enc) if q.bot_id else ""
+            if not token:
+                return Response({"detail": "Bot tokeni yo'q — guruhga yuborib bo'lmaydi"}, status=400)
+            tg = Client(token)
+        try:
+            _q, entry = review.fix(q, text, actor, tg=tg, send=send, learn_kb=bool(request.data.get("learn")))
+        except Exception as e:  # noqa: BLE001
+            return Response({"detail": f"Guruhga yuborib bo'lmadi: {e}"[:300]}, status=502)
+        q.refresh_from_db()
+        return Response({**_review_row(q, []), "kb_entry": entry.id if entry else None})
+    else:
+        return Response({"detail": "action noto'g'ri"}, status=400)
+    q.refresh_from_db()
+    return Response(_review_row(q, []))
 
 
 def _admin_resolve(questions, value, actor):

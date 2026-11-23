@@ -60,6 +60,14 @@ export interface SystemsInfo {
   groups: { title: string; total: number; apps: Record<string, number>; origins: Record<string, number>;
     top: { category: string; n: number }[]; resolved: number }[];
 }
+export type ReviewStatus = "" | "wrong" | "check" | "ok" | "fixed";
+export interface ReviewRow {
+  id: number; text: string; ocr: string; problem: string; group: string; link: string; user: string; at: string;
+  answered_at: string | null; answer_text: string; answered_by: string; stage: string; confidence: number;
+  entry: number | null; entry_title: string; feedback: number; review: ReviewStatus; review_by: string; review_at: string | null;
+  review_note: string; fixed_text: string; fixed_by: string; fixed_at: string | null; sent: boolean; category: string; app: string;
+  media: MediaInfo[]; kb_entry?: number | null;
+}
 export interface SupportMessage {
   id: number; group: number | null; group_title: string; user_name: string; user_username: string; text: string;
   ocr_text: string; has_photo: boolean; media: MediaInfo[]; link: string; lang: string; status: MsgStatus; stage: string; entry: number | null;
@@ -88,7 +96,7 @@ export interface SupportSettings {
   task_mode: "command" | "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
   self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all"; answer_variety: boolean; progress_messages: boolean;
   answer_policy: "standard" | "kb" | "all";
-  confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number; category_owners: Record<string, number> | null;
+  confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number; category_owners: Record<string, number> | null; answer_keep_days: number; answer_test_note: boolean; review_button: boolean;
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
@@ -242,6 +250,10 @@ export const supportApi = {
     post<{ ok: boolean; entry: number | null }>(`messages/${id}/answer/`, { text, save, approve }),
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),
   resolve: (id: number, value: Resolution) => post<{ ok: boolean }>(`messages/${id}/resolve/`, { value }),
+  reviews: (params: Record<string, string | number>) =>
+    get<{ count: number; counts: Partial<Record<"wrong" | "check" | "ok" | "fixed" | "none", number>>; results: ReviewRow[] }>("reviews/", params),
+  reviewAction: (id: number, body: { action: "wrong" | "ok" | "check" | "clear" | "fix"; note?: string; text?: string; send?: boolean; learn?: boolean }) =>
+    post<ReviewRow>(`reviews/${id}/`, body),
   resolveBulk: (ids: number[], value: "yes" | "no") => post<{ ok: boolean; done: number }>("messages/resolve-bulk/", { ids, value }),
   setLabel: (id: number, body: { app?: SysApp; origin?: SysOrigin; category?: SysCategory; solution?: string; train?: boolean | null }) =>
     post<Record<string, unknown>>(`messages/${id}/label/`, body),

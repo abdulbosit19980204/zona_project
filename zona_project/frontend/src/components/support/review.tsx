@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, Copy, ExternalLink, RotateCcw, GitMerge, Layers, ListChecks, MessageSquare, Pencil, Search, Sparkles, SquareStack, Star, X } from "lucide-react";
+import { Bot, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, RotateCcw, GitMerge, Layers, ListChecks, MessageSquare, Pencil, Search, Sparkles, SquareStack, Star, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
@@ -18,6 +18,7 @@ import { useCan } from "@/hooks/use-org";
 import { supportApi, type Entry } from "./api";
 import { EntryBadge, EntryPicker, fmtDate, Segmented, useSupportMutation } from "./common";
 import { AISuggestions } from "./ai-suggestions";
+import { BotAnswers } from "./bot-answers";
 import { Duplicates } from "./duplicates";
 import { Recheck } from "./recheck";
 import { EntryEditor } from "./entry-editor";
@@ -25,7 +26,7 @@ import { MediaRow } from "./media";
 import { useSt, type SKey, type ST } from "./i18n";
 import { SupportShell } from "./shell";
 
-type View = "queue" | "cards" | "clusters" | "dups" | "recheck" | "ai";
+type View = "queue" | "cards" | "clusters" | "dups" | "recheck" | "ai" | "answers";
 const PAGE = 20;
 
 export function SupportReview() {
@@ -54,6 +55,8 @@ function ReviewInner() {
   const all = useQuery({ queryKey: ["support", "entries", "queue-all"], queryFn: () => supportApi.entries({ status: "new,review" }),
     enabled: view === "clusters" });
   const total = fresh.data?.count ?? 0;
+  const rv = useQuery({ queryKey: ["support", "reviews", "count"], queryFn: () => supportApi.reviews({ status: "open", limit: 1 }), staleTime: 30_000 });
+  const openReviews = (rv.data?.counts.wrong ?? 0) + (rv.data?.counts.check ?? 0);
   const items = useMemo(() => [...(page === 0 && !search ? edits.data ?? [] : []), ...(fresh.data?.results ?? [])]
     .sort((a, b) => Number(b.priority) - Number(a.priority)), [fresh.data, edits.data, page, search]);
   const pages = Math.max(1, Math.ceil(total / PAGE));
@@ -86,10 +89,12 @@ function ReviewInner() {
           { value: "dups", label: t("viewDups"), icon: Copy },
           { value: "recheck", label: t("viewRecheck"), icon: RotateCcw },
           { value: "ai", label: t("viewAI"), icon: Sparkles },
+          { value: "answers", label: t("viewAnswers"), count: openReviews || undefined, icon: Bot },
         ]} />
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">{t(`viewHint_${view}` as SKey)}</p>
       </div>
       {view === "ai" && <AISuggestions t={t} />}
+      {view === "answers" && <BotAnswers t={t} />}
       {view === "dups" && <Duplicates t={t} />}
       {view === "recheck" && <Recheck t={t} onEdit={edit} />}
       {(view === "queue" || view === "cards") && pager}

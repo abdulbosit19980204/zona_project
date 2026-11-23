@@ -251,6 +251,11 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {sw("escalation_ack", t("t_escalation"))}
           {sw("feedback_buttons", t("t_feedback"))}
           {sw("thanks_reaction", t("t_thanks"), t("t_thanksHint"))}
+          {sw("answer_test_note", t("t_answerNote"), t("t_answerNoteHint"))}
+          {sw("review_button", t("t_reviewBtn"), t("t_reviewBtnHint"))}
+          {field(t("t_keepDays"), t("t_keepDaysHint"),
+            <Input type="number" min={0} max={3650} value={f.answer_keep_days} onChange={num("answer_keep_days")}
+              onBlur={() => toggle.mutate({ answer_keep_days: f.answer_keep_days })} />)}
           {sw("confirm_resolution", t("t_confirm"), t("t_confirmHint"))}
           {f.confirm_resolution && field(t("t_confirmAfter"), undefined,
             <Input type="number" min={0} value={f.confirm_after} onChange={num("confirm_after")}

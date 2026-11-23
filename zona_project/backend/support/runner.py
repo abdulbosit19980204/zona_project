@@ -17,7 +17,7 @@ from django.utils import timezone
 from zona import conf
 from zona.crypto import decrypt
 
-from . import contacts, conversation, engine, ocr, resolution, systems, translit, vision
+from . import contacts, conversation, engine, ocr, resolution, review, systems, translit, vision
 from .models import (MODE_COLLECT, MODE_LIVE, MODE_OFF, MODE_SHADOW, Bot, Entry, EntryVersion, Group, HistoryJob,
                      Media, Message, Settings, TgUser)
 from .telegram import Client, TelegramError
@@ -560,9 +560,10 @@ class Handler:
             raw = "\n".join(x for x in (root.text, info.text) if x)
             d = engine.followup(raw, lang, conversation.context(root), asker=_asker(root), previous=root.answer_text)
         if d is not None and not d.needs_human and d.text and engine.allowed(d, settings):
-            body = engine.to_html(self._script(root, d.text), settings.signature)
-            buttons = ([[{"text": "👍", "callback_data": f"fb:{root.id}:1"}, {"text": "👎", "callback_data": f"fb:{root.id}:-1"}]]
-                       if settings.feedback_buttons else None)
+            body = engine.to_html(self._script(root, d.text), "" if settings.answer_test_note else settings.signature)
+            if settings.answer_test_note:
+                body += review.note_html(engine.detect_lang(info.text or root.text))
+            buttons = review.buttons(root, settings)
             sent = self._safe_send(root.chat_id, body, reply_to=info.message_id, buttons=buttons)
             if sent:
                 Message.objects.filter(pk=root.pk).update(answer_text=d.text, answered_at=timezone.now(), stage="ai",
@@ -786,8 +787,7 @@ class Handler:
             line = engine.responsible_line(d.responsible, q.lang) if d.stage == "rule" else ""
             if line and settings.mention_responsible:
                 body += "\n\n" + line
-            buttons = ([[{"text": "👍", "callback_data": f"fb:{q.id}:1"}, {"text": "👎", "callback_data": f"fb:{q.id}:-1"}]]
-                       if settings.feedback_buttons else None)
+            buttons = review.buttons(q, settings)
             sent = self._send_answer(q, self._decorate(q, d, engine.to_html(body, settings.signature)), d.entry, buttons)
             if sent:
                 q.status, q.answered_by, q.answered_at = Message.ANSWERED, "bot", timezone.now()
@@ -880,6 +880,17 @@ class Handler:
                 vision.label(Media.objects.filter(message=q, kind=Media.PHOTO), entry, staff_name, auto=True)
         return a
 
+    def _mark_wrong(self, cb, q, user):
+        """Xodim/admin bot javobini xato deb belgiladi: tuzatish ro'yxatiga; admin chatiga — havola bilan (bir marta)."""
+        first = q.review not in (review.WRONG, review.FIXED)
+        review.mark(q, review.WRONG, user.staff_name() or user.name)
+        if first and self.bot.admin_chat_id:
+            link = q.group.message_link(q.message_id) if q.group_id else ""
+            body = (f"⚠️ <b>Xato javob</b> — belgiladi: {engine.html.escape(user.staff_name() or user.name)}\n"
+                    f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((q.answer_text or '')[:400])}")
+            self._safe_send(self.bot.admin_chat_id, body, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
+        return self.tg.answer_callback(cb["id"], "Belgilandi — tuzatish ro'yxatiga qo'shildi. Rahmat!")
+
     # ---------------------------------------------------------------- tugmalar
     def on_callback(self, cb):
         data = cb.get("data") or ""
@@ -890,9 +901,20 @@ class Handler:
         if kind == "fb":
             mid, _, val = rest.partition(":")
             q = Message.objects.filter(pk=int(mid or 0), bot=self.bot).select_related("entry").first()
+            if q and (user.is_staff or chat_id == self.bot.admin_chat_id) and q.user_id != user.id:
+                # xodim baholadi: 👎 — xato javob (tuzatish ro'yxatiga), 👍 — to'g'ri deb tasdiqlandi
+                if val == "1":
+                    review.mark(q, review.OK, user.staff_name())
+                    return self.tg.answer_callback(cb["id"], "To'g'ri deb belgilandi")
+                return self._mark_wrong(cb, q, user)
             if not q or (q.user_id and q.user_id != user.id):
                 return self.tg.answer_callback(cb["id"], "Baholash faqat savol egasi uchun")
             if q.feedback == 0:
+                # savol egasining bahosi ham ko'rib chiqiladi: 👎 — xato ro'yxatiga, 👍 — tekshirish uchun
+                if val == "1":
+                    review.mark(q, review.CHECK, "savol egasi 👍")
+                else:
+                    review.mark(q, review.WRONG, "savol egasi 👎")
                 q.feedback = 1 if val == "1" else -1
                 q.save(update_fields=["feedback"])
                 if q.entry_id:
@@ -907,6 +929,13 @@ class Handler:
                 if q.resolution != Message.YES and not resolution.is_final(q):  # 👍 — hal bo'ldi, 👎 — hal bo'lmadi
                     resolution.mark(q, Message.YES if q.feedback > 0 else Message.NO, "savol egasi (👍/👎)")
             return self.tg.answer_callback(cb["id"], "Rahmat!")
+        if kind == "bad":  # ⚠️ Xato javob — faqat admin va xodimlar
+            q = Message.objects.filter(pk=int(rest or 0), bot=self.bot).select_related("group", "user").first()
+            if not q:
+                return self.tg.answer_callback(cb["id"], "Topilmadi")
+            if not (user.is_staff or chat_id == self.bot.admin_chat_id):
+                return self.tg.answer_callback(cb["id"], "Bu tugma xodimlar uchun. Javob yoqmasa — 👎 bosing.", alert=True)
+            return self._mark_wrong(cb, q, user)
         if kind == "rs":  # "hal bo'ldimi?" tugmalari
             mid, _, val = rest.partition(":")
             q = Message.objects.filter(pk=int(mid or 0), bot=self.bot).select_related("user", "group").first()
@@ -1011,6 +1040,10 @@ class Handler:
             line = engine.supervisor_line(q.user, q.lang)
             if line:
                 tail = "\n\n" + line
+        if s.answer_test_note:
+            if s.signature:  # test rejimi yozuvi imzo o'rnini bosadi ("🤖 avto-javob" ikki marta chiqmasin)
+                body_html = body_html.replace(f"\n\n<i>{engine.html.escape(s.signature)}</i>", "")
+            tail += review.note_html(q.lang)
         return head + body_html + tail
 
     def _send_answer(self, q, body_html, entry=None, buttons=None):
@@ -1107,8 +1140,7 @@ class Handler:
 
     def _respond_parts(self, q, d, settings):
         """Albomda turli ekranlar — har biriga alohida javob (bir xilini shu odam yaqinda olgan bo'lsa — qisqa eslatma)."""
-        buttons = ([[{"text": "👍", "callback_data": f"fb:{q.id}:1"}, {"text": "👎", "callback_data": f"fb:{q.id}:-1"}]]
-                   if settings.feedback_buttons else None)
+        buttons = review.buttons(q, settings)
         first = None
         for idx, e, conf in d.parts:
             head = f"🖼 Фото {idx + 1}" if q.lang == "ru" else f"🖼 {idx + 1}-rasm"

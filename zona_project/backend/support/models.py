@@ -88,6 +88,12 @@ class Settings(models.Model):
     history_night_to = models.PositiveSmallIntegerField("Tungi oyna tugashi (soat)", default=7, db_default=7)
     # toifa bo'yicha mas'ul — butun tizimda ustun: {"promo": <Member id>} (masalan, barcha aksiya savollari — operatorga)
     category_owners = models.JSONField("Toifa bo'yicha mas'ul", null=True, blank=True)
+    # --- bot javoblarini baholash ---
+    answer_keep_days = models.PositiveIntegerField("Bot javoblari skrinshotlarini saqlash (kun)", default=90, db_default=90)
+    answer_test_note = models.BooleanField("Javob tagida: avto-javob, test rejimi, fikringiz muhim", default=True,
+                                           db_default=True)
+    review_button = models.BooleanField("Javob ostida \"⚠️ Xato javob\" tugmasi (xodimlar uchun)", default=True,
+                                        db_default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -340,6 +346,16 @@ class Message(models.Model):
     label_conf = models.PositiveSmallIntegerField(default=0, db_default=0)
     labeled_by = models.CharField(max_length=6, blank=True, default="", db_default="")  # rule / ai / staff
     train = models.BooleanField(null=True, blank=True)  # o'qitish uchun yaroqlimi (AI baholaydi; None — baholanmagan)
+    # bot javobini baholash: "" — baholanmagan; wrong — xato (xodim ⚠️ yoki 👎); check — tekshirish (👍);
+    # ok — to'g'ri deb tasdiqlandi; fixed — to'g'ri javob yozildi (va guruhga yuborildi)
+    review = models.CharField(max_length=6, blank=True, default="", db_default="", db_index=True)
+    review_by = models.CharField(max_length=150, blank=True, default="", db_default="")
+    review_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.CharField(max_length=300, blank=True, default="", db_default="")
+    fixed_text = models.TextField(blank=True, default="", db_default="")
+    fixed_by = models.CharField(max_length=150, blank=True, default="", db_default="")
+    fixed_at = models.DateTimeField(null=True, blank=True)
+    fixed_msg_id = models.BigIntegerField(null=True, blank=True)  # guruhga yuborilgan tuzatilgan javob
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
 

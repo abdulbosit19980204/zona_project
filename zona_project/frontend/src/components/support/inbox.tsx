@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bot, BookOpen, CheckCheck, CircleCheck, CircleX, ExternalLink, Hourglass, Image as ImageIcon, Inbox, MessageSquareReply, Search, Send, Sparkles, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, BookOpen, CheckCheck, CircleCheck, CircleX, ExternalLink, Hourglass, Image as ImageIcon, Inbox, MessageSquareReply, Search, Send, Sparkles, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -262,6 +262,7 @@ function Conversation({ m, t, onBack }: { m: SupportMessage; t: ST; onBack: () =
   const answer = useSupportMutation(() => supportApi.answer(m.id, text, save, approve), t("sent"));
   const close = useSupportMutation(() => supportApi.close(m.id));
   const resolve = useSupportMutation((v: Resolution) => supportApi.resolve(m.id, v), t("saved"));
+  const wrong = useSupportMutation(() => supportApi.reviewAction(m.id, { action: "wrong" }), t("rvMarkedWrong"));
   const done = m.status === "answered" || m.status === "closed";
   const botSaid = m.answer_text && m.stage !== "panel";
   const send = () => answer.mutate(undefined, { onSuccess: () => setText("") });
@@ -299,6 +300,12 @@ function Conversation({ m, t, onBack }: { m: SupportMessage; t: ST; onBack: () =
             onClick={() => resolve.mutate(m.resolution === "no" ? "" : "no")} title={m.resolution === "no" ? t("markClear") : t("markNo")}>
             <CircleX className="size-3.5" />{t("markNo")}
           </Button>
+          {m.answered_by === "bot" && (
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive" disabled={wrong.isPending}
+              title={t("inboxMarkWrongHint")} onClick={() => wrong.mutate(undefined)}>
+              <AlertTriangle className="size-3.5" />{t("inboxMarkWrong")}
+            </Button>
+          )}
         </span>
       </div>
 

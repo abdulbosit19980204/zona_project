@@ -158,10 +158,17 @@ def cleanup(days):
     """O'rgatilmagan, biriktirilmagan eski savol rasmlarini o'chirish (0 — hech narsa o'chirilmaydi)."""
     if not days:
         return 0
+    from .models import Settings
     attached = {i for a in Entry.objects.exclude(attachments=[]).values_list("attachments", flat=True) for i in a}
     cutoff = timezone.now() - timezone.timedelta(days=days)
+    # bot javoblari tahlil uchun kamida answer_keep_days saqlanadi; xato / tekshirilmagan javoblar — tuzatilguncha
+    keep_bot = timezone.now() - timezone.timedelta(days=max(days, Settings.load().answer_keep_days or 0))
     n = 0
-    for m in Media.objects.filter(created_at__lt=cutoff, label__isnull=True, source__in=["question", "history"]).exclude(path=""):
+    for m in (Media.objects.filter(created_at__lt=cutoff, label__isnull=True, source__in=["question", "history"])
+              .exclude(path="").select_related("message")):
+        msg = m.message
+        if msg is not None and (msg.review in ("wrong", "check") or (msg.answered_by == "bot" and m.created_at > keep_bot)):
+            continue
         if m.pk in attached or Media.objects.filter(sha256=m.sha256).exclude(pk=m.pk).filter(label__isnull=False).exists():
             continue
         try:

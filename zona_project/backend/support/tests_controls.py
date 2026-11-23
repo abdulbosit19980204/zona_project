@@ -88,7 +88,7 @@ class ModeAndToggleTests(ControlsBase):
         self.assertTrue(q.answer_text)  # taklif tahlil uchun saqlanadi
 
     def test_escalation_and_feedback_toggles(self):
-        Settings.objects.filter(pk=Settings.load().pk).update(escalation_ack=False, feedback_buttons=False,
+        Settings.objects.filter(pk=Settings.load().pk).update(escalation_ack=False, feedback_buttons=False, review_button=False,
                                                                drafts_to_admin=False)
         h = self.handler()
         h.handle(group_msg(1, 10, "noma'lum murakkab savol bu yerda yozilgan"))
