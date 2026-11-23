@@ -91,6 +91,8 @@ class Handler:
             return self.on_membership(upd["my_chat_member"])
         if "callback_query" in upd:
             return self.on_callback(upd["callback_query"])
+        if "message_reaction" in upd:
+            return self.on_reaction(upd["message_reaction"])
         msg = upd.get("message")
         if not msg:
             return None
@@ -123,6 +125,25 @@ class Handler:
             self._safe_send(self.bot.admin_chat_id, f"ℹ️ Bot guruhga {state}: <b>{engine.html.escape(group.title)}</b>"
                                                     f"\nRejim: {group.get_mode_display()} (panelda o'zgartiriladi)")
         return group
+
+    # ---------------------------------------------------------------- xodim reaksiyasi
+    def on_reaction(self, data):
+        """Xodim savolga (yoki uning zanjiridagi xabarga) istalgan emoji qo'ydi — savolni qabul qildi (qisman javob):
+        odatdagidek keyin savol egasidan "hal bo'ldimi?" so'raladi. Reaksiya olib tashlansa — e'tiborsiz.
+        Telegram reaksiyalarni faqat bot guruhda admin bo'lsa yuboradi."""
+        if self.history or not self.settings.react_accept:
+            return None
+        chat = data.get("chat") or {}
+        sender = data.get("user") or {}
+        if chat.get("type") not in ("group", "supergroup") or not sender or sender.get("is_bot") or not data.get("new_reaction"):
+            return None
+        user = engine.identify(sender["id"], sender.get("username", ""), _full_name(sender))
+        if not user.is_staff:
+            return None
+        q = resolution.target_of(self.bot, chat["id"], data.get("message_id"))
+        if q is None or q.kind != Message.QUESTION or q.user_id == user.id or q.source != "live":
+            return None
+        return resolution.accept(q, user, react=True)
 
     # ---------------------------------------------------------------- shaxsiy chat
     def on_private(self, msg):
@@ -859,6 +880,9 @@ class Handler:
             return a
         if engine.is_handoff(text):
             return a  # boshqa xodimga yo'naltirish ("@operator", "Vali помогите") — savol hali javob kutadi, o'rganilmaydi
+        if not self.history:
+            # xodim javob berdi — savolni qabul qilgan; "hal bo'lmadi" / "jarayonda" bo'lsa — savol egasidan qayta so'raladi
+            resolution.accept(q, user, now=when)
         corrected = q.status == Message.ANSWERED and q.answered_by == "bot"
         if q.status != Message.ANSWERED or corrected:
             q.status, q.stage, q.answered_by, q.answered_at = Message.ANSWERED, "staff", staff_name, when
@@ -886,20 +910,23 @@ class Handler:
 
     def _mark_wrong(self, cb, q, user):
         """Xodim/admin bot javobini xato deb belgiladi: tuzatish ro'yxatiga; admin chatiga — havola bilan (bir marta)."""
-        first = q.review not in (review.WRONG, review.FIXED)
+        first = q.review != review.WRONG  # tuzatilgan javob ham qayta xato deb belgilanishi mumkin
+        refix = q.review == review.FIXED and bool((q.fixed_text or "").strip())
+        shown = q.fixed_text if refix else q.answer_text
         who = user.staff_name() if user.is_staff else f"{user.name or user.username or 'foydalanuvchi'} (agent)"
-        review.mark(q, review.WRONG, who)
+        review.mark(q, review.WRONG, who, note="tuzatilgan javob ham xato" if refix else "")
         if first and self.bot.admin_chat_id:
             link = q.group.message_link(q.message_id) if q.group_id else ""
-            body = (f"⚠️ <b>Xato javob</b> — belgiladi: {engine.html.escape(who)}\n"
-                    f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((q.answer_text or '')[:400])}")
+            title = "Tuzatilgan javob ham xato" if refix else "Xato javob"
+            body = (f"⚠️ <b>{title}</b> — belgiladi: {engine.html.escape(who)}\n"
+                    f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((shown or '')[:400])}")
             self._safe_send(self.bot.admin_chat_id, body, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
         # guruhda xato javob ko'rsatilmaydi ("yangilanishga yuborildi"); asl javob — belgilagan xodimga shaxsan
         hidden = review.hide(self.tg, q)
         if first and hidden and user.tg_id and user.is_staff:  # asl javob — faqat xodimga shaxsan
             try:
                 self.tg.send(user.tg_id, "⚠️ Siz xato deb belgilagan javob guruhda yashirildi (Panel → Tasdiqlash → Bot javoblari):\n"
-                             f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((q.answer_text or '')[:1500])}",
+                             f"❓ {engine.html.escape((q.text or q.problem or '')[:300])}\n💬 {engine.html.escape((shown or '')[:1500])}",
                              timeout=8, retries=0)
             except Exception as e:  # noqa: BLE001 — xodim botga /start yozmagan bo'lishi mumkin
                 log.info("wrong-answer DM failed: %s", e)
@@ -914,15 +941,25 @@ class Handler:
         kind, _, rest = data.partition(":")
         if kind == "fb":
             mid, _, val = rest.partition(":")
-            q = Message.objects.filter(pk=int(mid or 0), bot=self.bot).select_related("entry").first()
+            q = Message.objects.filter(pk=int(mid or 0), bot=self.bot).select_related("entry", "group").first()
+            # tuzatilgan javob ostidagi tugma: u ham tekshiriladi (xato bo'lsa — qayta tuzatishga)
+            on_fixed = bool(q and q.review == review.FIXED and q.fixed_msg_id
+                            and (cb.get("message") or {}).get("message_id") == q.fixed_msg_id)
             if q and (user.is_staff or chat_id == self.bot.admin_chat_id) and q.user_id != user.id:
                 # xodim baholadi: 👎 — xato javob (tuzatish ro'yxatiga), 👍 — to'g'ri deb tasdiqlandi
                 if val == "1":
-                    review.mark(q, review.OK, user.staff_name())
+                    if not on_fixed:
+                        review.mark(q, review.OK, user.staff_name())
                     return self.tg.answer_callback(cb["id"], "To'g'ri deb belgilandi")
                 return self._mark_wrong(cb, q, user)
             if not q or (q.user_id and q.user_id != user.id):
                 return self.tg.answer_callback(cb["id"], "Baholash faqat savol egasi uchun")
+            if on_fixed:  # savol egasi tuzatilgan javobni baholadi
+                if val != "1":
+                    review.mark(q, review.WRONG, "savol egasi 👎 (tuzatilgan javob)", note="tuzatilgan javob ham xato")
+                if q.resolution != Message.YES and not resolution.is_final(q):
+                    resolution.mark(q, Message.YES if val == "1" else Message.NO, "savol egasi (👍/👎)")
+                return self.tg.answer_callback(cb["id"], "Rahmat!")
             if q.feedback == 0:
                 # savol egasining bahosi ham ko'rib chiqiladi: 👎 — xato ro'yxatiga, 👍 — tekshirish uchun
                 if val == "1":
@@ -948,22 +985,14 @@ class Handler:
             if not q:
                 return self.tg.answer_callback(cb["id"], "Topilmadi")
             return self._mark_wrong(cb, q, user)
-        if kind == "rs":  # "hal bo'ldimi?" tugmalari
+        if kind == "rs":  # "hal bo'ldimi?" tugmalari: savol egasi (✅/❌) va xodim (✅ Javob berildi / ⏳ Jarayonda)
             mid, _, val = rest.partition(":")
             q = Message.objects.filter(pk=int(mid or 0), bot=self.bot).select_related("user", "group").first()
-            if not q or (q.user_id and q.user_id != user.id):
-                return self.tg.answer_callback(cb["id"], "Faqat savol egasi belgilaydi")
-            value = Message.YES if val == "1" else Message.NO
-            if resolution.is_final(q):  # admin allaqachon yopgan — qaror o'zgarmaydi
-                resolution.close_prompt(self.tg, q, q.resolution)
-                if value == Message.NO and q.resolution == Message.YES:
-                    resolution.notify_unresolved(self.tg, q, self.bot.admin_chat_id, "savol egasi: hal bo'lmadi (siz yopgansiz)")
-                return self.tg.answer_callback(cb["id"], "Rahmat! Mutaxassis allaqachon belgilagan.")
-            resolution.mark(q, value, "savol egasi")
-            resolution.close_prompt(self.tg, q, value)
-            if value == Message.NO:
-                resolution.notify_unresolved(self.tg, q, self.bot.admin_chat_id)
-            return self.tg.answer_callback(cb["id"], "Rahmat!")
+            if not q:
+                return self.tg.answer_callback(cb["id"], "Topilmadi")
+            text, alert = resolution.press(self.tg, q, user, val, (cb.get("message") or {}).get("message_id"),
+                                           self.bot.admin_chat_id)
+            return self.tg.answer_callback(cb["id"], text, alert=alert)
 
         # quyidagilar faqat admin chatidan va xodimlar uchun
         if chat_id != self.bot.admin_chat_id or not user.is_staff:
@@ -1576,9 +1605,13 @@ class BotWorker(threading.Thread):
         if time.time() - self.last_confirm > 60:
             self.last_confirm = time.time()
             try:
-                resolution.ask_pending(client)
+                resolution.ask_pending(client, bot_id=self.bot_id)
             except Exception:  # noqa: BLE001
                 log.exception("resolution ask failed")
+            try:  # savol ochiq qolmasin: xodimdan so'rash, qayta so'rash, eslatish
+                resolution.followups(client, bot_id=self.bot_id)
+            except Exception:  # noqa: BLE001
+                log.exception("resolution followups failed")
         close_old_connections()
 
     @staticmethod

@@ -2,7 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Bot, History, Images, Link2, ListTodo, LogOut, MessageSquareText, Plus, Save, Search, Send, Settings2, ShieldCheck, Trash2, Users, Wifi, type LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { ConfirmDialog, FormRow } from "@/components/qrdrive/common";
 import { Badge } from "@/components/ui/badge";
@@ -36,8 +37,16 @@ const SETTING_TABS: { key: string; label: SKey; hint: SKey; icon: LucideIcon }[]
 ];
 
 export function SupportSettingsPage() {
+  return <Suspense><SettingsInner /></Suspense>;
+}
+
+function SettingsInner() {
   const t = useSt();
-  const [tab, setTab] = useState("bots");
+  const params = useSearchParams();  // tahlil sahifasidan "Guruhlarni sozlash": /support/settings?tab=groups
+  const [tab, setTab] = useState(() => {
+    const want = params.get("tab");
+    return want && SETTING_TABS.some((x) => x.key === want) ? want : "bots";
+  });
   const cur = SETTING_TABS.find((x) => x.key === tab)!;
   return (
     <SupportShell title={t("setTitle")} description={t("setDesc")}>
@@ -161,7 +170,7 @@ function BotCard({ b, t }: { b: SupportBot; t: ST }) {
 /* ---------------------------------------------------------------- guruhlar */
 function GroupsSection({ t }: { t: ST }) {
   const groups = useQuery({ queryKey: ["support", "groups"], queryFn: supportApi.groups, refetchInterval: 30_000 });
-  const upd = useSupportMutation(({ id, mode }: { id: number; mode: SupportGroup["mode"] }) => supportApi.updateGroup(id, { mode }), t("saved"));
+  const upd = useSupportMutation(({ id, ...body }: { id: number } & Partial<SupportGroup>) => supportApi.updateGroup(id, body), t("saved"));
   return (
     <section className="grid gap-3">
       <p className="text-xs text-muted-foreground">{t("groupsHint")}</p>
@@ -179,8 +188,13 @@ function GroupsSection({ t }: { t: ST }) {
                 <span>· {g.bot_name}</span>
                 <span>· {t("q7")}: <b className="text-foreground">{g.questions_7d}</b></span>
                 {g.last_message_at && <span>· {fmtDate(g.last_message_at)}</span>}
+                {!g.in_analytics && <span className="text-warning">· {t("grpAnalyticsOff")}</span>}
               </div>
             </div>
+            <label className="flex items-center gap-2 text-xs" title={t("grpAnalyticsHint")}>
+              <Switch checked={g.in_analytics} disabled={upd.isPending} onCheckedChange={(v) => upd.mutate({ id: g.id, in_analytics: v })} />
+              {t("grpAnalytics")}
+            </label>
             {g.mode === "inherit" && <div className="flex items-center gap-1.5 text-xs text-muted-foreground">{t("nowActs")}: <ModeBadge mode={g.effective_mode} t={t} /></div>}
           </div>
           <Segmented size="sm" value={g.mode} className="w-full sm:w-auto"
@@ -260,6 +274,16 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {f.confirm_resolution && field(t("t_confirmAfter"), undefined,
             <Input type="number" min={0} value={f.confirm_after} onChange={num("confirm_after")}
               onBlur={() => toggle.mutate({ confirm_after: f.confirm_after })} />)}
+          {sw("react_accept", t("t_react"), t("t_reactHint"))}
+          {f.confirm_resolution && field(t("t_askStaff"), t("t_askStaffHint"),
+            <Input type="number" min={0} max={1440} value={f.ask_staff_after} onChange={num("ask_staff_after")}
+              onBlur={() => toggle.mutate({ ask_staff_after: f.ask_staff_after })} />)}
+          {f.confirm_resolution && field(t("t_reask"), t("t_reaskHint"),
+            <Input type="number" min={0} max={2880} value={f.reask_after} onChange={num("reask_after")}
+              onBlur={() => toggle.mutate({ reask_after: f.reask_after })} />)}
+          {f.confirm_resolution && field(t("t_remindMax"), t("t_remindMaxHint"),
+            <Input type="number" min={1} max={10} value={f.remind_max} onChange={num("remind_max")}
+              onBlur={() => toggle.mutate({ remind_max: f.remind_max })} />)}
           {field(t("t_threadWindow"), t("t_threadWindowHint"),
             <Input type="number" min={0} max={240} value={f.thread_window} onChange={num("thread_window")}
               onBlur={() => toggle.mutate({ thread_window: f.thread_window })} />)}

@@ -94,6 +94,14 @@ class Settings(models.Model):
                                            db_default=True)
     review_button = models.BooleanField("Javob ostida \"⚠️ Xato javob\" tugmasi (xodimlar uchun)", default=True,
                                         db_default=True)
+    # --- savol ochiq qolmasin: xodim reaksiyasi = qabul qildi; savol egasi / xodimdan so'rash va eslatish ---
+    react_accept = models.BooleanField("Xodim savolga reaksiya (emoji) qo'ysa — savol qabul qilindi", default=True,
+                                       db_default=True)
+    ask_staff_after = models.PositiveIntegerField("Savol egasi belgilamasa — javob bergan xodimdan so'rash (daqiqa)",
+                                                  default=60, db_default=60)
+    reask_after = models.PositiveIntegerField("Hal bo'lmadi / jarayonda — qayta so'rash va eslatish (daqiqa)", default=120,
+                                              db_default=120)
+    remind_max = models.PositiveSmallIntegerField("Bitta savol bo'yicha ko'pi bilan eslatma", default=3, db_default=3)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -149,6 +157,8 @@ class Group(models.Model):
     mode = models.CharField(max_length=8, choices=[(INHERIT, "Bot rejimi"), *MODES], default=INHERIT)
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField("Bot guruhda admin", default=False)
+    # tahlilga kiradimi: test guruhlari (masalan, botni sinash vazifalari) statistikani buzmasin
+    in_analytics = models.BooleanField("Tahlilga qo'shiladi", default=True, db_default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
 
@@ -301,6 +311,7 @@ class Message(models.Model):
     QUESTION, STAFF, CLARIFY, INFO, OTHER = "question", "staff", "clarify", "info", "other"
     FEEDBACK = "feedback"  # savol egasining "rahmat / готово / ishlamadi" xabari
     YES, NO, ASKED = "yes", "no", "asked"  # resolution: hal bo'ldi / bo'lmadi / tasdiq so'raldi ("" — noma'lum)
+    WORK = "work"  # xodim "⏳ jarayonda" deb belgiladi
     NEW, ANSWERED, DRAFTED, ESCALATED, IGNORED, CLOSED = "new", "answered", "drafted", "escalated", "ignored", "closed"
     STATUSES = [(NEW, "Yangi"), (ANSWERED, "Javob berildi"), (DRAFTED, "Qoralama (soya rejimi)"),
                 (ESCALATED, "Odamga uzatildi"), (IGNORED, "Savol emas"), (CLOSED, "Yopildi")]
@@ -357,6 +368,12 @@ class Message(models.Model):
     fixed_at = models.DateTimeField(null=True, blank=True)
     fixed_msg_id = models.BigIntegerField(null=True, blank=True)  # guruhga yuborilgan tuzatilgan javob
     answer_hidden = models.BooleanField(default=False, db_default=False)  # xato deb belgilangan javob guruhda yashirilgan
+    # savol ochiq qolmasin: kim qabul qildi (reaksiya / javob / "jarayonda"), keyingi so'rov qachon, nechta eslatildi
+    handler = models.ForeignKey(TgUser, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    next_ask_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    remind_count = models.PositiveSmallIntegerField(default=0, db_default=0)
+    staff_msg_id = models.BigIntegerField(null=True, blank=True)  # xodimga "javob berildimi?" xabari
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
 

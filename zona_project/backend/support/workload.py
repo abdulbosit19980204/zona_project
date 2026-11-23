@@ -22,6 +22,12 @@ def local(dt):
     return dt.astimezone(TZ)
 
 
+def scoped(qs):
+    """Tahlil doirasi: faqat jonli xabarlar (guruh tarixidan o'rganilganlar — faqat bilim uchun, statistikaga kirmaydi)
+    va tahlilga qo'shilgan guruhlar (test guruhlari — Sozlamalar → Guruhlar)."""
+    return qs.filter(source="live").exclude(group__in_analytics=False)
+
+
 def period(params, default_days=30, max_days=366):
     """So'rov parametrlaridan davr: from/to (YYYY-MM-DD, ikkalasi ham kiradi) yoki days (bugun ham to'liq kiradi).
     Chegaralar Toshkent vaqti bilan 00:00. Qaytaradi: (boshlanish, tugash, ma'lumot)."""
@@ -56,7 +62,7 @@ def _q(values, p):
 
 
 def workload(start, end, info=None):
-    questions = list(Message.objects.filter(kind=Message.QUESTION, created_at__gte=start, created_at__lt=end)
+    questions = list(scoped(Message.objects.filter(kind=Message.QUESTION, created_at__gte=start, created_at__lt=end))
                      .exclude(status=Message.IGNORED).exclude(stage="dup")
                      .values("id", "created_at", "stage", "status", "group__title", "entry__title", "entry__zone__name",
                              "answered_at", "answered_by"))
@@ -68,8 +74,8 @@ def workload(start, end, info=None):
     for r in staff_msgs:
         if r.question_id not in first:
             first[r.question_id] = (r.created_at, r.user.staff_name())
-    for q in questions:  # panel orqali javob
-        if q["stage"] == "panel" and q["answered_at"] and (q["id"] not in first or q["answered_at"] < first[q["id"]][0]):
+    for q in questions:  # panel orqali javob / xodim reaksiyasi (savolni qabul qildi)
+        if q["stage"] in ("panel", "react") and q["answered_at"] and (q["id"] not in first or q["answered_at"] < first[q["id"]][0]):
             first[q["id"]] = (q["answered_at"], q["answered_by"])
 
     heat = [[0] * 24 for _ in range(7)]
@@ -92,7 +98,7 @@ def workload(start, end, info=None):
         tp = types[tkey]
         for row in (wk, g, tp):
             row["questions"] += 1
-        bot = q["stage"] in BOT_STAGES and q["status"] == Message.ANSWERED
+        bot = q["stage"] in BOT_STAGES and q["status"] in (Message.ANSWERED, Message.CLOSED)
         if bot:
             wk["bot"] += 1
             g["bot"] += 1
@@ -191,8 +197,8 @@ SPEED_BUCKETS = [(2, "≤2s"), (5, "2–5s"), (10, "5–10s"), (30, "10–30s"),
 def speed(start, end, info=None):
     """Bot tezligi: savol Telegram'da yuborilgandan bot javobi yuborilguncha (soniya). Qayerda vaqt ketadi — navbat, OCR, AI, yuborish."""
     from .models import Settings
-    rows = list(Message.objects.filter(kind=Message.QUESTION, created_at__gte=start, created_at__lt=end, answered_by="bot",
-                                       answered_at__isnull=False)
+    rows = list(scoped(Message.objects.filter(kind=Message.QUESTION, created_at__gte=start, created_at__lt=end, answered_by="bot",
+                                              answered_at__isnull=False))
                 .values("id", "created_at", "answered_at", "stage", "photo_file_id", "group__title", "timing", "text"))
     def secs(r):
         return max(0.0, (r["answered_at"] - r["created_at"]).total_seconds())

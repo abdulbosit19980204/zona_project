@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Bot, CircleCheck, Clock3, Zap, HelpCircle, Image as ImageIcon, Inbox, ListChecks, MessageCircleQuestion, Tags, Target, UserRound, Users } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,7 @@ export function SupportAnalytics() {
   const ready = preset !== "custom" || Boolean(from || to);
   const q = useQuery({ queryKey: ["support", "analytics", range], queryFn: () => supportApi.analytics(range), refetchInterval: 60_000, enabled: ready });
   const a = q.data;
-  const botClosed = a ? ["template", "faq", "rule", "ai", "image"].reduce((s, k) => s + (a.by_stage[k] ?? 0), 0) : 0;
+  const sm = a?.summary;
 
   return (
     <SupportShell title={t("anTitle")} description={t("anDesc")}
@@ -54,14 +55,16 @@ export function SupportAnalytics() {
       {a && (
         <div className="grid gap-5">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Metric label={t("anQuestions")} value={a.questions} icon={Inbox} tone="primary" />
+            <Metric label={t("anQuestions")} value={a.questions} hint={`${t("anPhoto")}: ${a.with_photo}`} icon={Inbox} tone="primary" />
             <Metric label={t("resRate")} value={a.resolution?.rate != null ? `${a.resolution.rate}%` : "—"}
               hint={a.resolution ? `${t("r_yes")} ${a.resolution.yes} · ${t("r_no")} ${a.resolution.no}` : undefined} icon={CircleCheck} tone="success" />
-            <Metric label={t("kpiBot")} value={botClosed} hint={a.questions ? `${Math.round((100 * botClosed) / a.questions)}%` : undefined} icon={Bot} tone="success" />
-            <Metric label={t("anUnanswered")} value={a.unanswered} icon={HelpCircle} tone="warning" />
-            <Metric label={t("anPhoto")} value={a.with_photo} icon={ImageIcon} />
-            <Metric label={t("anAskFirst")} value={a.entries_with_ask_first} icon={ListChecks} />
+            <Metric label={t("kpiBot")} value={sm?.bot ?? 0} hint={sm?.bot_share != null ? `${sm.bot_share}%` : undefined} icon={Bot} tone="success" />
+            <Metric label={t("kpiStaff")} value={sm?.staff ?? 0}
+              hint={sm ? `${sm.staff_share ?? 0}% · ${t("kpiReacts", { n: sm.react })}` : undefined} icon={UserRound} />
+            <Metric label={t("anUnanswered")} value={sm?.unanswered ?? a.unanswered} icon={HelpCircle} tone="warning" />
+            <Metric label={t("anOpenNow")} value={sm?.open ?? 0} hint={t("anOpenHint")} icon={ListChecks} tone="warning" />
           </div>
+          <Scope a={a} t={t} />
 
           <Segmented value={tab} onChange={setTab} options={[
             { value: "overview", label: t("anTabOverview"), icon: BarChart3 },
@@ -108,13 +111,33 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-/** Savollar yakuni: hal bo'ldi / hal bo'lmadi / tasdiq kutilmoqda / noma'lum — bitta ulushli chiziq va raqamlar. */
+/** Statistikaga nima kiradi: faqat jonli savollar va tahlilga qo'shilgan guruhlar; nimalar chiqarib tashlangani. */
+function Scope({ a, t }: { a: Analytics; t: ST }) {
+  const x = a.excluded;
+  if (!x) return null;
+  const parts = [
+    x.history > 0 && t("anExHistory", { n: x.history }),
+    x.groups_off > 0 && `${t("anExGroups", { n: x.groups_off })}${x.groups.length ? ` (${x.groups.join(", ")})` : ""}`,
+    x.duplicates > 0 && t("anExDup", { n: x.duplicates }),
+    x.ignored > 0 && t("anExIgnored", { n: x.ignored }),
+  ].filter(Boolean) as string[];
+  return (
+    <p className="-mt-2 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+      <span>{t("anScope")}</span>
+      {parts.length > 0 && <span>— {parts.join(" · ")}.</span>}
+      <Link href="/support/settings?tab=groups" className="font-medium text-primary hover:underline">{t("anScopeEdit")}</Link>
+    </p>
+  );
+}
+
+/** Savollar yakuni: hal bo'ldi / hal bo'lmadi / jarayonda / tasdiq kutilmoqda / noma'lum — bitta ulushli chiziq va raqamlar. */
 function Outcomes({ a, t }: { a: Analytics; t: ST }) {
   const r = a.resolution;
   if (!r) return null;
   const parts = [
     { key: "yes", n: r.yes, cls: "bg-success", label: t("r_yes") },
     { key: "no", n: r.no, cls: "bg-destructive", label: t("r_no") },
+    { key: "work", n: r.work ?? 0, cls: "bg-primary/70", label: t("r_work") },
     { key: "asked", n: r.asked, cls: "bg-warning", label: t("r_asked") },
     { key: "unknown", n: r.unknown, cls: "bg-muted-foreground/25", label: t("r_") },
   ];
@@ -128,7 +151,7 @@ function Outcomes({ a, t }: { a: Analytics; t: ST }) {
           <div key={p.key} className={p.cls} style={{ width: `${(100 * p.n) / total}%` }} title={`${p.label}: ${p.n}`} />
         ))}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {parts.map((p) => (
           <div key={p.key} className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
             <span className={`size-2.5 shrink-0 rounded-sm ${p.cls}`} />
@@ -290,9 +313,6 @@ function Overview({ a, t }: { a: Analytics; t: ST }) {
           {Object.entries(a.by_stage).map(([k, v]) => (
             <Badge key={k} variant="outline" className="gap-1.5 font-normal">{stageLabel(k, t) || k}<span className="font-mono font-semibold">{v}</span></Badge>
           ))}
-          {Object.entries(a.by_source).map(([k, v]) => (
-            <Badge key={k} variant="secondary" className="gap-1.5 font-normal">{t("anSource")}: {t(`src_${k}` as SKey)}<span className="font-mono font-semibold">{v}</span></Badge>
-          ))}
         </div>
       </Panel>
     </div>
@@ -322,6 +342,9 @@ function StaffTable({ a, t }: { a: Analytics; t: ST }) {
     { key: "res", header: t("colResolved"), align: "right", sort: (s) => s.resolved ?? 0, cell: (s) => (
       <span className="font-mono"><span className="text-success">{s.resolved ?? 0}</span>
         {(s.unresolved ?? 0) > 0 && <span className="text-destructive"> / {s.unresolved}</span>}</span>
+    ) },
+    { key: "react", header: t("anReacts"), align: "right", sort: (s) => s.reactions ?? 0, cell: (s) => (
+      <span className="font-mono">{s.reactions ?? 0}{(s.working ?? 0) > 0 && <span className="block text-[11px] text-primary">{t("anWorking")}: {s.working}</span>}</span>
     ) },
     { key: "clar", header: t("anClar"), align: "right", sort: (s) => s.clarifications, cell: (s) => <span className="font-mono">{s.clarifications}</span> },
     { key: "speed", header: t("anSpeed"), align: "right", sort: (s) => s.median_s, cell: (s) => (

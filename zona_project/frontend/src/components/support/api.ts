@@ -19,7 +19,7 @@ export interface SupportBot {
 export interface SupportGroup {
   id: number; bot: number; bot_name: string; chat_id: number; title: string; mode: Mode | "inherit";
   effective_mode: Mode; is_active: boolean; is_admin: boolean; joined_at: string; last_message_at: string | null;
-  questions_7d: number;
+  questions_7d: number; in_analytics: boolean;
 }
 export interface EntryVersion {
   id: number; title: string; questions: string[]; triggers: string[]; extract: string[]; answer: string;
@@ -46,7 +46,7 @@ export interface EntrySource {
   id: number; text: string; ocr: string; info: string[]; group: string; user: string; link: string; at: string; media: MediaInfo[];
 }
 /** Savol yakuni: hal bo'ldi / hal bo'lmadi / tasdiq so'raldi / noma'lum. */
-export type Resolution = "" | "asked" | "yes" | "no";
+export type Resolution = "" | "asked" | "yes" | "no" | "work";
 export const SYS_APPS = ["prbc", "protarget", "1c", "telegram", "other"] as const;
 export const SYS_ORIGINS = ["1c", "prbc", "protarget", "telegram", "network", "user", "other"] as const;
 export const SYS_CATEGORIES = ["client", "order", "promo", "payment", "product", "stock", "visit", "login", "route", "report",
@@ -98,6 +98,7 @@ export interface SupportSettings {
   self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all"; answer_variety: boolean; progress_messages: boolean;
   answer_policy: "standard" | "kb" | "all";
   confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number; category_owners: Record<string, number> | null; answer_keep_days: number; answer_test_note: boolean; review_button: boolean;
+  react_accept: boolean; ask_staff_after: number; reask_after: number; remind_max: number;
 }
 export interface SupportTaskInfo {
   id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
@@ -183,10 +184,13 @@ export interface Analytics extends Period {
   staff: { name: string; answers: number; panel: number; clarifications: number; median_s: number | null; groups: string[];
     candidates: number; approved: number; rejected: number; questions: number; share: number; avg_s: number | null;
     active_days: number; per_day: number; messages: number; last: string | null; topics: { title: string; n: number }[];
-    resolved?: number; unresolved?: number }[];
+    resolved?: number; unresolved?: number; reactions?: number; working?: number }[];
   top_asks: { text: string; count: number }[];
   daily: { date: string; total: number; bot: number; staff: number; resolved?: number; unresolved?: number }[];
-  resolution?: { total: number; yes: number; no: number; asked: number; unknown: number; rate: number | null;
+  summary?: { total: number; bot: number; staff: number; react: number; unanswered: number; bot_share: number | null;
+    staff_share: number | null; open: number };
+  excluded?: { history: number; groups_off: number; duplicates: number; ignored: number; groups: string[] };
+  resolution?: { total: number; yes: number; no: number; asked: number; work?: number; unknown: number; rate: number | null;
     confirmed_share: number | null; by: { by: string; n: number }[] };
   systems?: SystemsInfo;
   groups: { title: string; n: number }[];

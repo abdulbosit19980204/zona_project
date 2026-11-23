@@ -46,7 +46,8 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
                    "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction",
-                   "thread_window", "category_owners", "answer_keep_days", "answer_test_note", "review_button"]
+                   "thread_window", "category_owners", "answer_keep_days", "answer_test_note", "review_button",
+                   "react_accept", "ask_staff_after", "reask_after", "remind_max"]
 
 
 def _settings_payload(s):
@@ -163,7 +164,7 @@ class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ["id", "bot", "bot_name", "chat_id", "title", "mode", "effective_mode", "is_active", "is_admin",
-                  "joined_at", "last_message_at", "questions_7d"]
+                  "in_analytics", "joined_at", "last_message_at", "questions_7d"]
         read_only_fields = ["bot", "chat_id", "title", "is_admin", "joined_at", "last_message_at"]
 
 
@@ -567,7 +568,7 @@ class MessageViewSet(ZonaViewSet):
             qs = qs.filter(stage=p["stage"])
         if p.get("resolution"):  # yes / no / asked / open (holati noma'lum yoki so'ralgan)
             r = p["resolution"]
-            qs = qs.filter(resolution__in=["", "asked"]) if r == "open" else qs.filter(resolution=r)
+            qs = qs.filter(resolution__in=["", "asked", "work"]) if r == "open" else qs.filter(resolution=r)
         for f in ("app", "origin", "category"):  # tizim bo'yicha filtr
             if p.get(f):
                 qs = qs.filter(**{f: "" if p[f] == "none" else p[f]})
@@ -834,10 +835,18 @@ def analytics(request):
     from statistics import median
 
     from .engine import tokens_text
-    from .workload import local, period
+    from .workload import BOT_STAGES, local, period, scoped
     since, end, info = period(request.query_params)
-    msgs = Message.objects.filter(created_at__gte=since, created_at__lt=end)
-    questions = msgs.filter(kind=Message.QUESTION)
+    raw = Message.objects.filter(created_at__gte=since, created_at__lt=end)
+    # faqat jonli savollar va tahlilga qo'shilgan guruhlar (guruh tarixi — faqat bilim uchun; test guruhlari — sozlamada)
+    msgs = scoped(raw)
+    all_q = msgs.filter(kind=Message.QUESTION)
+    questions = all_q.exclude(stage="dup").exclude(status=Message.IGNORED)  # haqiqiy savollar (takror / savol emas — yo'q)
+    raw_q = raw.filter(kind=Message.QUESTION)
+    excluded = {"history": raw_q.filter(source="history").count(),
+                "groups_off": raw_q.filter(source="live", group__in_analytics=False).count(),
+                "duplicates": all_q.filter(stage="dup").count(), "ignored": all_q.filter(status=Message.IGNORED).count(),
+                "groups": list(Group.objects.filter(in_analytics=False).values_list("title", flat=True))}
 
     # xodimlar: kim nechta savolga javob berdi, qanchalik tez, qancha ishladi
     per = defaultdict(lambda: {"answers": 0, "clarifications": 0, "times": [], "groups": set(), "questions": set(),
@@ -888,10 +897,18 @@ def analytics(request):
     # xodim javob bergan savollarning yakuni (savol egasi tasdiqlagan / rad etgan)
     res_of = dict(Message.objects.filter(pk__in={i for r in per.values() for i in r["questions"]})
                   .values_list("pk", "resolution"))
+    # reaksiya bilan qabul qilgan savollar (qisman javob) va hozir "jarayonda" turganlari
+    reacts, working = Counter(), Counter()
+    for h in questions.filter(handler__isnull=False, stage="react").select_related("handler__member", "handler__contact"):
+        reacts[h.handler.staff_name()] += 1
+    for h in questions.filter(handler__isnull=False, resolution=Message.WORK).select_related("handler__member", "handler__contact"):
+        working[h.handler.staff_name()] += 1
     for row in staff:
         qids = per[row["name"]]["questions"]
         row["resolved"] = sum(1 for i in qids if res_of.get(i) == Message.YES)
         row["unresolved"] = sum(1 for i in qids if res_of.get(i) == Message.NO)
+        row["reactions"] = reacts.get(row["name"], 0)
+        row["working"] = working.get(row["name"], 0)
     staff.sort(key=lambda x: -x["answers"])
 
     # qanday ma'lumot so'raladi (aniqlashtirishlar)
@@ -913,14 +930,22 @@ def analytics(request):
             d["resolved"] += 1
         elif res == Message.NO:
             d["unresolved"] += 1
-        if stage in ("template", "faq", "rule", "ai", "image"):
+        if stage in BOT_STAGES:
             d["bot"] += 1
-        elif stage in ("staff", "panel"):
+        elif stage in ("staff", "panel", "react"):
             d["staff"] += 1
     groups = list(questions.values("group__title").annotate(n=Count("id")).order_by("-n")[:15])
-    unanswered = questions.exclude(status__in=[Message.ANSWERED, Message.CLOSED, Message.IGNORED]).count()
+    unanswered = questions.exclude(status__in=[Message.ANSWERED, Message.CLOSED]).count()
+    total = questions.count()
+    answered = questions.filter(status__in=[Message.ANSWERED, Message.CLOSED])
+    bot_n = answered.filter(stage__in=BOT_STAGES).count()
+    staff_n = answered.filter(stage__in=["staff", "panel", "react"]).count()
+    summary = {"total": total, "bot": bot_n, "staff": staff_n, "react": answered.filter(stage="react").count(),
+               "unanswered": unanswered, "bot_share": round(100 * bot_n / total) if total else None,
+               "staff_share": round(100 * staff_n / total) if total else None,
+               "open": questions.filter(resolution__in=[Message.NO, Message.WORK, Message.ASKED]).count()}
     return Response({
-        **info, "questions": questions.count(), "unanswered": unanswered,
+        **info, "questions": total, "unanswered": unanswered, "summary": summary, "excluded": excluded,
         "by_source": dict(questions.values_list("source").annotate(c=Count("id"))),
         "by_stage": dict(questions.exclude(stage="").values_list("stage").annotate(c=Count("id"))),
         "staff": staff, "top_asks": top_asks,
@@ -1188,11 +1213,16 @@ def _resolution(questions):
     real =questions.exclude(status=Message.IGNORED).exclude(stage="dup")
     c = dict(real.values_list("resolution").annotate(n=Count("id")))
     yes, no, asked = c.get(Message.YES, 0), c.get(Message.NO, 0), c.get(Message.ASKED, 0)
+    work = c.get(Message.WORK, 0)
     total = sum(c.values())
     by = Counter()
     for who, n in real.filter(resolution=Message.YES).values_list("resolved_by").annotate(n=Count("id")):
-        by[who or "—"] += n
-    return {"total": total, "yes": yes, "no": no, "asked": asked, "unknown": total - yes - no - asked,
+        # kim yopdi — guruhlab: savol egasi / xodim / panel (ism bilan emas, aks holda ro'yxat uzun va noaniq)
+        key = ("savol egasi" if (who or "").startswith("savol egasi") else "xodim" if (who or "").startswith("xodim:")
+               else "panel" if (who or "").startswith("panel: ") else (who or "—"))
+        by[key] += n
+    return {"total": total, "yes": yes, "no": no, "asked": asked, "work": work,
+            "unknown": total - yes - no - asked - work,
             "rate": round(100 * yes / (yes + no)) if yes + no else None,
             "confirmed_share": round(100 * yes / total) if total else None,
             "by": [{"by": k, "n": v} for k, v in by.most_common(6)]}

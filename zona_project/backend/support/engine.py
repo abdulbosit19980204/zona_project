@@ -630,6 +630,16 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
         if te and all(te.pk != x[0].pk for x in distinct):
             return Decision("template", te, tconf, render_answer(te, tfields, lang), False, own(te), tfields,
                             te.status != Entry.APPROVED, note="ekrandagi matn (OCR) rasm o'xshashligidan ustun")
+    if strong_text and ocr and match_template(text, templates)[0] is None:
+        # matn — umumiy alomat ("zakaz o'tmayapti"), ekrandagi xabar esa aniq sababni aytadi ("Заказ не оформлен:
+        # на складе недостаточно остатка") — aniq holat shabloni ustun (matn shu mavzuda bo'lsa: umumiy so'z bor)
+        te, tfields, tconf = match_template(ocr, templates)
+        if te and tconf >= 95:
+            topic = set(toks(" ".join([te.title, *(te.triggers or []), *(te.questions or [])])))
+            if set(toks(text)) & topic:
+                tfields = extract_fields(te, raw)
+                return Decision("template", te, tconf, render_answer(te, tfields, lang), False, own(te), tfields,
+                                te.status != Entry.APPROVED, note="ekrandagi aniq xabar (OCR) umumiy matndan ustun")
     if distinct:
         if strong_text:
             # matn hal qiladi: shu matnga eng mos tanilgan ekran yoki (agar matn boshqa narsani so'rasa) matn bo'yicha javob

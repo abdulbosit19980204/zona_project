@@ -74,7 +74,7 @@ export function BotAnswers({ t }: { t: ST }) {
 function ReviewCard({ r, t }: { r: ReviewRow; t: ST }) {
   const can = useCan();
   const [text, setText] = useState(r.fixed_text || "");
-  const [send, setSend] = useState(!r.sent);
+  const [send, setSend] = useState(true);  // tuzatilgan javob ham guruhdagi o'sha xabarda yangilanadi
   const [learn, setLearn] = useState(true);
   const act = useSupportMutation((body: Parameters<typeof supportApi.reviewAction>[1]) => supportApi.reviewAction(r.id, body),
     (x) => (x.kb_entry ? t("rvFixedKb") : t("saved")));
@@ -110,6 +110,13 @@ function ReviewCard({ r, t }: { r: ReviewRow; t: ST }) {
           </div>
           <p className={cn("whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-2.5 text-sm", r.review === "wrong" && "line-through decoration-destructive/40")}>
             {r.answer_text || "—"}</p>
+          {r.fixed_text && r.review !== "fixed" && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 text-sm">
+              <div className="mb-1 text-[11px] uppercase tracking-wide text-destructive">{t("rvPrevFix")}</div>
+              <p className="whitespace-pre-wrap break-words line-through decoration-destructive/40">{r.fixed_text}</p>
+              <div className="mt-1 text-xs text-muted-foreground">{r.fixed_by}{r.fixed_at ? ` · ${fmtDate(r.fixed_at)}` : ""}</div>
+            </div>
+          )}
           {r.fixed_text && r.review === "fixed" && (
             <div className="rounded-lg border border-success/30 bg-success/5 p-2.5 text-sm">
               <div className="mb-1 text-[11px] uppercase tracking-wide text-success">{t("rvFixedAnswer")}{r.sent && ` · ${t("rvSent")}`}</div>
@@ -128,13 +135,13 @@ function ReviewCard({ r, t }: { r: ReviewRow; t: ST }) {
             <span className="ml-auto flex flex-wrap gap-1.5">
               {r.review !== "ok" && <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => act.mutate({ action: "ok" })}>
                 <Check className="size-4" />{t("rvMarkOk")}</Button>}
-              {r.review !== "wrong" && r.review !== "fixed" && <Button size="sm" variant="outline" className="text-destructive" disabled={act.isPending}
+              {r.review !== "wrong" && <Button size="sm" variant="outline" className="text-destructive" disabled={act.isPending}
                 onClick={() => act.mutate({ action: "wrong" })}><AlertTriangle className="size-4" />{t("rvMarkWrong")}</Button>}
               {r.review && <Button size="sm" variant="ghost" disabled={act.isPending} onClick={() => act.mutate({ action: "clear" })}>
                 <Undo2 className="size-4" />{t("rvClear")}</Button>}
               <Button size="sm" disabled={!text.trim() || act.isPending}
                 onClick={() => act.mutate({ action: "fix", text: text.trim(), send, learn })}>
-                <Send className="size-4" />{send ? t("rvFixSend") : t("rvFixSave")}</Button>
+                <Send className="size-4" />{r.fixed_text ? t("rvRefix") : send ? t("rvFixSend") : t("rvFixSave")}</Button>
             </span>
           </div>
         </div>

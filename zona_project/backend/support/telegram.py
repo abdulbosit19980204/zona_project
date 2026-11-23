@@ -85,7 +85,7 @@ class Client:
     def get_updates(self, offset, timeout=8):
         # qisqa long-poll: ulanish osilib qolsa 13 s da sezamiz (oldin 35 s + 5..120 s kutish — xabarlar kechikardi)
         return self.call("getUpdates", {"offset": offset, "timeout": timeout,
-                                        "allowed_updates": ["message", "edited_message", "callback_query",
+                                        "allowed_updates": ["message", "edited_message", "callback_query", "message_reaction",
                                                             "my_chat_member"]},
                          timeout=timeout + 5, retries=0)
 

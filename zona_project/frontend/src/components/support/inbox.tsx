@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Bot, BookOpen, CheckCheck, CircleCheck, CircleX, ExternalLink, Hourglass, Image as ImageIcon, Inbox, MessageSquareReply, Search, Send, Sparkles, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, BookOpen, CheckCheck, CircleCheck, CircleX, ExternalLink, Hourglass, Image as ImageIcon, Inbox, Loader2, MessageSquareReply, Search, Send, Sparkles, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -27,7 +27,7 @@ type ResFilter = "any" | "open" | "yes" | "no" | "asked";
 /** Savol yakuni belgisi: hal bo'ldi / hal bo'lmadi / tasdiq kutilmoqda (noma'lum bo'lsa — hech narsa). */
 function ResolutionMark({ r, t, label = false }: { r: Resolution; t: ST; label?: boolean }) {
   if (!r) return label ? <span className="text-muted-foreground">{t("r_")}</span> : null;
-  const Icon = r === "yes" ? CircleCheck : r === "no" ? CircleX : Hourglass;
+  const Icon = r === "yes" ? CircleCheck : r === "no" ? CircleX : r === "work" ? Loader2 : Hourglass;
   const tone = r === "yes" ? "text-success" : r === "no" ? "text-destructive" : "text-warning";
   return (
     <span className={cn("inline-flex items-center gap-1", tone)} title={t(`r_${r}` as SKey)}>
