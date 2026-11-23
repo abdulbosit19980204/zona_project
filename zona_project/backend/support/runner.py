@@ -26,6 +26,9 @@ log = logging.getLogger("support")
 APPROVER_LEVELS = {"L2", "L3", "LEAD", "BIZ"}
 
 
+SURE_IMAGE = 94  # rasm ishonchi (vision.confidence): shundan yuqori — ekran deyarli aynan bir xil
+
+
 def media_dir():
     base = os.environ.get("ZONA_SUPPORT_MEDIA") or str(Path(str(dj_settings.DATABASES["default"]["NAME"])).parent / "support-media")
     return Path(base)
@@ -641,7 +644,10 @@ class Handler:
         d = None
         if media and media.kind == Media.PHOTO and not q.ocr_text:
             strong = engine.substantive(q.text)
-            if strong or (image and not image[0].extract and len({e.pk for e, _c, _i in images}) == 1):
+            # OCR'siz tez javob faqat ekran deyarli aynan bir xil bo'lsa: o'xshash xato oynalari (bir xil dizayn, boshqa
+            # matn) adashtirmasin — aks holda avval ekrandagi matn o'qiladi (1–2 s) va matn hal qiladi
+            exact = image and image[1] >= SURE_IMAGE
+            if strong or (exact and not image[0].extract and len({e.pk for e, _c, _i in images}) == 1):
                 # tez yo'l: aniq matnli savol yoki tanilgan ekran — OCR'ni kutmasdan javob, OCR keyin (tahlil uchun)
                 d = engine.decide(q.text or "", q.lang, allow_unapproved=unapproved, text=q.text, images=images, fast=True)
                 deferred_ocr = d is not None and mode == MODE_LIVE

@@ -58,3 +58,19 @@ class OwnerTests(ControlsBase):
         self.assertEqual(self.call("patch", "support/settings/", {"category_owners": {"promo": 999999}}).status_code, 400)
         self.call("patch", "support/settings/", {"category_owners": {}})
         self.assertIsNone(Settings.load().category_owners)
+
+
+class ScreenTextBeatsLookalikeTests(ControlsBase):
+    def test_ocr_trigger_of_another_template_wins_over_similar_screen(self):
+        inactive = Entry.objects.create(kind=Entry.TEMPLATE, title="ProTarget: Inactive user account", triggers=["inactive user account"],
+                                        answer="Akkaunt faol emas", answer_ru="Аккаунт неактивен", status=Entry.APPROVED)
+        token = Entry.objects.create(kind=Entry.TEMPLATE, title="ProTarget: Token has been expired", triggers=["token has been expired"],
+                                     answer="Ilovani to'liq yoping va qaytadan kiring.",
+                                     answer_ru="Закройте приложение полностью и снова зайдите.", status=Entry.APPROVED)
+        # rasm bo'yicha "Inactive" ga o'xshash (80%), lekin ekrandagi matn — "Token has been expired"
+        d = engine.decide("", "ru", images=[(inactive, 80, 0)], text="", ocr="Визиты\nToken has been expired\nПопробовать снова")
+        self.assertEqual((d.stage, d.entry), ("template", token))
+        self.assertIn("Закройте приложение", d.text)
+        # o'z ekrani — o'zi (matn ham shuni aytadi)
+        d2 = engine.decide("", "ru", images=[(inactive, 80, 0)], text="", ocr="Inactive user account\nПопробовать снова")
+        self.assertEqual(d2.entry, inactive)

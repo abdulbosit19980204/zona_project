@@ -606,6 +606,13 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
     for e, c, idx in sorted(imgs, key=lambda x: -x[1]):
         if e is not None and all(e.pk != d[0].pk for d in distinct):
             distinct.append((e, c, idx))
+    if distinct and not strong_text and ocr:
+        # ekranlar bir-biriga o'xshash bo'lishi mumkin (ProTarget xato oynalari: bir xil belgi va tugma), lekin ekrandagi
+        # matn aniq boshqa holatni aytsa ("Token has been expired" ≠ "Inactive user account") — matn hal qiladi
+        te, tfields, tconf = match_template(ocr, templates)
+        if te and all(te.pk != x[0].pk for x in distinct):
+            return Decision("template", te, tconf, render_answer(te, tfields, lang), False, own(te), tfields,
+                            te.status != Entry.APPROVED, note="ekrandagi matn (OCR) rasm o'xshashligidan ustun")
     if distinct:
         if strong_text:
             # matn hal qiladi: shu matnga eng mos tanilgan ekran yoki (agar matn boshqa narsani so'rasa) matn bo'yicha javob
