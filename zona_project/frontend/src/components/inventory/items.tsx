@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, AtSign, BatteryCharging, CalendarClock, Camera, Download, History, ImageOff, ImagePlus, Info, Keyboard, Loader2,
+  AlertTriangle, AtSign, BatteryCharging, CalendarClock, Camera, ChevronDown, Cpu, Download, History, ImageOff, ImagePlus, Info, Keyboard, Loader2,
   MapPin, Minus, Monitor, Package, Phone, Plus, Printer, Projector, RotateCcw, Router, ScanBarcode, ShieldCheck,
   Smartphone, Trash2, User, Wallet, X,
 } from "lucide-react";
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-import { download, inv, type Boot, type Condition, type Employee, type Item, type ItemInput, type Params, type PhotoRef } from "./api";
+import { download, inv, type Boot, type Condition, type Employee, type Item, type ItemInput, type Params, type PhotoRef, type SpecField } from "./api";
 import { condLabel, loc, tr, useLang, useT, type Lang } from "./i18n";
 import {
   Btn, COND_STYLE, CondBadge, Empty, Field, FilterBar, Overlay, Picker, Spinner, ToggleChip, ago, compressImage, dt, inputCls,
@@ -95,6 +95,7 @@ function emptyForm(boot: Boot, preset?: Partial<ItemInput>): ItemInput {
     org: preset?.org ?? last.org ?? null, branch, location: preset?.location ?? last.location ?? "",
     device_type: preset?.device_type ?? null, brand: "", model: "", serial: "", quantity: 1, condition: "ok",
     employee: preset?.employee ?? null, note: "", photos: [], purchase_price: null, purchase_date: "", warranty_months: null,
+    specs: {},
   };
 }
 
@@ -103,7 +104,7 @@ function fromItem(it: Item): ItemInput {
     org: it.org, branch: it.branch, location: it.location, device_type: it.device_type, brand: it.brand, model: it.model,
     serial: it.serial, quantity: it.quantity, condition: it.condition, employee: it.employee, note: it.note,
     photos: it.photos.map((p) => p.id), purchase_price: it.purchase_price, purchase_date: it.purchase_date ?? "",
-    warranty_months: it.warranty_months,
+    warranty_months: it.warranty_months, specs: { ...(it.specs ?? {}) },
   };
 }
 
@@ -111,7 +112,7 @@ const FIELD_LABEL: Record<string, string> = {
   org: "Tashkilot", branch: "Filial", location: "Qayerda turibdi", device_type: "Qurilma turi", brand: "Brend",
   model: "Model", serial: "Seriya raqami", quantity: "Soni", condition: "Holati", employee: "Xodim", note: "Izoh",
   photos: "Rasmlar", purchase_price: "Sotib olingan narxi", purchase_date: "Sotib olingan sana",
-  warranty_months: "Kafolat muddati", phone: "Telefon", telegram: "Telegram", full_name: "F.I.Sh.", position: "Lavozimi", status: "Holati",
+  warranty_months: "Kafolat muddati", specs: "Texnik xususiyatlar", phone: "Telefon", telegram: "Telegram", full_name: "F.I.Sh.", position: "Lavozimi", status: "Holati",
 };
 const ACTION_LABEL: Record<string, string> = {
   create: "Qo'shdi", update: "O'zgartirdi", delete: "O'chirdi", restore: "Tikladi", import: "Import", status: "Holat",
@@ -260,6 +261,63 @@ function ContactBlock({ contact, onChange, invalid, disabled }: {
           onChange={(e) => onChange({ ...contact, noTg: e.target.checked, telegram: e.target.checked ? "" : contact.telegram })} />
         {t("Xodimda Telegram yo'q")}
       </label>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ texnik xususiyatlar (turga xos, ixtiyoriy) */
+function SpecsBlock({ fields, learned, values, onChange, disabled }: {
+  fields: SpecField[]; learned: Record<string, string[]>; values: Record<string, string>;
+  onChange: (v: Record<string, string>) => void; disabled?: boolean;
+}) {
+  const t = useT();
+  const lang = useLang();
+  const filled = fields.filter((f) => values[f.key]).length;
+  const [open, setOpen] = useState(filled > 0);
+  const setValue = (key: string, v: string) => {
+    const next = { ...values };
+    if (v) next[key] = v;
+    else delete next[key];
+    onChange(next);
+  };
+  return (
+    <div className="rounded-2xl border bg-muted/30">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 p-3 text-left">
+        <Cpu className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">{t("Texnik xususiyatlar")}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {filled ? t("{n} / {m} to'ldirilgan", { n: filled, m: fields.length }) : fields.slice(0, 4).map((f) => loc(f, "label", lang)).join(", ") + "…"}
+          </span>
+        </span>
+        <span className="text-xs text-muted-foreground">{t("ixtiyoriy")}</span>
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="grid grid-cols-2 items-end gap-3 border-t p-3">
+          {fields.map((f) => {
+            const label = loc(f, "label", lang) + (f.unit ? `, ${f.unit}` : "");
+            const v = values[f.key] ?? "";
+            if (f.kind === "select") {
+              const opts = [...f.options, ...(learned[f.key] ?? []).filter((x) => !f.options.includes(x))]
+                .map((o) => ({ value: o, label: tr(o, undefined, lang) }));
+              return (
+                <Field key={f.key} label={label}>
+                  <Picker title={label} value={v} options={opts} allowCustom disabled={disabled} placeholder={t("Tanlang")}
+                    onChange={(x) => setValue(f.key, x)} />
+                </Field>
+              );
+            }
+            return (
+              <Field key={f.key} label={label}>
+                <input className={cn(inputCls, f.key === "ip" || f.key === "mac" ? "font-mono" : "")} value={v} disabled={disabled}
+                  inputMode={f.kind === "number" ? "decimal" : undefined} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                  onChange={(e) => setValue(f.key, e.target.value)} />
+              </Field>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -503,7 +561,13 @@ function ItemFormBody({ boot, onClose, item, preset }: {
           <Picker title={t("Qurilma turi")} value={form.device_type ? String(form.device_type) : ""} options={typeOpts}
             invalid={errors.device_type} disabled={!canWrite} placeholder={t("Nima ekanini tanlang")}
             icon={type ? <GroupIcon group={type.group} className="size-4" /> : <Package className="size-4" />}
-            onChange={(v) => { set("device_type", v ? Number(v) : null); set("brand", ""); }} />
+            onChange={(v) => {
+              const next = boot.device_types.find((d) => String(d.id) === v);
+              const keys = new Set((next?.specs ?? []).map((x) => x.key));
+              set("device_type", v ? Number(v) : null);
+              set("brand", "");
+              set("specs", Object.fromEntries(Object.entries(form.specs ?? {}).filter(([k]) => keys.has(k))));
+            }} />
         </Field>
         {type && (type.serial_hint || type.extra_hint) && (
           <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/8 p-3 text-sm">
@@ -536,6 +600,11 @@ function ItemFormBody({ boot, onClose, item, preset }: {
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <span>{t("Bu seriya raqam allaqachon kiritilgan: {n} ({b}). Qayta kiritmayapsizmi?", { n: dup.inv_number, b: dup.branch })}</span>
           </div>
+        )}
+
+        {type && !!type.specs?.length && (
+          <SpecsBlock fields={type.specs} learned={boot.spec_values?.[String(type.id)] ?? {}} values={form.specs ?? {}}
+            disabled={!canWrite} onChange={(v) => set("specs", v)} />
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr]">
@@ -639,6 +708,7 @@ export function ItemCard({ it, onClick }: { it: Item; onClick: () => void }) {
           {it.quantity > 1 && <span className="shrink-0 rounded-md bg-muted px-1.5 text-xs font-bold">×{it.quantity}</span>}
         </div>
         <div className="truncate text-sm text-muted-foreground">{[it.brand, it.model].filter(Boolean).join(" ") || "—"}</div>
+        {it.specs_text && <div className="truncate text-xs text-muted-foreground">{it.specs_text}</div>}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <span className="font-mono font-semibold text-primary">{it.inv_number}</span>
           <CondBadge value={it.condition} />
@@ -695,7 +765,7 @@ function ItemsTable({ rows, onOpen }: { rows: Item[]; onOpen: (it: Item) => void
                 </div>
               </td>
               <td className="whitespace-nowrap px-2 font-mono text-xs font-semibold text-primary">{it.inv_number}</td>
-              <td className="px-2"><div className="font-medium">{names.type(it.device_type, it.device_type_name)}</div><div className="text-xs text-muted-foreground">{[it.brand, it.model].filter(Boolean).join(" ") || "—"}</div></td>
+              <td className="px-2"><div className="font-medium">{names.type(it.device_type, it.device_type_name)}</div><div className="text-xs text-muted-foreground">{[it.brand, it.model].filter(Boolean).join(" ") || "—"}</div>{it.specs_text && <div className="max-w-xs truncate text-[11px] text-muted-foreground" title={it.specs_text}>{it.specs_text}</div>}</td>
               <td className="px-2 font-mono text-xs">{it.serial || <span className="font-sans text-amber-600">{t("yo'q")}</span>}</td>
               <td className="px-2 text-right tabular-nums">{it.quantity}</td>
               <td className="px-2"><CondBadge value={it.condition} />{it.is_deleted && <div className="mt-0.5 text-[11px] text-red-600">{t("o'chirilgan")}</div>}</td>

@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-import { download, inv, type AccessRow, type Branch, type DeviceType, type Level } from "./api";
+import { download, inv, type AccessRow, type Branch, type DeviceType, type Level, type SpecField } from "./api";
 import { levelLabel, loc, statusLabel, tr, useLang, useT } from "./i18n";
 import { ImportDialog } from "./import-dialog";
 import { actionLabel, fieldLabel } from "./items";
@@ -402,9 +402,11 @@ function TypeFormBody({ onClose, type }: { open: boolean; onClose: () => void; t
   const qc = useQueryClient();
   const t = useT();
   const [f, setF] = useState<Partial<DeviceType> & { brandsText?: string }>(() => type ? { ...type, brandsText: type.brands.join(", ") } : { brandsText: "", is_active: true });
+  const [rows, setRows] = useState<SpecRow[]>(() => (type?.specs ?? []).map((x) => ({ ...x, optionsText: x.options.join(", ") })));
   const save = async () => {
     try {
-      await inv.saveCatalog({ kind: "device_type", id: type?.id, ...f, brands: f.brandsText ?? "" });
+      const specs = rows.map(({ optionsText, ...x }) => ({ ...x, options: optionsText.split(",").map((o) => o.trim()).filter(Boolean) }));
+      await inv.saveCatalog({ kind: "device_type", id: type?.id, ...f, brands: f.brandsText ?? "", specs });
       qc.invalidateQueries({ queryKey: ["inv", "boot"] });
       toast.success(t("Saqlandi"));
       onClose();
@@ -429,9 +431,58 @@ function TypeFormBody({ onClose, type }: { open: boolean; onClose: () => void; t
         {pair("Seriya raqami qayerda?", "serial_hint", "serial_hint_ru")}
         {pair("Qo'shimcha nima yozish kerak", "extra_hint", "extra_hint_ru")}
         <Field label={t("Brendlar")} hint={t("Vergul bilan: HP, Lenovo, Dell")}><input className={inputCls} value={f.brandsText ?? ""} onChange={(e) => setF({ ...f, brandsText: e.target.value })} /></Field>
+        <SpecsEditor rows={rows} setRows={setRows} />
         {type && <Btn variant="danger" onClick={remove}><Trash2 className="size-4" />{t("O'chirish (ishlatilgan bo'lsa — nofaol qilinadi)")}</Btn>}
       </div>
     </Overlay>
+  );
+}
+
+type SpecRow = SpecField & { optionsText: string };
+
+function SpecsEditor({ rows, setRows }: { rows: SpecRow[]; setRows: (r: SpecRow[]) => void }) {
+  const t = useT();
+  const upd = (i: number, patch: Partial<SpecRow>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const move = (i: number, d: number) => {
+    const j = i + d;
+    if (j < 0 || j >= rows.length) return;
+    const next = [...rows];
+    [next[i], next[j]] = [next[j], next[i]];
+    setRows(next);
+  };
+  return (
+    <div className="space-y-2 rounded-2xl border bg-muted/30 p-3">
+      <div className="text-sm font-semibold">{t("Maxsus maydonlar (texnik xususiyatlar)")}</div>
+      <p className="text-xs text-muted-foreground">{t("Bu turdagi qurilmada qo'shimcha so'raladigan maydonlar. Hammasi ixtiyoriy; «Ro'yxat» maydonida yo'q qiymatni xodim yozib qo'sha oladi.")}</p>
+      {rows.map((r, i) => (
+        <div key={r.key || i} className="space-y-2 rounded-xl border bg-card p-2.5">
+          <div className="grid grid-cols-2 gap-2">
+            <input className={inputCls} value={r.label} placeholder={`${t("Maydon nomi")} — UZ`} onChange={(e) => upd(i, { label: e.target.value })} />
+            <input className={inputCls} value={r.label_ru} placeholder={`${t("Maydon nomi")} — RU`} onChange={(e) => upd(i, { label_ru: e.target.value })} />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(["select", "text", "number"] as const).map((k) => (
+              <button key={k} type="button" onClick={() => upd(i, { kind: k })}
+                className={cn("h-8 rounded-lg border px-2.5 text-xs font-semibold", r.kind === k ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}>
+                {t(k === "select" ? "Ro'yxat" : k === "text" ? "Matn" : "Raqam")}
+              </button>
+            ))}
+            <input className={cn(inputCls, "h-8 w-20 md:h-8")} value={r.unit} placeholder={t("O'lchov")} onChange={(e) => upd(i, { unit: e.target.value })} />
+            <div className="ml-auto flex gap-1">
+              <button type="button" onClick={() => move(i, -1)} className="grid size-8 place-items-center rounded-lg hover:bg-muted" aria-label="↑">↑</button>
+              <button type="button" onClick={() => move(i, 1)} className="grid size-8 place-items-center rounded-lg hover:bg-muted" aria-label="↓">↓</button>
+              <button type="button" onClick={() => setRows(rows.filter((_, j) => j !== i))} className="grid size-8 place-items-center rounded-lg text-destructive hover:bg-destructive/10" aria-label={t("O'chirish")}><Trash2 className="size-3.5" /></button>
+            </div>
+          </div>
+          {r.kind === "select" && (
+            <input className={inputCls} value={r.optionsText} placeholder={t("Variantlar (vergul bilan)")} onChange={(e) => upd(i, { optionsText: e.target.value })} />
+          )}
+        </div>
+      ))}
+      <Btn variant="outline" size="sm" onClick={() => setRows([...rows, { key: "", label: "", label_ru: "", kind: "select", options: [], unit: "", optionsText: "" }])}>
+        <Plus className="size-4" />{t("Maydon qo'shish")}
+      </Btn>
+    </div>
   );
 }
 
@@ -489,7 +540,7 @@ export function CatalogView() {
               <span className="w-24 shrink-0 text-xs text-muted-foreground">{tr(d.group, undefined, lang)}</span>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{loc(d, "name", lang)}{!d.is_active && ` (${t("nofaol")})`}{!d.name_ru && <span className="ml-2 text-[11px] text-amber-600">{t("ruscha nomi yo'q")}</span>}</div>
-                <div className="truncate text-xs text-muted-foreground">{d.brands.join(", ")}</div>
+                <div className="truncate text-xs text-muted-foreground">{d.brands.join(", ")}{d.specs?.length ? ` · ${t("{n} ta maxsus maydon", { n: d.specs.length })}` : ""}</div>
               </div>
               <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
             </button>

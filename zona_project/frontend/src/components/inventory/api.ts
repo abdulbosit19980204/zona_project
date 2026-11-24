@@ -10,6 +10,10 @@ export interface InvMe {
   id: number; username: string; name: string; level: Level; branches: number[] | null; restricted: boolean;
   can: { write: boolean; manage: boolean; analytics: boolean };
 }
+/** Turga xos texnik xususiyat maydoni (RAM, disk, protsessor...). */
+export interface SpecField {
+  key: string; label: string; label_ru: string; kind: "select" | "text" | "number"; options: string[]; unit: string;
+}
 export interface Org { id: number; name: string; code: string }
 export interface Branch {
   id: number; code: string; name: string; region: string; note: string; status: BranchStatus; status_label: string;
@@ -18,12 +22,13 @@ export interface Branch {
 export interface DeviceType {
   id: number; name: string; group: string; description: string; serial_hint: string; extra_hint: string;
   brands: string[]; is_active: boolean; order: number;
-  name_ru: string; description_ru: string; serial_hint_ru: string; extra_hint_ru: string;
+  name_ru: string; description_ru: string; serial_hint_ru: string; extra_hint_ru: string; specs: SpecField[];
 }
 export interface Boot {
   me: InvMe; orgs: Org[]; branches: Branch[]; locations: { id: number; name: string; name_ru: string }[]; device_types: DeviceType[];
   conditions: { value: Condition; label: string }[]; branch_statuses: { value: BranchStatus; label: string }[];
   levels: { value: Level; label: string }[];
+  spec_values: Record<string, Record<string, string[]>>;
 }
 export interface PhotoRef { id: number; url: string; thumb: string; width: number; height: number }
 export interface LogRow {
@@ -39,11 +44,13 @@ export interface Item {
   created_by: string; updated_by: string; created_at: string; updated_at: string; photos: PhotoRef[];
   history?: LogRow[]; duplicate?: { id: number; inv_number: string; branch: string } | null;
   purchase_price: number | null; purchase_date: string | null; warranty_months: number | null; warranty_until: string | null;
+  specs: Record<string, string>; specs_text: string;
 }
 export interface ItemInput {
   org: number | null; branch: number | null; location: string; device_type: number | null; brand: string;
   model: string; serial: string; quantity: number; condition: Condition; employee: number | null; note: string;
   photos: number[]; purchase_price: number | null; purchase_date: string; warranty_months: number | null;
+  specs: Record<string, string>;
 }
 export interface Page<T> { count: number; page: number; page_size: number; results: T[]; quantity?: number }
 export type AckStatus = "pending" | "signed" | "revoked";
@@ -93,7 +100,7 @@ export interface ImportResult {
 
 export interface AckItem {
   id: number; inv_number: string; type: string; type_ru: string; group: string; brand: string; model: string; serial: string;
-  quantity: number; condition: Condition; condition_label: string; location: string; branch: string;
+  quantity: number; condition: Condition; condition_label: string; location: string; branch: string; specs?: string;
   photos: { thumb: string; url: string }[]; result?: { id: number; ok: boolean; comment: string } | null;
 }
 export interface Ack {

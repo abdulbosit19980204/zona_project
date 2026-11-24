@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from . import photos as photo_store
 from .access import CanWrite, HasInventory, branch_scope, can_write_branch, scoped
 from .models import Ack, Employee, Item, Log
+from .specs import summary as spec_summary
 from .views import COND_LABEL, _int, _s, bad, inv_api, log, user_name
 
 _sig = Signer(salt="inventory-signature")
@@ -35,7 +36,8 @@ def snapshot(items):
     return [{"id": it.id, "inv_number": it.inv_number, "type": it.device_type.name, "type_ru": it.device_type.name_ru,
              "group": it.device_type.group, "brand": it.brand, "model": it.model, "serial": it.serial,
              "quantity": it.quantity, "condition": it.condition, "condition_label": COND_LABEL.get(it.condition, ""),
-             "location": it.location, "branch": it.branch.name, "photos": [p.id for p in it.photos.all()][:6]}
+             "location": it.location, "branch": it.branch.name, "photos": [p.id for p in it.photos.all()][:6],
+             "specs": spec_summary(it.device_type.specs, it.specs)}
             for it in items]
 
 

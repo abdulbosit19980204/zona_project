@@ -22,6 +22,7 @@ from zona.auth import AUTHENTICATION
 
 from . import photos as photo_store
 from .i18n import translate_response
+from .specs import clean_defs, labeled as spec_labeled, summary as spec_summary
 from .access import (COLLECTOR, DIRECTOR, MANAGER, CanWrite, HasInventory, IsManager, IsManagerOrDirector,
                      access_of, branch_scope, can_write_branch, level_of, scoped)
 from .models import Access, Branch, DeviceType, Employee, Item, Location, Log, Org, Photo
@@ -120,7 +121,23 @@ def type_payload(d):
     return {"id": d.id, "name": d.name, "group": d.group, "description": d.description, "serial_hint": d.serial_hint,
             "extra_hint": d.extra_hint, "brands": d.brands or [], "is_active": d.is_active, "order": d.order,
             "name_ru": d.name_ru, "description_ru": d.description_ru, "serial_hint_ru": d.serial_hint_ru,
-            "extra_hint_ru": d.extra_hint_ru}
+            "extra_hint_ru": d.extra_hint_ru, "specs": d.specs or []}
+
+
+def learned_spec_values():
+    """Qo'lda yozilgan (ro'yxatda yo'q) qiymatlar — keyingi safar shu tur uchun taklif bo'lib chiqadi.
+    {type_id: {key: [qiymatlar]}}"""
+    defs = {d.id: {x["key"]: set(x.get("options") or []) for x in (d.specs or [])} for d in DeviceType.objects.all()}
+    out = {}
+    for type_id, specs in Item.objects.filter(is_deleted=False).exclude(specs={}).values_list("device_type_id", "specs"):
+        known = defs.get(type_id, {})
+        for k, v in (specs or {}).items():
+            v = str(v).strip()
+            if k in known and v and v not in known[k]:
+                bucket = out.setdefault(type_id, {}).setdefault(k, [])
+                if v not in bucket and len(bucket) < 50:
+                    bucket.append(v)
+    return out
 
 
 @inv_api(["GET"], [HasInventory])
@@ -136,6 +153,7 @@ def bootstrap(request):
         "conditions": [{"value": v, "label": l} for v, l in Item.CONDITIONS],
         "branch_statuses": [{"value": v, "label": l} for v, l in Branch.STATUSES],
         "levels": [{"value": v, "label": l} for v, l in Access.LEVELS],
+        "spec_values": learned_spec_values(),
     })
 
 
@@ -153,6 +171,7 @@ def item_payload(it, full=False):
         "note": it.note, "is_deleted": it.is_deleted,
         "purchase_price": it.purchase_price, "purchase_date": it.purchase_date, "warranty_months": it.warranty_months,
         "warranty_until": it.warranty_until,
+        "specs": it.specs or {}, "specs_text": spec_summary(it.device_type.specs, it.specs),
         "created_by": user_name(it.created_by), "updated_by": user_name(it.updated_by),
         "created_at": it.created_at, "updated_at": it.updated_at,
         "photos": [photo_store.payload(p) for p in it.photos.all()],
@@ -251,6 +270,23 @@ def clean_item(request, data, instance=None):
             out[f] = _s(data.get(f), limit)
     if "note" in data:
         out["note"] = _s(data.get("note"), 2000)
+    if "specs" in data:
+        dt = out.get("device_type") or (instance.device_type if instance else None)
+        allowed = {d["key"]: d for d in (dt.specs or [])} if dt else {}
+        raw = data.get("specs") if isinstance(data.get("specs"), dict) else {}
+        specs = {}
+        for k, v in raw.items():
+            d = allowed.get(str(k))
+            v = _s(v, 120)
+            if not d or not v:
+                continue
+            if d.get("kind") == "number" and not re.fullmatch(r"\d+([.,]\d+)?", v):
+                return None, f"{d['label']}: raqam yozing."
+            specs[str(k)] = v
+        out["specs"] = specs
+    elif instance is not None and "device_type" in out and out["device_type"].id != instance.device_type_id:
+        keys = {d["key"] for d in (out["device_type"].specs or [])}  # tur almashdi — mos kelmaydigan maydonlar tushadi
+        out["specs"] = {k: v for k, v in (instance.specs or {}).items() if k in keys}
     if "purchase_price" in data:
         raw = re.sub(r"[\s'.,]", "", str(data.get("purchase_price") or ""))
         if raw and not raw.isdigit():
@@ -289,6 +325,8 @@ def parse_date_value(value):
 def _display(field, value):
     if value is None:
         return ""
+    if isinstance(value, dict):
+        return "; ".join(f"{k}: {v}" for k, v in value.items())
     if field == "purchase_price":
         return f"{value:,}".replace(",", " ")
     if hasattr(value, "isoformat"):
@@ -396,7 +434,11 @@ def item_detail(request, pk):
     for f, v in fields.items():
         old = getattr(item, f)
         if (old.pk if hasattr(old, "pk") else old) != (v.pk if hasattr(v, "pk") else v):
-            changes[f] = [_display(f, old), _display(f, v)]
+            if f == "specs":
+                defs = (fields.get("device_type") or item.device_type).specs
+                changes[f] = [spec_labeled(defs, old), spec_labeled(defs, v)]
+            else:
+                changes[f] = [_display(f, old), _display(f, v)]
             setattr(item, f, v)
     before = set(item.photos.values_list("pk", flat=True))
     with transaction.atomic():
@@ -749,6 +791,7 @@ def catalog_save(request):
             "description": _s(data.get("description")), "serial_hint": _s(data.get("serial_hint")),
             "extra_hint": _s(data.get("extra_hint")), "brands": [_s(b, 80) for b in brands if _s(b, 80)][:30],
             "is_active": bool(data.get("is_active", True)), "name_ru": _s(data.get("name_ru"), 120),
+            **({"specs": clean_defs(data.get("specs"))} if "specs" in data else {}),
             "description_ru": _s(data.get("description_ru")), "serial_hint_ru": _s(data.get("serial_hint_ru")),
             "extra_hint_ru": _s(data.get("extra_hint_ru"))}
     else:

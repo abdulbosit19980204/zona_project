@@ -62,6 +62,7 @@ PATTERNS = [
     (re.compile(r"^(.*): yozish huquqi yo'q$"), "{0}: нет прав на запись"),
     (re.compile(r"^Telefon noto'g'ri: (.*)$"), "Неверный телефон: {0}"),
     (re.compile(r"^Telegram noto'g'ri: (.*)$"), "Неверный Telegram: {0}"),
+    (re.compile(r"^(.*): raqam yozing\.$"), "{0}: укажите число."),
     (re.compile(r"^Sana tanilmadi: (.*)$"), "Дата не распознана: {0}"),
     (re.compile(r"^Holat tanilmadi \((.*)\) — 'Ishlayapti'$"), "Состояние не распознано ({0}) — «Работает»"),
 ]

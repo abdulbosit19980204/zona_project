@@ -142,6 +142,20 @@ BRANCH_COLUMNS = [("Kod", 7), ("Filial", 14), ("Viloyat", 20), ("Holati", 12), (
                   ("7 kun", 7), ("Oxirgi faollik", 17), ("Faollik", 14)]
 
 
+def spec_columns(items):
+    """Eksportdagi texnik xususiyat ustunlari: faqat qiymati bor kalitlar, katalog tartibida."""
+    used = set()
+    for it in items:
+        used.update(k for k, v in (it.specs or {}).items() if v)
+    cols, seen = [], set()
+    for d in DeviceType.objects.all():
+        for x in d.specs or []:
+            if x["key"] in used and x["key"] not in seen:
+                seen.add(x["key"])
+                cols.append((x["key"], x["label"] + (f" ({x['unit']})" if x.get("unit") else "")))
+    return cols
+
+
 @inv_api(["GET"], [HasInventory])
 def export_items(request):
     fmt = request.query_params.get("fmt", "xlsx")
@@ -149,12 +163,15 @@ def export_items(request):
     if fmt == "template":
         return _file(fill_template(request, qs if request.query_params.get("empty") != "1" else Item.objects.none()),
                      f"IT_inventarizatsiya_{_now_tag()}.xlsx", XLSX)
-    rows = [item_row(request, it) for it in qs.iterator(chunk_size=500)] if fmt != "template" else []
+    items = list(qs)
+    specs = spec_columns(items)
+    columns = ITEM_COLUMNS + [(label, 16) for _, label in specs]
+    rows = [item_row(request, it) + [(it.specs or {}).get(k, "") for k, _ in specs] for it in items]
     if fmt == "csv":
-        return _file(_csv(ITEM_COLUMNS, rows), f"inventarizatsiya_{_now_tag()}.csv", "text/csv; charset=utf-8")
+        return _file(_csv(columns, rows), f"inventarizatsiya_{_now_tag()}.csv", "text/csv; charset=utf-8")
     wb = Workbook()
-    ws_items = add_sheet(wb, "Qurilmalar", ITEM_COLUMNS, rows, first=True)
-    _formats(ws_items, ITEM_COLUMNS)
+    ws_items = add_sheet(wb, "Qurilmalar", columns, rows, first=True)
+    _formats(ws_items, columns)
     stats = compute_stats(request)
     add_sheet(wb, "Filiallar holati", BRANCH_COLUMNS, branch_status_rows(stats))
     emps = scoped(Employee.objects.select_related("org", "branch"), request.user).filter(is_active=True)
@@ -572,6 +589,13 @@ def _items_from_rows(request, rows, lk, result, default_branch, sheet):
             fields["purchase_date"] = d
         if cols["months"] is not None:
             fields["warranty_months"] = _int(_cell(row, cols["months"])) if _cell(row, cols["months"]) else None
+        # texnik xususiyatlar: ustun nomi = maydon nomi (o'zbekcha yoki ruscha)
+        file_specs = {}
+        for d in dt.specs or []:
+            label = d["label"] + (f" ({d['unit']})" if d.get("unit") else "")
+            j = next((names[k] for k in (norm(label), norm(d["label"]), norm(d.get("label_ru") or "")) if k and k in names), None)
+            if j is not None:
+                file_specs[d["key"]] = _cell(row, j)[:120]
         item = None
         if inv_number:
             item = scoped(Item.objects.all(), request.user).filter(inv_number=inv_number).first()
@@ -586,6 +610,9 @@ def _items_from_rows(request, rows, lk, result, default_branch, sheet):
                         and same(cand.location, fields["location"]):
                     item = cand
                     break
+        if file_specs:  # faylda bor maydonlar yangilanadi, qolganlari saqlanadi
+            merged = {**((item.specs or {}) if item else {}), **file_specs}
+            fields["specs"] = {k: v for k, v in merged.items() if v}
         if item and item.id in lk.touched_items:
             fields["quantity"] = item.quantity + fields["quantity"]  # fayldagi takror qator — soni qo'shiladi
         if item:

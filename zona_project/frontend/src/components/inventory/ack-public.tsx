@@ -196,6 +196,7 @@ export function AckPublicPage() {
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold leading-snug">{(lang === "ru" && it.type_ru) || it.type}</div>
                         <div className="text-sm text-muted-foreground">{[it.brand, it.model].filter(Boolean).join(" ") || "—"}{it.quantity > 1 && ` · ×${it.quantity}`}</div>
+                        {it.specs && <div className="text-xs text-muted-foreground">{it.specs}</div>}
                         <div className="mt-0.5 text-xs text-muted-foreground"><span className="font-mono">{it.inv_number}</span>{it.serial && ` · S/N ${it.serial}`} · {condLabel(it.condition, lang)}</div>
                       </div>
                     </div>

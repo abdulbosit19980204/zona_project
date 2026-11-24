@@ -443,3 +443,44 @@ class PurchaseWarrantyTests(InvBase):
         self.api.post("/api/inventory/items/import/", {"file": buf}, format="multipart")
         item.refresh_from_db()
         self.assertEqual((item.model, item.purchase_price), ("X1", 8500000))  # narx ustuni yo'q — o'chmadi
+
+
+class SpecsTests(InvBase):
+    def test_specs_saved_filtered_and_logged(self):
+        it = self.add_item(specs={"cpu": "Intel Core i5", "ram": "8 GB", "disk_type": "SSD", "disk": "256 GB", "bogus": "x"})
+        self.assertEqual(it["specs"], {"cpu": "Intel Core i5", "ram": "8 GB", "disk_type": "SSD", "disk": "256 GB"})
+        self.assertEqual(it["specs_text"], "Intel Core i5 · 8 GB · SSD · 256 GB")
+        r = self.col.patch(f"/api/inventory/items/{it['id']}/", {"specs": {**it["specs"], "ram": "16 GB", "cpu_model": "i5-1135G7"}}, format="json")
+        self.assertEqual(r.json()["specs"]["ram"], "16 GB")
+        upd = Log.objects.filter(action=Log.UPDATE, item_id=it["id"]).first()
+        self.assertIn("Operativ xotira (RAM): 16 GB", upd.changes["specs"][1])
+        # tur almashsa — mos kelmaydigan maydonlar tushadi (monitorda RAM yo'q)
+        monitor = DeviceType.objects.get(name="Monitor")
+        r = self.col.patch(f"/api/inventory/items/{it['id']}/", {"device_type": monitor.id}, format="json")
+        self.assertEqual(r.json()["specs"], {})
+
+    def test_custom_value_learned_and_export_import_columns(self):
+        self.add_item(specs={"cpu": "Intel Core i5", "ram": "10 GB"})  # 10 GB ro'yxatda yo'q — yozib qo'shilgan
+        boot = self.col.get("/api/inventory/bootstrap/").json()
+        self.assertIn("10 GB", boot["spec_values"][str(self.laptop.id)]["ram"])
+        laptop = next(d for d in boot["device_types"] if d["name"] == "Noutbuk")
+        self.assertEqual(laptop["specs"][0]["key"], "cpu")
+        x = load_workbook(io.BytesIO(self.api.get("/api/inventory/items/export/?fmt=xlsx").content))["Qurilmalar"]
+        head = [c.value for c in x[1]]
+        self.assertIn("Operativ xotira (RAM)", head)
+        self.assertEqual(x.cell(2, head.index("Operativ xotira (RAM)") + 1).value, "10 GB")
+        buf = io.BytesIO("Qurilma turi;Filial;Seriya raqami (S/N);Protsessor;Disk hajmi\nNoutbuk;Samarqand;PF4ABC12;Intel Core i7;512 GB\n".encode("utf-8"))
+        buf.name = "s.csv"
+        res = self.api.post("/api/inventory/items/import/", {"file": buf}, format="multipart").json()
+        self.assertEqual(res["updated"], 1, res)
+        it = Item.objects.get()
+        self.assertEqual(it.specs, {"cpu": "Intel Core i7", "ram": "10 GB", "disk": "512 GB"})  # RAM saqlandi
+
+    def test_manager_edits_type_spec_fields(self):
+        r = self.api.post("/api/inventory/catalog/", {"kind": "device_type", "id": self.laptop.id, "name": "Noutbuk",
+                                                      "specs": [{"label": "Klaviatura tili", "kind": "select", "options": "Lotin, Kirill, Lotin, "},
+                                                                {"label": "", "kind": "text"}]}, format="json").json()
+        self.assertEqual(r["specs"], [{"key": "klaviatura_tili", "label": "Klaviatura tili", "label_ru": "", "kind": "select",
+                                       "options": ["Lotin", "Kirill"], "unit": ""}])
+        self.assertEqual(self.col.post("/api/inventory/catalog/", {"kind": "device_type", "id": self.laptop.id, "name": "X"},
+                                       format="json").status_code, 403)

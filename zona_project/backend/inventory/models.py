@@ -88,6 +88,8 @@ class DeviceType(models.Model):
     description_ru = models.CharField("Bu nima? (rus)", max_length=255, blank=True, default="")
     serial_hint_ru = models.CharField("Seriya raqami qayerda? (rus)", max_length=255, blank=True, default="")
     extra_hint_ru = models.CharField("Qo'shimcha (rus)", max_length=255, blank=True, default="")
+    # turga xos texnik xususiyatlar (ixtiyoriy maydonlar ta'rifi): [{key, label, label_ru, kind, options, unit}]
+    specs = models.JSONField("Texnik xususiyatlar (maydonlar)", default=list, blank=True)
     is_active = models.BooleanField("Faol", default=True)
     order = models.PositiveIntegerField(default=0)
 
@@ -179,6 +181,7 @@ class Item(models.Model):
     purchase_price = models.PositiveBigIntegerField("Sotib olingan narxi (so'm)", null=True, blank=True)
     purchase_date = models.DateField("Sotib olingan sana", null=True, blank=True)
     warranty_months = models.PositiveSmallIntegerField("Kafolat muddati (oy)", null=True, blank=True)
+    specs = models.JSONField("Texnik xususiyatlar", default=dict, blank=True)  # {key: qiymat}, DeviceType.specs bo'yicha
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
