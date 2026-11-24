@@ -31,6 +31,7 @@ urlpatterns = [
     path("images/label/", views.image_label, name="images-label"),
     path("images/ignore/", views.image_ignore, name="images-ignore"),
     path("images/screens/assign/", views.screen_assign),
+    path("groups-redirect/", views.groups_redirect),
     path("images/screens/rebuild/", views.screens_rebuild),
     path("images/screens/<int:pk>/", views.screen_detail),
     path("tasks/", views.support_tasks, name="tasks"),

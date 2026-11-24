@@ -151,8 +151,10 @@ def red_text(image_bytes, timeout=15):
     if mask is None:
         return ""
     try:
+        from concurrent.futures import ThreadPoolExecutor
+
         from PIL import Image, ImageOps
-        out = []
+        crops = []
         for a, b in red_bands(mask)[:3]:
             y0, y1 = max(0, a - 6), min(mask.height, b + 6)
             box = mask.crop((0, y0, mask.width, y1)).getbbox()
@@ -163,8 +165,15 @@ def red_text(image_bytes, timeout=15):
             k = 3 if crop.height < 80 else 2 if crop.height < 160 else 1
             if k > 1:
                 crop = crop.resize((crop.width * k, crop.height * k), Image.Resampling.LANCZOS)
-            crop = ImageOps.expand(crop, border=16, fill=255)
-            lines = [" ".join(ln.split()) for ln in _tesseract(crop, langs, timeout).splitlines()]
+            crops.append(ImageOps.expand(crop, border=16, fill=255))
+        if not crops:
+            return ""
+        # bo'laklar bir vaqtda (har biri alohida tesseract jarayoni) — ketma-ket emas
+        with ThreadPoolExecutor(max_workers=len(crops)) as pool:
+            texts = list(pool.map(lambda c: _tesseract(c, langs, timeout), crops))
+        out = []
+        for txt in texts:
+            lines = [" ".join(ln.split()) for ln in txt.splitlines()]
             msg = " ".join(ln for ln in lines if _clean(ln))
             # qizil yorliqlar ("Скидка на корзину", "Активный визит") — xato emas: xato so'zi yoki to'liq gap bo'lsin
             if msg and (ERROR_WORDS.search(msg) or len(re.findall(r"[^\W\d_]{3,}", msg)) >= 5):

@@ -168,6 +168,10 @@ class Group(models.Model):
     is_admin = models.BooleanField("Bot guruhda admin", default=False)
     # tahlilga kiradimi: test guruhlari (masalan, botni sinash vazifalari) statistikani buzmasin
     in_analytics = models.BooleanField("Tahlilga qo'shiladi", default=True, db_default=True)
+    # eski guruh: savollarga javob berilmaydi — yozgan odamga "savolingizni yangi guruhga yozing" (havola bilan)
+    redirect_to = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="redirected_from")
+    invite_link = models.CharField("Guruhga taklif havolasi", max_length=200, blank=True, default="", db_default="")
+    redirect_count = models.PositiveIntegerField(default=0, db_default=0)
     joined_at = models.DateTimeField(auto_now_add=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
 

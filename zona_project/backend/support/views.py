@@ -165,8 +165,25 @@ class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ["id", "bot", "bot_name", "chat_id", "title", "mode", "effective_mode", "is_active", "is_admin",
-                  "in_analytics", "joined_at", "last_message_at", "questions_7d"]
-        read_only_fields = ["bot", "chat_id", "title", "is_admin", "joined_at", "last_message_at"]
+                  "in_analytics", "joined_at", "last_message_at", "questions_7d", "redirect_to", "invite_link", "link",
+                  "redirect_count"]
+        read_only_fields = ["bot", "chat_id", "title", "is_admin", "joined_at", "last_message_at", "redirect_count"]
+
+    link = serializers.SerializerMethodField()
+
+    def get_link(self, g):
+        return g.invite_link or (f"https://t.me/{g.username}" if g.username else "")
+
+    def validate_redirect_to(self, v):
+        if v is not None and self.instance is not None and v.pk == self.instance.pk:
+            raise serializers.ValidationError("Guruh o'ziga yo'naltirilmaydi")
+        return v
+
+    def validate_invite_link(self, v):
+        v = (v or "").strip()
+        if v and not v.startswith(("https://t.me/", "http://t.me/", "t.me/", "tg://")):
+            raise serializers.ValidationError("Telegram havolasi bo'lishi kerak (https://t.me/...)")
+        return ("https://" + v) if v.startswith("t.me/") else v
 
 
 class GroupViewSet(ZonaViewSet):
@@ -1552,7 +1569,8 @@ def _image_types(s):
            .exclude(path="").select_related("message__group").order_by("-created_at")[:600])
     ign = Media.objects.filter(kind=Media.PHOTO, ignored=True).exclude(path="").order_by("-created_at")[:300]
     disk = Media.objects.exclude(path="").aggregate(n=Sum("size"))["n"] or 0
-    saved = Media.objects.filter(slim=True).aggregate(full=Sum("full_size"), now=Sum("size"))
+    saved = {"full": Media.objects.filter(slim=True).aggregate(n=Sum("full_size"))["n"],
+             "now": Media.objects.filter(slim=True).exclude(path="").aggregate(n=Sum("size"))["n"]}
     ignored = [{"count": len(g), "ids": [m.id for m in g], "samples": [media_dict(m) for m in g[:4]]}
                for g in vision.clusters(list(ign), s.image_threshold)[:40]]
     groups = []
@@ -1820,3 +1838,22 @@ def suggestion_decide(request, pk, action):
     except ValueError as e:
         return Response({"detail": str(e)}, status=400)
     return Response(_sugg(x))
+
+
+@zona_api(["POST"], [IsZonaAdmin])
+def groups_redirect(request):
+    """Eski guruhlarni yangi guruhga yo'naltirish (bir nechtasini birdan): ids yoki not_admin=true (bot admin bo'lmagan
+    barcha guruhlar); target=null — yo'naltirishni bekor qilish."""
+    target = request.data.get("target")
+    t = Group.objects.filter(pk=target).first() if target else None
+    if target and t is None:
+        return Response({"detail": "Guruh topilmadi"}, status=400)
+    qs = Group.objects.filter(is_active=True)
+    if request.data.get("not_admin"):
+        qs = qs.filter(is_admin=False)
+    else:
+        qs = qs.filter(pk__in=[int(x) for x in request.data.get("ids") or []])
+    if t is not None:
+        qs = qs.exclude(pk=t.pk)
+    return Response({"done": qs.update(redirect_to=t)})
+

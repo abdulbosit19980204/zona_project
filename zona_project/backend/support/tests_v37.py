@@ -191,3 +191,49 @@ class PeopleTypeTests(OpenBase):
         tags = {t["key"]: t["n"] for t in d["tags"]}
         self.assertEqual(tags, {"promo": 4, "visit": 1})
         self.assertTrue(any(i["code"] == "tag_often" for i in d["insights"]))
+
+
+class RedirectTests(OpenBase):
+    def setUp(self):
+        super().setUp()
+        from .runner import Handler
+        Handler._redirected.clear()
+        from .models import Group
+        self.new = Group.objects.create(bot=self.bot, chat_id=-200, title="ROP yangi", username="rop_new", is_admin=True)
+        Group.objects.filter(pk=self.g.pk).update(redirect_to=self.new)
+
+    def test_old_group_replies_with_link_in_askers_language_once(self):
+        from .tests import group_msg
+        self.h().handle(group_msg(500, 1, "Почему не работает скидка?", username="agent1"))
+        sent = self.tg.sent[-1]
+        self.assertEqual((sent["chat"], sent["reply_to"]), (-100, 500))
+        self.assertIn("@agent1", sent["text"])
+        self.assertIn("новую группу", sent["text"])
+        self.assertIn('href="https://t.me/rop_new"', sent["text"])
+        self.assertFalse(Message.objects.filter(message_id=500, kind=Message.QUESTION).exists())  # javob berilmaydi
+        n = len(self.tg.sent)
+        self.h().handle(group_msg(501, 1, "ещё вопрос", username="agent1"))
+        self.assertEqual(len(self.tg.sent), n)  # 10 daqiqa ichida qayta eslatilmaydi
+        self.h().handle(group_msg(502, 2, "Скидка чиқмаяпти", username="agent2"))
+        self.assertIn("янги гуруҳга", self.tg.sent[-1]["text"])  # o'zbek kirill — kirillda
+        self.assertIn('href="https://t.me/rop_new"', self.tg.sent[-1]["text"])
+        from .models import Group
+        self.assertEqual(Group.objects.get(pk=self.g.pk).redirect_count, 2)
+
+    def test_staff_not_redirected_and_admin_bulk_api(self):
+        from .models import Group
+        from .tests import group_msg
+        n = len(self.tg.sent)
+        self.h().handle(group_msg(510, 7, "Tayyor", username="test_op"))  # xodim (Member telegram)
+        self.assertEqual(len(self.tg.sent), n)
+        old2 = Group.objects.create(bot=self.bot, chat_id=-300, title="Eski 2", is_admin=False)
+        Group.objects.filter(pk=self.new.pk).update(is_admin=True)
+        self.login("admin")
+        r = self.call("post", "support/groups-redirect/", {"target": self.new.id, "not_admin": True}).json()
+        self.assertGreaterEqual(r["done"], 1)
+        self.assertEqual(Group.objects.get(pk=old2.pk).redirect_to_id, self.new.id)
+        self.assertIsNone(Group.objects.get(pk=self.new.pk).redirect_to_id)  # o'ziga yo'naltirilmaydi
+        bad = self.call("patch", f"support/groups/{self.new.id}/", {"invite_link": "http://evil.example"})
+        self.assertEqual(bad.status_code, 400)
+        ok = self.call("patch", f"support/groups/{self.new.id}/", {"invite_link": "t.me/+AbCd"}).json()
+        self.assertEqual(ok["link"], "https://t.me/+AbCd")

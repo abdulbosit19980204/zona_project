@@ -256,6 +256,9 @@ class Handler:
         photo = media[0] if media else None
         self.media_meta = media
         reply_to = (msg.get("reply_to_message") or {}).get("message_id")
+        if group.redirect_to_id and not self.history and not user.is_staff and not sender.get("is_bot") and (text or photo):
+            # eski guruh: savollarga javob berilmaydi — yozgan odamga yangi guruh havolasi (uning tilida)
+            return self.on_redirect(msg, group, user, text)
         if mode == MODE_OFF:
             return None
         if text.startswith("/kontakt") or text.startswith("/contact"):
@@ -358,6 +361,26 @@ class Handler:
         return q
 
     _recent_text: dict = {}  # (chat, user) -> (vaqt, matn): savol deb olinmagan qisqa izoh (keyin rasm kelishi mumkin)
+
+    _redirected = {}  # (chat_id, user) -> oxirgi eslatma vaqti: albom / ketma-ket xabarlarga bitta eslatma
+    REDIRECT_GAP = 600
+
+    def on_redirect(self, msg, group, user, text):
+        key = (group.chat_id, user.pk)
+        now = time.time()
+        if now - Handler._redirected.get(key, 0) < self.REDIRECT_GAP:
+            return None
+        target = Group.objects.select_related("bot").filter(pk=group.redirect_to_id).first()
+        if target is None:
+            return None
+        link = invite_link(target, self.tg if target.bot_id == self.bot.pk else None)
+        Handler._redirected[key] = now
+        html_text = redirect_text(user, text, target.title, link)
+        sent = self._safe_send(group.chat_id, html_text, reply_to=msg["message_id"])
+        if sent:
+            from django.db.models import F as _F
+            Group.objects.filter(pk=group.pk).update(redirect_count=_F("redirect_count") + 1)
+        return sent
 
     def _merge_recent(self, chat, user, msg, text, photo):
         """Shu muallifning bir necha soniya oldingi savoli bilan birlashtirish: rasm + keyin izoh yoki matn + keyin rasm."""
@@ -687,8 +710,12 @@ class Handler:
         if mode == MODE_LIVE:
             self.tg.typing(q.chat_id)
         d = None
+        self._ocr_future = None
+        if (media and media.kind == Media.PHOTO and settings.ocr_enabled and not q.ocr_text and not media.ocr_text
+                and not self.history and self.executor is not None):
+            self._ocr_future = self._start_ocr(q, media)  # to'liq matn fonda — qizil yozuv bilan parallel
         if media and media.kind == Media.PHOTO and settings.ocr_enabled and not q.alert_text and not self.history:
-            self._alert(q, media)  # qizil xato yozuvi (~0.5 s): bor bo'lsa — javob shu bo'yicha, tez yo'l emas
+            self._alert(q, media)  # qizil xato yozuvi: bor bo'lsa — javob shu bo'yicha, tez yo'l emas
             mark("alert")
         leader = engine.is_leader(q.user)
         if media and media.kind == Media.PHOTO and not q.ocr_text:
@@ -1133,12 +1160,37 @@ class Handler:
         q.photo_path = m.path
         return m
 
+    def _start_ocr(self, q, media):
+        try:
+            data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
+        except OSError:
+            data = self.photo_bytes.get(q.message_id)
+        if not data:
+            return None
+
+        def run():
+            with _OCR_SLOTS:
+                return ocr.read_text(data)
+        try:
+            return _OCR_POOL.submit(run)
+        except RuntimeError:
+            return None
+
     def _ocr(self, q, media):
         if not media or media.kind != Media.PHOTO:
             return
         if media.ocr_text:
             q.ocr_text = media.ocr_text
             return
+        fut = getattr(self, "_ocr_future", None)
+        if fut is not None:
+            self._ocr_future = None
+            try:
+                q.ocr_text = fut.result(timeout=40) or ""
+                Media.objects.filter(pk=media.pk).update(ocr_text=q.ocr_text)
+                return
+            except Exception:  # noqa: BLE001 — fonda o'qilmadi: odatdagidek
+                pass
         try:
             data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
         except OSError:
@@ -1702,6 +1754,7 @@ class Progress:
 
 
 _OCR_SLOTS = threading.BoundedSemaphore(max(2, (os.cpu_count() or 4) - 2))
+_OCR_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="support-ocr")
 
 
 def _asker(q):
@@ -1935,6 +1988,42 @@ def _nightly_labels(hist):
     if not Message.objects.filter(kind=Message.QUESTION).exclude(stage="dup").exclude(labeled_by__in=["ai", "staff"]).exists():
         return None
     return AIJob.objects.create(kind=AIJob.LABELS, params={"limit": 1000}, created_by="avto (tun)")
+
+
+def invite_link(group, tg=None):
+    """Guruh havolasi: qo'lda kiritilgan, ochiq guruh nomi yoki (bot admin bo'lsa) Telegram'dan olingan — saqlanadi."""
+    if group.invite_link:
+        return group.invite_link
+    if group.username:
+        return f"https://t.me/{group.username}"
+    try:
+        if tg is None:
+            token = decrypt(group.bot.token_enc)
+            tg = Client(token) if token else None
+        link = tg.call("exportChatInviteLink", {"chat_id": group.chat_id}, timeout=8, retries=1) if tg else ""
+    except Exception:  # noqa: BLE001 — bot admin emas / huquqi yo'q
+        link = ""
+    if isinstance(link, str) and link.startswith("https://"):
+        Group.objects.filter(pk=group.pk).update(invite_link=link)
+        return link
+    return ""
+
+
+def redirect_text(user, text, title, link):
+    """"Bu guruhda javob berilmaydi — yangi guruhga yozing": yozgan tilida (rus / o'zbek; kirill — kirillda), belgilab."""
+    esc = engine.html.escape
+    who = engine.mention_html(user) + ", " if user else ""
+    name = esc(title or "yangi guruh")
+    tag = f'<a href="{esc(link)}">{name}</a>' if link else f"<b>{name}</b>"
+    uz = "bu guruhda savollarga javob berish to'xtatildi. Iltimos, savolingizni yangi guruhga yozing 👉 "
+    ru = "в этой группе ответы на вопросы больше не даются. Пожалуйста, напишите ваш вопрос в новую группу 👉 "
+    if not (text or "").strip():
+        return f"{who}{uz}{tag}\n\n{ru}{tag}"  # faqat rasm: ikki tilda
+    if engine.detect_lang(text) == "ru":
+        return who + ru + tag
+    if translit.is_uz_cyrillic(text):
+        uz = translit.lat2cyr(uz)
+    return who + uz + tag
 
 
 def _media_thread(nightly=False):

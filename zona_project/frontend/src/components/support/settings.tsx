@@ -172,9 +172,30 @@ function BotCard({ b, t }: { b: SupportBot; t: ST }) {
 function GroupsSection({ t }: { t: ST }) {
   const groups = useQuery({ queryKey: ["support", "groups"], queryFn: supportApi.groups, refetchInterval: 30_000 });
   const upd = useSupportMutation(({ id, ...body }: { id: number } & Partial<SupportGroup>) => supportApi.updateGroup(id, body), t("saved"));
+  const [target, setTarget] = useState("");
+  const bulk = useSupportMutation(() => supportApi.groupsRedirect({ target: Number(target), not_admin: true }), (r) => t("rdBulkDone", { n: r.done }));
+  const list = groups.data ?? [];
+  const nameOf = (id: number | null) => list.find((x) => x.id === id)?.title ?? "";
   return (
     <section className="grid gap-3">
       <p className="text-xs text-muted-foreground">{t("groupsHint")}</p>
+      {list.length > 1 && (
+        <Card className="gap-2 p-4">
+          <div className="text-sm font-semibold">{t("rdTitle")}</div>
+          <p className="text-xs text-muted-foreground">{t("rdHint")}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select className="h-9 min-w-56 rounded-md border bg-background px-2 text-sm" value={target} onChange={(e) => setTarget(e.target.value)}
+              aria-label={t("rdTarget")}>
+              <option value="">{t("rdTarget")}</option>
+              {list.filter((g) => g.is_admin && !g.redirect_to).map((g) => <option key={g.id} value={g.id}>{g.title || g.chat_id}</option>)}
+            </select>
+            <Button size="sm" disabled={!target || bulk.isPending}
+              onClick={() => window.confirm(t("rdBulkConfirm", { n: list.filter((g) => !g.is_admin && g.is_active && String(g.id) !== target).length, to: nameOf(Number(target)) })) && bulk.mutate(undefined)}>
+              {t("rdBulk")}
+            </Button>
+          </div>
+        </Card>
+      )}
       {groups.isLoading && <Skeleton className="h-32" />}
       {groups.data && groups.data.length === 0 && <p className="text-sm text-muted-foreground">{t("empty")}</p>}
       {groups.data?.map((g) => (
@@ -201,9 +222,38 @@ function GroupsSection({ t }: { t: ST }) {
           <Segmented size="sm" value={g.mode} className="w-full sm:w-auto"
             onChange={(v) => upd.mutate({ id: g.id, mode: v as SupportGroup["mode"] })}
             options={(["inherit", ...MODES] as const).map((m) => ({ value: m, label: t(`mode_${m}`) }))} />
+          <RedirectRow g={g} list={list} t={t} onSave={(body) => upd.mutate({ id: g.id, ...body })} pending={upd.isPending} />
         </Card>
       ))}
     </section>
+  );
+}
+
+/** Guruh: eski bo'lsa — qaysi guruhga yo'naltiriladi (bot javob bermaydi, havolani yuboradi); yangi bo'lsa — havolasi. */
+function RedirectRow({ g, list, t, onSave, pending }: {
+  g: SupportGroup; list: SupportGroup[]; t: ST; onSave: (b: Partial<SupportGroup>) => void; pending: boolean;
+}) {
+  const [link, setLink] = useState(g.invite_link);
+  const incoming = list.filter((x) => x.redirect_to === g.id).length;
+  return (
+    <div className="grid gap-2 rounded-lg bg-muted/40 p-2.5 text-xs sm:grid-cols-2">
+      <label className="grid gap-1">
+        <span className="text-muted-foreground">{t("rdOld")}</span>
+        <select className="h-8 rounded-md border bg-background px-2 text-xs" value={g.redirect_to ?? ""} disabled={pending}
+          onChange={(e) => onSave({ redirect_to: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">{t("rdNone")}</option>
+          {list.filter((x) => x.id !== g.id && !x.redirect_to).map((x) => <option key={x.id} value={x.id}>{x.title || x.chat_id}</option>)}
+        </select>
+        {g.redirect_to && <span className="text-warning">{t("rdActive", { n: g.redirect_count })}</span>}
+      </label>
+      <label className="grid gap-1">
+        <span className="text-muted-foreground">{t("rdLink")}{incoming > 0 && <> · {t("rdIncoming", { n: incoming })}</>}</span>
+        <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder={g.link || "https://t.me/+..."} className="h-8 text-xs"
+          onBlur={() => link !== g.invite_link && onSave({ invite_link: link })} />
+        {!g.invite_link && g.link && <span className="truncate text-muted-foreground">{t("rdAuto")}: {g.link}</span>}
+        {incoming > 0 && !g.link && !g.invite_link && <span className="text-warning">{t("rdNoLink")}</span>}
+      </label>
+    </div>
   );
 }
 

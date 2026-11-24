@@ -27,6 +27,8 @@ export interface SupportGroup {
   id: number; bot: number; bot_name: string; chat_id: number; title: string; mode: Mode | "inherit";
   effective_mode: Mode; is_active: boolean; is_admin: boolean; joined_at: string; last_message_at: string | null;
   questions_7d: number; in_analytics: boolean;
+  /** eski guruh: savollar shu guruhga yo'naltiriladi (bot javob bermaydi, havola yuboradi) */
+  redirect_to: number | null; invite_link: string; link: string; redirect_count: number;
 }
 export interface EntryVersion {
   id: number; title: string; questions: string[]; triggers: string[]; extract: string[]; answer: string;
@@ -310,6 +312,7 @@ export const supportApi = {
   checkBot: (id: number) => post<{ ok: boolean; username?: string; error?: string; can_read_all_group_messages?: boolean }>(`bots/${id}/check/`),
   groups: () => get<SupportGroup[]>("groups/"),
   updateGroup: (id: number, body: Partial<SupportGroup>) => patch<SupportGroup>(`groups/${id}/`, body),
+  groupsRedirect: (body: { target: number | null; ids?: number[]; not_admin?: boolean }) => post<{ done: number }>("groups-redirect/", body),
   entries: (params: Record<string, string | number> = {}) => get<Entry[]>("entries/", params),
   /** sahifa (backend'da filtr va tartib): {count, results}; sources=1 — manba savollar faqat shu sahifa uchun */
   entriesPage: (params: Record<string, string | number>) => get<{ count: number; results: Entry[] }>("entries/", params),
