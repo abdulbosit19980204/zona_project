@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Bot, CircleCheck, Clock3, Zap, HelpCircle, Image as ImageIcon, Inbox, ListChecks, MessageCircleQuestion, Tags, Target, UserRound, Users } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,14 +22,29 @@ import { StaffBoard } from "./staff";
 import { Workload } from "./workload";
 
 type Tab = "overview" | "speed" | "workload" | "staff" | "askers" | "topics";
+const TABS: Tab[] = ["overview", "speed", "workload", "staff", "askers", "topics"];
+const PRESETS = ["1", "7", "30", "90", "custom"];
 
 /** Tahlil: savollar, bot ishi, xodimlar javoblari va javobdan oldin so'raladigan ma'lumotlar — bo'limlarga ajratilgan. */
 export function SupportAnalytics() {
   const t = useSt();
-  const [preset, setPreset] = useState("30");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [tab, setTab] = useState<Tab>("overview");
+  // filtrlar URL'da (?p=1&tab=staff&from=&to=): sahifa yangilansa ham, havola ulashilsa ham saqlanadi; standart — bugun
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const preset = PRESETS.includes(sp.get("p") ?? "") ? sp.get("p")! : "1";
+  const from = sp.get("from") ?? "";
+  const to = sp.get("to") ?? "";
+  const tab = (TABS.includes(sp.get("tab") as Tab) ? sp.get("tab") : "overview") as Tab;
+  const set = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(sp.toString());
+    Object.entries(patch).forEach(([k, v]) => (v ? next.set(k, v) : next.delete(k)));
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+  const setPreset = (v: string) => set({ p: v === "1" ? null : v, ...(v === "custom" ? {} : { from: null, to: null }) });
+  const setFrom = (v: string) => set({ from: v || null });
+  const setTo = (v: string) => set({ to: v || null });
+  const setTab = (v: Tab) => set({ tab: v === "overview" ? null : v });
   const range: Range = preset === "custom" ? { from: from || to, to: to || from } : { days: Number(preset) };
   const ready = preset !== "custom" || Boolean(from || to);
   const q = useQuery({ queryKey: ["support", "analytics", range], queryFn: () => supportApi.analytics(range), refetchInterval: 60_000, enabled: ready });
