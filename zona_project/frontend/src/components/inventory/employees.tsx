@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, Download, FileDown, FileSignature, Laptop, Phone, Plus, Search, Send, Upload, Users, Workflow, X } from "lucide-react";
+import { AtSign, Download, FileDown, FileSignature, Laptop, Phone, Plus, Send, Upload, Users, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ import { AckBadge, AckDetail, useCreateAck } from "./acks";
 import { download, inv, type Employee } from "./api";
 import { useT } from "./i18n";
 import { ImportDialog } from "./import-dialog";
-import { Btn, Empty, Field, Overlay, Picker, Spinner, inputCls, useBoot } from "./ui";
+import { Btn, Empty, Field, FilterBar, MoreActions, Overlay, Picker, Spinner, inputCls, useBoot, type FilterChip } from "./ui";
 
 function EmployeeForm(props: { open: boolean; onClose: () => void; emp: Employee | null; onShowItems: (id: number) => void }) {
   return props.open ? <EmployeeFormBody key={props.emp?.id ?? "new"} {...props} /> : null;
@@ -66,7 +66,7 @@ function EmployeeFormBody({ onClose, emp, onShowItems }: {
           <input className={inputCls} value={f.full_name ?? ""} onChange={(e) => set("full_name", e.target.value)} disabled={!canWrite}
             placeholder={t("Familiya Ism Sharif")} autoFocus={!emp} />
         </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t("Telefon")}>
             <input className={inputCls} inputMode="tel" value={f.phone ?? ""} onChange={(e) => set("phone", e.target.value)} disabled={!canWrite}
               placeholder="+998 90 123 45 67" />
@@ -156,6 +156,19 @@ export function EmployeesView({ onShowItems, table }: { onShowItems: (employeeId
     return m;
   }, [rows, noBranch]);
   const manage = boot.me.can.manage;
+  const orgOpts = boot.orgs.map((o) => ({ value: String(o.id), label: o.name }));
+  const deviceOpts = [{ value: "1", label: t("Qurilmasi bor") }, { value: "0", label: t("Qurilmasi yo'q") }];
+  const ackOpts = [{ value: "signed", label: t("Imzolangan") }, { value: "pending", label: t("Imzo kutilmoqda") },
+    { value: "none", label: t("Havola yuborilmagan") }, { value: "contact", label: t("Telefon yoki Telegram yo'q") }];
+  const chips: FilterChip[] = [];
+  const label = (opts: { value: string; label: string }[], v: string) => opts.find((o) => o.value === v)?.label ?? v;
+  if (branch) chips.push({ label: branch === "none" ? noBranch : label(boot.branches.map((b) => ({ value: String(b.id), label: b.name })), branch), onRemove: () => setBranch("") });
+  if (org) chips.push({ label: label(orgOpts, org), onRemove: () => setOrg("") });
+  if (project) chips.push({ label: project, onRemove: () => setProject("") });
+  if (department) chips.push({ label: department, onRemove: () => setDepartment("") });
+  if (devices) chips.push({ label: label(deviceOpts, devices), onRemove: () => setDevices("") });
+  if (ack) chips.push({ label: label(ackOpts, ack), onRemove: () => setAck("") });
+  const clearFilters = () => { setBranch(""); setOrg(""); setProject(""); setDepartment(""); setDevices(""); setAck(""); };
 
   const fromStaff = async () => {
     try {
@@ -181,40 +194,43 @@ export function EmployeesView({ onShowItems, table }: { onShowItems: (employeeId
 
   return (
     <div className={cn("mx-auto w-full", table ? "max-w-[1800px]" : "max-w-5xl")}>
-      <div className="sticky top-[var(--inv-top,0px)] z-20 space-y-2 border-b bg-background/95 px-3 py-3 backdrop-blur sm:px-4">
-        <div className="flex gap-2">
-          <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary md:h-10 md:rounded-lg">
-            <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Ism, telefon, Telegram, lavozim…")} className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none md:text-sm" />
-            {q && <button onClick={() => setQ("")}><X className="size-4 text-muted-foreground" /></button>}
-          </div>
-          {boot.me.can.write && <Btn onClick={() => setCreating(true)}><Plus className="size-4" /><span className="hidden sm:inline">{t("Xodim")}</span></Btn>}
-        </div>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
-          {boot.branches.length > 1 && (
+      <FilterBar inline={table} search={q} onSearch={setQ} placeholder={t("Ism, telefon, Telegram, lavozim…")} chips={chips}
+        onClear={clearFilters} total={list.data?.count}
+        right={boot.me.can.write ? <Btn onClick={() => setCreating(true)} className="w-11 px-0 sm:w-auto sm:px-4"><Plus className="size-4" /><span className="hidden sm:inline">{t("Xodim")}</span></Btn> : undefined}>
+        {boot.branches.length > 1 && (
+          <Field label={table ? "" : t("Filial")}>
             <Picker title={t("Filial")} placeholder={t("Barcha filiallar")} value={branch}
               options={[{ value: "none", label: noBranch }, ...boot.branches.map((b) => ({ value: String(b.id), label: b.name }))]} onChange={setBranch} />
-          )}
-          <Picker title={t("Tashkilot")} placeholder={t("Barcha tashkilotlar")} value={org} options={boot.orgs.map((o) => ({ value: String(o.id), label: o.name }))} onChange={setOrg} />
+          </Field>
+        )}
+        <Field label={table ? "" : t("Tashkilot")}>
+          <Picker title={t("Tashkilot")} placeholder={t("Barcha tashkilotlar")} value={org} options={orgOpts} onChange={setOrg} />
+        </Field>
+        <Field label={table ? "" : t("Loyiha")}>
           <Picker title={t("Loyiha")} placeholder={t("Barcha loyihalar")} value={project} options={(list.data?.projects ?? []).map((p) => ({ value: p, label: p }))} onChange={setProject} />
+        </Field>
+        <Field label={table ? "" : t("Bo'lim")}>
           <Picker title={t("Bo'lim")} placeholder={t("Barcha bo'limlar")} value={department} options={(list.data?.departments ?? []).map((p) => ({ value: p, label: p }))} onChange={setDepartment} />
-          <Picker title={t("Qurilmasi")} placeholder={t("Qurilmasi: hammasi")} value={devices}
-            options={[{ value: "1", label: t("Qurilmasi bor") }, { value: "0", label: t("Qurilmasi yo'q") }]} onChange={setDevices} />
-          <Picker title={t("Tasdiqnoma")} placeholder={t("Tasdiqnoma: hammasi")} value={ack}
-            options={[{ value: "signed", label: t("Imzolangan") }, { value: "pending", label: t("Imzo kutilmoqda") },
-              { value: "none", label: t("Havola yuborilmagan") }, { value: "contact", label: t("Telefon yoki Telegram yo'q") }]} onChange={setAck} />
-        </div>
-      </div>
+        </Field>
+        <Field label={table ? "" : t("Qurilmasi")}>
+          <Picker title={t("Qurilmasi")} placeholder={t("Qurilmasi: hammasi")} value={devices} options={deviceOpts} onChange={setDevices} />
+        </Field>
+        <Field label={table ? "" : t("Tasdiqnoma")}>
+          <Picker title={t("Tasdiqnoma")} placeholder={t("Tasdiqnoma: hammasi")} value={ack} options={ackOpts} onChange={setAck} />
+        </Field>
+      </FilterBar>
 
-      <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
+      <div className="flex items-center gap-2 px-4 pt-3">
         <span className="mr-auto text-sm text-muted-foreground">{t("{n} xodim", { n: list.data?.count ?? "…" })}</span>
-        <Btn variant="ghost" size="sm" onClick={() => download("employees/export/", { fmt: "xlsx", branch: branch && branch !== "none" ? branch : undefined }).catch((e) => toast.error(errorMessage(e)))}><Download className="size-4" />Excel</Btn>
-        <Btn variant="ghost" size="sm" onClick={() => download("employees/export/", { fmt: "csv" }).catch((e) => toast.error(errorMessage(e)))}><Download className="size-4" />CSV</Btn>
-        <Btn variant="ghost" size="sm" onClick={() => download("employees/template/").catch((e) => toast.error(errorMessage(e)))}><FileDown className="size-4" />{t("Shablon")}</Btn>
-        {boot.me.can.write && <Btn variant="ghost" size="sm" onClick={() => setImporting(true)}><Upload className="size-4" />{t("Import")}</Btn>}
-        {manage && <Btn variant="ghost" size="sm" onClick={fromStaff} title={t("Platformadagi Xodimlar tuzilmasidan (loyiha = brend, filial = shahar)")}><Workflow className="size-4" />{t("Tuzilmadan olish")}</Btn>}
+        <MoreActions inline={table} actions={[
+          { label: "Excel", icon: <Download className="size-4" />, onClick: () => download("employees/export/", { fmt: "xlsx", branch: branch && branch !== "none" ? branch : undefined }).catch((e) => toast.error(errorMessage(e))) },
+          { label: "CSV", icon: <Download className="size-4" />, onClick: () => download("employees/export/", { fmt: "csv" }).catch((e) => toast.error(errorMessage(e))) },
+          { label: t("Shablon"), icon: <FileDown className="size-4" />, onClick: () => download("employees/template/").catch((e) => toast.error(errorMessage(e))) },
+          { label: t("Import"), icon: <Upload className="size-4" />, onClick: () => setImporting(true), hidden: !boot.me.can.write },
+          { label: t("Tuzilmadan olish"), icon: <Workflow className="size-4" />, onClick: fromStaff, hidden: !manage },
+        ]} />
       </div>
-      {byBranch.size > 1 && !branch && (
+      {table && byBranch.size > 1 && !branch && (
         <div className="flex flex-wrap gap-1.5 px-4 pt-2">
           {[...byBranch.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => (
             <span key={name} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{name}: <b>{n}</b></span>
@@ -222,7 +238,7 @@ export function EmployeesView({ onShowItems, table }: { onShowItems: (employeeId
         </div>
       )}
 
-      <div className="grid gap-2 px-3 pb-28 pt-3 sm:grid-cols-2 sm:px-4">
+      <div className="grid grid-cols-1 gap-2 px-3 pb-28 pt-3 sm:grid-cols-2 sm:px-4">
         {list.isLoading && <Spinner className="sm:col-span-2" />}
         {!list.isLoading && !rows.length && (
           <div className="sm:col-span-2">

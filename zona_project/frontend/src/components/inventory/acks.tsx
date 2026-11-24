@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 import { download, inv, type Ack, type AckStatus, type Employee } from "./api";
 import { condLabel, tr, useLang, useT } from "./i18n";
-import { Btn, Card, Empty, Kpi, Overlay, Picker, Spinner, ago, dt, useBoot } from "./ui";
+import { Btn, Card, Empty, Kpi, MoreActions, Overlay, Picker, Spinner, ago, dt, useBoot } from "./ui";
 
 /* ------------------------------------------------------------------ havola va xabar */
 export function ackLink(path: string) {
@@ -240,21 +240,21 @@ export function AcksView({ table }: { table?: boolean }) {
   return (
     <div className={cn("mx-auto w-full space-y-3 p-3 pb-28 sm:p-4", table ? "max-w-[1800px]" : "max-w-5xl")}>
       {tt && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Kpi label={t("Qurilmasi bor xodimlar")} value={tt.employees_with_devices} tone="slate" />
-          <Kpi label={t("Imzolagan")} value={tt.acks_signed} tone="green" />
-          <Kpi label={t("Imzo kutilmoqda")} value={tt.acks_pending} tone="amber" />
-          <Kpi label={t("Havola yuborilmagan")} value={Math.max(0, tt.employees_with_devices - tt.acks_signed - tt.acks_pending)} tone="red" onClick={() => setTab("none")} />
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+          <Kpi compact label={t("Qurilmasi bor xodimlar")} value={tt.employees_with_devices} tone="slate" onClick={() => setTab("all")} />
+          <Kpi compact label={t("Imzolagan")} value={tt.acks_signed} tone="green" onClick={() => setTab("signed")} />
+          <Kpi compact label={t("Imzo kutilmoqda")} value={tt.acks_pending} tone="amber" onClick={() => setTab("pending")} />
+          <Kpi compact label={t("Havola yuborilmagan")} value={Math.max(0, tt.employees_with_devices - tt.acks_signed - tt.acks_pending)} tone="red" onClick={() => setTab("none")} />
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
         {boot.branches.length > 1 && (
-          <div className="w-full sm:w-56"><Picker title={t("Filial")} placeholder={t("Barcha filiallar")} value={branch}
+          <div className="min-w-0 flex-1 sm:max-w-56 sm:flex-none"><Picker title={t("Filial")} placeholder={t("Barcha filiallar")} value={branch}
             options={boot.branches.map((b) => ({ value: String(b.id), label: b.name }))} onChange={setBranch} /></div>
         )}
-        <div className="ml-auto flex flex-wrap gap-2">
-          <Btn variant="outline" size="sm" onClick={() => download("acks/export/", { branch }).catch((e) => toast.error(errorMessage(e)))}><Download className="size-4" />{t("Excel (havolalar bilan)")}</Btn>
-          {boot.me.can.write && <Btn size="sm" loading={busy} onClick={bulk}><Link2 className="size-4" />{t("Barchasiga havola yaratish")}</Btn>}
+        <div className="ml-auto flex items-center gap-2">
+          {boot.me.can.write && <Btn size="sm" loading={busy} onClick={bulk}><Link2 className="size-4" /><span className={cn(boot.branches.length > 1 && "hidden sm:inline")}>{t("Barchasiga havola yaratish")}</span></Btn>}
+          <MoreActions inline={table} actions={[{ label: t("Excel (havolalar bilan)"), icon: <Download className="size-4" />, onClick: () => download("acks/export/", { branch }).catch((e) => toast.error(errorMessage(e))) }]} />
         </div>
       </div>
       <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] sm:mx-0 sm:px-0">
@@ -289,7 +289,7 @@ export function AcksView({ table }: { table?: boolean }) {
           {rows.map((a) => (
             <div key={a.id} className={cn("rounded-2xl border bg-card p-3 shadow-xs", a.issues > 0 && "border-red-500/30")}>
               <div className="flex flex-wrap items-start gap-2">
-                <button onClick={() => setDetail(a.id)} className="min-w-0 flex-1 text-left">
+                <button onClick={() => setDetail(a.id)} className="min-w-0 flex-1 basis-full text-left sm:basis-0">
                   <div className="font-semibold">{a.employee_name}</div>
                   <div className="text-xs text-muted-foreground">{[a.branch, a.phone, a.telegram && `@${a.telegram}`, t("{n} ta qurilma", { n: a.items_count })].filter(Boolean).join(" · ")}</div>
                 </button>

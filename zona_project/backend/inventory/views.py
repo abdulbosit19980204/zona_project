@@ -507,7 +507,14 @@ def employees(request):
         fields, err = clean_employee(request, request.data)
         if err:
             return bad(err)
-        dup = Employee.objects.filter(full_name__iexact=fields["full_name"], branch=fields.get("branch")).first()
+        from .seed import EmployeeIndex
+        branch = fields.get("branch")
+        dup = EmployeeIndex(Employee.objects.filter(Q(branch=branch) | Q(branch__isnull=True)) if branch
+                            else Employee.objects.filter(branch__isnull=True)) \
+            .find(fields["full_name"], branch.id if branch else None, fields.get("phone", ""), fields.get("telegram", ""))
+        if dup and not dup.is_active:
+            dup.is_active = True
+            dup.save(update_fields=["is_active", "updated_at"])
         if dup:
             return Response(employee_payload(dup, 0), status=status.HTTP_200_OK)
         emp = Employee.objects.create(**fields, created_by=request.user, source=Employee.MANUAL)
@@ -1105,7 +1112,8 @@ def employees_from_staff(request):
     """Zona'dagi "Xodimlar tuzilmasi" (dala xodimlari) dan: loyiha = brend jamoasi, filial = shahar bo'yicha."""
     from zona.models import StaffPerson
 
-    from .seed import CITY_ALIASES, norm
+    from .seed import CITY_ALIASES, EmployeeIndex, norm
+    index = EmployeeIndex()
     by_code = {b.code: b for b in Branch.objects.all()}
     by_name = {norm(b.name): b for b in Branch.objects.all()}
     created = updated = unmapped = 0
@@ -1117,7 +1125,8 @@ def employees_from_staff(request):
         branch = by_code.get(CITY_ALIASES.get(city, "")) or by_name.get(city)
         if not branch:
             unmapped += 1
-        emp = Employee.objects.filter(source=Employee.STAFF, external_id=str(sp.pk)).first()
+        emp = Employee.objects.filter(source=Employee.STAFF, external_id=str(sp.pk)).first() \
+            or index.find(sp.name, branch.id if branch else None, sp.phone)  # Excel'dan oldin kiritilgan bo'lsa — bog'lanadi
         fields = {"full_name": sp.name.strip()[:150], "position": (sp.get_role_display() or sp.position)[:120],
                   "phone": sp.phone[:40], "project": sp.project.name[:120],
                   "department": (sp.unit.title if sp.unit_id else "")[:120]}
@@ -1128,12 +1137,14 @@ def employees_from_staff(request):
                         setattr(emp, f, v)
                 if branch and not emp.branch_id:
                     emp.branch = branch
+                if not emp.external_id:
+                    emp.external_id = str(sp.pk)
                 emp.save()
             updated += 1
         else:
             if not dry:
-                Employee.objects.create(**fields, branch=branch, source=Employee.STAFF, external_id=str(sp.pk),
-                                        created_by=request.user)
+                index.add(Employee.objects.create(**fields, branch=branch, source=Employee.STAFF,
+                                                  external_id=str(sp.pk), created_by=request.user))
             created += 1
     if not dry and (created or updated):
         log(request, Log.IMPORT, entity="employee",

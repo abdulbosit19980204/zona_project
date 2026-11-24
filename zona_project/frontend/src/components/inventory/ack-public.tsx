@@ -139,7 +139,7 @@ export function AckPublicPage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-background">
+    <div className="h-full overflow-y-auto overflow-x-hidden bg-background">
       <div className="mx-auto max-w-xl px-4 pb-16 pt-5">
         <div className="mb-5 flex items-center gap-3">
           <span className="grid size-11 place-items-center rounded-2xl bg-indigo-600 text-white"><ShieldCheck className="size-6" /></span>

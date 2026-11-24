@@ -110,13 +110,13 @@ export function InvDesktop({ view }: { view: DesktopView }) {
           </div>
         </div>
       </header>
-      <div className={cn("min-h-0 flex-1 overflow-y-auto", view === "overview" && "px-3 py-3 sm:px-5")}>
+      <div className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden", view === "overview" && "px-3 py-3 sm:px-5")}>
         {view === "overview" && <AnalyticsView embedded onOpenBranch={openBranch} />}
         {view === "items" && <ItemsView key={params.toString()} table initial={initial} onAdd={() => setAdding(true)} />}
         {view === "employees" && <EmployeesView table onShowItems={(id) => router.push(`/inv/items?employee=${id}`)} />}
         {view === "acks" && <AcksView table />}
         {view === "branches" && <BranchesView onOpen={(id) => openBranch(id)} />}
-        {view === "history" && <HistoryView onOpenItem={setOpenItemId} />}
+        {view === "history" && <HistoryView table onOpenItem={setOpenItemId} />}
         {view === "exchange" && <ExchangeView />}
         {view === "users" && <UsersView />}
         {view === "catalog" && <CatalogView />}

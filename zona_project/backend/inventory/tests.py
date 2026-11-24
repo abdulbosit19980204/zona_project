@@ -345,3 +345,63 @@ class AckAndLanguageTests(InvBase):
         ack = self.col.post(f"/api/inventory/employees/{e['id']}/ack/").json()
         self.col.post(f"/api/inventory/acks/{ack['id']}/revoke/")
         self.assertEqual(APIClient().get(f"/api/inventory/public/ack/{ack['token']}/").status_code, 404)
+
+
+class ImportDedupeTests(InvBase):
+    def upload(self, client, url, content, name="x.csv"):
+        buf = io.BytesIO(content.encode("utf-8"))
+        buf.name = name
+        return client.post(url, {"file": buf}, format="multipart").json()
+
+    def test_employees_reimport_does_not_duplicate(self):
+        csv_text = "F.I.Sh.;Lavozimi;Telefon;Filial\nKarimov Aziz;Kassir;901234567;Samarqand\nToshev Ali;;;Buxoro\n"
+        r1 = self.upload(self.api, "/api/inventory/employees/import/", csv_text)
+        self.assertEqual(r1["employees_created"], 2, r1)
+        # ikkinchi marta, katta-kichik harf va bo'shliqlar boshqacha
+        r2 = self.upload(self.api, "/api/inventory/employees/import/",
+                         "F.I.Sh.;Lavozimi;Telefon;Filial\nKARIMOV  aziz.;Kassir;+998 90 123 45 67;Samarqand\nToshev Ali;;;Buxoro\n")
+        self.assertEqual(r2["employees_created"], 0, r2)
+        self.assertEqual(Employee.objects.count(), 2)
+
+    def test_employee_without_branch_and_inactive_are_reused(self):
+        Employee.objects.create(full_name="Filialsiz Odam")
+        Employee.objects.create(full_name="Ketgan Xodim", branch=self.sam, is_active=False)
+        r = self.upload(self.api, "/api/inventory/employees/import/",
+                        "F.I.Sh.;Filial\nFilialsiz Odam;Samarqand\nKetgan Xodim;Samarqand\n")
+        self.assertEqual((r["employees_created"], r["employees_updated"]), (0, 2), r)
+        self.assertEqual(Employee.objects.get(full_name="Filialsiz Odam").branch, self.sam)
+        self.assertTrue(Employee.objects.get(full_name="Ketgan Xodim").is_active)
+
+    def test_same_name_other_branch_matched_by_phone_only(self):
+        Employee.objects.create(full_name="Aliyev Vali", branch=self.bux, phone="+998 90 111 22 33")
+        r = self.upload(self.api, "/api/inventory/employees/import/",
+                        "F.I.Sh.;Telefon;Filial\nAliyev Vali;90 111 22 33;Samarqand\nAliyev Vali;;Andijon\n")
+        self.assertEqual(r["employees_created"], 1, r)  # telefon mos — o'sha odam; telefonsiz boshqa filialda — boshqa odam
+
+    def test_items_without_serial_reimport_and_duplicate_rows(self):
+        text = ("Qurilma turi;Filial;Brend;Model;Soni;Kimda turibdi (xodim);Qayerda turibdi\n"
+                "Klaviatura va sichqoncha;Samarqand;Logitech;MK270;2;Karimov Aziz;Ofis\n"
+                "Klaviatura va sichqoncha;Samarqand;Logitech;MK270;3;Karimov Aziz;Ofis\n"
+                "Monitor;Samarqand;Samsung;S24;1;;Ofis\n")
+        r1 = self.upload(self.api, "/api/inventory/items/import/", text)
+        self.assertEqual((r1["created"], r1["employees_created"]), (2, 1), r1)
+        kb = Item.objects.get(device_type__name="Klaviatura va sichqoncha")
+        self.assertEqual(kb.quantity, 5)  # fayldagi takror qator — soni qo'shildi
+        r2 = self.upload(self.api, "/api/inventory/items/import/", text)
+        self.assertEqual((r2["created"], r2["employees_created"]), (0, 0), r2)
+        self.assertEqual(Item.objects.count(), 2)
+        kb.refresh_from_db()
+        self.assertEqual(kb.quantity, 5)
+        self.assertEqual(Employee.objects.count(), 1)
+
+    def test_manual_add_and_staff_import_reuse_existing(self):
+        r = self.col.post("/api/inventory/employees/", {"full_name": "karimov aziz", "branch": self.sam.id}, format="json")
+        r2 = self.col.post("/api/inventory/employees/", {"full_name": "Karimov Aziz", "branch": self.sam.id}, format="json")
+        self.assertEqual(r.json()["id"], r2.json()["id"])
+        from zona.models import StaffPerson, StaffProject
+        p = StaffProject.objects.create(name="Heinz")
+        StaffPerson.objects.create(project=p, name="KARIMOV AZIZ", city="Самарканд")
+        res = self.api.post("/api/inventory/employees/from-staff/", {}, format="json").json()
+        self.assertEqual((res["created"], res["updated"]), (0, 1))
+        self.assertEqual(Employee.objects.count(), 1)
+        self.assertEqual(Employee.objects.get().project, "Heinz")

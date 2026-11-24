@@ -21,7 +21,7 @@ from rest_framework.response import Response
 from . import photos as photo_store
 from .access import MANAGER, branch_scope, can_write_branch, level_of, scoped
 from .models import Access, Branch, DeviceType, Employee, Item, Location, Log, Org
-from .seed import CONDITION_BY_LABEL, TEMPLATE, norm
+from .seed import CONDITION_BY_LABEL, TEMPLATE, EmployeeIndex, norm
 from .views import (COND_LABEL, STATUS_LABEL, CanWrite, HasInventory, IsManager, _int, _s, bad, compute_stats,
                     filter_items, inv_api, item_qs, log, next_inv_number, user_name)
 
@@ -400,10 +400,8 @@ class Lookup:
             if o.code:
                 self.orgs[norm(o.code)] = o
         self.types = {norm(d.name): d for d in DeviceType.objects.all()}
-        self.emps = {}
-        for e in Employee.objects.filter(is_active=True):
-            self.emps[(norm(e.full_name), e.branch_id)] = e
-            self.emps.setdefault((norm(e.full_name), None), e)
+        self.emps = EmployeeIndex()
+        self.touched_items = set()  # shu importda yaratilgan/yangilangan qurilmalar (takror qatorlar soni qo'shiladi)
 
 
 def _import_employees_rows(request, rows, lk, result, default_branch=None):
@@ -437,8 +435,9 @@ def _import_employees_rows(request, rows, lk, result, default_branch=None):
         fields = {"position": _cell(row, c_pos)[:120], "phone": phone or "", "telegram": tg or "",
                   "project": _cell(row, c_proj)[:120], "department": _cell(row, c_dep)[:120],
                   "note": _cell(row, c_note)[:255]}
-        key = (norm(name), branch.id if branch else None)
-        emp = lk.emps.get(key)
+        emp = lk.emps.find(name, branch.id if branch else None, fields["phone"], fields["telegram"])
+        if emp and not manager and not can_write_branch(request.user, emp.branch_id) and emp.branch_id:
+            emp = None  # boshqa filialdagi xodimga filial xodimi tega olmaydi — o'z filialiga yangi yoziladi
         if emp:
             changed = False
             for f, v in fields.items():
@@ -447,14 +446,19 @@ def _import_employees_rows(request, rows, lk, result, default_branch=None):
                     changed = True
             if org and emp.org_id != org.id:
                 emp.org, changed = org, True
+            if branch and not emp.branch_id:
+                emp.branch, changed = branch, True
+            if not emp.is_active:
+                emp.is_active, changed = True, True
             if changed:
                 emp.save()
                 result["employees_updated"] += 1
+            else:
+                result["employees_unchanged"] = result.get("employees_unchanged", 0) + 1
         else:
             emp = Employee.objects.create(full_name=name[:150], branch=branch, org=org, source=Employee.IMPORT,
                                           created_by=request.user, **fields)
-            lk.emps[key] = emp
-            lk.emps.setdefault((norm(name), None), emp)
+            lk.emps.add(emp)
             result["employees_created"] += 1
 
 
@@ -498,12 +502,18 @@ def _items_from_rows(request, rows, lk, result, default_branch, sheet):
             cond = cond_raw
         emp = None
         if emp_name:
-            emp = lk.emps.get((norm(emp_name), branch.id)) or lk.emps.get((norm(emp_name), None))
+            emp = lk.emps.find(emp_name, branch.id, _cell(row, cols["phone"]))
+            if emp and not emp.branch_id:
+                emp.branch = branch
+                emp.save(update_fields=["branch", "updated_at"])
+            if emp and not emp.is_active:
+                emp.is_active = True
+                emp.save(update_fields=["is_active", "updated_at"])
             if not emp:
                 emp = Employee.objects.create(full_name=emp_name[:150], branch=branch, source=Employee.IMPORT,
                                               position=_cell(row, cols["position"])[:120],
                                               phone=_cell(row, cols["phone"])[:40], created_by=request.user)
-                lk.emps[(norm(emp_name), branch.id)] = emp
+                lk.emps.add(emp)
                 result["employees_created"] += 1
         note = _cell(row, cols["note"])
         inv_number = _cell(row, cols["inv"])
@@ -523,6 +533,16 @@ def _items_from_rows(request, rows, lk, result, default_branch, sheet):
         if not item and fields["serial"]:
             item = Item.objects.filter(branch=branch, device_type=dt, serial__iexact=fields["serial"],
                                        is_deleted=False).first()
+        if not item and not fields["serial"]:
+            # seriyasiz qurilma: filial + tur + brend + model + xodim + joy bir xil bo'lsa — o'sha qator
+            same = lambda a, b: norm(a) == norm(b)  # noqa: E731
+            for cand in Item.objects.filter(branch=branch, device_type=dt, serial="", is_deleted=False, employee=emp):
+                if same(cand.brand, fields["brand"]) and same(cand.model, fields["model"]) \
+                        and same(cand.location, fields["location"]):
+                    item = cand
+                    break
+        if item and item.id in lk.touched_items:
+            fields["quantity"] = item.quantity + fields["quantity"]  # fayldagi takror qator — soni qo'shiladi
         if item:
             changes = {}
             for f, v in fields.items():
@@ -538,12 +558,14 @@ def _items_from_rows(request, rows, lk, result, default_branch, sheet):
                 result["updated"] += 1
             else:
                 result["unchanged"] += 1
+            lk.touched_items.add(item.id)
         else:
             item = Item(**fields, created_by=request.user, updated_by=request.user)
             item.inv_number = next_inv_number(branch.id)
             item.save()
             log(request, Log.IMPORT, branch=branch, item=item,
                 summary=f"Import: {item.inv_number} · {dt.name} {fields['brand']} {fields['model']}".strip())
+            lk.touched_items.add(item.id)
             result["created"] += 1
             numbers[branch.id] = numbers.get(branch.id, 0) + 1
     for bid in numbers:

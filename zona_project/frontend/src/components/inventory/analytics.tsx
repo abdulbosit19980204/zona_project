@@ -111,7 +111,7 @@ export function AnalyticsView({ onOpenBranch, embedded }: {
       {!!lagging.length && (
         <Card className="border-red-500/25 bg-red-500/[0.03]">
           <SectionTitle icon={<AlertTriangle className="size-4 text-red-500" />}>{t("E'tibor talab qiladi — sust filiallar ({n})", { n: lagging.length })}</SectionTitle>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {lagging.map((b) => (
               <button key={b.id} onClick={() => onOpenBranch(b.id)} className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left hover:border-primary/40">
                 <div className="min-w-0 flex-1">
@@ -189,7 +189,7 @@ export function AnalyticsView({ onOpenBranch, embedded }: {
         </div>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <SectionTitle icon={<TrendingUp className="size-4" />}>{t("Kunlik faollik")}</SectionTitle>
           <div className="h-64">
@@ -268,7 +268,7 @@ export function AnalyticsView({ onOpenBranch, embedded }: {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <SectionTitle icon={<Trophy className="size-4 text-amber-500" />}>{t("Kim qancha ish qildi")}</SectionTitle>
           {s.leaderboard.length ? (

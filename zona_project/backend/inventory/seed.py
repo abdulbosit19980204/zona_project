@@ -31,6 +31,54 @@ def norm(text):
     return re.sub(r"\s+", " ", t)
 
 
+def name_key(text):
+    """Ismni taqqoslash kaliti: harf katta-kichikligi, nuqta/vergul va ortiqcha bo'shliqlar hisobga olinmaydi."""
+    return re.sub(r"\s+", " ", re.sub(r"[^\w']+", " ", norm(text))).strip()
+
+
+def phone_key(text):
+    """Telefonning oxirgi 9 raqami (+998 / 8 / bo'shliqlardan qat'i nazar)."""
+    d = re.sub(r"\D", "", str(text or ""))
+    return d[-9:] if len(d) >= 9 else ""
+
+
+class EmployeeIndex:
+    """Mavjud xodimlarni qayta yaratmaslik uchun qidiruv (import, Xodimlar tuzilmasidan olish).
+
+    Mos keladi: (1) ism + shu filial; (2) ism + telefon yoki Telegram; (3) shu ismli yagona xodim, agar ikkala
+    tomonning birida filial ko'rsatilmagan bo'lsa. Nofaol xodimlar ham topiladi (qayta faollashtiriladi).
+    """
+
+    def __init__(self, qs=None):
+        from .models import Employee
+        self.by_name_branch, self.by_name = {}, {}
+        for e in (qs if qs is not None else Employee.objects.all()).order_by("-is_active", "id"):
+            self.add(e)
+
+    def add(self, e):
+        n = name_key(e.full_name)
+        self.by_name_branch.setdefault((n, e.branch_id), e)
+        bucket = self.by_name.setdefault(n, [])
+        if e not in bucket:
+            bucket.append(e)
+
+    def find(self, name, branch_id=None, phone="", telegram=""):
+        n = name_key(name)
+        if not n:
+            return None
+        e = self.by_name_branch.get((n, branch_id))
+        if e:
+            return e
+        cands = self.by_name.get(n, [])
+        pk, tg = phone_key(phone), str(telegram or "").lstrip("@").lower()
+        for c in cands:
+            if (pk and phone_key(c.phone) == pk) or (tg and c.telegram.lower() == tg):
+                return c
+        if len(cands) == 1 and (cands[0].branch_id is None or branch_id is None):
+            return cands[0]
+        return None
+
+
 def seed_catalog(apps=None, force=False):
     """Bo'sh jadvallarni shablon katalogi bilan to'ldiradi. Mavjud yozuvlarga tegmaydi (faqat yo'qlarini qo'shadi)."""
     get = (lambda name: apps.get_model("inventory", name)) if apps else None

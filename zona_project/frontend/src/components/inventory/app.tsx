@@ -275,7 +275,7 @@ function App() {
   const subtitle = me.level === "collector" ? b.branches.map((x) => x.name).join(", ") || levelLabel(me.level, lang) : levelLabel(me.level, lang);
 
   return (
-    <div id="inv-scroll" className="h-full overflow-y-auto bg-background" style={{ "--inv-top": `${headerH}px` } as CSSProperties}>
+    <div id="inv-scroll" className="h-full overflow-y-auto overflow-x-hidden bg-background" style={{ "--inv-top": `${headerH}px` } as CSSProperties}>
       <header ref={headerRef} className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 pb-2 pt-3 sm:gap-3 sm:px-4">
           {!me.restricted && (

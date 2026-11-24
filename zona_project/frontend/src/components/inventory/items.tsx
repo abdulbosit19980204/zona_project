@@ -2,11 +2,11 @@
 
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, AtSign, BatteryCharging, Camera, Download, Filter, History, ImageOff, ImagePlus, Info, Keyboard, Loader2,
-  MapPin, Minus, Monitor, Package, Phone, Plus, Printer, Projector, RotateCcw, Router, ScanBarcode, Search, ShieldCheck,
+  AlertTriangle, AtSign, BatteryCharging, Camera, Download, History, ImageOff, ImagePlus, Info, Keyboard, Loader2,
+  MapPin, Minus, Monitor, Package, Phone, Plus, Printer, Projector, RotateCcw, Router, ScanBarcode, ShieldCheck,
   Smartphone, Trash2, User, X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { errorMessage } from "@/lib/api/client";
@@ -15,8 +15,8 @@ import { cn } from "@/lib/utils";
 import { download, inv, type Boot, type Condition, type Employee, type Item, type ItemInput, type Params, type PhotoRef } from "./api";
 import { condLabel, loc, tr, useLang, useT, type Lang } from "./i18n";
 import {
-  Btn, COND_STYLE, CondBadge, Empty, Field, Overlay, Picker, Spinner, ago, compressImage, dt, inputCls, useBoot,
-  type Opt,
+  Btn, COND_STYLE, CondBadge, Empty, Field, FilterBar, Overlay, Picker, Spinner, ToggleChip, ago, compressImage, dt, inputCls,
+  useBoot, type FilterChip, type Opt,
 } from "./ui";
 
 /* ------------------------------------------------------------------ yordamchilar */
@@ -212,7 +212,7 @@ function ContactBlock({ contact, onChange, invalid, disabled }: {
       <div className="text-xs text-muted-foreground">
         {t("Xodimga tasdiqlash havolasi yuboriladi — u qurilmalarni ko'rib, imzo qo'yadi. Telefon va Telegramini yozing.")}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label={t("Xodim telefoni")} required>
           <div className={cn("flex items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary md:rounded-lg", invalid.phone && "border-destructive ring-2 ring-destructive/15")}>
             <Phone className="size-4 shrink-0 text-muted-foreground" />
@@ -408,7 +408,7 @@ function ItemFormBody({ boot, onClose, item, preset }: {
         <Btn size="lg" className="w-full" onClick={restore}><RotateCcw className="size-4" />{t("Qayta tiklash")}</Btn>
       ) : undefined}>
       <div id="inv-form-top" className="space-y-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t("Filial")} required>
             {fixedBranch ? (
               <div className="flex h-12 items-center gap-2 rounded-xl border bg-muted/50 px-3 text-[15px] font-medium md:h-10 md:rounded-lg md:text-sm">
@@ -442,7 +442,7 @@ function ItemFormBody({ boot, onClose, item, preset }: {
           </div>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t("Brend")}>
             <Picker title={t("Brend")} value={form.brand} options={brandOpts} allowCustom disabled={!canWrite || !type}
               placeholder={type ? t("Tanlang yoki yozing") : t("Avval qurilma turini tanlang")} onChange={(v) => set("brand", v)} />
@@ -465,7 +465,7 @@ function ItemFormBody({ boot, onClose, item, preset }: {
           </div>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr]">
           <Field label={t("Soni")} hint={t("Bir xil 5 ta sichqoncha — bitta qator, soni 5")}>
             <Stepper value={form.quantity} onChange={(n) => set("quantity", n)} />
           </Field>
@@ -542,15 +542,6 @@ function ItemFormBody({ boot, onClose, item, preset }: {
 }
 
 /* ------------------------------------------------------------------ ro'yxat */
-function Chip({ active, onClick, children }: { active?: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button onClick={onClick} className={cn("h-9 shrink-0 whitespace-nowrap rounded-full border px-3 text-[13px] font-medium transition-colors md:h-8 md:text-xs",
-      active ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
-      {children}
-    </button>
-  );
-}
-
 export function ItemCard({ it, onClick }: { it: Item; onClick: () => void }) {
   const t = useT();
   const names = useCatalogNames();
@@ -646,10 +637,10 @@ export function ItemsView({ initial, onAdd, table }: { initial?: ItemFilters; on
   const boot = useBoot().data!;
   const t = useT();
   const lang = useLang();
+  const names = useCatalogNames();
   const [f, setF] = useState<ItemFilters>(initial ?? {});
   const [q, setQ] = useState(initial?.q ?? "");
   const [edit, setEdit] = useState<Item | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
   useEffect(() => {
     const tm = setTimeout(() => setF((x) => ({ ...x, q })), 300);
     return () => clearTimeout(tm);
@@ -668,73 +659,66 @@ export function ItemsView({ initial, onAdd, table }: { initial?: ItemFilters; on
   });
   const rows = list.data?.pages.flatMap((p) => p.results) ?? [];
   const first = list.data?.pages[0];
-  const toggle = (key: keyof ItemFilters) => setF((x) => ({ ...x, [key]: !x[key] }));
-  const activeCount = ["branch", "org", "type", "condition", "group", "employee"].filter((k) => f[k as keyof ItemFilters]).length;
+  const setKey = <K extends keyof ItemFilters>(key: K, value: ItemFilters[K]) => setF((x) => ({ ...x, [key]: value || undefined }));
+  const toggle = (key: keyof ItemFilters) => setF((x) => ({ ...x, [key]: !x[key] || undefined }));
   const branchOpts = boot.branches.map((b) => ({ value: String(b.id), label: b.name }));
   const typeOpts = boot.device_types.map((d) => ({ value: String(d.id), label: loc(d, "name", lang), group: tr(d.group, undefined, lang) }));
 
+  const chips: FilterChip[] = [];
+  if (f.branch) chips.push({ label: boot.branches.find((b) => String(b.id) === f.branch)?.name ?? t("Filial"), onRemove: () => setKey("branch", undefined) });
+  if (f.type) chips.push({ label: names.type(Number(f.type)), onRemove: () => setKey("type", undefined) });
+  if (f.condition) chips.push({ label: condLabel(f.condition, lang), onRemove: () => setKey("condition", undefined) });
+  if (f.org) chips.push({ label: boot.orgs.find((o) => String(o.id) === f.org)?.name ?? t("Tashkilot"), onRemove: () => setKey("org", undefined) });
+  if (f.group) chips.push({ label: names.group(f.group), onRemove: () => setKey("group", undefined) });
+  if (f.employee) chips.push({ label: rows[0]?.employee_name || t("Xodim"), onRemove: () => setKey("employee", undefined) });
+  const quick: [keyof ItemFilters, string][] = [["mine", "Men kiritganlar"], ["no_serial", "S/N yo'q"], ["no_employee", "Xodimsiz"],
+    ["no_photo", "Rasmsiz"], ["deleted", "O'chirilganlar"]];
+  for (const [k, label] of quick) if (f[k]) chips.push({ label: t(label), onRemove: () => toggle(k) });
+
   return (
     <div className={cn("mx-auto w-full", table ? "max-w-[1800px]" : "max-w-5xl")}>
-      <div className="sticky top-[var(--inv-top,0px)] z-20 space-y-2 border-b bg-background/95 px-3 py-3 backdrop-blur sm:px-4">
-        <div className="flex gap-2">
-          <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary md:h-10 md:rounded-lg">
-            <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Raqam, seriya, model, xodim…")}
-              className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none md:text-sm" />
-            {q && <button onClick={() => setQ("")}><X className="size-4 text-muted-foreground" /></button>}
-          </div>
-          <button onClick={() => setShowFilters((s) => !s)}
-            className={cn("relative grid size-11 shrink-0 place-items-center rounded-xl border bg-card", (showFilters || activeCount) && "border-primary text-primary", table && "hidden")}>
-            <Filter className="size-4" />
-            {!!activeCount && <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{activeCount}</span>}
-          </button>
-          {boot.me.can.write && !table && <Btn className="hidden sm:inline-flex" onClick={onAdd}><Plus className="size-4" />{t("Qo'shish")}</Btn>}
-        </div>
-        {(showFilters || table) && (
-          <div className={cn("grid gap-2 sm:grid-cols-3", table && "lg:grid-cols-4")}>
-            {boot.branches.length > 1 && (
-              <Picker title={t("Filial")} placeholder={t("Barcha filiallar")} value={f.branch ?? ""} options={branchOpts}
-                onChange={(v) => setF((x) => ({ ...x, branch: v || undefined }))} />
-            )}
-            <Picker title={t("Qurilma turi")} placeholder={t("Barcha turlar")} value={f.type ?? ""} options={typeOpts}
-              onChange={(v) => setF((x) => ({ ...x, type: v || undefined }))} />
-            <Picker title={t("Holati")} placeholder={t("Har qanday holat")} value={f.condition ?? ""}
-              options={boot.conditions.map((c) => ({ value: c.value, label: condLabel(c.value, lang) }))}
-              onChange={(v) => setF((x) => ({ ...x, condition: v || undefined }))} />
-            <Picker title={t("Tashkilot")} placeholder={t("Barcha tashkilotlar")} value={f.org ?? ""}
-              options={boot.orgs.map((o) => ({ value: String(o.id), label: o.name }))}
-              onChange={(v) => setF((x) => ({ ...x, org: v || undefined }))} />
-          </div>
+      <FilterBar inline={table} search={q} onSearch={setQ} placeholder={t("Raqam, seriya, model, xodim…")} chips={chips}
+        onClear={() => setF((x) => ({ q: x.q }))} total={first?.count}
+        right={boot.me.can.write && !table ? <Btn className="hidden sm:inline-flex" onClick={onAdd}><Plus className="size-4" />{t("Qo'shish")}</Btn> : undefined}>
+        {boot.branches.length > 1 && (
+          <Field label={table ? "" : t("Filial")}>
+            <Picker title={t("Filial")} placeholder={t("Barcha filiallar")} value={f.branch ?? ""} options={branchOpts} onChange={(v) => setKey("branch", v)} />
+          </Field>
         )}
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:px-0">
-          <Chip active={f.mine} onClick={() => toggle("mine")}>{t("Men kiritganlar")}</Chip>
-          <Chip active={f.no_serial} onClick={() => toggle("no_serial")}>{t("S/N yo'q")}</Chip>
-          <Chip active={f.no_employee} onClick={() => toggle("no_employee")}>{t("Xodimsiz")}</Chip>
-          <Chip active={f.no_photo} onClick={() => toggle("no_photo")}>{t("Rasmsiz")}</Chip>
-          <Chip active={f.condition === "broken"} onClick={() => setF((x) => ({ ...x, condition: x.condition === "broken" ? undefined : "broken" }))}>{condLabel("broken", lang)}</Chip>
-          <Chip active={f.deleted} onClick={() => toggle("deleted")}>{t("O'chirilganlar")}</Chip>
-          {(activeCount > 0 || f.mine || f.no_serial || f.no_employee || f.no_photo || f.deleted || f.q) && (
-            <Chip onClick={() => { setF({}); setQ(""); }}>{t("Tozalash")} ✕</Chip>
-          )}
+        <Field label={table ? "" : t("Qurilma turi")}>
+          <Picker title={t("Qurilma turi")} placeholder={t("Barcha turlar")} value={f.type ?? ""} options={typeOpts} onChange={(v) => setKey("type", v)} />
+        </Field>
+        <Field label={table ? "" : t("Holati")}>
+          <Picker title={t("Holati")} placeholder={t("Har qanday holat")} value={f.condition ?? ""}
+            options={boot.conditions.map((c) => ({ value: c.value, label: condLabel(c.value, lang) }))} onChange={(v) => setKey("condition", v)} />
+        </Field>
+        <Field label={table ? "" : t("Tashkilot")}>
+          <Picker title={t("Tashkilot")} placeholder={t("Barcha tashkilotlar")} value={f.org ?? ""}
+            options={boot.orgs.map((o) => ({ value: String(o.id), label: o.name }))} onChange={(v) => setKey("org", v)} />
+        </Field>
+        <div className={cn(table ? "flex flex-wrap items-center gap-1.5 sm:col-span-3 lg:col-span-2" : "")}>
+          {!table && <div className="mb-1.5 text-[13px] font-semibold text-foreground/80">{t("Tezkor tanlash")}</div>}
+          <div className="flex flex-wrap gap-2">
+            {quick.map(([k, label]) => <ToggleChip key={k} active={!!f[k]} onClick={() => toggle(k)}>{t(label)}</ToggleChip>)}
+          </div>
         </div>
-      </div>
+      </FilterBar>
 
       <div className="flex items-center justify-between px-4 pb-1 pt-3 text-sm text-muted-foreground">
         <span>{first ? t("{rows} qator · {qty} dona", { rows: first.count, qty: first.quantity ?? 0 }) : "…"}</span>
-        <div className="flex gap-1">
-          <Btn variant="ghost" size="sm" onClick={() => download("items/export/", { ...params, fmt: "xlsx" }).catch((e) => toast.error(errorMessage(e)))}>
-            <Download className="size-4" />Excel
-          </Btn>
-        </div>
+        <Btn variant="ghost" size="sm" onClick={() => download("items/export/", { ...params, fmt: "xlsx" }).catch((e) => toast.error(errorMessage(e)))}>
+          <Download className="size-4" />Excel
+        </Btn>
       </div>
 
       <div className="space-y-2 px-3 pb-28 sm:px-4">
         {list.isLoading && <Spinner />}
         {list.isError && <Empty icon={<AlertTriangle className="size-6" />} title={t("Yuklab bo'lmadi")} hint={errorMessage(list.error)} />}
         {!list.isLoading && !rows.length && (
-          <Empty icon={<ImageOff className="size-6" />} title={t("Hozircha qurilma yo'q")}
-            hint={boot.me.can.write ? t("Birinchi qurilmani qo'shing — «+» tugmasini bosing.") : undefined}
-            action={boot.me.can.write ? <Btn onClick={onAdd}><Plus className="size-4" />{t("Qurilma qo'shish")}</Btn> : undefined} />
+          <Empty icon={<ImageOff className="size-6" />} title={chips.length || f.q ? t("Bu filtr bo'yicha hech narsa yo'q") : t("Hozircha qurilma yo'q")}
+            hint={chips.length || f.q ? undefined : boot.me.can.write ? t("Birinchi qurilmani qo'shing — «+» tugmasini bosing.") : undefined}
+            action={chips.length || f.q ? <Btn variant="outline" onClick={() => { setF({}); setQ(""); }}>{t("Filtrlarni tozalash")}</Btn>
+              : boot.me.can.write ? <Btn onClick={onAdd}><Plus className="size-4" />{t("Qurilma qo'shish")}</Btn> : undefined} />
         )}
         {table && !!rows.length && <ItemsTable rows={rows} onOpen={setEdit} />}
         {rows.map((it) => <div key={it.id} className={cn(table && "md:hidden")}><ItemCard it={it} onClick={() => setEdit(it)} /></div>)}

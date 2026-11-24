@@ -212,6 +212,18 @@ export const RU: Record<string, string> = {
 
   // ---------------------------------------------------------------- tasdiqnomalar
   "Tasdiqlash": "Подтверждение",
+  "Excel": "Excel",
+  "CSV": "CSV",
+  "Tezkor tanlash": "Быстрый выбор",
+  "Bu filtr bo'yicha hech narsa yo'q": "По этому фильтру ничего нет",
+  "Filtrlarni tozalash": "Сбросить фильтры",
+  "Filtr": "Фильтр",
+  "Filtrlar": "Фильтры",
+  "Hammasini tozalash": "Сбросить все",
+  "Ko'rsatish ({n})": "Показать ({n})",
+  "Ko'rsatish": "Показать",
+  "Boshqa amallar": "Другие действия",
+  "Amallar": "Действия",
   "Xodimlar tasdig'i (imzo)": "Подтверждение сотрудников (подпись)",
   "Tasdiqnomalar": "Подтверждения",
   "Tasdiqlash havolasi": "Ссылка для подтверждения",

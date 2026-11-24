@@ -14,7 +14,7 @@ import { download, inv, type AccessRow, type Branch, type DeviceType, type Level
 import { levelLabel, loc, statusLabel, tr, useLang, useT } from "./i18n";
 import { ImportDialog } from "./import-dialog";
 import { actionLabel, fieldLabel } from "./items";
-import { Btn, Card, Empty, Field, Overlay, Picker, SectionTitle, Spinner, StatusBadge, ago, dt, inputCls, useBoot } from "./ui";
+import { Btn, Card, Empty, Field, FilterBar, Overlay, Picker, SectionTitle, Spinner, StatusBadge, ago, dt, inputCls, useBoot, type FilterChip } from "./ui";
 
 const fail = (e: unknown) => toast.error(errorMessage(e));
 
@@ -48,7 +48,7 @@ export function ExchangeView() {
       )}
       <div>
         <SectionTitle icon={<Download className="size-4" />}>{t("Eksport — yuklab olish")}</SectionTitle>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Tile icon={<Sheet className="size-5" />} tone="emerald" title={t("Shablon formatida (to'ldirilgan)")}
             hint={t("Asl «IT inventarizatsiya shabloni» — barcha varaqlar, formulalar, Xulosa va ochiluvchi ro'yxatlar bilan")}
             onClick={() => download("items/export/", { ...params, fmt: "template" }).catch(fail)} />
@@ -75,7 +75,7 @@ export function ExchangeView() {
       {boot.me.can.write && (
         <div>
           <SectionTitle icon={<Upload className="size-4" />}>{t("Import — fayldan yuklash")}</SectionTitle>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Tile icon={<Upload className="size-5" />} tone="emerald" title={t("Qurilmalarni import qilish")}
               hint={t("To'ldirilgan shablon, yuqoridagi Excel/CSV eksporti. Avval tekshiriladi, keyin tasdiqlaysiz.")}
               onClick={() => setImporting(true)} />
@@ -167,7 +167,7 @@ export function BranchesView({ onOpen }: { onOpen: (id: number) => void }) {
         <h2 className="mr-auto text-lg font-bold">{t("Filiallar")} ({boot.branches.length})</h2>
         {boot.me.can.manage && <Btn onClick={() => setCreating(true)}><Plus className="size-4" />{t("Filial")}</Btn>}
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {boot.branches.map((b) => {
           const s = statById.get(b.id);
           return (
@@ -352,7 +352,7 @@ export function UsersView() {
       {users.isLoading ? <Spinner /> : !rows.length ? (
         <Empty icon={<ShieldCheck className="size-6" />} title={t("Hali foydalanuvchi yo'q")} hint={t("«Filiallarga login yaratish» — har bir filial uchun tayyor login va parol.")} />
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((r) => (
             <div key={r.id} className={cn("rounded-2xl border bg-card p-3 shadow-xs", !r.is_active && "opacity-60")}>
               <div className="flex items-start gap-2">
@@ -415,7 +415,7 @@ function TypeFormBody({ onClose, type }: { open: boolean; onClose: () => void; t
     try { await inv.saveCatalog({ kind: "device_type", id: type.id, delete: true }); qc.invalidateQueries({ queryKey: ["inv", "boot"] }); onClose(); } catch (e) { fail(e); }
   };
   const pair = (label: string, uz: keyof DeviceType, ru: keyof DeviceType, hint?: string) => (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <Field label={`${t(label)} — UZ`} hint={hint}><input className={inputCls} value={String(f[uz] ?? "")} onChange={(e) => setF({ ...f, [uz]: e.target.value })} /></Field>
       <Field label={`${t(label)} — RU`}><input className={inputCls} value={String(f[ru] ?? "")} onChange={(e) => setF({ ...f, [ru]: e.target.value })} /></Field>
     </div>
@@ -496,7 +496,7 @@ export function CatalogView() {
           ))}
         </div>
       </Card>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <SimpleList title={t("Tashkilotlar (loyihalar)")} kind="org" rows={boot.orgs} />
         <SimpleList title={t("Joylar (qayerda turibdi)")} kind="location" rows={boot.locations} />
       </div>
@@ -506,7 +506,7 @@ export function CatalogView() {
 }
 
 /* ====================================================================== tarix */
-export function HistoryView({ onOpenItem }: { onOpenItem: (id: number) => void }) {
+export function HistoryView({ onOpenItem, table }: { onOpenItem: (id: number) => void; table?: boolean }) {
   const boot = useBoot().data!;
   const t = useT();
   const lang = useLang();
@@ -521,16 +521,27 @@ export function HistoryView({ onOpenItem }: { onOpenItem: (id: number) => void }
   const ACT_STYLE: Record<string, string> = { create: "bg-emerald-500/12 text-emerald-700", update: "bg-blue-500/12 text-blue-700", delete: "bg-red-500/12 text-red-700",
     restore: "bg-violet-500/12 text-violet-700", import: "bg-amber-500/15 text-amber-700", status: "bg-sky-500/12 text-sky-700", login: "bg-zinc-500/12 text-zinc-700",
     sign: "bg-teal-500/15 text-teal-700" };
+  const branchOpts = boot.branches.map((b) => ({ value: String(b.id), label: b.name }));
+  const userOpts = (d?.users ?? []).map((u) => ({ value: String(u.id), label: u.name }));
+  const actionOpts = ["create", "update", "delete", "restore", "import", "status", "sign"].map((value) => ({ value, label: actionLabel(value, lang) }));
+  const entityOpts = [["item", "Qurilmalar"], ["employee", "Xodimlar"], ["ack", "Tasdiqnomalar"], ["branch", "Filiallar"], ["user", "Foydalanuvchilar"], ["catalog", "Katalog"]]
+    .map(([value, label]) => ({ value, label: t(label) }));
+  const name = (opts: { value: string; label: string }[], v: string) => opts.find((o) => o.value === v)?.label ?? v;
+  const set = (fn: (v: string) => void) => (v: string) => { fn(v); setPage(1); };
+  const chips: FilterChip[] = [];
+  if (branch) chips.push({ label: name(branchOpts, branch), onRemove: () => set(setBranch)("") });
+  if (user) chips.push({ label: name(userOpts, user), onRemove: () => set(setUser)("") });
+  if (action) chips.push({ label: name(actionOpts, action), onRemove: () => set(setAction)("") });
+  if (entity) chips.push({ label: name(entityOpts, entity), onRemove: () => set(setEntity)("") });
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-3 p-3 pb-28 sm:p-4">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {boot.branches.length > 1 && <Picker title={t("Filial")} placeholder={t("Barcha filiallar")} value={branch} options={boot.branches.map((b) => ({ value: String(b.id), label: b.name }))} onChange={(v) => { setBranch(v); setPage(1); }} />}
-        <Picker title={t("Foydalanuvchi")} placeholder={t("Hamma")} value={user} options={(d?.users ?? []).map((u) => ({ value: String(u.id), label: u.name }))} onChange={(v) => { setUser(v); setPage(1); }} />
-        <Picker title={t("Amal")} placeholder={t("Barcha amallar")} value={action} onChange={(v) => { setAction(v); setPage(1); }}
-          options={["create", "update", "delete", "restore", "import", "status", "sign"].map((value) => ({ value, label: actionLabel(value, lang) }))} />
-        <Picker title={t("Nima")} placeholder={t("Hammasi")} value={entity} onChange={(v) => { setEntity(v); setPage(1); }}
-          options={[["item", "Qurilmalar"], ["employee", "Xodimlar"], ["ack", "Tasdiqnomalar"], ["branch", "Filiallar"], ["user", "Foydalanuvchilar"], ["catalog", "Katalog"]].map(([value, label]) => ({ value, label: t(label) }))} />
-      </div>
+    <div className={cn("mx-auto w-full pb-28", table ? "max-w-[1800px]" : "max-w-6xl")}>
+      <FilterBar inline={table} chips={chips} total={d?.count} onClear={() => { setBranch(""); setUser(""); setAction(""); setEntity(""); setPage(1); }}>
+        {boot.branches.length > 1 && <Field label={table ? "" : t("Filial")}><Picker title={t("Filial")} placeholder={t("Barcha filiallar")} value={branch} options={branchOpts} onChange={set(setBranch)} /></Field>}
+        <Field label={table ? "" : t("Foydalanuvchi")}><Picker title={t("Foydalanuvchi")} placeholder={t("Hamma")} value={user} options={userOpts} onChange={set(setUser)} /></Field>
+        <Field label={table ? "" : t("Amal")}><Picker title={t("Amal")} placeholder={t("Barcha amallar")} value={action} options={actionOpts} onChange={set(setAction)} /></Field>
+        <Field label={table ? "" : t("Nima")}><Picker title={t("Nima")} placeholder={t("Hammasi")} value={entity} options={entityOpts} onChange={set(setEntity)} /></Field>
+      </FilterBar>
+      <div className="space-y-3 p-3 sm:p-4">
       <div className="text-sm text-muted-foreground">{t("{n} yozuv", { n: d?.count ?? "…" })}</div>
       {logs.isLoading ? <Spinner /> : (
         <div className="space-y-1.5">
@@ -557,6 +568,7 @@ export function HistoryView({ onOpenItem }: { onOpenItem: (id: number) => void }
           <Btn variant="outline" size="sm" disabled={page * d.page_size >= d.count} onClick={() => setPage(page + 1)}>{t("Keyingi")}</Btn>
         </div>
       )}
+      </div>
     </div>
   );
 }

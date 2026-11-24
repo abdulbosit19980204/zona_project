@@ -3,8 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ru, uz } from "date-fns/locale";
-import { Check, ChevronDown, Loader2, Plus, Search, X } from "lucide-react";
+import { Check, ChevronDown, Loader2, MoreHorizontal, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/utils";
 
@@ -108,8 +109,9 @@ export function Overlay({ open, onClose, title, subtitle, children, footer, wide
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  // portal: ota elementdagi backdrop-blur / transform "fixed" oynani o'ziga qisib qo'ymasin
+  return createPortal(
     <div className="fixed inset-0 flex items-end justify-center bg-black/40 backdrop-blur-[2px] sm:items-center sm:p-4"
       style={{ zIndex: z }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={cn("flex h-[100dvh] w-full flex-col bg-background shadow-2xl sm:h-auto sm:max-h-[92dvh] sm:rounded-2xl sm:border",
@@ -126,7 +128,8 @@ export function Overlay({ open, onClose, title, subtitle, children, footer, wide
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
         {footer && <div className="shrink-0 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -237,9 +240,11 @@ export function Field({ label, hint, children, required, className }: {
 }) {
   return (
     <label className={cn("block min-w-0", className)}>
-      <span className="mb-1.5 block text-[13px] font-semibold text-foreground/80">
-        {label}{required && <span className="text-destructive"> *</span>}
-      </span>
+      {label && (
+        <span className="mb-1.5 block text-[13px] font-semibold text-foreground/80">
+          {label}{required && <span className="text-destructive"> *</span>}
+        </span>
+      )}
       {children}
       {hint && <span className="mt-1 block text-xs leading-snug text-muted-foreground">{hint}</span>}
     </label>
@@ -360,8 +365,9 @@ export async function compressImage(file: File, maxSide = 1600, quality = 0.82):
 }
 
 /* ------------------------------------------------------------------ katta raqamli kartochka */
-export function Kpi({ label, value, tone = "primary", hint, onClick }: {
+export function Kpi({ label, value, tone = "primary", hint, onClick, compact }: {
   label: string; value: ReactNode; tone?: "primary" | "amber" | "green" | "violet" | "red" | "slate"; hint?: string; onClick?: () => void;
+  compact?: boolean;
 }) {
   const tones = {
     primary: "text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
@@ -373,9 +379,9 @@ export function Kpi({ label, value, tone = "primary", hint, onClick }: {
   };
   const Comp = onClick ? "button" : "div";
   return (
-    <Comp onClick={onClick} className={cn("rounded-2xl border bg-card px-3 py-4 text-center", tones[tone], onClick && "transition-colors hover:bg-muted/50")}>
-      <div className="text-[28px] font-bold leading-none tabular-nums">{value}</div>
-      <div className="mt-2 text-xs font-medium opacity-90">{label}</div>
+    <Comp onClick={onClick} className={cn("rounded-2xl border bg-card text-center", compact ? "px-1.5 py-2 sm:px-3 sm:py-4" : "px-3 py-4", tones[tone], onClick && "transition-colors hover:bg-muted/50")}>
+      <div className={cn("font-bold leading-none tabular-nums", compact ? "text-lg sm:text-[28px]" : "text-[28px]")}>{value}</div>
+      <div className={cn("font-medium leading-tight opacity-90", compact ? "mt-1 text-[10px] sm:mt-2 sm:text-xs" : "mt-2 text-xs")}>{label}</div>
       {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
     </Comp>
   );
@@ -386,5 +392,103 @@ export function Progress({ value, className, tone = "bg-primary" }: { value: num
     <div className={cn("h-2 w-full overflow-hidden rounded-full bg-muted", className)}>
       <div className={cn("h-full rounded-full transition-all", tone)} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ filtr paneli (telefonda yig'iladi) */
+export interface FilterChip { label: string; onRemove: () => void }
+
+/**
+ * Qidiruv + filtrlar. Telefonda: qidiruv qatori va «Filtr» tugmasi (yoqilganlar soni bilan), filtrlar pastdan
+ * chiqadigan oynada; yoqilgan filtrlar kichik «✕» belgilari bo'lib ko'rinadi. Kompyuterda (inline) — doim ochiq.
+ */
+export function FilterBar({ search, onSearch, placeholder, chips, onClear, inline, right, children, sticky = true, total }: {
+  search?: string; onSearch?: (v: string) => void; placeholder?: string; chips: FilterChip[]; onClear: () => void;
+  inline?: boolean; right?: ReactNode; children: ReactNode; sticky?: boolean; total?: ReactNode;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const count = chips.length;
+  return (
+    <div className={cn("z-20 space-y-2 border-b bg-background/95 px-3 py-3 backdrop-blur sm:px-4", sticky && "sticky top-[var(--inv-top,0px)]")}>
+      <div className="flex gap-2">
+        {onSearch ? (
+          <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary md:h-10 md:rounded-lg">
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+            <input value={search ?? ""} onChange={(e) => onSearch(e.target.value)} placeholder={placeholder}
+              enterKeyHint="search" className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none md:text-sm" />
+            {search && <button onClick={() => onSearch("")} aria-label={t("Tozalash")}><X className="size-4 text-muted-foreground" /></button>}
+          </div>
+        ) : <div className="flex-1" />}
+        {!inline && (
+          <button onClick={() => setOpen(true)} aria-label={t("Filtr")}
+            className={cn("relative flex h-11 shrink-0 items-center gap-1.5 rounded-xl border bg-card px-3 text-sm font-semibold",
+              count ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "text-muted-foreground")}>
+            <SlidersHorizontal className="size-4" /><span className={cn(onSearch && "hidden min-[400px]:inline")}>{t("Filtr")}</span>
+            {!!count && <span className="grid size-5 place-items-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">{count}</span>}
+          </button>
+        )}
+        {right}
+      </div>
+      {inline && <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-6">{children}</div>}
+      {!!count && (
+        <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0">
+          {chips.map((c) => (
+            <button key={c.label} onClick={c.onRemove}
+              className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-indigo-500/10 pl-3 pr-2 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+              {c.label}<X className="size-3.5" />
+            </button>
+          ))}
+          {count > 1 && <button onClick={onClear} className="h-8 shrink-0 px-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline">{t("Hammasini tozalash")}</button>}
+        </div>
+      )}
+      {!inline && (
+        <Overlay open={open} onClose={() => setOpen(false)} title={t("Filtrlar")}
+          footer={<div className="flex gap-2">
+            <Btn variant="outline" className="flex-1" disabled={!count} onClick={onClear}>{t("Tozalash")}</Btn>
+            <Btn className="flex-[2]" onClick={() => setOpen(false)}>{total !== undefined ? t("Ko'rsatish ({n})", { n: String(total) }) : t("Ko'rsatish")}</Btn>
+          </div>}>
+          <div className="space-y-4 p-4">{children}</div>
+        </Overlay>
+      )}
+    </div>
+  );
+}
+
+/** Filtr oynasidagi tez tanlanadigan belgi (yoqish / o'chirish). */
+export function ToggleChip({ active, onClick, children }: { active?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className={cn("h-10 shrink-0 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium transition-colors md:h-8 md:text-xs",
+      active ? "border-indigo-600 bg-indigo-600 text-white" : "bg-card text-muted-foreground hover:text-foreground")}>
+      {active && <Check className="mr-1 inline size-3.5" />}{children}
+    </button>
+  );
+}
+
+/** Qo'shimcha amallar: kompyuterda — tugmalar qatori, telefonda — «⋯» menyusi. */
+export interface MoreAction { label: string; icon: ReactNode; onClick: () => void; hidden?: boolean }
+export function MoreActions({ actions, inline }: { actions: MoreAction[]; inline?: boolean }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const list = actions.filter((a) => !a.hidden);
+  if (inline) {
+    return <div className="flex flex-wrap gap-1">{list.map((a) => <Btn key={a.label} variant="ghost" size="sm" onClick={a.onClick}>{a.icon}{a.label}</Btn>)}</div>;
+  }
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="grid size-9 place-items-center rounded-xl border bg-card text-muted-foreground" aria-label={t("Boshqa amallar")}>
+        <MoreHorizontal className="size-4" />
+      </button>
+      <Overlay open={open} onClose={() => setOpen(false)} title={t("Amallar")}>
+        <div className="p-2 pb-6">
+          {list.map((a) => (
+            <button key={a.label} onClick={() => { setOpen(false); a.onClick(); }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3.5 text-left text-[15px] hover:bg-muted">
+              <span className="text-muted-foreground">{a.icon}</span>{a.label}
+            </button>
+          ))}
+        </div>
+      </Overlay>
+    </>
   );
 }
