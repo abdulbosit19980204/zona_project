@@ -33,7 +33,7 @@ def jpeg(color=(200, 30, 30), size=(2400, 1800)):
 
 
 @override_settings()
-class InventoryTests(TestCase):
+class InvBase(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -64,6 +64,9 @@ class InventoryTests(TestCase):
         self.assertEqual(r.status_code, 201, r.content)
         return r.json()
 
+
+
+class InventoryTests(InvBase):
     # ------------------------------------------------------------ huquqlar
     def test_catalog_seeded_from_template(self):
         self.assertEqual(Branch.objects.count(), 12)
@@ -164,7 +167,7 @@ class InventoryTests(TestCase):
         r = self.api.get("/api/inventory/employees/template/")
         wb = load_workbook(io.BytesIO(r.content))
         ws = wb["Xodimlar"]
-        ws.append(["Toshmatov Ali", "Kassir", "+998901112233", "STAR FMCG", "Buxoro", "BIC", "Savdo", ""])
+        ws.append(["Toshmatov Ali", "Kassir", "+998901112233", "@toshmatov_ali", "STAR FMCG", "Buxoro", "BIC", "Savdo", ""])
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
@@ -173,6 +176,7 @@ class InventoryTests(TestCase):
         self.assertEqual(r.json()["employees_created"], 1, r.json())
         e = Employee.objects.get(full_name="Toshmatov Ali")
         self.assertEqual((e.branch.code, e.org.name, e.project), ("BUX", "STAR FMCG", "BIC"))
+        self.assertEqual((e.phone, e.telegram), ("+998 90 111 22 33", "toshmatov_ali"))
 
     # ------------------------------------------------------------ eksport / import
     def test_exports(self):
@@ -267,3 +271,77 @@ class InventoryTests(TestCase):
         self.assertEqual(Employee.objects.get(full_name="Ivanov Ivan").branch, self.sam)
         r = self.api.post("/api/inventory/employees/from-staff/", {}, format="json").json()
         self.assertEqual((r["created"], r["updated"]), (0, 2))  # qayta import — dublikat yo'q
+
+
+PNG_DOT = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+
+
+class AckAndLanguageTests(InvBase):
+    def emp(self, **extra):
+        r = self.col.post("/api/inventory/employees/", {"full_name": "Karimov Aziz", "branch": self.sam.id, **extra},
+                          format="json")
+        self.assertIn(r.status_code, (200, 201), r.content)
+        return r.json()
+
+    def test_phone_and_telegram_normalized_and_validated(self):
+        e = self.emp(phone="90 123 45 67", telegram="https://t.me/Karimov_Aziz")
+        self.assertEqual((e["phone"], e["telegram"]), ("+998 90 123 45 67", "Karimov_Aziz"))
+        r = self.col.patch(f"/api/inventory/employees/{e['id']}/", {"telegram": "@ab"}, format="json")
+        self.assertEqual(r.status_code, 400)
+        r = self.col.patch(f"/api/inventory/employees/{e['id']}/", {"phone": "12"}, format="json", HTTP_X_LANG="ru")
+        self.assertIn("номер телефона", r.json()["detail"])
+
+    def test_russian_messages_and_catalog(self):
+        r = self.col.post("/api/inventory/items/", {"branch": self.bux.id, "device_type": self.laptop.id}, format="json",
+                          HTTP_X_LANG="ru")
+        self.assertEqual(r.json()["detail"], "Нет прав на запись в этот филиал.")
+        boot = self.col.get("/api/inventory/bootstrap/").json()
+        laptop = next(d for d in boot["device_types"] if d["name"] == "Noutbuk")
+        self.assertEqual(laptop["name_ru"], "Ноутбук")
+        self.assertTrue(all(x["name_ru"] for x in boot["locations"]))
+
+    def test_ack_flow_link_open_sign(self):
+        e = self.emp(telegram="karimov_aziz")
+        r = self.col.post(f"/api/inventory/employees/{e['id']}/ack/")
+        self.assertEqual(r.status_code, 400)  # qurilmasi yo'q
+        item = self.add_item(employee=e["id"])
+        ack = self.col.post(f"/api/inventory/employees/{e['id']}/ack/").json()
+        self.assertEqual((ack["status"], ack["items_count"], ack["outdated"]), ("pending", 1, False))
+        anon = APIClient()
+        page = anon.get(f"/api/inventory/public/ack/{ack['token']}/").json()
+        self.assertEqual(page["employee_name"], "Karimov Aziz")
+        self.assertEqual(page["items"][0]["inv_number"], item["inv_number"])
+        self.assertNotIn("ip", page)
+        bad = anon.post(f"/api/inventory/public/ack/{ack['token']}/sign/", {"name": "Karimov Aziz", "signature": ""},
+                        format="json", HTTP_X_LANG="ru")
+        self.assertEqual(bad.json()["detail"], "Поставьте подпись (нарисуйте пальцем).")
+        ok = anon.post(f"/api/inventory/public/ack/{ack['token']}/sign/", {
+            "name": "Karimov Aziz", "signature": PNG_DOT, "lang": "uz",
+            "items": [{"id": item["id"], "ok": False, "comment": "menda emas"}]}, format="json")
+        self.assertEqual(ok.status_code, 200, ok.content)
+        self.assertEqual((ok.json()["status"], ok.json()["issues"]), ("signed", 1))
+        again = anon.post(f"/api/inventory/public/ack/{ack['token']}/sign/", {"name": "Karimov Aziz", "signature": PNG_DOT},
+                          format="json")
+        self.assertEqual(again.status_code, 400)
+        detail = self.api.get(f"/api/inventory/acks/{ack['id']}/").json()
+        self.assertEqual(anon.get(detail["signature_url"]).status_code, 200)
+        s = self.api.get("/api/inventory/stats/").json()
+        self.assertEqual(s["totals"]["acks_signed"], 1)
+        lst = self.col.get("/api/inventory/employees/?ack=signed").json()
+        self.assertEqual(lst["results"][0]["ack"]["status"], "signed")
+        # qurilmalar o'zgarsa — tasdiqnoma eskiradi, bulk yangisini yaratadi
+        self.add_item(employee=e["id"], serial="NEW-1")
+        rows = self.api.get("/api/inventory/acks/").json()["results"]
+        self.assertTrue(rows[0]["outdated"])
+        self.assertEqual(self.api.post("/api/inventory/acks/bulk/", {}, format="json").json()["created"], 1)
+        x = load_workbook(io.BytesIO(self.api.get("/api/inventory/acks/export/").content))
+        self.assertIn("/ack/", x.active["J2"].value)
+
+    def test_collector_cannot_ack_other_branch_and_revoke(self):
+        other = Employee.objects.create(full_name="Boshqa Odam", branch=self.bux)
+        self.assertEqual(self.col.post(f"/api/inventory/employees/{other.id}/ack/").status_code, 404)
+        e = self.emp()
+        self.add_item(employee=e["id"])
+        ack = self.col.post(f"/api/inventory/employees/{e['id']}/ack/").json()
+        self.col.post(f"/api/inventory/acks/{ack['id']}/revoke/")
+        self.assertEqual(APIClient().get(f"/api/inventory/public/ack/{ack['token']}/").status_code, 404)

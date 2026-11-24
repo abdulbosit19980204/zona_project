@@ -70,7 +70,8 @@
     "invExchange": "Import / Eksport",
     "invUsers": "Loginlar va huquqlar",
     "invCatalog": "Katalog",
-    "invMobile": "Mobil ko'rinish"
+    "invMobile": "Mobil ko'rinish",
+    "invAcks": "Tasdiqnomalar (imzo)"
   },
   "top": {
     "search": "Qidirish…",

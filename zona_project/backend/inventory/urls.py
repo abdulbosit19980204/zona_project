@@ -1,7 +1,7 @@
 """Xost loyihada: path("api/inventory/", include("inventory.urls"))."""
 from django.urls import path
 
-from . import io, views
+from . import acks, io, views
 
 app_name = "inventory"
 
@@ -22,6 +22,15 @@ urlpatterns = [
     path("employees/import/", io.employees_import, name="employees-import"),
     path("employees/from-staff/", views.employees_from_staff, name="employees-from-staff"),
     path("employees/<int:pk>/", views.employee_detail, name="employee"),
+    path("employees/<int:pk>/ack/", acks.employee_ack, name="employee-ack"),
+    path("acks/", acks.acks, name="acks"),
+    path("acks/bulk/", acks.acks_bulk, name="acks-bulk"),
+    path("acks/export/", acks.acks_export, name="acks-export"),
+    path("acks/<int:pk>/", acks.ack_detail, name="ack"),
+    path("acks/<int:pk>/revoke/", acks.ack_revoke, name="ack-revoke"),
+    path("acks/<int:pk>/signature/", acks.ack_signature, name="ack-signature"),
+    path("public/ack/<str:token>/", acks.public_ack, name="public-ack"),
+    path("public/ack/<str:token>/sign/", acks.public_sign, name="public-sign"),
     path("branches/", views.branches, name="branches"),
     path("branches/<int:pk>/", views.branch_detail, name="branch"),
     path("catalog/", views.catalog_save, name="catalog"),

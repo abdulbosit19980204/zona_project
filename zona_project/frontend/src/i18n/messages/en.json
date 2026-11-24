@@ -70,7 +70,8 @@
     "invExchange": "Import / export",
     "invUsers": "Logins & access",
     "invCatalog": "Catalog",
-    "invMobile": "Mobile view"
+    "invMobile": "Mobile view",
+    "invAcks": "Acknowledgements"
   },
   "top": {
     "search": "Search…",

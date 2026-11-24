@@ -1,5 +1,5 @@
 import {
-  Activity, BadgeCheck, ClipboardCheck, FileSpreadsheet, KeyRound, Laptop, Smartphone, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
+  Activity, BadgeCheck, ClipboardCheck, FileSignature, FileSpreadsheet, KeyRound, Laptop, Smartphone, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
   LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert,
   Inbox, Signpost, Sparkles, SlidersHorizontal, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, type LucideIcon,
 } from "lucide-react";
@@ -117,6 +117,7 @@ export const INVENTORY_NAV: NavGroup[] = [
       { href: "/inv", key: "invOverview", icon: ChartColumn },
       { href: "/inv/items", key: "invItems", icon: Laptop },
       { href: "/inv/employees", key: "invEmployees", icon: Users },
+      { href: "/inv/acks", key: "invAcks", icon: FileSignature },
       { href: "/inv/branches", key: "invBranches", icon: Building2 },
       { href: "/inv/history", key: "invHistory", icon: History },
     ],

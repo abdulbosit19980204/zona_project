@@ -1,10 +1,9 @@
 "use client";
-/* eslint-disable react/no-unescaped-entities -- o'zbekcha matnlardagi apostrof (o'z, ma'lumot) */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, BarChart3, Building2, CheckCircle2, ClipboardList, History, Laptop, LogOut, Moon, Package, Plus,
-  RefreshCw, Search, Settings2, ShieldCheck, Sun, Upload, Users,
+  ArrowLeft, BarChart3, Building2, CheckCircle2, ClipboardList, FileSignature, History, Laptop, LogOut, Moon, Package,
+  Plus, RefreshCw, Search, Settings2, ShieldCheck, Sun, Upload, Users,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
@@ -16,16 +15,18 @@ import { errorMessage } from "@/lib/api/client";
 import { authApi } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/stores/auth";
+import { useUI } from "@/stores/ui";
 
+import { AcksView } from "./acks";
 import { BranchesView, CatalogView, ExchangeView, HistoryView, UsersView } from "./admin";
 import { AnalyticsView } from "./analytics";
 import { inv, type Boot } from "./api";
 import { EmployeesView } from "./employees";
+import { levelLabel, useLang, useT } from "./i18n";
 import { ItemForm, ItemsView, type ItemFilters } from "./items";
 import { Btn, Card, Empty, FlagBadge, Kpi, Progress, SectionTitle, Spinner, ago, useBoot } from "./ui";
 
-type Tab = "home" | "items" | "employees" | "analytics" | "history" | "branches" | "exchange" | "users" | "catalog";
-const LEVEL_LABEL = { manager: "Boshqaruvchi (IT)", director: "Rahbar", collector: "Filial xodimi" } as const;
+type Tab = "home" | "items" | "employees" | "acks" | "analytics" | "history" | "branches" | "exchange" | "users" | "catalog";
 
 function tabsFor(boot: Boot): { key: Tab; label: string; icon: typeof Laptop }[] {
   const m = boot.me;
@@ -33,6 +34,7 @@ function tabsFor(boot: Boot): { key: Tab; label: string; icon: typeof Laptop }[]
     { key: "home", label: "Menyu", icon: ClipboardList },
     { key: "items", label: "Qurilmalar", icon: Laptop },
     { key: "employees", label: "Xodimlar", icon: Users },
+    { key: "acks", label: "Tasdiqlash", icon: FileSignature },
     { key: "analytics", label: m.level === "collector" ? "Natijalar" : "Analitika", icon: BarChart3 },
     { key: "history", label: "Tarix", icon: History },
     ...(m.level !== "collector" ? [{ key: "branches" as Tab, label: "Filiallar", icon: Building2 }] : []),
@@ -41,11 +43,23 @@ function tabsFor(boot: Boot): { key: Tab; label: string; icon: typeof Laptop }[]
   ];
 }
 
-/* ------------------------------------------------------------------ bosh menyu */
-function MenuTile({ icon, label, tone, onClick, big }: { icon: ReactNode; label: string; tone: string; onClick: () => void; big?: boolean }) {
+/** O'zbek / rus tili (platformaning umumiy til sozlamasi). */
+export function LangToggle({ className }: { className?: string }) {
+  const lang = useLang();
+  const setLocale = useUI((s) => s.setLocale);
   return (
-    <button onClick={onClick} className={cn("flex flex-col items-start gap-4 rounded-3xl border bg-card p-5 text-left shadow-xs transition-all hover:border-primary/40 active:scale-[0.98]",
-      big && "col-span-2")}>
+    <button onClick={() => setLocale(lang === "ru" ? "uz" : "ru")} title={lang === "ru" ? "O'zbekcha" : "Русский"}
+      className={cn("grid h-10 min-w-10 place-items-center rounded-xl border px-2 text-xs font-bold hover:bg-muted", className)}>
+      {lang === "ru" ? "UZ" : "RU"}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ bosh menyu */
+function MenuTile({ icon, label, tone, onClick, wide }: { icon: ReactNode; label: string; tone: string; onClick: () => void; wide?: boolean }) {
+  return (
+    <button onClick={onClick} className={cn("flex min-w-0 flex-col items-start gap-4 rounded-3xl border bg-card p-5 text-left shadow-xs transition-all hover:border-primary/40 active:scale-[0.98] [overflow-wrap:anywhere]",
+      wide && "col-span-2 flex-row items-center")}>
       <span className={cn("grid size-12 place-items-center rounded-2xl", tone)}>{icon}</span>
       <span className="text-[15px] font-bold">{label}</span>
     </button>
@@ -53,16 +67,17 @@ function MenuTile({ icon, label, tone, onClick, big }: { icon: ReactNode; label:
 }
 
 function CollectorHome({ boot, go, add }: { boot: Boot; go: (t: Tab) => void; add: () => void }) {
+  const t = useT();
   const qc = useQueryClient();
   const stats = useQuery({ queryKey: ["inv", "stats", 30], queryFn: () => inv.stats({ days: 30 }) });
   const s = stats.data;
   const mine = s?.leaderboard.find((u) => u.user_id === boot.me.id);
   const finish = async (id: number, done: boolean) => {
-    if (done && !confirm("Filialdagi barcha qurilmalar kiritildimi? «Yakunlandi» deb belgilanadi.")) return;
+    if (done && !confirm(t("Filialdagi barcha qurilmalar kiritildimi? «Yakunlandi» deb belgilanadi."))) return;
     try {
       await inv.updateBranch(id, { status: done ? "done" : "active" });
       qc.invalidateQueries({ queryKey: ["inv"] });
-      toast.success(done ? "Rahmat! Filial «Yakunlandi» deb belgilandi" : "Filial qayta ochildi");
+      toast.success(done ? t("Rahmat! Filial «Yakunlandi» deb belgilandi") : t("Filial qayta ochildi"));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -71,11 +86,12 @@ function CollectorHome({ boot, go, add }: { boot: Boot; go: (t: Tab) => void; ad
     <div className="mx-auto w-full max-w-xl space-y-4 p-4 pb-28">
       <button onClick={add} className="flex w-full items-center gap-4 rounded-3xl bg-indigo-600 p-5 text-left text-white shadow-lg shadow-indigo-600/25 active:scale-[0.98]">
         <span className="grid size-14 place-items-center rounded-2xl bg-white/20"><Plus className="size-8" /></span>
-        <span><span className="block text-lg font-bold">Qurilma qo'shish</span><span className="text-sm opacity-90">Rasmga olib, ro'yxatdan tanlang</span></span>
+        <span><span className="block text-lg font-bold">{t("Qurilma qo'shish")}</span><span className="text-sm opacity-90">{t("Rasmga olib, ro'yxatdan tanlang")}</span></span>
       </button>
       <div className="grid grid-cols-2 gap-3">
-        <MenuTile icon={<Laptop className="size-6" />} label="Kiritilganlar" tone="bg-emerald-500/10 text-emerald-600" onClick={() => go("items")} />
-        <MenuTile icon={<Users className="size-6" />} label="Xodimlar" tone="bg-amber-500/10 text-amber-600" onClick={() => go("employees")} />
+        <MenuTile icon={<Laptop className="size-6" />} label={t("Kiritilganlar")} tone="bg-emerald-500/10 text-emerald-600" onClick={() => go("items")} />
+        <MenuTile icon={<Users className="size-6" />} label={t("Xodimlar")} tone="bg-amber-500/10 text-amber-600" onClick={() => go("employees")} />
+        <MenuTile wide icon={<FileSignature className="size-6" />} label={t("Xodimlar tasdig'i (imzo)")} tone="bg-teal-500/10 text-teal-600" onClick={() => go("acks")} />
       </div>
       {s?.branches.map((b) => (
         <Card key={b.id}>
@@ -85,42 +101,43 @@ function CollectorHome({ boot, go, add }: { boot: Boot; go: (t: Tab) => void; ad
             <FlagBadge value={b.flag} />
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">
-            <Kpi label="Jami (dona)" value={b.qty} />
-            <Kpi label="Bugun" value={b.today} tone="green" />
-            <Kpi label="Xodimlar" value={b.employees} tone="amber" />
+            <Kpi label={t("Jami (dona)")} value={b.qty} />
+            <Kpi label={t("Bugun")} value={b.today} tone="green" />
+            <Kpi label={t("Imzolagan")} value={`${b.acks_signed}/${b.employees_with_devices}`} tone="amber" onClick={() => go("acks")} />
           </div>
           {b.coverage !== null && (
             <div className="mt-3">
-              <div className="mb-1 flex justify-between text-xs text-muted-foreground"><span>Qurilmasi kiritilgan xodimlar</span><b>{b.employees_with_devices}/{b.employees}</b></div>
+              <div className="mb-1 flex justify-between text-xs text-muted-foreground"><span>{t("Qurilmasi kiritilgan xodimlar")}</span><b>{b.employees_with_devices}/{b.employees}</b></div>
               <Progress value={b.coverage} />
             </div>
           )}
           {(b.no_serial > 0 || b.no_employee > 0) && (
             <div className="mt-3 rounded-xl bg-amber-500/8 p-3 text-xs text-amber-800 dark:text-amber-300">
-              Tekshiring: {b.no_serial > 0 && <>{b.no_serial} ta qurilmada seriya raqam yo'q. </>}{b.no_employee > 0 && <>{b.no_employee} tasiga xodim biriktirilmagan.</>}
+              {t("Tekshiring:")} {b.no_serial > 0 && <>{t("{n} ta qurilmada seriya raqam yo'q.", { n: b.no_serial })} </>}{b.no_employee > 0 && <>{t("{n} tasiga xodim biriktirilmagan.", { n: b.no_employee })}</>}
             </div>
           )}
           {boot.me.can.write && (b.status === "done" ? (
             <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="size-5" /><span className="flex-1 font-semibold">Yakunlandi</span>
-              <Btn variant="ghost" size="sm" onClick={() => finish(b.id, false)}>Qayta ochish</Btn>
+              <CheckCircle2 className="size-5" /><span className="flex-1 font-semibold">{t("Yakunlandi")}</span>
+              <Btn variant="ghost" size="sm" onClick={() => finish(b.id, false)}>{t("Qayta ochish")}</Btn>
             </div>
           ) : (
             <Btn variant="success" className="mt-3 w-full" onClick={() => finish(b.id, true)} disabled={!b.rows}>
-              <CheckCircle2 className="size-4" />Hammasini kiritdim — yakunlash
+              <CheckCircle2 className="size-4" />{t("Hammasini kiritdim — yakunlash")}
             </Btn>
           ))}
         </Card>
       ))}
-      {mine && <p className="text-center text-sm text-muted-foreground">Siz jami <b>{mine.create}</b> ta qurilma kiritdingiz, oxirgisi {ago(mine.last_at)}.</p>}
+      {mine && <p className="text-center text-sm text-muted-foreground">{t("Siz jami {n} ta qurilma kiritdingiz, oxirgisi {d}.", { n: mine.create, d: ago(mine.last_at) })}</p>}
       <Card className="bg-muted/30">
-        <SectionTitle>Qanday ishlaydi</SectionTitle>
+        <SectionTitle>{t("Qanday ishlaydi")}</SectionTitle>
         <ol className="space-y-2 text-sm">
-          <li><b>1.</b> «Qurilma qo'shish» ni bosing.</li>
-          <li><b>2.</b> Qurilma turini ro'yxatdan tanlang — seriya raqami qayerdaligi o'zi chiqadi.</li>
-          <li><b>3.</b> «Kamera» bilan qurilmani va yorlig'ini suratga oling.</li>
-          <li><b>4.</b> Kimda turganini tanlang (yo'q bo'lsa — ismini yozib qo'shing).</li>
-          <li><b>5.</b> «Saqlash va yana» — keyingi qurilmaga o'ting. Hammasi tugagach «Yakunlash» ni bosing.</li>
+          <li><b>1.</b> {t("«Qurilma qo'shish» ni bosing.")}</li>
+          <li><b>2.</b> {t("Qurilma turini ro'yxatdan tanlang — seriya raqami qayerdaligi o'zi chiqadi.")}</li>
+          <li><b>3.</b> {t("«Kamera» bilan qurilmani va yorlig'ini suratga oling.")}</li>
+          <li><b>4.</b> {t("Kimda turganini tanlang (yo'q bo'lsa — ismini yozib qo'shing), telefoni va Telegramini yozing.")}</li>
+          <li><b>5.</b> {t("«Saqlash va yana» — keyingi qurilmaga o'ting.")}</li>
+          <li><b>6.</b> {t("«Tasdiqlash» bo'limidan xodimlarga havola yuboring — ular imzo qo'yadi. Hammasi tugagach «Yakunlash» ni bosing.")}</li>
         </ol>
       </Card>
     </div>
@@ -128,36 +145,38 @@ function CollectorHome({ boot, go, add }: { boot: Boot; go: (t: Tab) => void; ad
 }
 
 function ManagerHome({ boot, go, add, openBranch }: { boot: Boot; go: (t: Tab) => void; add: () => void; openBranch: (id: number) => void }) {
+  const t = useT();
   const stats = useQuery({ queryKey: ["inv", "stats", 30], queryFn: () => inv.stats({ days: 30 }) });
-  const t = stats.data?.totals;
+  const tt = stats.data?.totals;
   const lagging = (stats.data?.branches ?? []).filter((b) => b.flag === "slow" || b.flag === "idle");
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 p-4 pb-28">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {boot.me.can.write && <MenuTile icon={<Plus className="size-6" />} label="Yangi qurilma" tone="bg-indigo-500/10 text-indigo-600" onClick={add} />}
-        <MenuTile icon={<Laptop className="size-6" />} label="Qurilmalar" tone="bg-emerald-500/10 text-emerald-600" onClick={() => go("items")} />
-        <MenuTile icon={<Users className="size-6" />} label="Xodimlar" tone="bg-amber-500/10 text-amber-600" onClick={() => go("employees")} />
-        <MenuTile icon={<BarChart3 className="size-6" />} label="Analitika" tone="bg-violet-500/10 text-violet-600" onClick={() => go("analytics")} />
-        <MenuTile icon={<Building2 className="size-6" />} label="Filiallar" tone="bg-sky-500/10 text-sky-600" onClick={() => go("branches")} />
-        <MenuTile icon={<Upload className="size-6" />} label="Import / Eksport" tone="bg-rose-500/10 text-rose-600" onClick={() => go("exchange")} />
-        {boot.me.can.manage && <MenuTile icon={<ShieldCheck className="size-6" />} label="Loginlar" tone="bg-teal-500/10 text-teal-600" onClick={() => go("users")} />}
-        <MenuTile icon={<History className="size-6" />} label="Tarix" tone="bg-zinc-500/10 text-zinc-600" onClick={() => go("history")} />
-        {boot.me.can.manage && <MenuTile icon={<Settings2 className="size-6" />} label="Katalog" tone="bg-orange-500/10 text-orange-600" onClick={() => go("catalog")} />}
+        {boot.me.can.write && <MenuTile icon={<Plus className="size-6" />} label={t("Yangi qurilma")} tone="bg-indigo-500/10 text-indigo-600" onClick={add} />}
+        <MenuTile icon={<Laptop className="size-6" />} label={t("Qurilmalar")} tone="bg-emerald-500/10 text-emerald-600" onClick={() => go("items")} />
+        <MenuTile icon={<Users className="size-6" />} label={t("Xodimlar")} tone="bg-amber-500/10 text-amber-600" onClick={() => go("employees")} />
+        <MenuTile icon={<FileSignature className="size-6" />} label={t("Tasdiqlash")} tone="bg-teal-500/10 text-teal-600" onClick={() => go("acks")} />
+        <MenuTile icon={<BarChart3 className="size-6" />} label={t("Analitika")} tone="bg-violet-500/10 text-violet-600" onClick={() => go("analytics")} />
+        <MenuTile icon={<Building2 className="size-6" />} label={t("Filiallar")} tone="bg-sky-500/10 text-sky-600" onClick={() => go("branches")} />
+        <MenuTile icon={<Upload className="size-6" />} label={t("Import / Eksport")} tone="bg-rose-500/10 text-rose-600" onClick={() => go("exchange")} />
+        {boot.me.can.manage && <MenuTile icon={<ShieldCheck className="size-6" />} label={t("Loginlar")} tone="bg-cyan-500/10 text-cyan-600" onClick={() => go("users")} />}
+        <MenuTile icon={<History className="size-6" />} label={t("Tarix")} tone="bg-zinc-500/10 text-zinc-600" onClick={() => go("history")} />
+        {boot.me.can.manage && <MenuTile icon={<Settings2 className="size-6" />} label={t("Katalog")} tone="bg-orange-500/10 text-orange-600" onClick={() => go("catalog")} />}
       </div>
       <Card>
-        <SectionTitle icon={<Package className="size-4" />}>Tizim xulosasi</SectionTitle>
-        {!t ? <Spinner className="py-6" /> : (
+        <SectionTitle icon={<Package className="size-4" />}>{t("Tizim xulosasi")}</SectionTitle>
+        {!tt ? <Spinner className="py-6" /> : (
           <div className="grid grid-cols-2 gap-2.5">
-            <Kpi label="Jami qurilmalar (dona)" value={t.qty} onClick={() => go("items")} />
-            <Kpi label="Bugun kiritildi" value={t.today} tone="green" />
-            <Kpi label="Yakunlangan filiallar" value={`${t.done}/${t.branches}`} tone="amber" onClick={() => go("analytics")} />
-            <Kpi label="Xodimlar" value={t.employees_total} tone="violet" onClick={() => go("employees")} />
+            <Kpi label={t("Jami qurilmalar (dona)")} value={tt.qty} onClick={() => go("items")} />
+            <Kpi label={t("Bugun kiritildi")} value={tt.today} tone="green" />
+            <Kpi label={t("Yakunlangan filiallar")} value={`${tt.done}/${tt.branches}`} tone="amber" onClick={() => go("analytics")} />
+            <Kpi label={t("Imzolagan xodimlar")} value={`${tt.acks_signed}/${tt.employees_with_devices}`} tone="violet" onClick={() => go("acks")} />
           </div>
         )}
       </Card>
       {!!lagging.length && (
         <Card>
-          <SectionTitle>Sust filiallar</SectionTitle>
+          <SectionTitle>{t("Sust filiallar")}</SectionTitle>
           <div className="space-y-1.5">
             {lagging.map((b) => (
               <button key={b.id} onClick={() => openBranch(b.id)} className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-muted">
@@ -175,6 +194,8 @@ function ManagerHome({ boot, go, add, openBranch }: { boot: Boot; go: (t: Tab) =
 function App() {
   const router = useRouter();
   const qc = useQueryClient();
+  const t = useT();
+  const lang = useLang();
   const boot = useBoot();
   const refresh = useAuth((s) => s.refresh);
   const logoutStore = useAuth((s) => s.logout);
@@ -216,9 +237,9 @@ function App() {
     } catch { /* ruxsat yo'q */ }
   }, [restricted, setTheme]);
 
-  const setTab = (t: Tab) => {
-    setTabState(t);
-    try { sessionStorage.setItem("inv-tab", t); } catch { /* yo'q */ }
+  const setTab = (k: Tab) => {
+    setTabState(k);
+    try { sessionStorage.setItem("inv-tab", k); } catch { /* yo'q */ }
     document.getElementById("inv-scroll")?.scrollTo({ top: 0 });
   };
   const openBranch = (id: number, extra?: Record<string, boolean | string>) => {
@@ -236,9 +257,9 @@ function App() {
   if (boot.isError || !boot.data) {
     return (
       <div className="grid h-full place-items-center p-6">
-        <Empty icon={<ShieldCheck className="size-6" />} title="Inventarizatsiya moduliga ruxsat yo'q"
-          hint={`${errorMessage(boot.error)} Administratorga murojaat qiling.`}
-          action={<div className="flex gap-2"><Btn variant="outline" onClick={() => router.push("/")}>Platformaga</Btn><Btn variant="ghost" onClick={logout}>Chiqish</Btn></div>} />
+        <Empty icon={<ShieldCheck className="size-6" />} title={t("Inventarizatsiya moduliga ruxsat yo'q")}
+          hint={`${errorMessage(boot.error)} ${t("Administratorga murojaat qiling.")}`}
+          action={<div className="flex gap-2"><Btn variant="outline" onClick={() => router.push("/")}>{t("Platformaga")}</Btn><Btn variant="ghost" onClick={logout}>{t("Chiqish")}</Btn></div>} />
       </div>
     );
   }
@@ -248,35 +269,37 @@ function App() {
   const current = tabs.some((x) => x.key === tab) ? tab : "home";
   const counts: Partial<Record<Tab, string>> = stats.data ? {
     items: `${stats.data.totals.rows}`, employees: `${stats.data.totals.employees_total}`,
+    acks: `${stats.data.totals.acks_signed}/${stats.data.totals.employees_with_devices}`,
   } : {};
   const initials = me.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "U";
-  const subtitle = me.level === "collector" ? b.branches.map((x) => x.name).join(", ") || LEVEL_LABEL[me.level] : LEVEL_LABEL[me.level];
+  const subtitle = me.level === "collector" ? b.branches.map((x) => x.name).join(", ") || levelLabel(me.level, lang) : levelLabel(me.level, lang);
 
   return (
     <div id="inv-scroll" className="h-full overflow-y-auto bg-background" style={{ "--inv-top": `${headerH}px` } as CSSProperties}>
       <header ref={headerRef} className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 pb-2 pt-3 sm:px-4">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 pb-2 pt-3 sm:gap-3 sm:px-4">
           {!me.restricted && (
-            <button onClick={() => router.push("/inv")} className="grid size-10 shrink-0 place-items-center rounded-xl hover:bg-muted" title="Odatiy (kompyuter) ko'rinish"><ArrowLeft className="size-5" /></button>
+            <button onClick={() => router.push("/inv")} className="grid size-10 shrink-0 place-items-center rounded-xl hover:bg-muted" title={t("Odatiy (kompyuter) ko'rinish")}><ArrowLeft className="size-5" /></button>
           )}
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-600 text-sm font-bold text-white">{initials}</span>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="truncate font-bold">{me.name}</div>
             <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
           </div>
-          <button onClick={() => { setItemFilters({}); setTab("items"); }} className="grid size-10 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600" title="Qidirish"><Search className="size-5" /></button>
-          <button onClick={() => { qc.invalidateQueries({ queryKey: ["inv"] }); toast.success("Yangilandi"); }} className="hidden size-10 place-items-center rounded-xl hover:bg-muted sm:grid" title="Yangilash"><RefreshCw className="size-5" /></button>
-          <button onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="grid size-10 place-items-center rounded-xl hover:bg-muted" title="Kun / tun">
+          <button onClick={() => { setItemFilters({}); setTab("items"); }} className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600" title={t("Qidirish")}><Search className="size-5" /></button>
+          <LangToggle className="shrink-0" />
+          <button onClick={() => { qc.invalidateQueries({ queryKey: ["inv"] }); toast.success(t("Yangilandi")); }} className="hidden size-10 place-items-center rounded-xl hover:bg-muted sm:grid" title={t("Yangilash")}><RefreshCw className="size-5" /></button>
+          <button onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")} className="grid size-10 shrink-0 place-items-center rounded-xl hover:bg-muted" title={t("Kun / tun")}>
             {resolvedTheme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
           </button>
-          <button onClick={logout} className="grid size-10 place-items-center rounded-xl hover:bg-muted" title="Chiqish"><LogOut className="size-5" /></button>
+          <button onClick={logout} className="grid size-10 shrink-0 place-items-center rounded-xl hover:bg-muted" title={t("Chiqish")}><LogOut className="size-5" /></button>
         </div>
         <nav className="mx-auto flex max-w-7xl gap-1.5 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] sm:px-4">
           {tabs.map((x) => (
             <button key={x.key} onClick={() => { if (x.key === "items") setItemFilters(undefined); setTab(x.key); }}
               className={cn("flex h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-colors",
                 current === x.key ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
-              <x.icon className="size-4" />{x.label}{counts[x.key] && <span className="opacity-75">({counts[x.key]})</span>}
+              <x.icon className="size-4" />{t(x.label)}{counts[x.key] && <span className="opacity-75">({counts[x.key]})</span>}
             </button>
           ))}
         </nav>
@@ -288,6 +311,7 @@ function App() {
           : <ManagerHome boot={b} go={setTab} add={() => setAdding(true)} openBranch={openBranch} />)}
         {current === "items" && <ItemsView key={JSON.stringify(itemFilters ?? null)} initial={itemFilters} onAdd={() => setAdding(true)} />}
         {current === "employees" && <EmployeesView onShowItems={(id) => { setItemFilters({ employee: String(id) }); setTab("items"); }} />}
+        {current === "acks" && <AcksView />}
         {current === "analytics" && <AnalyticsView onOpenBranch={openBranch} />}
         {current === "history" && <HistoryView onOpenItem={setOpenItemId} />}
         {current === "branches" && <BranchesView onOpen={openBranch} />}
@@ -297,7 +321,7 @@ function App() {
       </main>
 
       {me.can.write && (current === "items" || current === "home") && (
-        <button onClick={() => setAdding(true)} aria-label="Qurilma qo'shish"
+        <button onClick={() => setAdding(true)} aria-label={t("Qurilma qo'shish")}
           className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-30 grid size-16 place-items-center rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-600/30 active:scale-95 sm:hidden">
           <Plus className="size-8" />
         </button>

@@ -38,8 +38,8 @@ ITEM_COLUMNS = [
     ("Rasm havolalari", 40), ("Kiritgan", 16), ("Kiritilgan sana", 17), ("O'zgartirgan", 16),
     ("O'zgartirilgan sana", 17),
 ]
-EMP_COLUMNS = [("F.I.Sh.", 30), ("Lavozimi", 20), ("Telefon", 18), ("Tashkilot", 20), ("Filial", 16),
-               ("Loyiha (brend)", 18), ("Bo'lim", 18), ("Izoh", 24)]
+EMP_COLUMNS = [("F.I.Sh.", 30), ("Lavozimi", 20), ("Telefon", 18), ("Telegram", 18), ("Tashkilot", 20),
+               ("Filial", 16), ("Loyiha (brend)", 18), ("Bo'lim", 18), ("Izoh", 24)]
 
 
 def _now_tag():
@@ -413,6 +413,8 @@ def _import_employees_rows(request, rows, lk, result, default_branch=None):
     c_name, c_pos, c_phone = _col(names, "f.i.sh."), _col(names, "lavozim"), _col(names, "telefon")
     c_org, c_branch = _col(names, "tashkilot"), _col(names, "filial")
     c_proj, c_dep, c_note = _col(names, "loyiha"), _col(names, "bo'lim"), _col(names, "izoh")
+    c_tg = _col(names, "telegram")
+    from .views import norm_phone, norm_telegram
     manager = level_of(request.user) == MANAGER
     for n, row in enumerate(rows[idx + 1:], start=idx + 2):
         name = _cell(row, c_name)
@@ -427,7 +429,12 @@ def _import_employees_rows(request, rows, lk, result, default_branch=None):
             result["errors"].append({"sheet": "Xodimlar", "row": n, "message": "Faqat o'z filialingiz xodimlari"})
             continue
         org = lk.orgs.get(norm(_cell(row, c_org)))
-        fields = {"position": _cell(row, c_pos)[:120], "phone": _cell(row, c_phone)[:40],
+        phone, tg = norm_phone(_cell(row, c_phone)), norm_telegram(_cell(row, c_tg))
+        if phone is None:
+            result["warnings"].append({"sheet": "Xodimlar", "row": n, "message": f"Telefon noto'g'ri: {_cell(row, c_phone)}"})
+        if tg is None:
+            result["warnings"].append({"sheet": "Xodimlar", "row": n, "message": f"Telegram noto'g'ri: {_cell(row, c_tg)}"})
+        fields = {"position": _cell(row, c_pos)[:120], "phone": phone or "", "telegram": tg or "",
                   "project": _cell(row, c_proj)[:120], "department": _cell(row, c_dep)[:120],
                   "note": _cell(row, c_note)[:255]}
         key = (norm(name), branch.id if branch else None)
@@ -597,8 +604,8 @@ def import_items(request):
 
 # ====================================================================== xodimlar import / eksport
 def employee_row(e):
-    return [e.full_name, e.position, e.phone, e.org.name if e.org_id else "", e.branch.name if e.branch_id else "",
-            e.project, e.department, e.note]
+    return [e.full_name, e.position, e.phone, f"@{e.telegram}" if e.telegram else "", e.org.name if e.org_id else "",
+            e.branch.name if e.branch_id else "", e.project, e.department, e.note]
 
 
 @inv_api(["GET"], [HasInventory])
@@ -630,8 +637,8 @@ def employees_template(request):
                "(Heinz, BIC...). Tayyor bo'lgach saytda: Xodimlar → Import."])
     ws.append([])
     ws.append([c[0] for c in EMP_COLUMNS])
-    ws.append(["Karimov Aziz (namuna)", "Savdo menejeri", "+998 90 123 45 67", "Star Distribution", "Samarqand",
-               "Heinz", "Savdo bo'limi", ""])
+    ws.append(["Karimov Aziz (namuna)", "Savdo menejeri", "+998 90 123 45 67", "@karimov_aziz", "Star Distribution",
+               "Samarqand", "Heinz", "Savdo bo'limi", ""])
     for c in range(1, len(EMP_COLUMNS) + 1):
         ws.cell(5, c).font = Font(italic=True, color="7F7F7F")
     style_table(ws, [c[1] for c in EMP_COLUMNS], header_row=4)
@@ -643,8 +650,8 @@ def employees_template(request):
     orgs, brs = [o.name for o in Org.objects.all()], [b.name for b in branches]
     for i in range(max(len(orgs), len(brs))):
         ch.append([orgs[i] if i < len(orgs) else None, brs[i] if i < len(brs) else None])
-    _dv(ws, f"Tanlovlar!$A$2:$A${max(2, len(orgs) + 1)}", "D5:D3000", "Tashkilot", "Ro'yxatdan tanlang.")
-    _dv(ws, f"Tanlovlar!$B$2:$B${max(2, len(brs) + 1)}", "E5:E3000", "Filial", "Ro'yxatdan tanlang.")
+    _dv(ws, f"Tanlovlar!$A$2:$A${max(2, len(orgs) + 1)}", "E5:E3000", "Tashkilot", "Ro'yxatdan tanlang.")
+    _dv(ws, f"Tanlovlar!$B$2:$B${max(2, len(brs) + 1)}", "F5:F3000", "Filial", "Ro'yxatdan tanlang.")
     return _file(_save(wb), "xodimlar_shablon.xlsx", XLSX)
 
 

@@ -1,4 +1,6 @@
 """IT inventarizatsiya API (/api/inventory/...). Har bir javob filial doirasi bilan cheklanadi (access.scoped)."""
+import functools
+import re
 import secrets
 import string
 from datetime import datetime, timedelta
@@ -19,6 +21,7 @@ from rest_framework.response import Response
 from zona.auth import AUTHENTICATION
 
 from . import photos as photo_store
+from .i18n import translate_response
 from .access import (COLLECTOR, DIRECTOR, MANAGER, CanWrite, HasInventory, IsManager, IsManagerOrDirector,
                      access_of, branch_scope, can_write_branch, level_of, scoped)
 from .models import Access, Branch, DeviceType, Employee, Item, Location, Log, Org, Photo
@@ -28,14 +31,45 @@ COND_LABEL = dict(Item.CONDITIONS)
 STATUS_LABEL = dict(Branch.STATUSES)
 
 
-def inv_api(methods, permissions, multipart=False):
+def inv_api(methods, permissions, multipart=False, auth=True):
     def wrap(fn):
-        fn = authentication_classes(AUTHENTICATION)(fn)
+        fn = authentication_classes(AUTHENTICATION if auth else [])(fn)
         fn = permission_classes(permissions)(fn)
         fn = renderer_classes([JSONRenderer])(fn)
         fn = parser_classes([JSONParser, MultiPartParser, FormParser] if multipart else [JSONParser])(fn)
-        return api_view(methods)(fn)
+        view = api_view(methods)(fn)
+
+        @functools.wraps(view)
+        def translated(request, *args, **kwargs):  # X-Lang: ru — xabarlar rus tilida
+            return translate_response(request, view(request, *args, **kwargs))
+        return translated
     return wrap
+
+
+PHONE_DIGITS = re.compile(r"\D")
+TG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{4,31}$")
+
+
+def norm_phone(value):
+    """+998 90 123 45 67 ko'rinishiga keltiradi; noto'g'ri bo'lsa None. Bo'sh — bo'sh."""
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    d = PHONE_DIGITS.sub("", raw)
+    if len(d) == 9:
+        d = "998" + d
+    if len(d) == 12 and d.startswith("998"):
+        return f"+{d[:3]} {d[3:5]} {d[5:8]} {d[8:10]} {d[10:]}"
+    return raw[:40] if 9 <= len(d) <= 15 else None
+
+
+def norm_telegram(value):
+    """@user, t.me/user, https://t.me/user -> user; noto'g'ri bo'lsa None. Bo'sh — bo'sh."""
+    t = str(value or "").strip()
+    t = re.sub(r"^(https?://)?(www\.)?(t|telegram)\.(me|dog)/", "", t, flags=re.I).lstrip("@").strip("/ ")
+    if not t:
+        return ""
+    return t if TG_RE.match(t) else None
 
 
 def bad(message, code=status.HTTP_400_BAD_REQUEST):
@@ -84,7 +118,9 @@ def branch_payload(b):
 
 def type_payload(d):
     return {"id": d.id, "name": d.name, "group": d.group, "description": d.description, "serial_hint": d.serial_hint,
-            "extra_hint": d.extra_hint, "brands": d.brands or [], "is_active": d.is_active, "order": d.order}
+            "extra_hint": d.extra_hint, "brands": d.brands or [], "is_active": d.is_active, "order": d.order,
+            "name_ru": d.name_ru, "description_ru": d.description_ru, "serial_hint_ru": d.serial_hint_ru,
+            "extra_hint_ru": d.extra_hint_ru}
 
 
 @inv_api(["GET"], [HasInventory])
@@ -95,7 +131,7 @@ def bootstrap(request):
         "me": me_payload(request.user),
         "orgs": [{"id": o.id, "name": o.name, "code": o.code} for o in Org.objects.all()],
         "branches": [branch_payload(b) for b in branches],
-        "locations": [{"id": x.id, "name": x.name} for x in Location.objects.all()],
+        "locations": [{"id": x.id, "name": x.name, "name_ru": x.name_ru} for x in Location.objects.all()],
         "device_types": [type_payload(d) for d in DeviceType.objects.all()],
         "conditions": [{"value": v, "label": l} for v, l in Item.CONDITIONS],
         "branch_statuses": [{"value": v, "label": l} for v, l in Branch.STATUSES],
@@ -401,8 +437,25 @@ def photo_file(request, pk):
 
 
 # ====================================================================== xodimlar
-def employee_payload(e, devices=None):
-    return {"id": e.id, "full_name": e.full_name, "position": e.position, "phone": e.phone, "org": e.org_id,
+def ack_brief(ack):
+    if not ack:
+        return None
+    return {"id": ack.id, "status": ack.status, "created_at": ack.created_at, "opened_at": ack.opened_at,
+            "signed_at": ack.signed_at, "issues": sum(1 for r in ack.result or [] if not r.get("ok", True))}
+
+
+def latest_acks(employee_ids):
+    """{employee_id: oxirgi (bekor qilinmagan) tasdiqnoma}."""
+    from .models import Ack
+    out = {}
+    for a in Ack.objects.filter(employee_id__in=list(employee_ids)).exclude(status=Ack.REVOKED).order_by("created_at"):
+        out[a.employee_id] = a
+    return out
+
+
+def employee_payload(e, devices=None, ack=None):
+    return {"id": e.id, "full_name": e.full_name, "position": e.position, "phone": e.phone, "telegram": e.telegram,
+            "ack": ack_brief(ack), "org": e.org_id,
             "org_name": e.org.name if e.org_id else "", "branch": e.branch_id,
             "branch_name": e.branch.name if e.branch_id else "", "project": e.project, "department": e.department,
             "note": e.note, "is_active": e.is_active, "source": e.source,
@@ -430,9 +483,19 @@ def clean_employee(request, data, instance=None):
         out["branch"] = branch
     if "org" in data:
         out["org"] = Org.objects.filter(pk=_int(data.get("org"))).first() if data.get("org") else None
-    for f, limit in (("position", 120), ("phone", 40), ("project", 120), ("department", 120), ("note", 255)):
+    for f, limit in (("position", 120), ("project", 120), ("department", 120), ("note", 255)):
         if f in data:
             out[f] = _s(data.get(f), limit)
+    if "phone" in data:
+        phone = norm_phone(data.get("phone"))
+        if phone is None:
+            return None, "Telefon raqamini to'g'ri yozing (masalan: +998 90 123 45 67)."
+        out["phone"] = phone
+    if "telegram" in data:
+        tg = norm_telegram(data.get("telegram"))
+        if tg is None:
+            return None, "Telegram username noto'g'ri (5–32 belgi: harf, raqam, _)."
+        out["telegram"] = tg
     if "is_active" in data:
         out["is_active"] = bool(data.get("is_active"))
     return out, None
@@ -472,14 +535,20 @@ def employees(request):
     if p.get("q"):
         q = p["q"].strip()
         qs = qs.filter(Q(full_name__icontains=q) | Q(phone__icontains=q) | Q(position__icontains=q)
-                       | Q(project__icontains=q))
+                       | Q(project__icontains=q) | Q(telegram__icontains=q.lstrip("@")))
+    if p.get("contact") == "0":  # telefon yoki telegrami yo'qlar
+        qs = qs.filter(Q(phone="") | Q(telegram=""))
+    if p.get("ack"):
+        qs = filter_by_ack(qs, p["ack"])
     total = qs.count()
     limit = min(_int(p.get("limit"), 3000) or 3000, 5000)
     offset = max(_int(p.get("offset"), 0) or 0, 0)
     facets = employee_scope(request).filter(is_active=True)
+    page = list(qs[offset: offset + limit])
+    acks = latest_acks(e.id for e in page)
     return Response({
         "count": total,
-        "results": [employee_payload(e) for e in qs[offset: offset + limit]],
+        "results": [employee_payload(e, ack=acks.get(e.id)) for e in page],
         "projects": sorted(x for x in facets.values_list("project", flat=True).distinct() if x),
         "departments": sorted(x for x in facets.values_list("department", flat=True).distinct() if x),
     })
@@ -516,7 +585,21 @@ def employee_detail(request, pk):
     if changes:
         log(request, Log.UPDATE, branch=emp.branch, entity="employee", changes=changes,
             summary=f"Xodim: {emp.full_name} · {', '.join(changes)}")
-    return Response(employee_payload(emp, emp.items.filter(is_deleted=False).count()))
+    return Response(employee_payload(emp, emp.items.filter(is_deleted=False).count(), latest_acks([emp.id]).get(emp.id)))
+
+
+def filter_by_ack(qs, state):
+    """signed — imzolagan; pending — havola yuborilgan, kutilmoqda; none — hali havola yo'q (qurilmasi bor xodimlar)."""
+    from .models import Ack
+    signed = Ack.objects.filter(status=Ack.SIGNED).values("employee_id")
+    pending = Ack.objects.filter(status=Ack.PENDING).values("employee_id")
+    if state == "signed":
+        return qs.filter(pk__in=signed)
+    if state == "pending":
+        return qs.filter(pk__in=pending).exclude(pk__in=signed)
+    if state == "none":
+        return qs.filter(items__is_deleted=False).exclude(pk__in=signed).exclude(pk__in=pending).distinct()
+    return qs
 
 
 # ====================================================================== filiallar
@@ -601,7 +684,7 @@ def catalog_save(request):
     if kind == "org":
         model, fields = Org, {"name": _s(data.get("name"), 120), "code": _s(data.get("code"), 60)}
     elif kind == "location":
-        model, fields = Location, {"name": _s(data.get("name"), 120)}
+        model, fields = Location, {"name": _s(data.get("name"), 120), "name_ru": _s(data.get("name_ru"), 120)}
     elif kind == "device_type":
         brands = data.get("brands") or []
         if isinstance(brands, str):
@@ -610,7 +693,9 @@ def catalog_save(request):
             "name": _s(data.get("name"), 120), "group": _s(data.get("group"), 60),
             "description": _s(data.get("description")), "serial_hint": _s(data.get("serial_hint")),
             "extra_hint": _s(data.get("extra_hint")), "brands": [_s(b, 80) for b in brands if _s(b, 80)][:30],
-            "is_active": bool(data.get("is_active", True))}
+            "is_active": bool(data.get("is_active", True)), "name_ru": _s(data.get("name_ru"), 120),
+            "description_ru": _s(data.get("description_ru")), "serial_hint_ru": _s(data.get("serial_hint_ru")),
+            "extra_hint_ru": _s(data.get("extra_hint_ru"))}
     else:
         return bad("Noma'lum katalog turi.")
     obj = model.objects.filter(pk=pk).first() if pk else None
@@ -644,7 +729,8 @@ def catalog_save(request):
     log(request, Log.UPDATE if pk else Log.CREATE, entity="catalog", summary=f"Katalog: {kind} {obj.name}")
     if kind == "device_type":
         return Response(type_payload(obj))
-    return Response({"id": obj.id, "name": obj.name, **({"code": obj.code} if kind == "org" else {})})
+    return Response({"id": obj.id, "name": obj.name, **({"code": obj.code} if kind == "org" else {}),
+                     **({"name_ru": obj.name_ru} if kind == "location" else {})})
 
 
 # ====================================================================== foydalanuvchilar (boshqaruvchi)
@@ -901,6 +987,18 @@ def compute_stats(request):
     emp = {r["branch_id"]: r for r in emp_qs.values("branch_id").annotate(
         n=Count("id", distinct=True),
         with_dev=Count("id", distinct=True, filter=Q(items__is_deleted=False, items__isnull=False)))}
+    from .models import Ack
+    ack_qs = Ack.objects.filter(employee__is_active=True)
+    if ids is not None:
+        ack_qs = ack_qs.filter(employee__branch_id__in=ids)
+    signed_emps = set(ack_qs.filter(status=Ack.SIGNED).values_list("employee_id", flat=True))
+    pending_emps = set(ack_qs.filter(status=Ack.PENDING).values_list("employee_id", flat=True)) - signed_emps
+    emp_branch = dict(Employee.objects.filter(pk__in=signed_emps | pending_emps).values_list("id", "branch_id"))
+    ack_signed, ack_pending = {}, {}
+    for eid in signed_emps:
+        ack_signed[emp_branch.get(eid)] = ack_signed.get(emp_branch.get(eid), 0) + 1
+    for eid in pending_emps:
+        ack_pending[emp_branch.get(eid)] = ack_pending.get(emp_branch.get(eid), 0) + 1
     collectors = {}
     for acc in Access.objects.filter(level=COLLECTOR, user__is_active=True).prefetch_related("branches"):
         for b in acc.branches.all():
@@ -921,6 +1019,7 @@ def compute_stats(request):
             "coverage": round(100 * e.get("with_dev", 0) / e["n"]) if e.get("n") else None,
             "photo_pct": round(100 * photo_rows.get(b.id, 0) / rows) if rows else None,
             "collectors": collectors.get(b.id, 0), "flag": activity_flag(b, rows, last_at, now),
+            "acks_signed": ack_signed.get(b.id, 0), "acks_pending": ack_pending.get(b.id, 0),
         })
 
     # Kunlik faollik (tarixdan)
@@ -983,6 +1082,8 @@ def compute_stats(request):
         "broken": sum(r["broken"] for r in branch_rows), "missing": sum(r["missing"] for r in branch_rows),
         "deleted": Item.objects.filter(is_deleted=True, **({} if ids is None else {"branch_id__in": ids})).count(),
         "collectors": Access.objects.filter(level=COLLECTOR, user__is_active=True).count(),
+        "acks_signed": sum(r["acks_signed"] for r in branch_rows),
+        "acks_pending": sum(r["acks_pending"] for r in branch_rows),
         "collectors_logged_in": Access.objects.filter(level=COLLECTOR, user__is_active=True,
                                                       user__last_login__isnull=False).count(),
     }

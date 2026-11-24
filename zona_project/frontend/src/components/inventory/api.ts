@@ -18,9 +18,10 @@ export interface Branch {
 export interface DeviceType {
   id: number; name: string; group: string; description: string; serial_hint: string; extra_hint: string;
   brands: string[]; is_active: boolean; order: number;
+  name_ru: string; description_ru: string; serial_hint_ru: string; extra_hint_ru: string;
 }
 export interface Boot {
-  me: InvMe; orgs: Org[]; branches: Branch[]; locations: { id: number; name: string }[]; device_types: DeviceType[];
+  me: InvMe; orgs: Org[]; branches: Branch[]; locations: { id: number; name: string; name_ru: string }[]; device_types: DeviceType[];
   conditions: { value: Condition; label: string }[]; branch_statuses: { value: BranchStatus; label: string }[];
   levels: { value: Level; label: string }[];
 }
@@ -44,8 +45,11 @@ export interface ItemInput {
   photos: number[];
 }
 export interface Page<T> { count: number; page: number; page_size: number; results: T[]; quantity?: number }
+export type AckStatus = "pending" | "signed" | "revoked";
+export interface AckBrief { id: number; status: AckStatus; created_at: string; opened_at: string | null; signed_at: string | null; issues: number }
 export interface Employee {
-  id: number; full_name: string; position: string; phone: string; org: number | null; org_name: string;
+  id: number; full_name: string; position: string; phone: string; telegram: string; ack: AckBrief | null;
+  org: number | null; org_name: string;
   branch: number | null; branch_name: string; project: string; department: string; note: string;
   is_active: boolean; source: string; devices: number;
 }
@@ -59,6 +63,7 @@ export interface BranchStat extends Branch {
   rows: number; qty: number; broken: number; missing: number; no_serial: number; no_employee: number;
   with_photo: number; today: number; week: number; last_at: string | null; employees: number;
   employees_with_devices: number; coverage: number | null; photo_pct: number | null; collectors: number; flag: Flag;
+  acks_signed: number; acks_pending: number;
 }
 export interface Stats {
   generated_at: string; days: number;
@@ -66,7 +71,7 @@ export interface Stats {
     rows: number; qty: number; branches: number; done: number; active: number; planned: number; slow: number;
     employees: number; employees_total: number; employees_with_devices: number; today: number; week: number;
     no_serial: number; no_employee: number; with_photo: number; broken: number; missing: number; deleted: number;
-    collectors: number; collectors_logged_in: number;
+    collectors: number; collectors_logged_in: number; acks_signed: number; acks_pending: number;
   };
   branches: BranchStat[];
   daily: { date: string; create: number; update: number; delete: number }[];
@@ -82,6 +87,19 @@ export interface ImportResult {
   created?: number; updated?: number; unchanged?: number; employees_created: number; employees_updated: number;
   errors: { sheet?: string; row: number; message: string }[]; warnings: { sheet?: string; row: number; message: string }[];
   dry_run: boolean;
+}
+
+export interface AckItem {
+  id: number; inv_number: string; type: string; type_ru: string; group: string; brand: string; model: string; serial: string;
+  quantity: number; condition: Condition; condition_label: string; location: string; branch: string;
+  photos: { thumb: string; url: string }[]; result?: { id: number; ok: boolean; comment: string } | null;
+}
+export interface Ack {
+  id: number; token?: string; path: string; status: AckStatus; employee: number; employee_name: string; position: string;
+  phone: string; telegram: string; branch: string; branch_id: number | null; items_count: number; issues: number;
+  created_at: string; created_by?: string; opened_at: string | null; signed_at: string | null; signer_name: string;
+  outdated: boolean; items?: AckItem[]; comment?: string; signature_url?: string; ip?: string; user_agent?: string;
+  lang?: string; company?: string;
 }
 
 const B = "inventory/";
@@ -160,6 +178,15 @@ export const inv = {
   deleteUser: (id: number) => del<null>(`users/${id}/`),
   resetPassword: (id: number) => post<{ password: string; username: string }>(`users/${id}/reset-password/`, {}),
   generateUsers: () => post<{ created: { username: string; password: string; branch: string }[] }>("users/generate/", {}),
+
+  createAck: (employeeId: number) => post<Ack>(`employees/${employeeId}/ack/`),
+  acks: (params: Params) => get<{ count: number; results: Ack[] }>("acks/", clean(params)),
+  ack: (id: number) => get<Ack>(`acks/${id}/`),
+  revokeAck: (id: number) => post<Ack>(`acks/${id}/revoke/`),
+  acksBulk: (branch?: number | null) => post<{ created: number; skipped: number }>("acks/bulk/", { branch: branch ?? undefined }),
+  publicAck: (token: string) => get<Ack>(`public/ack/${token}/`),
+  publicSign: (token: string, body: { name: string; signature: string; items: { id: number; ok: boolean; comment: string }[]; comment: string; lang: string }) =>
+    post<Ack>(`public/ack/${token}/sign/`, body),
 
   logs: (params: Params) => get<Page<LogRow> & { users: { id: number; name: string }[] }>("logs/", clean(params)),
   stats: (params: Params = {}) => get<Stats>("stats/", clean(params)),

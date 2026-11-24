@@ -1,15 +1,15 @@
 "use client";
-/* eslint-disable react/no-unescaped-entities -- o'zbekcha matnlardagi apostrof (o'z, ma'lumot) */
 
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNowStrict } from "date-fns";
-import { uz } from "date-fns/locale";
+import { ru, uz } from "date-fns/locale";
 import { Check, ChevronDown, Loader2, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
 import { inv, type BranchStatus, type Condition, type Flag } from "./api";
+import { condLabel, currentLang, statusLabel, tr, useLang, useT } from "./i18n";
 
 /* ------------------------------------------------------------------ ma'lumot */
 export function useBoot() {
@@ -36,7 +36,7 @@ export function matches(text: string, query: string): boolean {
 export function ago(value: string | null | undefined): string {
   if (!value) return "—";
   try {
-    return formatDistanceToNowStrict(new Date(value), { addSuffix: true, locale: uz });
+    return formatDistanceToNowStrict(new Date(value), { addSuffix: true, locale: currentLang() === "ru" ? ru : uz });
   } catch {
     return "—";
   }
@@ -44,7 +44,7 @@ export function ago(value: string | null | undefined): string {
 export function dt(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
-  return `${d.toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
+  return `${d.toLocaleDateString(currentLang() === "ru" ? "ru-RU" : "uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 /* ------------------------------------------------------------------ telefon "orqaga" tugmasi oynani yopadi */
@@ -100,6 +100,7 @@ export function Overlay({ open, onClose, title, subtitle, children, footer, wide
   open: boolean; onClose: () => void; title: ReactNode; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode;
   wide?: boolean; z?: number;
 }) {
+  const t = useT();
   useBackClose(open, onClose);
   useEffect(() => {
     if (!open) return;
@@ -118,7 +119,7 @@ export function Overlay({ open, onClose, title, subtitle, children, footer, wide
             <div className="truncate text-base font-semibold">{title}</div>
             {subtitle && <div className="truncate text-xs text-muted-foreground">{subtitle}</div>}
           </div>
-          <button onClick={onClose} className="grid size-10 place-items-center rounded-full hover:bg-muted" aria-label="Yopish">
+          <button onClick={onClose} className="grid size-10 place-items-center rounded-full hover:bg-muted" aria-label={t("Yopish")}>
             <X className="size-5" />
           </button>
         </div>
@@ -132,15 +133,17 @@ export function Overlay({ open, onClose, title, subtitle, children, footer, wide
 /* ------------------------------------------------------------------ qidiruvli tanlov */
 export interface Opt { value: string; label: string; hint?: string; group?: string }
 
-export function Picker({ value, options, onChange, placeholder = "Tanlang", title, allowCustom, onCreate, createLabel,
+export function Picker({ value, options, onChange, placeholder, title, allowCustom, onCreate, createLabel,
   clearable = true, disabled, icon, invalid, className }: {
   value: string; options: Opt[]; onChange: (value: string, opt?: Opt) => void; placeholder?: string; title: string;
   allowCustom?: boolean; onCreate?: (text: string) => Promise<void> | void; createLabel?: string; clearable?: boolean;
   disabled?: boolean; icon?: ReactNode; invalid?: boolean; className?: string;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
+  const create = createLabel ?? t("Yangi qo'shish");
   const current = options.find((o) => o.value === value);
   const label = current?.label ?? (allowCustom && value ? value : "");
   const filtered = useMemo(() => options.filter((o) => matches(`${o.label} ${o.hint ?? ""} ${o.group ?? ""}`, q)), [options, q]);
@@ -162,10 +165,10 @@ export function Picker({ value, options, onChange, placeholder = "Tanlang", titl
         className={cn("flex h-12 w-full min-w-0 items-center gap-2 rounded-xl border bg-card px-3 text-left text-[15px] shadow-xs md:h-10 md:rounded-lg md:text-sm transition-colors hover:border-primary/40 disabled:opacity-60",
           invalid && "border-destructive ring-2 ring-destructive/15", className)}>
         {icon && <span className="shrink-0 text-muted-foreground">{icon}</span>}
-        <span className={cn("min-w-0 flex-1 truncate", !label && "text-muted-foreground")}>{label || placeholder}</span>
+        <span className={cn("min-w-0 flex-1 truncate", !label && "text-muted-foreground")}>{label || placeholder || t("Tanlang")}</span>
         {clearable && value && !disabled ? (
           <span role="button" tabIndex={-1} onClick={(e) => { e.stopPropagation(); onChange(""); }}
-            className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted" aria-label="Tozalash">
+            className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted" aria-label={t("Tozalash")}>
             <X className="size-4" />
           </span>
         ) : <ChevronDown className="size-4 shrink-0 text-muted-foreground" />}
@@ -174,7 +177,7 @@ export function Picker({ value, options, onChange, placeholder = "Tanlang", titl
         <div className="sticky top-0 z-10 border-b bg-background p-3">
           <div className="flex h-12 items-center gap-2 rounded-xl border bg-card px-3 focus-within:border-primary">
             <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Qidirish…"
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Qidirish…")}
               className="h-full min-w-0 flex-1 bg-transparent text-base outline-none" />
             {q && <button onClick={() => setQ("")} className="text-muted-foreground"><X className="size-4" /></button>}
           </div>
@@ -182,7 +185,7 @@ export function Picker({ value, options, onChange, placeholder = "Tanlang", titl
         <div className="p-2 pb-6">
           {q && !exact && allowCustom && (
             <button onClick={() => pick(q.trim())} className="mb-1 flex w-full items-center gap-3 rounded-xl border border-dashed border-primary/40 px-3 py-3 text-left text-primary hover:bg-primary/5">
-              <Plus className="size-4" /><span>«{q.trim()}» deb yozish</span>
+              <Plus className="size-4" /><span>{t("«{q}» deb yozish", { q: q.trim() })}</span>
             </button>
           )}
           {q && !exact && onCreate && (
@@ -191,12 +194,12 @@ export function Picker({ value, options, onChange, placeholder = "Tanlang", titl
               try { await onCreate(q.trim()); close(); } finally { setBusy(false); }
             }} className="mb-1 flex w-full items-center gap-3 rounded-xl border border-dashed border-primary/40 px-3 py-3 text-left text-primary hover:bg-primary/5">
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-              <span>{createLabel ?? "Yangi qo'shish"}: «{q.trim()}»</span>
+              <span>{create}: «{q.trim()}»</span>
             </button>
           )}
           {!q && onCreate && (
             <div className="mb-2 rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-              Ro'yxatda yo'q bo'lsa — ismini yozing, pastda «{createLabel ?? "Yangi qo'shish"}» chiqadi.
+              {t("Ro'yxatda yo'q bo'lsa — ismini yozing, pastda «{action}» chiqadi.", { action: create })}
             </div>
           )}
           {shown.map((o, i) => {
@@ -217,10 +220,10 @@ export function Picker({ value, options, onChange, placeholder = "Tanlang", titl
             );
           })}
           {filtered.length > shown.length && (
-            <div className="px-3 py-3 text-center text-xs text-muted-foreground">Yana {filtered.length - shown.length} ta — qidiruvni aniqlashtiring</div>
+            <div className="px-3 py-3 text-center text-xs text-muted-foreground">{t("Yana {n} ta — qidiruvni aniqlashtiring", { n: filtered.length - shown.length })}</div>
           )}
           {!filtered.length && !(q && (allowCustom || onCreate)) && (
-            <div className="px-3 py-10 text-center text-sm text-muted-foreground">Hech narsa topilmadi</div>
+            <div className="px-3 py-10 text-center text-sm text-muted-foreground">{t("Hech narsa topilmadi")}</div>
           )}
         </div>
       </Overlay>
@@ -305,8 +308,9 @@ export const COND_STYLE: Record<Condition, string> = {
 export const COND_COLOR: Record<Condition, string> = {
   ok: "#0ca30c", repair: "#fab219", broken: "#d03b3b", spare: "#2a78d6", missing: "#8a8a85",
 };
-export function CondBadge({ value, label }: { value: Condition; label: string }) {
-  return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", COND_STYLE[value])}>{label}</span>;
+export function CondBadge({ value }: { value: Condition; label?: string }) {
+  const lang = useLang();
+  return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", COND_STYLE[value])}>{condLabel(value, lang)}</span>;
 }
 
 export const STATUS_STYLE: Record<BranchStatus, string> = {
@@ -314,8 +318,9 @@ export const STATUS_STYLE: Record<BranchStatus, string> = {
   active: "bg-blue-500/12 text-blue-700 dark:text-blue-400",
   done: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400",
 };
-export function StatusBadge({ value, label }: { value: BranchStatus; label: string }) {
-  return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", STATUS_STYLE[value])}>{label}</span>;
+export function StatusBadge({ value }: { value: BranchStatus; label?: string }) {
+  const lang = useLang();
+  return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", STATUS_STYLE[value])}>{statusLabel(value, lang)}</span>;
 }
 
 export const FLAG: Record<Flag, { label: string; cls: string; dot: string }> = {
@@ -326,10 +331,11 @@ export const FLAG: Record<Flag, { label: string; cls: string; dot: string }> = {
   idle: { label: "Boshlanmagan", cls: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300", dot: "bg-zinc-400" },
 };
 export function FlagBadge({ value }: { value: Flag }) {
+  useLang();  // til almashsa qayta chiziladi
   const f = FLAG[value];
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold", f.cls)}>
-      <span className={cn("size-1.5 rounded-full", f.dot)} />{f.label}
+      <span className={cn("size-1.5 rounded-full", f.dot)} />{tr(f.label)}
     </span>
   );
 }

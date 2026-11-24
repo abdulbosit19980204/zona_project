@@ -52,6 +52,7 @@ class Location(models.Model):
     """Qayerda turibdi: Ofis, Ombor, Kassa... (ro'yxatda yo'q joyni ham yozish mumkin)."""
 
     name = models.CharField("Nomi", max_length=120, unique=True)
+    name_ru = models.CharField("Nomi (rus)", max_length=120, blank=True, default="")
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -70,6 +71,11 @@ class DeviceType(models.Model):
     serial_hint = models.CharField("Seriya raqami qayerda?", max_length=255, blank=True)
     extra_hint = models.CharField("Qo'shimcha nima yozish kerak", max_length=255, blank=True)
     brands = models.JSONField("Brendlar", default=list, blank=True)
+    # rus tilida (filial xodimlarining bir qismi faqat ruschani biladi)
+    name_ru = models.CharField("Qurilma turi (rus)", max_length=120, blank=True, default="")
+    description_ru = models.CharField("Bu nima? (rus)", max_length=255, blank=True, default="")
+    serial_hint_ru = models.CharField("Seriya raqami qayerda? (rus)", max_length=255, blank=True, default="")
+    extra_hint_ru = models.CharField("Qo'shimcha (rus)", max_length=255, blank=True, default="")
     is_active = models.BooleanField("Faol", default=True)
     order = models.PositiveIntegerField(default=0)
 
@@ -90,6 +96,7 @@ class Employee(models.Model):
     full_name = models.CharField("F.I.Sh.", max_length=150)
     position = models.CharField("Lavozimi", max_length=120, blank=True)
     phone = models.CharField("Telefon", max_length=40, blank=True)
+    telegram = models.CharField("Telegram", max_length=64, blank=True, default="")  # username, @ siz
     org = models.ForeignKey(Org, verbose_name="Tashkilot", null=True, blank=True, on_delete=models.SET_NULL,
                             related_name="employees")
     branch = models.ForeignKey(Branch, verbose_name="Filial", null=True, blank=True, on_delete=models.SET_NULL,
@@ -198,8 +205,9 @@ class Log(models.Model):
     """Kim, qachon, qaysi filialda nima qildi — tarix va statistika shu jadvaldan."""
 
     CREATE, UPDATE, DELETE, RESTORE, IMPORT, STATUS, LOGIN = "create", "update", "delete", "restore", "import", "status", "login"
+    SIGN = "sign"
     ACTIONS = [(CREATE, "Qo'shdi"), (UPDATE, "O'zgartirdi"), (DELETE, "O'chirdi"), (RESTORE, "Tikladi"),
-               (IMPORT, "Import"), (STATUS, "Holat"), (LOGIN, "Kirdi")]
+               (IMPORT, "Import"), (STATUS, "Holat"), (LOGIN, "Kirdi"), (SIGN, "Imzoladi")]
 
     at = models.DateTimeField(auto_now_add=True, db_index=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
@@ -216,3 +224,37 @@ class Log(models.Model):
                    models.Index(fields=["user", "at"], name="inv_log_user_at")]
         verbose_name = "Tarix yozuvi"
         verbose_name_plural = "Tarix"
+
+
+class Ack(models.Model):
+    """Xodimning tasdiqnomasi: unga biriktirilgan qurilmalar ro'yxatini havola orqali ochib, imzo bilan tasdiqlaydi.
+
+    Ro'yxat havola yaratilgan paytdagi holatda saqlanadi (items) — keyin qurilmalar o'zgarsa, tasdiqnoma "eskirgan"
+    deb ko'rsatiladi va yangisini yuborish mumkin.
+    """
+
+    PENDING, SIGNED, REVOKED = "pending", "signed", "revoked"
+    STATUSES = [(PENDING, "Kutilmoqda"), (SIGNED, "Imzolangan"), (REVOKED, "Bekor qilingan")]
+
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="acks")
+    branch = models.ForeignKey(Branch, null=True, blank=True, on_delete=models.SET_NULL, related_name="acks")
+    token = models.CharField(max_length=64, unique=True)
+    status = models.CharField(max_length=10, choices=STATUSES, default=PENDING)
+    items = models.JSONField(default=list, blank=True)  # [{id, inv_number, type, brand, model, serial, quantity, ...}]
+    result = models.JSONField(default=list, blank=True)  # [{id, ok, comment}]
+    comment = models.TextField(blank=True)
+    signer_name = models.CharField(max_length=150, blank=True)
+    signature = models.CharField(max_length=400, blank=True)  # PNG fayl yo'li
+    lang = models.CharField(max_length=4, blank=True)
+    ip = models.CharField(max_length=64, blank=True)
+    user_agent = models.CharField(max_length=300, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    opened_at = models.DateTimeField(null=True, blank=True)
+    signed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        verbose_name = "Tasdiqnoma"
+        verbose_name_plural = "Tasdiqnomalar"

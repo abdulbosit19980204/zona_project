@@ -141,6 +141,15 @@ ularga yopiq. Eksport: CSV, Excel va **asl shablon formatida** (formulalar, Xulo
 import — to'ldirilgan shablon yoki eksport qilingan jadval (avval tekshiruv, keyin tasdiq). Rasmlar baza yonidagi
 `inventory-media/` da (`ZONA_INVENTORY_MEDIA`), siqilgan holda; havolalari imzolangan.
 
+**Tillar:** o'zbek va rus (sarlavhadagi UZ/RU tugmasi; katalog ham ikki tilda). Tarjimalar —
+`frontend/src/components/inventory/i18n-ru.ts`, to'liqligini tekshirish: `node frontend/scripts/inv-i18n-check.mjs`.
+
+**Xodim tasdig'i (imzo):** qurilma kiritilganda xodimning telefoni va Telegrami yoziladi. «Tasdiqlash» bo'limida
+xodimga shaxsiy havola (`/ack/<token>`, loginsiz) yaratiladi va Telegram/SMS orqali yuboriladi. Xodim o'zidagi
+qurilmalarni rasmlari bilan ko'radi, har birini «menda bor / yo'q» deb belgilaydi, barmog'i bilan imzo chizadi.
+Natija — imzolangan dalolatnoma (chop etish / PDF), e'tirozlar ro'yxati va analitikadagi «imzolagan xodimlar» ko'rsatkichi.
+Qurilmalar keyin o'zgarsa, tasdiqnoma «eskirgan» deb belgilanadi va yangi havola yuboriladi.
+
 ```bash
 python backend/manage.py inv_setup --logins --out /root/inventarizatsiya_loginlar.xlsx   # filial loginlari + fayl
 ```
