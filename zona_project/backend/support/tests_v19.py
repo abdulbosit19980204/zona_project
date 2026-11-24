@@ -162,16 +162,18 @@ class PrbcSilentTests(FlowBase):
     def q(self, mid, text):
         return Message.objects.create(bot=self.bot, group=self.g, chat_id=self.g.chat_id, message_id=mid, user=self.u, text=text)
 
-    def test_unanswered_command_is_removed_from_group_and_sent_to_admin_chat(self):
+    def test_unanswered_command_becomes_group_instruction_for_staff(self):
+        # xodim botga yozmagan — shaxsiy xabar bormaydi: buyruq guruhda xodimni belgilagan ko'rsatmaga aylanadi
         q = self.q(6, "kassa apparati chek chiqarmayapti")
         t = tasks.maybe_create(q, Decision("", None, 0, "", True, [{"id": self.said.id}]), self.tg)
         SupportTask.objects.filter(pk=t.pk).update(sent_at=timezone.now() - timezone.timedelta(minutes=5))
         tasks.check_unanswered(self.tg)
         t.refresh_from_db()
-        self.assertIn(t.post_id, self.tg.deleted)  # guruhdagi buyruq o'chirildi
-        self.assertEqual(self.tg.sent[-1]["chat"], 555)
-        self.assertIn("/vazifa", self.tg.sent[-1]["text"])
-        self.assertIn("admin chati", t.reply)
+        edit = self.tg.edits[-1]
+        self.assertEqual((edit["chat"], edit["id"]), (self.g.chat_id, t.post_id))
+        self.assertIn("@test_said", edit["text"])
+        self.assertFalse([m for m in self.tg.sent if m["chat"] == 555])  # admin chatiga emas
+        self.assertIn("ko'rsatmaga aylantirildi", t.reply)
 
     def test_after_repeated_silence_no_command_is_posted_in_group(self):
         for i in range(3):
@@ -180,8 +182,10 @@ class PrbcSilentTests(FlowBase):
         q = self.q(30, "printer chek chiqarmayapti umuman")
         t = tasks.maybe_create(q, Decision("", None, 0, "", True, [{"id": self.said.id}]), self.tg)
         self.assertEqual(t.status, SupportTask.REMINDED)
-        self.assertFalse([m for m in self.tg.sent if m["chat"] == self.g.chat_id])  # ochiq guruhga hech narsa
-        self.assertTrue([m for m in self.tg.sent if m["chat"] == 555])
+        in_group = [m for m in self.tg.sent if m["chat"] == self.g.chat_id]
+        self.assertFalse([m for m in in_group if "/vazifa@" in m["text"]])  # PRBC buyrug'i yozilmaydi
+        self.assertTrue([m for m in in_group if "@test_said" in m["text"] and m["reply_to"] == 30])  # xodimga — guruhda
+        self.assertFalse([m for m in self.tg.sent if m["chat"] == 555])
 
 
 class AnswerLanguageTests(FlowBase):

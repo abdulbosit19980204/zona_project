@@ -312,27 +312,33 @@ def group_hint(assignee, lang):
             f"<code>/vazifa Sarlavha</code> yozing")
 
 
-def _notify_staff(tg, q, html_text, assignee, link=""):
-    """Ko'rsatmani xodimning o'ziga yetkazish: shaxsiy xabar (botni ochgan bo'lsa), bo'lmasa — bot admin chati.
-    Qaytaradi: qayerga yuborildi ("shaxsiy xabar" / "admin chati") yoki "" (hech qayerga)."""
-    buttons = [[{"text": "↗ Savolga o'tish", "url": link}]] if link else None
+_DM_BLOCKED = {}  # username -> vaqt: bot shaxsiy yoza olmagan (xodim botga /start yozmagan) — bir kun qayta urinilmaydi
+DM_RETRY = 86400
+
+
+def _dm(tg, q, assignee, html_text, link=""):
+    """Xodimga shaxsiy xabar. Telegram bot birinchi bo'lib yoza olmaydi (xodim botni ochmagan bo'lsa) — False."""
+    import time
+    u = (assignee or "").lstrip("@").lower()
+    if not u or time.time() - _DM_BLOCKED.get(u, 0) < DM_RETRY:
+        return False
     chat = staff_chat_id(assignee)
-    if chat:
-        try:
-            tg.send(chat, html_text, buttons=buttons)
-            if q.photo_file_id and hasattr(tg, "copy"):
-                tg.copy(chat, q.chat_id, q.message_id)
-            return "shaxsiy xabar"
-        except Exception:  # noqa: BLE001 — xodim botni ochmagan (403)
-            pass
-    admin = q.bot.admin_chat_id if q.bot_id else None
-    if admin:
-        try:
-            tg.send(admin, html_text, buttons=buttons)
-            return "admin chati"
-        except Exception:  # noqa: BLE001
-            pass
-    return ""
+    if not chat:
+        return False
+    try:
+        tg.send(chat, html_text, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
+        if q.photo_file_id and hasattr(tg, "copy"):
+            tg.copy(chat, q.chat_id, q.message_id)
+        return True
+    except Exception:  # noqa: BLE001 — 403 "bot can't initiate conversation" / "chat not found"
+        _DM_BLOCKED[u] = time.time()
+        return False
+
+
+def _notify_staff(tg, q, html_text, assignee, link=""):
+    """Ko'rsatmani xodimning o'ziga: shaxsiy xabar (botni ochgan bo'lsa). Bo'lmasa — "" va chaqiruvchi guruhda
+    (savolga reply qilib, xodimni belgilab) yozadi: admin chatiga emas — xodim ko'rsin."""
+    return "shaxsiy xabar" if _dm(tg, q, assignee, html_text, link) else ""
 
 
 def remind(q, d, title, assignee, reason, tg, s, group=None):
@@ -345,30 +351,23 @@ def remind(q, d, title, assignee, reason, tg, s, group=None):
         t.save(update_fields=["error"])
         return t
     notes = []
+    dm_ok = bool(s.task_remind_dm) and _dm(tg, q, assignee, t.text, link)
     if s.task_remind_dm:
-        chat = staff_chat_id(assignee)
-        try:
-            if not chat:
-                raise ValueError("xodim Telegram ID'si noma'lum")
-            buttons = [[{"text": "↗ Savolga o'tish", "url": link}]] if link else None
-            tg.send(chat, t.text, buttons=buttons)
-            if q.photo_file_id and hasattr(tg, "copy"):
-                tg.copy(chat, q.chat_id, q.message_id)
-            notes.append("shaxsiy xabar yuborildi")
-        except Exception as e:  # noqa: BLE001 — xodim botni ochmagan bo'lishi mumkin (403)
-            notes.append(f"shaxsiy xabar yuborilmadi: {str(e)[:120]}")
-    if group is False and not any(n == "shaxsiy xabar yuborildi" for n in notes) and q.bot_id and q.bot.admin_chat_id:
-        try:  # guruhga yozilmaydi — shaxsiy xabar bormagan bo'lsa ko'rsatma admin chatiga
-            tg.send(q.bot.admin_chat_id, t.text, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
-            notes.append("ko'rsatma admin chatiga yuborildi")
-        except Exception as e:  # noqa: BLE001
-            notes.append(f"admin chatiga yuborilmadi: {str(e)[:120]}")
-    if s.task_remind_group and group is not False:
+        notes.append("shaxsiy xabar yuborildi" if dm_ok else "shaxsiy xabar yuborilmadi (xodim botga yozmagan)")
+    # guruhda — savolga reply, xodim belgilanadi (shaxsiy xabar bormagan bo'lsa, guruh eslatmasi o'chiq bo'lsa ham):
+    # xodim o'zi ko'radi; admin chatiga faqat guruhga ham yozib bo'lmasa
+    if (s.task_remind_group and group is not False) or not dm_ok:
         try:
             tg.send(q.chat_id, group_hint(assignee, q.lang), reply_to=q.message_id)
             notes.append("guruhda eslatildi")
         except Exception as e:  # noqa: BLE001
             notes.append(f"guruh eslatmasi yuborilmadi: {str(e)[:120]}")
+            if not dm_ok and q.bot_id and q.bot.admin_chat_id:
+                try:
+                    tg.send(q.bot.admin_chat_id, t.text, buttons=[[{"text": "↗ Savolga o'tish", "url": link}]] if link else None)
+                    notes.append("ko'rsatma admin chatiga yuborildi")
+                except Exception as e2:  # noqa: BLE001
+                    notes.append(f"admin chatiga yuborilmadi: {str(e2)[:120]}")
     t.reply = "; ".join(notes)
     t.sent_at = timezone.now()
     t.save(update_fields=["reply", "sent_at"])
