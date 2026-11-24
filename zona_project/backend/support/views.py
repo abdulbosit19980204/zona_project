@@ -86,8 +86,14 @@ def settings_view(request):
             raw = data.get("category_owners") or {}
             if not isinstance(raw, dict):
                 return Response({"detail": "category_owners: {toifa: xodim id}"}, status=400)
-            clean = {k: int(v) for k, v in raw.items() if k in CATEGORIES and str(v).isdigit()}
-            if Member.objects.filter(pk__in=clean.values()).count() != len(set(clean.values())):
+            from zona.models import TeamContact
+            # qiymat: xodim id (12) yoki jamoa a'zosi "c:34"
+            clean = {k: (int(v) if str(v).isdigit() else str(v)) for k, v in raw.items()
+                     if k in CATEGORIES and (str(v).isdigit() or (str(v).startswith("c:") and str(v)[2:].isdigit()))}
+            mids = {v for v in clean.values() if isinstance(v, int)}
+            cids = {int(v[2:]) for v in clean.values() if isinstance(v, str)}
+            if (Member.objects.filter(pk__in=mids).count() != len(mids)
+                    or TeamContact.objects.filter(pk__in=cids).count() != len(cids)):
                 return Response({"detail": "Xodim topilmadi"}, status=400)
             s.category_owners = clean or None
         s.full_clean()

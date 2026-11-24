@@ -374,8 +374,13 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {field(t("t_threadWindow"), t("t_threadWindowHint"),
             <Input type="number" min={0} max={240} value={f.thread_window} onChange={num("thread_window")}
               onBlur={() => toggle.mutate({ thread_window: f.thread_window })} />)}
-          {field(t("t_owners"), t("t_ownersHint"),
-            <CategoryOwners t={t} value={f.category_owners} onSave={(v) => { setF({ ...f, category_owners: v }); toggle.mutate({ category_owners: v }); }} />)}
+          <div className="grid gap-2 border-t py-3">
+            <div>
+              <div className="text-sm font-medium">{t("t_owners")}</div>
+              <p className="mt-0.5 text-xs text-muted-foreground">{t("t_ownersHint")}</p>
+            </div>
+            <CategoryOwners t={t} value={f.category_owners} onSave={(v) => { setF({ ...f, category_owners: v }); toggle.mutate({ category_owners: v }); }} />
+          </div>
           {sw("ask_first_prompt", t("t_askFirst"))}
           {sw("contact_lookup", t("t_contacts"), t("t_contactsHint"))}
         </Card>
@@ -554,23 +559,39 @@ function StaffSection({ t }: { t: ST }) {
 
 /* ---------------------------------------------------------------- guruh tarixi (MTProto, faqat o'qish) */
 /** Toifa bo'yicha mas'ul — butun tizimda ustun (masalan, barcha aksiya savollari — operatorga). Bo'sh — odatdagi mas'ul. */
-function CategoryOwners({ t, value, onSave }: { t: ST; value: Record<string, number> | null; onSave: (v: Record<string, number>) => void }) {
+/** Toifa mas'uli: xodimlar va jamoa a'zolari (Pro-target, supervayzerlar...) — jamoa bo'yicha guruhlangan ro'yxat.
+ *  Qiymat: xodim — id, jamoa a'zosi — "c:<id>". */
+function CategoryOwners({ t, value, onSave }: {
+  t: ST; value: Record<string, number | string> | null; onSave: (v: Record<string, number | string>) => void;
+}) {
   const staff = useQuery({ queryKey: ["support", "staff"], queryFn: supportApi.staff, staleTime: 60_000 });
   const members = (staff.data ?? []).filter((r) => r.type === "member");
+  const teams = new Map<string, typeof members>();
+  for (const r of staff.data ?? []) {
+    if (r.type === "contact") teams.set(r.team || "—", [...(teams.get(r.team || "—") ?? []), r]);
+  }
   const cur = value ?? {};
-  const set = (cat: string, id: string) => {
+  const set = (cat: string, v: string) => {
     const next = { ...cur };
-    if (id) next[cat] = Number(id); else delete next[cat];
+    if (v) next[cat] = v.startsWith("c:") ? v : Number(v); else delete next[cat];
     onSave(next);
   };
   return (
-    <div className="grid gap-1.5">
+    <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-x-6">
       {SYS_CATEGORIES.map((c) => (
-        <label key={c} className="grid grid-cols-[minmax(120px,160px)_1fr] items-center gap-2 text-sm">
-          <span className={cn(cur[c] ? "font-medium" : "text-muted-foreground")}>{t(`cat_${c}` as SKey)}</span>
-          <select className="h-8 rounded-md border bg-background px-2 text-sm" value={cur[c] ?? ""} onChange={(e) => set(c, e.target.value)}>
+        <label key={c} className="grid grid-cols-[minmax(96px,140px)_minmax(0,1fr)] items-center gap-2 text-sm">
+          <span className={cn("leading-tight", cur[c] ? "font-medium" : "text-muted-foreground")}>{t(`cat_${c}` as SKey)}</span>
+          <select className="h-8 w-full min-w-0 truncate rounded-md border bg-background px-2 text-sm" value={cur[c] != null ? String(cur[c]) : ""}
+            onChange={(e) => set(c, e.target.value)}>
             <option value="">{t("ownerDefault")}</option>
-            {members.map((m) => <option key={m.id} value={m.id}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>)}
+            <optgroup label={t("ownerStaff")}>
+              {members.map((m) => <option key={`m${m.id}`} value={m.id}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>)}
+            </optgroup>
+            {[...teams.entries()].map(([team, list]) => (
+              <optgroup key={team} label={team}>
+                {list.map((m) => <option key={`c${m.id}`} value={`c:${m.id}`}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>)}
+              </optgroup>
+            ))}
           </select>
         </label>
       ))}

@@ -50,6 +50,20 @@ def again_text(q):
     return html.escape(AGAIN_TEXT[_lang(q)])
 
 
+DONE_WORDS = re.compile(
+    r"(?<!\w)(tayyor\w*|тайёр\w*|готово|готов|готова|сделано|сделал\w*|выполнено|выполнил\w*|исправил\w*|добавил\w*|"
+    r"подключил\w*|включил\w*|bajarildi|bajardim|qilindi|qildim|qo'shildi|qoshildi|qo'shdim|qoshdim|yoqildi|yoqdim|"
+    r"ulandi|uladim|ochildi|ochdim|to'g'rilandi|togrilandi|to'g'riladim)(?!\w)|[✅✔☑👍👌🙏]", re.IGNORECASE)
+
+
+def ack_word(text):
+    """Qisqa "tayyor / готово / ✅ / rahmat / bo'ldi" xabari (xodimdan ham, agentdan ham) — bot 👍 reaksiya bildiradi."""
+    t = (text or "").strip()
+    if not t or len(t) > 120 or "?" in t or len(re.findall(r"\w+", t)) > 8 or NOT_YET.search(t):
+        return False
+    return bool(THANKS.search(t) or DONE_WORDS.search(t))
+
+
 def feedback_kind(text):
     """Savol egasining qisqa xabari: "yes" (rahmat/готово/ishladi), "no" (ishlamadi/не помогло) yoki "" (boshqa)."""
     t = (text or "").strip()
@@ -268,7 +282,10 @@ def _member_mention(m):
     if m is None or m.is_team:
         return ""
     from .models import TgUser
-    u = TgUser.objects.filter(member=m).exclude(username="").first() or TgUser.objects.filter(member=m).first()
+    if getattr(m, "contact_id", None):
+        u = staff_users(m).exclude(username="").first() or staff_users(m).first()
+    else:
+        u = TgUser.objects.filter(member=m).exclude(username="").first() or TgUser.objects.filter(member=m).first()
     if u is not None:
         return _mention(u)
     return "@" + html.escape(m.telegram.lstrip("@")) if m.telegram else ""
@@ -477,6 +494,11 @@ def staff_users(member):
     from .models import TgUser
     if member is None:
         return TgUser.objects.none()
+    if getattr(member, "contact_id", None):  # jamoa a'zosi (ContactOwner)
+        q = Q(contact_id=member.contact_id)
+        if member.telegram:
+            q |= Q(username__iexact=member.telegram.lstrip("@"))
+        return TgUser.objects.filter(q)
     q = Q(member=member) | Q(contact__member=member)
     if member.telegram:
         q |= Q(username__iexact=member.telegram.lstrip("@"))
@@ -490,7 +512,7 @@ def queue_of(member, now=None):
     users = list(staff_users(member).values_list("pk", flat=True))
     since = now - timezone.timedelta(days=PERSIST_DAYS)
     open_q = (Message.objects.filter(kind=Message.QUESTION, source="live", created_at__gte=since)
-              .filter(Q(handler_id__in=users) | Q(entry__responsible=member))
+              .filter(Q(handler_id__in=users) | (Q(entry__responsible=member) if member.pk else Q(pk__in=[])))
               .filter(Q(resolution__in=[ASKED, NO, WORK]) | Q(status=Message.ESCALATED, resolution=""))
               .exclude(status=Message.IGNORED).count())
     from .workload import work_secs

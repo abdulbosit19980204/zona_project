@@ -78,3 +78,44 @@ class StaffDoneTests(OpenBase):
         self.assertEqual((m["bot"], m["staff_done"], m["unanswered"]), (2, 1, 0))
         ans = {v["id"]: k["answer"] for k, v in rows}
         self.assertEqual((ans[a.pk], ans[b.pk]), ("Xodim bajardi", "Bot"))
+
+
+class ContactOwnerTests(OpenBase):
+    def setUp(self):
+        super().setUp()
+        from zona.models import Member, TeamContact
+        team = Member.objects.create(name="Pro-target", role="jamoa", department=self.member.department, is_team=True)
+        self.guzel = TeamContact.objects.create(member=team, name="Guzel", role="Operator", telegram="guzel_pt")
+
+    def test_settings_accept_contact_and_engine_uses_it(self):
+        self.login("admin")
+        r = self.call("patch", "support/settings/", {"category_owners": {"promo": f"c:{self.guzel.id}", "login": self.member.id}})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(Settings.load().category_owners, {"promo": f"c:{self.guzel.id}", "login": self.member.id})
+        bad = self.call("patch", "support/settings/", {"category_owners": {"promo": "c:99999"}})
+        self.assertEqual(bad.status_code, 400)
+        m = engine.category_owner("promo")
+        self.assertEqual((m.name, m.telegram, m.contact_id), ("Guzel", "guzel_pt", self.guzel.id))
+        d = engine.apply_owner(engine.Decision("", None, 0, "", True, []), "aksiya chiqmayapti")
+        self.assertEqual((d.responsible[0]["telegram"], d.responsible[0]["contact"], d.owner), (["guzel_pt"], self.guzel.id, True))
+        from . import resolution
+        from .models import TgUser
+        u = TgUser.objects.create(tg_id=77, name="Guzel", username="guzel_pt")
+        self.assertEqual(list(resolution.staff_users(m)), [u])
+        self.assertEqual(resolution.queue_of(m)[0], 0)
+        from .runner import Handler, learn_owner
+        self.assertEqual(Handler._owner_member(d), m)
+        self.assertEqual(learn_owner("aksiya chiqmayapti").name, "Pro-target")  # bilim bazasida — jamoasi
+
+
+class AckReactionTests(OpenBase):
+    def test_done_and_thanks_words_react_for_everyone_once(self):
+        from . import resolution
+        for w in ["готово", "tayyor", "✅", "Рахмат", "Bajarildi", "qo'shildi 👍"]:
+            self.assertTrue(resolution.ack_word(w), w)
+        for w in ["tayyor emas?", "не готово, не работает", "aksiya qachon tayyor bo'ladi va nima uchun hali ham ochilmagan nuqtalar ko'p"]:
+            self.assertFalse(resolution.ack_word(w), w)
+        self.h().handle(group_msg(900, 7, "готово", username="test_op", reply_to=5))  # xodim
+        self.h().handle(group_msg(901, 1, "Рахмат", username="agent1", reply_to=900))  # agent
+        self.assertIn((-100, 900, "👍"), self.tg.reactions)
+        self.assertEqual(sum(1 for r in self.tg.reactions if r[1] == 901), 1)  # bitta reaksiya (ikki yo'l bo'lsa ham)

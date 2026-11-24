@@ -57,8 +57,8 @@ class ThanksTests(FlowBase):
         q = self.ask()
         self.h().handle(group_msg(42, 2, "Rahmat"))
         q.refresh_from_db()
-        self.assertEqual(q.resolution, "")
-        self.assertFalse(getattr(self.tg, "reactions", []))
+        self.assertEqual(q.resolution, "")  # boshqa odamning "rahmat"i savolni yopmaydi
+        self.assertIn((-100, 42, "👍"), self.tg.reactions)  # lekin 👍 — hammaga (ko'rildi)
 
     def test_not_helped_reopens_and_notifies(self):
         q = self.ask()

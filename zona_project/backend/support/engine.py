@@ -584,7 +584,8 @@ def _person(m):
     tgs = [c.telegram.lstrip("@") for c in m.contacts.all() if c.telegram] if m.is_team else []
     if m.telegram:
         tgs.insert(0, m.telegram.lstrip("@"))
-    return {"id": m.id, "name": m.name, "role": m.role, "level": m.level, "telegram": tgs[:4], "is_team": m.is_team}
+    return {"id": m.id, "name": m.name, "role": m.role, "level": m.level, "telegram": tgs[:4], "is_team": m.is_team,
+            "contact": getattr(m, "contact_id", None)}
 
 
 # ------------------------------------------------------------------ 4. AI
@@ -753,11 +754,48 @@ def _for_leader(d, raw, lang, text, ocr, asker, history, alert=""):
                     note="savol beruvchi supervayzer — supervayzerga yo'naltiruvchi javob berilmadi, xodimga uzatildi")
 
 
+class _NoContacts:
+    @staticmethod
+    def all():
+        return []
+
+
+class ContactOwner:
+    """Jamoa a'zosi (TeamContact: Guzel, Eldar...) mas'ul sifatida — Member o'rnida ishlatiladi (ism, Telegram, lavozim)."""
+
+    is_team = False
+    contacts = _NoContacts()
+
+    def __init__(self, c):
+        self.contact, self.contact_id, self.id, self.pk = c, c.pk, None, None
+        self.name = c.name
+        self.role = c.role or (c.member.role if c.member_id else "")
+        self.level = c.member.level if c.member_id else ""
+        self.telegram = c.telegram or ""
+        self.team = c.member if c.member_id else None
+
+    def __eq__(self, other):
+        return isinstance(other, ContactOwner) and other.contact_id == self.contact_id
+
+    def __hash__(self):
+        return hash(("contact", self.contact_id))
+
+
+def owner_of(value):
+    """Settings.category_owners qiymati: 12 (xodim) yoki "c:34" (jamoa a'zosi) -> Member / ContactOwner / None."""
+    from zona.models import TeamContact
+    if isinstance(value, str) and value.startswith("c:") and value[2:].isdigit():
+        c = TeamContact.objects.select_related("member").filter(pk=int(value[2:])).first()
+        return ContactOwner(c) if c else None
+    if value and str(value).isdigit():
+        return Member.objects.filter(pk=int(value)).prefetch_related("contacts").first()
+    return None
+
+
 def category_owner(category, settings=None):
-    """Toifa uchun belgilangan mas'ul (Settings.category_owners: {"promo": member_id}) yoki None."""
+    """Toifa uchun belgilangan mas'ul (Settings.category_owners: {"promo": 12 yoki "c:34"}) yoki None."""
     s = settings or Settings.load()
-    mid = (s.category_owners or {}).get(category or "")
-    return Member.objects.filter(pk=mid).prefetch_related("contacts").first() if mid else None
+    return owner_of((s.category_owners or {}).get(category or ""))
 
 
 def owner_line(text, ocr=""):

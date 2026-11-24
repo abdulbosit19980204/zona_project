@@ -261,6 +261,9 @@ class Handler:
             return self.on_redirect(msg, group, user, text)
         if mode == MODE_OFF:
             return None
+        if mode == MODE_LIVE and not self.history and self.settings.thanks_reaction and resolution.ack_word(text):
+            # "tayyor / готово / ✅ / rahmat" — kimdan bo'lmasin (xodim yoki agent) 👍: ko'rildi, qabul qilindi
+            self._bg("_react_once", chat["id"], msg["message_id"])
         if text.startswith("/kontakt") or text.startswith("/contact"):
             # telefon raqamlari guruhga chiqarilmaydi
             uname = self.bot.username or "bot"
@@ -504,14 +507,28 @@ class Handler:
             self._bg("_feedback_net", q.pk, fb, msg["chat"]["id"], msg["message_id"], text, bool(s.thanks_reaction))
         return a
 
+    _reacted = set()
+    _react_lock = threading.Lock()
+
+    def _react_once(self, chat_id, message_id):
+        """Bitta xabarga bir marta 👍 (umumiy kalit so'z va savol yopish yo'li bir-birini takrorlamasin)."""
+        with Handler._react_lock:
+            if (chat_id, message_id) in Handler._reacted:
+                return
+            Handler._reacted.add((chat_id, message_id))
+            if len(Handler._reacted) > 5000:
+                Handler._reacted.clear()
+        if hasattr(self.tg, "react"):
+            try:
+                self.tg.react(chat_id, message_id, "👍")
+            except Exception as e:  # noqa: BLE001 — guruhda reaksiya taqiqlangan bo'lishi mumkin
+                log.info("reaction failed: %s", e)
+
     def _feedback_net(self, qid, fb, chat_id, message_id, text, react):
         q = Message.objects.select_related("user", "group").get(pk=qid)
         if fb == Message.YES:
-            if react and hasattr(self.tg, "react"):
-                try:
-                    self.tg.react(chat_id, message_id, "👍")
-                except Exception as e:  # noqa: BLE001 — guruhda reaksiya taqiqlangan bo'lishi mumkin
-                    log.info("reaction failed: %s", e)
+            if react:
+                self._react_once(chat_id, message_id)
         else:
             resolution.notify_unresolved(self.tg, q, self.bot.admin_chat_id, text)
         resolution.close_prompt(self.tg, q, fb)
@@ -1355,6 +1372,8 @@ class Handler:
         """Javobdagi mas'ul (shaxs; jamoa — Supervayzerlar kabi — emas)."""
         from zona.models import Member
         for r in d.responsible or []:
+            if r.get("contact"):
+                return engine.owner_of(f"c:{r['contact']}")
             if r.get("id") and not r.get("is_team"):
                 return Member.objects.filter(pk=r["id"]).first()
         if d.entry is not None and d.entry.responsible_id and not d.entry.responsible.is_team:
@@ -1481,6 +1500,8 @@ def learn_owner(text):
 
     from . import systems
     m = engine.category_owner(systems.detect(text or "")["category"])
+    if isinstance(m, engine.ContactOwner):
+        return m.team  # bilim bazasidagi mas'ul — xodim/jamoa (Member); jamoa a'zosi — o'z jamoasi
     if m is not None:
         return m
     try:
