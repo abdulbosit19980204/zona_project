@@ -1704,7 +1704,7 @@ def support_tasks(request):
     since = timezone.now() - timezone.timedelta(days=1)
     return Response({
         "tasks": [_task_dict(t) for t in qs[:200]],
-        "counts": {k: SupportTask.objects.filter(status=k).count() for k in ("queued", "sent", "failed", "skipped")},
+        "counts": {k: SupportTask.objects.filter(status=k).count() for k in ("queued", "sent", "failed", "skipped", "done")},
         "sent_today": SupportTask.objects.filter(status="sent", sent_at__gte=since).count(),
         "entries_with_task": Entry.objects.filter(creates_task=True).count(),
         "departments": [{"id": d.id, "name": d.name} for d in Department.objects.order_by("name")],

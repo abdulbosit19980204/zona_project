@@ -110,7 +110,7 @@ export interface SupportSettings {
   ai_primary: boolean; ai_primary_below: number; album_window: number;
   tasks_enabled: boolean; task_bot: string; task_default_assignee: string; task_departments: number[]; task_members: number[];
   task_daily_limit: number; task_gap: number; task_attach: boolean;
-  task_mode: "command" | "remind" | "account"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
+  task_mode: "command" | "remind" | "account" | "api"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
   self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all"; answer_variety: boolean; progress_messages: boolean;
   answer_policy: "standard" | "kb" | "all";
   confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number; category_owners: Record<string, number | string> | null; answer_keep_days: number; answer_test_note: boolean; review_button: boolean;
@@ -118,7 +118,7 @@ export interface SupportSettings {
   collapse_after: number; media_full_days: number; work_from: number; work_to: number; work_days: string;
 }
 export interface SupportTaskInfo {
-  id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded"; assignee: string; title: string; text: string; link: string;
+  id: number; status: "queued" | "sent" | "failed" | "skipped" | "reminded" | "done"; assignee: string; title: string; text: string; link: string;
   reason: string; reply: string; error: string; attempts: number; files: number; duplicates: number; created_at: string;
   sent_at: string | null; created_by: string; post_id?: number | null; message: number | null; asker: string; group: string; entry: number | null; entry_title: string;
 }

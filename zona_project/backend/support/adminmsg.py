@@ -44,6 +44,10 @@ def card(q, title, extra=(), answer="", answer_label="💬 Javob"):
     files = media_of(q)
     text = (q.text or "").strip()
     lines = [f"<b>{title}</b>", f"👥 {esc(group)} · 🕒 {_when(q)}", f"👤 {_who(q)}"]
+    from .agent import short
+    ag = short(q.user)
+    if ag:  # agent kodi, loyiha, hudud, supervayzer, telefon
+        lines.append(f"🏷 {esc(ag)}")
     if text:
         lines.append(f"❓ <blockquote expandable>{esc(text[:1500])}</blockquote>")
     elif files:

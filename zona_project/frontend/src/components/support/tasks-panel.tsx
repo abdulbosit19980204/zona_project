@@ -19,7 +19,7 @@ import { SettingRow } from "./shell";
 
 const TONE: Record<SupportTaskInfo["status"], string> = {
   queued: "border-warning/40 text-warning", sent: "border-success/40 text-success", reminded: "border-primary/40 text-primary",
-  failed: "border-destructive/40 text-destructive", skipped: "text-muted-foreground",
+  failed: "border-destructive/40 text-destructive", skipped: "text-muted-foreground", done: "border-success bg-success/10 text-success",
 };
 
 /** PRBC vazifalari: qachon yaratiladi, kimga, va yaratilgan vazifalar tarixi (savol beruvchilarga ko'rinmaydi). */
@@ -37,6 +37,7 @@ export function TasksPanel({ t }: { t: ST }) {
           { value: "queued", label: t("ts_queued"), count: data.data.counts.queued },
           { value: "sent", label: t("ts_sent") },
           { value: "reminded", label: t("ts_reminded") },
+          { value: "done", label: t("ts_done") },
           { value: "failed", label: t("ts_failed"), count: data.data.counts.failed },
           { value: "skipped", label: t("ts_skipped") },
         ]} />}>
@@ -55,7 +56,7 @@ function TaskSettings({ s, d, t }: { s: SupportSettings; d: TasksPayload; t: ST 
     task_remind_group: s.task_remind_group ?? true, task_remind_dm: s.task_remind_dm ?? true,
   });
   const mode = f.tasks_enabled ? f.task_mode : "off";
-  const setMode = (v: string) => setF(v === "off" ? { ...f, tasks_enabled: false } : { ...f, tasks_enabled: true, task_mode: v as "command" | "remind" | "account" });
+  const setMode = (v: string) => setF(v === "off" ? { ...f, tasks_enabled: false } : { ...f, tasks_enabled: true, task_mode: v as "command" | "remind" | "account" | "api" });
   const [testTo, setTestTo] = useState(s.task_default_assignee || "");
   const [pick, setPick] = useState("");
   const save = useSupportMutation(() => supportApi.saveSettings({ ...f, task_bot: f.task_bot.replace(/^@/, ""),
@@ -79,13 +80,15 @@ function TaskSettings({ s, d, t }: { s: SupportSettings; d: TasksPayload; t: ST 
       <Panel title={t("tkMode")} icon={ListTodo} bodyClassName="grid gap-3">
         <Segmented value={mode} onChange={setMode} options={[
           { value: "off", label: t("tkModeOff") },
+          { value: "api", label: t("tkModeApi") },
           { value: "command", label: t("tkModeCommand") },
           { value: "remind", label: t("tkModeRemind") },
           { value: "account", label: t("tkModeAccount") },
         ]} />
         <p className={cn("rounded-lg p-3 text-sm", mode === "account" ? "border border-warning/40 bg-warning/10 text-warning" : "bg-muted/50 text-muted-foreground")}>
-          {t(mode === "off" ? "tkModeOffHint" : mode === "command" ? "tkModeCommandHint" : mode === "remind" ? "tkModeRemindHint" : "tkModeAccountHint")}
+          {t(mode === "off" ? "tkModeOffHint" : mode === "api" ? "tkModeApiHint" : mode === "command" ? "tkModeCommandHint" : mode === "remind" ? "tkModeRemindHint" : "tkModeAccountHint")}
         </p>
+        {mode === "api" && <Link href="/prbc" className="text-sm text-primary hover:underline">{t("tkModeApiLink")} →</Link>}
         {mode === "command" && (
           <div className="grid gap-1.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
             <b>{t("tkCmdSetupTitle")}</b>

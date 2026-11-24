@@ -169,7 +169,7 @@ cd "$SRC"
 step "systemd servislari"
 for f in "$HERE"/systemd/*; do sed "s|__SRC__|$SRC|g" "$f" > "/etc/systemd/system/$(basename "$f")"; done
 systemctl daemon-reload
-for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot; do
+for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot foydali-prbc; do
   systemctl enable "$u" >/dev/null 2>&1; systemctl restart "$u"
 done
 systemctl enable --now foydali-backup.timer >/dev/null 2>&1
@@ -188,7 +188,7 @@ sed "s|__NODE_BIN__|$NODE_BIN|g" "$HERE/foydali-pm2.sh" > /usr/local/sbin/foydal
 chmod 755 /usr/local/sbin/foydali-pm2
 {
   echo "# Foydali boshqaruv markazi: faqat foydali-* servislarini boshqarish va jurnalini o'qish"
-  for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot; do
+  for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot foydali-prbc; do
     for a in start stop restart; do echo "$USR ALL=(root) NOPASSWD: /usr/bin/systemctl $a $u"; done
     for n in 300 800 3000; do echo "$USR ALL=(root) NOPASSWD:NOEXEC: /usr/bin/journalctl -u $u -n $n --no-pager -o short-iso"; done
   done
@@ -237,7 +237,7 @@ chk qrdrive-api  http://127.0.0.1:8120/qrdrive/health
 chk frontend     http://127.0.0.1:3020/login
 chk control      http://127.0.0.1:8920/
 chk "sayt (https)" "https://$DOMAIN/login"
-for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot foydali-control; do
+for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdrive-bot foydali-support-bot foydali-prbc foydali-control; do
   printf '  %-24s %s\n' "$u" "$(systemctl is-active "$u")"
 done
 echo

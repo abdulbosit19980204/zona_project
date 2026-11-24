@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "zona",
     "support",  # Telegram support bot (alohida jadvallar: support_*)
     "inventory",  # IT inventarizatsiya (alohida jadvallar: inventory_*)
+    "prbc",  # PRBC integratsiyasi: xodimlar sinxronlashi, vazifalar API orqali (alohida jadvallar: prbc_*)
 ]
 
 ZONA = {

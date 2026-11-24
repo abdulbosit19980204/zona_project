@@ -1,18 +1,88 @@
 {
-  "mode": "process",
-  "services": [
-    {"name": "zona-backend", "label": "Masʼuliyat platformasi — backend", "group": "Masʼuliyat platformasi",
-     "cmd": ["{py:.venv}", "-m", "uvicorn", "config.asgi:application", "--host", "127.0.0.1", "--port", "8000"],
-     "cwd": "backend", "port": 8000, "health": "http://127.0.0.1:8000/api/auth/login/"},
-    {"name": "qrdrive-api", "label": "QR Drive — API", "group": "QR Drive",
-     "cmd": ["{py:services/qrdrive/.venv}", "-m", "qrdrive.main"], "cwd": "services/qrdrive",
-     "port": 8100, "health": "http://127.0.0.1:8100/qrdrive/health", "open": "http://127.0.0.1:8100/qrdrive/api/docs"},
-    {"name": "qrdrive-worker", "label": "QR Drive — worker (navbat)", "group": "QR Drive",
-     "cmd": ["{py:services/qrdrive/.venv}", "-m", "qrdrive.worker.main"], "cwd": "services/qrdrive"},
-    {"name": "qrdrive-bot", "label": "QR Drive — Telegram bot", "group": "QR Drive",
-     "cmd": ["{py:services/qrdrive/.venv}", "-m", "qrdrive.bot.main"], "cwd": "services/qrdrive"},
-    {"name": "zona-frontend", "label": "Panel (Next.js)", "group": "Interfeys",
-     "cmd": ["{npm}", "run", "dev"], "cwd": "frontend", "port": 3000, "health": "http://127.0.0.1:3000/login",
-     "open": "http://127.0.0.1:3000/", "env": {"BACKEND_URL": "http://127.0.0.1:8000", "QRDRIVE_URL": "http://127.0.0.1:8100"}}
-  ]
+ "mode": "process",
+ "services": [
+  {
+   "name": "zona-backend",
+   "label": "Masʼuliyat platformasi — backend",
+   "group": "Masʼuliyat platformasi",
+   "cmd": [
+    "{py:.venv}",
+    "-m",
+    "uvicorn",
+    "config.asgi:application",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000"
+   ],
+   "cwd": "backend",
+   "port": 8000,
+   "health": "http://127.0.0.1:8000/api/auth/login/"
+  },
+  {
+   "name": "prbc-worker",
+   "label": "PRBC integratsiya (worker)",
+   "group": "Masʼuliyat platformasi",
+   "cmd": [
+    "{py:.venv}",
+    "manage.py",
+    "prbc_worker"
+   ],
+   "cwd": "backend"
+  },
+  {
+   "name": "qrdrive-api",
+   "label": "QR Drive — API",
+   "group": "QR Drive",
+   "cmd": [
+    "{py:services/qrdrive/.venv}",
+    "-m",
+    "qrdrive.main"
+   ],
+   "cwd": "services/qrdrive",
+   "port": 8100,
+   "health": "http://127.0.0.1:8100/qrdrive/health",
+   "open": "http://127.0.0.1:8100/qrdrive/api/docs"
+  },
+  {
+   "name": "qrdrive-worker",
+   "label": "QR Drive — worker (navbat)",
+   "group": "QR Drive",
+   "cmd": [
+    "{py:services/qrdrive/.venv}",
+    "-m",
+    "qrdrive.worker.main"
+   ],
+   "cwd": "services/qrdrive"
+  },
+  {
+   "name": "qrdrive-bot",
+   "label": "QR Drive — Telegram bot",
+   "group": "QR Drive",
+   "cmd": [
+    "{py:services/qrdrive/.venv}",
+    "-m",
+    "qrdrive.bot.main"
+   ],
+   "cwd": "services/qrdrive"
+  },
+  {
+   "name": "zona-frontend",
+   "label": "Panel (Next.js)",
+   "group": "Interfeys",
+   "cmd": [
+    "{npm}",
+    "run",
+    "dev"
+   ],
+   "cwd": "frontend",
+   "port": 3000,
+   "health": "http://127.0.0.1:3000/login",
+   "open": "http://127.0.0.1:3000/",
+   "env": {
+    "BACKEND_URL": "http://127.0.0.1:8000",
+    "QRDRIVE_URL": "http://127.0.0.1:8100"
+   }
+  }
+ ]
 }

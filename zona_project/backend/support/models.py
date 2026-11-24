@@ -531,7 +531,7 @@ class SupportTask(models.Model):
     """PRBC vazifasi (navbat). Bitta mavzuga bitta vazifa: savolga bog'lanadi; shu odamning shu mavzudagi takror
     savollari mavjud vazifaga bog'lanadi (yangisi yaratilmaydi). Savol beruvchilarga ko'rsatilmaydi."""
 
-    QUEUED, SENT, FAILED, SKIPPED, REMINDED = "queued", "sent", "failed", "skipped", "reminded"
+    QUEUED, SENT, FAILED, SKIPPED, REMINDED, DONE = "queued", "sent", "failed", "skipped", "reminded", "done"
     message = models.OneToOneField(Message, null=True, blank=True, on_delete=models.SET_NULL, related_name="task")
     entry = models.ForeignKey(Entry, null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks")
     assignee = models.CharField(max_length=64, blank=True)

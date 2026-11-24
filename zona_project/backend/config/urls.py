@@ -5,5 +5,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/support/", include("support.urls")),
     path("api/inventory/", include("inventory.urls")),
+    path("api/prbc/", include("prbc.urls")),
     path("", include("zona.urls")),  # boshqa loyihada odatda: path("zona/", include("zona.urls"))
 ]

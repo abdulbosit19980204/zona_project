@@ -1,7 +1,5 @@
 import {
-  Activity, BadgeCheck, ClipboardCheck, FileSignature, FileSpreadsheet, KeyRound, Laptop, Smartphone, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History,
-  LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert,
-  Inbox, Signpost, Sparkles, SlidersHorizontal, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, type LucideIcon,
+  Activity, BadgeCheck, ClipboardCheck, FileSignature, FileSpreadsheet, KeyRound, Laptop, Smartphone, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History, LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert, Inbox, Signpost, Sparkles, SlidersHorizontal, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, RefreshCcwDot, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -54,6 +52,7 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/ai-history", key: "aiHistory", icon: Sparkles },
       { href: "/audit", key: "audit", icon: History },
+      { href: "/prbc", key: "prbc", icon: RefreshCcwDot, perm: "admin" },
       { href: "/settings", key: "settings", icon: Settings },
     ],
   },

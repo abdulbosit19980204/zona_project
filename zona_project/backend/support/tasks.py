@@ -26,6 +26,7 @@ from django.utils import timezone
 from zona.crypto import decrypt
 from zona.models import Member
 
+from .agent import lines as agent_lines
 from .models import Entry, Media, Message, Settings, SupportTask
 
 log = logging.getLogger("support")
@@ -113,6 +114,9 @@ def build_text(q, title, assignee):
     if body:
         lines.append(f"Savol: {body[:1500]}")
     lines.append(f"Kimdan: {who}" + (f" · {q.group.title}" if q.group_id else ""))
+    card = agent_lines(q.user)
+    if card:  # agent kodi, loyiha, hudud, supervayzer, telefon — ijrochi qayta so'ramasin
+        lines += ["", "Agent ma'lumotlari:", *(f"• {x}" for x in card), ""]
     link = q.group.message_link(q.message_id) if q.group_id else ""
     if link:
         lines.append(f"Havola: {link}")
@@ -135,6 +139,11 @@ def maybe_create(q, d, tg=None):
             return prev
         title = (d.entry.title if d.entry is not None else (q.text or q.ocr_text or "Savol").strip().splitlines()[0])[:120]
         s = Settings.load()
+        if s.task_mode == "api":  # PRBC API orqali: navbatga yoziladi, prbc_worker bir necha soniyada yaratadi
+            text, link = build_text(q, title, assignee)
+            media = list(Media.objects.filter(message=q).exclude(path="").values_list("id", flat=True)[:10])
+            return SupportTask.objects.create(message=q, entry=d.entry, assignee=assignee, title=title, text=text,
+                                              link=link, media_ids=media, reason=reason)
         if s.task_mode == "command":
             return post_command(q, d, title, assignee, reason, tg, s)
         if s.task_mode != "account":
@@ -294,6 +303,9 @@ def dm_text(q, title, assignee, link):
     lines = ["🗂 <b>Vazifa ochish kerak</b>", "", f"<b>Mavzu:</b> {_esc(title)}", f"<b>Kimdan:</b> {who}"]
     if q.group_id:
         lines.append(f"<b>Guruh:</b> {_esc(q.group.title)}")
+    card = agent_lines(q.user, _esc)
+    if card:
+        lines.append("<b>Agent:</b> " + " · ".join(card))
     if body:
         lines += ["", f"<blockquote>{body}</blockquote>"]
     lines += ["", "<b>Qanday ochiladi</b> — guruhdagi savolga <i>reply</i> qilib yozing:",
