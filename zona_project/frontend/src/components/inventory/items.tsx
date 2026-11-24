@@ -2,9 +2,9 @@
 
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, AtSign, BatteryCharging, Camera, Download, History, ImageOff, ImagePlus, Info, Keyboard, Loader2,
+  AlertTriangle, AtSign, BatteryCharging, CalendarClock, Camera, Download, History, ImageOff, ImagePlus, Info, Keyboard, Loader2,
   MapPin, Minus, Monitor, Package, Phone, Plus, Printer, Projector, RotateCcw, Router, ScanBarcode, ShieldCheck,
-  Smartphone, Trash2, User, X,
+  Smartphone, Trash2, User, Wallet, X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -54,6 +54,29 @@ export function useEmployees(branch: number | null | undefined) {
   });
 }
 
+/** Sanaga oy qo'shish (backend bilan bir xil: 31-yanvar + 1 oy = fevral oxiri). */
+export function addMonths(iso: string | null | undefined, months: number | null | undefined): string | null {
+  if (!iso || !months) return null;
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const total = m - 1 + months;
+  const year = y + Math.floor(total / 12), month = (total % 12) + 1;
+  const day = Math.min(d, new Date(year, month, 0).getDate());
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+export const money = (n: number | null | undefined) => (n || n === 0 ? n.toLocaleString("ru-RU").replace(/\u00a0/g, " ") : "");
+export const dmy = (iso: string | null | undefined) => (iso ? iso.slice(0, 10).split("-").reverse().join(".") : "");
+export type WarrantyState = "expired" | "soon" | "active" | "none";
+export function warrantyState(until: string | null | undefined): WarrantyState {
+  if (!until) return "none";
+  const today = new Date().toISOString().slice(0, 10);
+  const soon = new Date(Date.now() + 90 * 86400_000).toISOString().slice(0, 10);
+  return until < today ? "expired" : until <= soon ? "soon" : "active";
+}
+export const WARRANTY_STYLE: Record<WarrantyState, string> = {
+  expired: "text-red-600", soon: "text-amber-600", active: "text-emerald-600", none: "text-muted-foreground",
+};
+
 const LAST_KEY = "inv-last";
 const DRAFT_KEY = "inv-draft";
 function readLast(): Partial<ItemInput> {
@@ -71,7 +94,7 @@ function emptyForm(boot: Boot, preset?: Partial<ItemInput>): ItemInput {
   return {
     org: preset?.org ?? last.org ?? null, branch, location: preset?.location ?? last.location ?? "",
     device_type: preset?.device_type ?? null, brand: "", model: "", serial: "", quantity: 1, condition: "ok",
-    employee: preset?.employee ?? null, note: "", photos: [],
+    employee: preset?.employee ?? null, note: "", photos: [], purchase_price: null, purchase_date: "", warranty_months: null,
   };
 }
 
@@ -79,14 +102,16 @@ function fromItem(it: Item): ItemInput {
   return {
     org: it.org, branch: it.branch, location: it.location, device_type: it.device_type, brand: it.brand, model: it.model,
     serial: it.serial, quantity: it.quantity, condition: it.condition, employee: it.employee, note: it.note,
-    photos: it.photos.map((p) => p.id),
+    photos: it.photos.map((p) => p.id), purchase_price: it.purchase_price, purchase_date: it.purchase_date ?? "",
+    warranty_months: it.warranty_months,
   };
 }
 
 const FIELD_LABEL: Record<string, string> = {
   org: "Tashkilot", branch: "Filial", location: "Qayerda turibdi", device_type: "Qurilma turi", brand: "Brend",
   model: "Model", serial: "Seriya raqami", quantity: "Soni", condition: "Holati", employee: "Xodim", note: "Izoh",
-  photos: "Rasmlar", phone: "Telefon", telegram: "Telegram", full_name: "F.I.Sh.", position: "Lavozimi", status: "Holati",
+  photos: "Rasmlar", purchase_price: "Sotib olingan narxi", purchase_date: "Sotib olingan sana",
+  warranty_months: "Kafolat muddati", phone: "Telefon", telegram: "Telegram", full_name: "F.I.Sh.", position: "Lavozimi", status: "Holati",
 };
 const ACTION_LABEL: Record<string, string> = {
   create: "Qo'shdi", update: "O'zgartirdi", delete: "O'chirdi", restore: "Tikladi", import: "Import", status: "Holat",
@@ -235,6 +260,54 @@ function ContactBlock({ contact, onChange, invalid, disabled }: {
           onChange={(e) => onChange({ ...contact, noTg: e.target.checked, telegram: e.target.checked ? "" : contact.telegram })} />
         {t("Xodimda Telegram yo'q")}
       </label>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ xarid va kafolat */
+function PurchaseBlock({ form, set, disabled }: {
+  form: ItemInput; set: <K extends keyof ItemInput>(key: K, value: ItemInput[K]) => void; disabled?: boolean;
+}) {
+  const t = useT();
+  const until = addMonths(form.purchase_date, form.warranty_months);
+  const state = warrantyState(until);
+  return (
+    <div className="rounded-2xl border bg-muted/30 p-3">
+      <div className="mb-3 flex items-center gap-2">
+        <Wallet className="size-4 text-muted-foreground" />
+        <span className="flex-1 text-sm font-semibold">{t("Xarid va kafolat")}</span>
+        <span className="text-xs text-muted-foreground">{t("ixtiyoriy")}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label={t("Sotib olingan narxi (so'm)")}>
+          <input className={cn(inputCls, "font-mono tabular-nums")} inputMode="numeric" disabled={disabled} placeholder="0"
+            value={money(form.purchase_price)}
+            onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 15); set("purchase_price", d ? Number(d) : null); }} />
+        </Field>
+        <Field label={t("Kafolat muddati (oy)")}>
+          <input className={inputCls} inputMode="numeric" disabled={disabled} placeholder="12"
+            value={form.warranty_months ?? ""}
+            onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 3); set("warranty_months", d ? Math.min(600, Number(d)) : null); }} />
+        </Field>
+        <Field label={t("Sotib olingan sana")}>
+          <input type="date" className={inputCls} disabled={disabled} value={form.purchase_date}
+            max={new Date().toISOString().slice(0, 10)} onChange={(e) => set("purchase_date", e.target.value)} />
+        </Field>
+        <Field label={t("Kafolat tugaydi")}>
+          <div className={cn("flex h-12 items-center gap-2 rounded-xl border bg-muted/50 px-3 text-[15px] md:h-10 md:rounded-lg md:text-sm", WARRANTY_STYLE[state])}>
+            <CalendarClock className="size-4 shrink-0" />
+            <span className="truncate">{until ? dmy(until) : "—"}</span>
+          </div>
+        </Field>
+      </div>
+      {until && state !== "active" && (
+        <p className={cn("mt-2 text-xs font-medium", WARRANTY_STYLE[state])}>
+          {state === "expired" ? t("Kafolat muddati tugagan") : t("Kafolat 90 kun ichida tugaydi")}
+        </p>
+      )}
+      {!until && (form.purchase_date || form.warranty_months) ? (
+        <p className="mt-2 text-xs text-muted-foreground">{t("Kafolat tugash sanasi uchun sotib olingan sana va muddatni yozing")}</p>
+      ) : null}
     </div>
   );
 }
@@ -504,6 +577,8 @@ function ItemFormBody({ boot, onClose, item, preset }: {
             onChange={(e) => set("note", e.target.value)} placeholder={(type && loc(type, "extra_hint", lang)) || t("Qo'shimcha ma'lumot")} />
         </Field>
 
+        <PurchaseBlock form={form} set={set} disabled={!canWrite} />
+
         {item && (
           <div className="space-y-3 border-t pt-4">
             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
@@ -573,6 +648,7 @@ export function ItemCard({ it, onClick }: { it: Item; onClick: () => void }) {
           {it.employee_name ? <span className="inline-flex items-center gap-1"><User className="size-3" />{it.employee_name}</span>
             : <span className="text-amber-600">{t("xodim yo'q")}</span>}
           {!it.serial && <span className="text-amber-600">{t("S/N yo'q")}</span>}
+          {warrantyState(it.warranty_until) === "expired" && <span className="text-red-600">{t("kafolat tugagan")}</span>}
           <span>{it.branch_name}{it.location ? ` · ${names.place(it.location)}` : ""}</span>
           <span>{ago(it.updated_at)}</span>
         </div>
@@ -583,7 +659,7 @@ export function ItemCard({ it, onClick }: { it: Item; onClick: () => void }) {
 
 export interface ItemFilters {
   q?: string; branch?: string; org?: string; type?: string; condition?: string; group?: string; employee?: string;
-  no_serial?: boolean; no_employee?: boolean; no_photo?: boolean; mine?: boolean; deleted?: boolean;
+  no_serial?: boolean; no_employee?: boolean; no_photo?: boolean; mine?: boolean; deleted?: boolean; warranty?: string;
 }
 
 function ItemsTable({ rows, onOpen }: { rows: Item[]; onOpen: (it: Item) => void }) {
@@ -602,6 +678,7 @@ function ItemsTable({ rows, onOpen }: { rows: Item[]; onOpen: (it: Item) => void
             <th className="px-2 py-2.5 font-semibold">{t("Holati")}</th>
             <th className="px-2 py-2.5 font-semibold">{t("Kimda")}</th>
             <th className="px-2 py-2.5 font-semibold">{t("Filial · joy")}</th>
+            <th className="px-2 py-2.5 font-semibold">{t("Kafolat")}</th>
             <th className="px-3 py-2.5 font-semibold">{t("Yangilangan")}</th>
           </tr>
         </thead>
@@ -624,6 +701,10 @@ function ItemsTable({ rows, onOpen }: { rows: Item[]; onOpen: (it: Item) => void
               <td className="px-2"><CondBadge value={it.condition} />{it.is_deleted && <div className="mt-0.5 text-[11px] text-red-600">{t("o'chirilgan")}</div>}</td>
               <td className="px-2">{it.employee_name ? <><div>{it.employee_name}</div><div className="text-xs text-muted-foreground">{it.employee_position}</div></> : <span className="text-xs text-amber-600">{t("biriktirilmagan")}</span>}</td>
               <td className="px-2"><div>{it.branch_name}</div><div className="text-xs text-muted-foreground">{names.place(it.location) || "—"}</div></td>
+              <td className="whitespace-nowrap px-2 text-xs">
+                {it.warranty_until ? <span className={WARRANTY_STYLE[warrantyState(it.warranty_until)]}>{dmy(it.warranty_until)}</span> : <span className="text-muted-foreground">—</span>}
+                {it.purchase_price ? <div className="text-muted-foreground">{money(it.purchase_price)} {t("so'm")}</div> : null}
+              </td>
               <td className="whitespace-nowrap px-3 text-xs text-muted-foreground">{ago(it.updated_at)}<div>{it.updated_by}</div></td>
             </tr>
           ))}
@@ -649,7 +730,7 @@ export function ItemsView({ initial, onAdd, table }: { initial?: ItemFilters; on
   const params: Params = {
     q: f.q, branch: f.branch, org: f.org, type: f.type, condition: f.condition, group: f.group, employee: f.employee,
     no_serial: f.no_serial ? 1 : undefined, no_employee: f.no_employee ? 1 : undefined, no_photo: f.no_photo ? 1 : undefined,
-    mine: f.mine ? 1 : undefined, deleted: f.deleted ? 1 : undefined,
+    mine: f.mine ? 1 : undefined, deleted: f.deleted ? 1 : undefined, warranty: f.warranty,
   };
   const list = useInfiniteQuery({
     queryKey: ["inv", "items", params],
@@ -671,6 +752,9 @@ export function ItemsView({ initial, onAdd, table }: { initial?: ItemFilters; on
   if (f.org) chips.push({ label: boot.orgs.find((o) => String(o.id) === f.org)?.name ?? t("Tashkilot"), onRemove: () => setKey("org", undefined) });
   if (f.group) chips.push({ label: names.group(f.group), onRemove: () => setKey("group", undefined) });
   if (f.employee) chips.push({ label: rows[0]?.employee_name || t("Xodim"), onRemove: () => setKey("employee", undefined) });
+  const warrantyOpts = [{ value: "expired", label: t("Kafolati tugagan") }, { value: "soon", label: t("90 kunda tugaydi") },
+    { value: "active", label: t("Kafolatda") }, { value: "none", label: t("Kafolat kiritilmagan") }];
+  if (f.warranty) chips.push({ label: warrantyOpts.find((o) => o.value === f.warranty)?.label ?? f.warranty, onRemove: () => setKey("warranty", undefined) });
   const quick: [keyof ItemFilters, string][] = [["mine", "Men kiritganlar"], ["no_serial", "S/N yo'q"], ["no_employee", "Xodimsiz"],
     ["no_photo", "Rasmsiz"], ["deleted", "O'chirilganlar"]];
   for (const [k, label] of quick) if (f[k]) chips.push({ label: t(label), onRemove: () => toggle(k) });
@@ -696,7 +780,10 @@ export function ItemsView({ initial, onAdd, table }: { initial?: ItemFilters; on
           <Picker title={t("Tashkilot")} placeholder={t("Barcha tashkilotlar")} value={f.org ?? ""}
             options={boot.orgs.map((o) => ({ value: String(o.id), label: o.name }))} onChange={(v) => setKey("org", v)} />
         </Field>
-        <div className={cn(table ? "flex flex-wrap items-center gap-1.5 sm:col-span-3 lg:col-span-2" : "")}>
+        <Field label={table ? "" : t("Kafolat")}>
+          <Picker title={t("Kafolat")} placeholder={t("Kafolat: hammasi")} value={f.warranty ?? ""} options={warrantyOpts} onChange={(v) => setKey("warranty", v)} />
+        </Field>
+        <div className={cn(table ? "flex flex-wrap items-center gap-1.5 sm:col-span-3 lg:col-span-6" : "")}>
           {!table && <div className="mb-1.5 text-[13px] font-semibold text-foreground/80">{t("Tezkor tanlash")}</div>}
           <div className="flex flex-wrap gap-2">
             {quick.map(([k, label]) => <ToggleChip key={k} active={!!f[k]} onClick={() => toggle(k)}>{t(label)}</ToggleChip>)}

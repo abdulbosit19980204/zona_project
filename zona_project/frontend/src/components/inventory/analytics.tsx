@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 import { download, inv, type BranchStat } from "./api";
 import { condLabel, statusLabel, tr, useLang, useT } from "./i18n";
-import { useCatalogNames } from "./items";
+import { money, useCatalogNames } from "./items";
 import { Btn, COND_COLOR, Card, Empty, FlagBadge, Kpi, Progress, SectionTitle, Spinner, StatusBadge, ago } from "./ui";
 
 /* Kunlik faollik: tasdiqlangan kategorik palitraning 1–3 o'rinlari (ko'k, to'q sariq, yashil-moviy) */
@@ -315,6 +315,16 @@ export function AnalyticsView({ onOpenBranch, embedded }: {
           )}
         </Card>
       </div>
+
+      <Card>
+        <SectionTitle>{t("Qiymat va kafolat")}</SectionTitle>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Kpi label={t("Qurilmalar qiymati (so'm)")} value={money(tt.total_value) || "0"} tone="primary" hint={t("narxi kiritilgan: {n} qator", { n: tt.priced_rows })} />
+          <Kpi label={t("Kafolati tugagan")} value={tt.warranty_expired} tone="red" />
+          <Kpi label={t("90 kunda tugaydi")} value={tt.warranty_soon} tone="amber" />
+          <Kpi label={t("Kafolatda")} value={tt.warranty_active} tone="green" />
+        </div>
+      </Card>
 
       <Card>
         <SectionTitle>{t("Ma'lumot sifati")}</SectionTitle>

@@ -3,8 +3,20 @@
 Jadvallar alohida (inventory_*): mavjud Zona/Support ma'lumotlariga tegilmaydi. Katalog (qurilma turlari, brendlar,
 filiallar, tashkilotlar, joylar) "StarGroup_IT_inventarizatsiya_shablon.xlsx" dan olingan (data/catalog.json).
 """
+import calendar
+from datetime import date
+
 from django.conf import settings
 from django.db import models
+
+
+def add_months(start, months):
+    """Sanaga oy qo'shadi (31-yanvar + 1 oy = 28/29-fevral). Biri bo'sh bo'lsa — None."""
+    if not start or not months:
+        return None
+    m = start.month - 1 + int(months)
+    year, month = start.year + m // 12, m % 12 + 1
+    return date(year, month, min(start.day, calendar.monthrange(year, month)[1]))
 
 
 class Org(models.Model):
@@ -163,6 +175,10 @@ class Item(models.Model):
     employee = models.ForeignKey(Employee, verbose_name="Kimda turibdi", null=True, blank=True,
                                  on_delete=models.SET_NULL, related_name="items")
     note = models.TextField("Izoh", blank=True)
+    # xarid va kafolat (ixtiyoriy). "Kafolat tugaydi" saqlanmaydi — sana + oydan hisoblanadi (warranty_until)
+    purchase_price = models.PositiveBigIntegerField("Sotib olingan narxi (so'm)", null=True, blank=True)
+    purchase_date = models.DateField("Sotib olingan sana", null=True, blank=True)
+    warranty_months = models.PositiveSmallIntegerField("Kafolat muddati (oy)", null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
@@ -182,6 +198,10 @@ class Item(models.Model):
 
     def __str__(self):
         return f"{self.inv_number} {self.device_type}"
+
+    @property
+    def warranty_until(self):
+        return add_months(self.purchase_date, self.warranty_months)
 
 
 class Photo(models.Model):

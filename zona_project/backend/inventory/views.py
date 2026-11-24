@@ -151,6 +151,8 @@ def item_payload(it, full=False):
         "employee_position": it.employee.position if it.employee_id else "",
         "employee_phone": it.employee.phone if it.employee_id else "",
         "note": it.note, "is_deleted": it.is_deleted,
+        "purchase_price": it.purchase_price, "purchase_date": it.purchase_date, "warranty_months": it.warranty_months,
+        "warranty_until": it.warranty_until,
         "created_by": user_name(it.created_by), "updated_by": user_name(it.updated_by),
         "created_at": it.created_at, "updated_at": it.updated_at,
         "photos": [photo_store.payload(p) for p in it.photos.all()],
@@ -194,6 +196,16 @@ def filter_items(request, qs):
         qs = qs.filter(serial="")
     if p.get("no_employee") == "1":
         qs = qs.filter(employee__isnull=True)
+    if p.get("warranty") in ("expired", "soon", "active", "none"):
+        from .models import add_months
+        today, ids = timezone.localdate(), []
+        for pk, d, m in qs.values_list("pk", "purchase_date", "warranty_months"):
+            until = add_months(d, m)
+            state = "none" if not until else "expired" if until < today else \
+                "soon" if until <= today + timedelta(days=90) else "active"
+            if state == p["warranty"]:
+                ids.append(pk)
+        qs = qs.filter(pk__in=ids)
     if p.get("no_photo") == "1":
         qs = qs.annotate(_pc=Count("photos")).filter(_pc=0)
     if p.get("q"):
@@ -239,12 +251,48 @@ def clean_item(request, data, instance=None):
             out[f] = _s(data.get(f), limit)
     if "note" in data:
         out["note"] = _s(data.get("note"), 2000)
+    if "purchase_price" in data:
+        raw = re.sub(r"[\s'.,]", "", str(data.get("purchase_price") or ""))
+        if raw and not raw.isdigit():
+            return None, "Narxni raqam bilan yozing (so'm)."
+        out["purchase_price"] = int(raw) if raw else None
+    if "warranty_months" in data:
+        months = _int(data.get("warranty_months")) if str(data.get("warranty_months") or "").strip() else None
+        if months is not None and not 0 <= months <= 600:
+            return None, "Kafolat muddati 0–600 oy oralig'ida bo'lsin."
+        out["warranty_months"] = months
+    if "purchase_date" in data:
+        out["purchase_date"] = parse_date_value(data.get("purchase_date"))
+        if out["purchase_date"] is False:
+            return None, "Sotib olingan sana noto'g'ri."
     return out, None
+
+
+def parse_date_value(value):
+    """ISO (2026-11-24) yoki 24.11.2026 -> date; bo'sh -> None; noto'g'ri -> False."""
+    from datetime import date as _date, datetime as _dt
+    if value in (None, ""):
+        return None
+    if isinstance(value, _dt):
+        return value.date()
+    if isinstance(value, _date):
+        return value
+    text = str(value).strip()[:10]
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return _dt.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return False
 
 
 def _display(field, value):
     if value is None:
         return ""
+    if field == "purchase_price":
+        return f"{value:,}".replace(",", " ")
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
     if field == "condition":
         return COND_LABEL.get(value, value)
     if hasattr(value, "pk"):
@@ -1044,6 +1092,23 @@ def compute_stats(request):
         series.append(daily.get(d, {"date": d, "create": 0, "update": 0, "delete": 0}))
 
     by_cond = {r["condition"]: r["q"] or 0 for r in items_qs.values("condition").annotate(q=Sum("quantity"))}
+    # qiymat va kafolat
+    from .models import add_months
+    soon_limit = today + timedelta(days=90)
+    value = priced = w_expired = w_soon = w_active = 0
+    for r in items_qs.filter(Q(purchase_price__isnull=False) | Q(warranty_months__isnull=False)) \
+            .values("purchase_price", "quantity", "purchase_date", "warranty_months"):
+        if r["purchase_price"]:
+            value += r["purchase_price"] * (r["quantity"] or 1)
+            priced += 1
+        until = add_months(r["purchase_date"], r["warranty_months"])
+        if until:
+            if until < today:
+                w_expired += 1
+            elif until <= soon_limit:
+                w_soon += 1
+            else:
+                w_active += 1
     by_type = list(items_qs.values("device_type__name", "device_type__group").annotate(rows=Count("id"), qty=Sum("quantity"))
                    .order_by("-qty"))
     by_group = {}
@@ -1089,6 +1154,8 @@ def compute_stats(request):
         "broken": sum(r["broken"] for r in branch_rows), "missing": sum(r["missing"] for r in branch_rows),
         "deleted": Item.objects.filter(is_deleted=True, **({} if ids is None else {"branch_id__in": ids})).count(),
         "collectors": Access.objects.filter(level=COLLECTOR, user__is_active=True).count(),
+        "total_value": value, "priced_rows": priced,
+        "warranty_expired": w_expired, "warranty_soon": w_soon, "warranty_active": w_active,
         "acks_signed": sum(r["acks_signed"] for r in branch_rows),
         "acks_pending": sum(r["acks_pending"] for r in branch_rows),
         "collectors_logged_in": Access.objects.filter(level=COLLECTOR, user__is_active=True,

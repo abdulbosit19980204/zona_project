@@ -405,3 +405,41 @@ class ImportDedupeTests(InvBase):
         self.assertEqual((res["created"], res["updated"]), (0, 1))
         self.assertEqual(Employee.objects.count(), 1)
         self.assertEqual(Employee.objects.get().project, "Heinz")
+
+
+class PurchaseWarrantyTests(InvBase):
+    def test_fields_saved_warranty_computed_and_exported(self):
+        from datetime import date
+        it = self.add_item(purchase_price="12 000 000", warranty_months=36, purchase_date="2026-01-31")
+        self.assertEqual((it["purchase_price"], it["warranty_months"]), (12000000, 36))
+        self.assertEqual(it["warranty_until"], "2029-01-31")
+        r = self.col.patch(f"/api/inventory/items/{it['id']}/", {"purchase_date": "29.02.2024", "warranty_months": 12}, format="json")
+        self.assertEqual(r.json()["warranty_until"], "2025-02-28")  # kabisa yili: oy oxiriga suriladi
+        self.assertEqual(self.col.patch(f"/api/inventory/items/{it['id']}/", {"purchase_price": "abc"}, format="json").status_code, 400)
+        upd = Log.objects.filter(action=Log.UPDATE, item_id=it["id"]).first()
+        self.assertIn("purchase_date", upd.changes)
+        s = self.api.get("/api/inventory/stats/").json()["totals"]
+        self.assertEqual((s["total_value"], s["warranty_expired"]), (12000000, 1))
+        self.assertEqual(self.api.get("/api/inventory/items/?warranty=expired").json()["count"], 1)
+        x = load_workbook(io.BytesIO(self.api.get("/api/inventory/items/export/?fmt=xlsx").content))["Qurilmalar"]
+        head = [c.value for c in x[1]]
+        row = {h: c.value for h, c in zip(head, x[2])}
+        self.assertEqual(row["Sotib olingan narxi (so'm)"], 12000000)
+        self.assertEqual(row["Kafolat tugaydi"].date() if hasattr(row["Kafolat tugaydi"], "date") else row["Kafolat tugaydi"], date(2025, 2, 28))
+        t = load_workbook(io.BytesIO(self.api.get("/api/inventory/items/export/?fmt=template").content))["Inventarizatsiya"]
+        self.assertEqual((t["P4"].value, t["P5"].value, t["R5"].value), ("Sotib olingan narxi (so'm)", 12000000, 12))
+        self.assertTrue(str(t["S5"].value).startswith("=IF("))
+
+    def test_import_reads_purchase_columns_and_keeps_when_absent(self):
+        buf = io.BytesIO("Qurilma turi;Filial;Seriya raqami (S/N);Sotib olingan narxi (so'm);Sotib olingan sana;Kafolat muddati (oy)\n"
+                         "Noutbuk;Samarqand;SN-1;8 500 000;15.03.2025;24\n".encode("utf-8"))
+        buf.name = "x.csv"
+        r = self.api.post("/api/inventory/items/import/", {"file": buf}, format="multipart").json()
+        self.assertEqual(r["created"], 1, r)
+        item = Item.objects.get()
+        self.assertEqual((item.purchase_price, str(item.purchase_date), item.warranty_months), (8500000, "2025-03-15", 24))
+        buf = io.BytesIO("Qurilma turi;Filial;Seriya raqami (S/N);Model\nNoutbuk;Samarqand;SN-1;X1\n".encode("utf-8"))
+        buf.name = "y.csv"
+        self.api.post("/api/inventory/items/import/", {"file": buf}, format="multipart")
+        item.refresh_from_db()
+        self.assertEqual((item.model, item.purchase_price), ("X1", 8500000))  # narx ustuni yo'q — o'chmadi

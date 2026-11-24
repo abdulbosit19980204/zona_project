@@ -47,6 +47,9 @@ RU = {
     "Ism-familiyangizni to'liq yozing.": "Укажите полностью фамилию и имя.",
     "Imzo qo'ying (barmoq bilan chizing).": "Поставьте подпись (нарисуйте пальцем).",
     "Imzo rasmi noto'g'ri.": "Неверное изображение подписи.",
+    "Narxni raqam bilan yozing (so'm).": "Укажите цену цифрами (сум).",
+    "Kafolat muddati 0–600 oy oralig'ida bo'lsin.": "Срок гарантии — от 0 до 600 месяцев.",
+    "Sotib olingan sana noto'g'ri.": "Неверная дата покупки.",
     # import xatolari
     "Faqat o'z filialingiz xodimlari": "Только сотрудники своего филиала",
 }
@@ -59,6 +62,7 @@ PATTERNS = [
     (re.compile(r"^(.*): yozish huquqi yo'q$"), "{0}: нет прав на запись"),
     (re.compile(r"^Telefon noto'g'ri: (.*)$"), "Неверный телефон: {0}"),
     (re.compile(r"^Telegram noto'g'ri: (.*)$"), "Неверный Telegram: {0}"),
+    (re.compile(r"^Sana tanilmadi: (.*)$"), "Дата не распознана: {0}"),
     (re.compile(r"^Holat tanilmadi \((.*)\) — 'Ishlayapti'$"), "Состояние не распознано ({0}) — «Работает»"),
 ]
 

@@ -34,7 +34,9 @@ BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 ITEM_COLUMNS = [
     ("Inventar raqam", 14), ("Tashkilot", 18), ("Filial", 14), ("Qayerda turibdi", 16), ("Qurilma turi", 28),
     ("Guruh", 12), ("Brend", 14), ("Model", 20), ("Seriya raqami (S/N)", 20), ("Soni", 6), ("Holati", 16),
-    ("Kimda turibdi (xodim)", 26), ("Lavozimi", 18), ("Telefon", 16), ("Izoh", 30), ("Rasmlar soni", 8),
+    ("Kimda turibdi (xodim)", 26), ("Lavozimi", 18), ("Telefon", 16), ("Izoh", 30),
+    ("Sotib olingan narxi (so'm)", 16), ("Sotib olingan sana", 13), ("Kafolat muddati (oy)", 10), ("Kafolat tugaydi", 13),
+    ("Rasmlar soni", 8),
     ("Rasm havolalari", 40), ("Kiritgan", 16), ("Kiritilgan sana", 17), ("O'zgartirgan", 16),
     ("O'zgartirilgan sana", 17),
 ]
@@ -70,7 +72,8 @@ def item_row(request, it):
         it.inv_number, it.org.name if it.org_id else "", it.branch.name, it.location, it.device_type.name,
         it.device_type.group, it.brand, it.model, it.serial, it.quantity, COND_LABEL.get(it.condition, it.condition),
         it.employee.full_name if it.employee_id else "", it.employee.position if it.employee_id else "",
-        it.employee.phone if it.employee_id else "", it.note, len(photos),
+        it.employee.phone if it.employee_id else "", it.note, it.purchase_price, it.purchase_date, it.warranty_months,
+        it.warranty_until, len(photos),
         " ".join(_abs(request, photo_store.url(p)) for p in photos), user_name(it.created_by), _local(it.created_at),
         user_name(it.updated_by), _local(it.updated_at),
     ]
@@ -85,6 +88,18 @@ def style_table(ws, widths, header_row=1):
     ws.freeze_panes = ws.cell(header_row + 1, 1)
     if ws.max_row > header_row:
         ws.auto_filter.ref = f"A{header_row}:{get_column_letter(len(widths))}{ws.max_row}"
+
+
+def _formats(ws, columns):
+    """Narx — minglik ajratgich bilan, sanalar — KK.OO.YYYY."""
+    names = [c[0] for c in columns]
+    fmt = {"Sotib olingan narxi (so'm)": "#,##0", "Sotib olingan sana": "DD.MM.YYYY", "Kafolat tugaydi": "DD.MM.YYYY"}
+    for title, number_format in fmt.items():
+        if title in names:
+            col = names.index(title) + 1
+            for row in ws.iter_rows(min_row=2, min_col=col, max_col=col):
+                for c in row:
+                    c.number_format = number_format
 
 
 def add_sheet(wb, title, columns, rows, first=False):
@@ -138,7 +153,8 @@ def export_items(request):
     if fmt == "csv":
         return _file(_csv(ITEM_COLUMNS, rows), f"inventarizatsiya_{_now_tag()}.csv", "text/csv; charset=utf-8")
     wb = Workbook()
-    add_sheet(wb, "Qurilmalar", ITEM_COLUMNS, rows, first=True)
+    ws_items = add_sheet(wb, "Qurilmalar", ITEM_COLUMNS, rows, first=True)
+    _formats(ws_items, ITEM_COLUMNS)
     stats = compute_stats(request)
     add_sheet(wb, "Filiallar holati", BRANCH_COLUMNS, branch_status_rows(stats))
     emps = scoped(Employee.objects.select_related("org", "branch"), request.user).filter(is_active=True)
@@ -163,6 +179,8 @@ def export_report(request):
         ("Bugun kiritildi", t["today"]), ("Oxirgi 7 kunda", t["week"]), ("Ishlamaydi / ta'mirga muhtoj (dona)", t["broken"]),
         ("Topilmadi (dona)", t["missing"]), ("Seriya raqamsiz qatorlar", t["no_serial"]),
         ("Xodim biriktirilmagan qatorlar", t["no_employee"]), ("Rasmli qatorlar", t["with_photo"]),
+        ("Qurilmalar qiymati (so'm, narxi kiritilganlar)", t["total_value"]), ("Narxi kiritilgan qatorlar", t["priced_rows"]),
+        ("Kafolati tugagan", t["warranty_expired"]), ("Kafolati 90 kunda tugaydi", t["warranty_soon"]),
         ("Xodimlar", t["employees_total"]), ("Qurilmasi bor xodimlar", t["employees_with_devices"]),
         ("Filial loginlari (faol)", t["collectors"]), ("Kamida bir marta kirgan", t["collectors_logged_in"]),
     ]:
@@ -273,12 +291,24 @@ def fill_template(request, items_qs):
     _clear(inv, 5, [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 15])
     _unitalic(inv, 5, 6, range(1, 16))
     last = max(1000, 4 + len(items))
+    extra = [("P", "Sotib olingan narxi (so'm)", 16, "#,##0"), ("Q", "Sotib olingan sana", 14, "DD.MM.YYYY"),
+             ("R", "Kafolat muddati (oy)", 11, "0"), ("S", "Kafolat tugaydi", 14, "DD.MM.YYYY")]
+    for col, title, width, _ in extra:
+        inv[f"{col}4"] = title
+        inv[f"{col}4"]._style = copy(inv["O4"]._style)
+        inv.column_dimensions[col].width = width
+    for r in range(5, max(504, 4 + len(items)) + 1):
+        for col, _, _, number_format in extra:
+            inv[f"{col}{r}"]._style = copy(inv[f"O{min(r, 6)}"]._style)
+            inv[f"{col}{r}"].number_format = number_format
+        inv[f"S{r}"] = f'=IF(OR(Q{r}="",R{r}=""),"",EDATE(Q{r},R{r}))'
     for i, it in enumerate(items):
         r = 5 + i
         values = {2: it.org.name if it.org_id else None, 3: it.branch.name, 4: it.location or None,
                   5: it.device_type.name, 7: it.brand or None, 8: it.model or None, 9: it.serial or None,
                   10: it.quantity, 11: COND_LABEL.get(it.condition), 12: it.employee.full_name if it.employee_id else None,
                   15: (f"[{it.inv_number}] " + it.note).strip() if it.note else f"[{it.inv_number}]"}
+        values.update({16: it.purchase_price, 17: it.purchase_date, 18: it.warranty_months})
         for c, v in values.items():
             inv.cell(r, c, v)
         if inv.cell(r, 1).value is None:
@@ -473,7 +503,10 @@ def _items_from_rows(request, rows, lk, result, default_branch, sheet):
         "qty": _col(names, "soni"), "condition": _col(names, "holati"),
         "employee": _col(names, "kimda turibdi (xodim)", "kimda"), "position": _col(names, "lavozim"),
         "phone": _col(names, "telefon"), "note": _col(names, "izoh"),
+        "price": _col(names, "sotib olingan narxi", "narxi"), "pdate": _col(names, "sotib olingan sana"),
+        "months": _col(names, "kafolat muddati", "kafolat (oy)"),
     }
+    from .views import parse_date_value
     numbers = {}
     for n, row in enumerate(rows[idx + 1:], start=idx + 2):
         tname = _cell(row, cols["type"])
@@ -527,6 +560,18 @@ def _items_from_rows(request, rows, lk, result, default_branch, sheet):
                   "brand": _cell(row, cols["brand"])[:80], "model": _cell(row, cols["model"])[:150],
                   "serial": _cell(row, cols["serial"])[:120], "quantity": max(qty, 1), "condition": cond,
                   "employee": emp, "note": note[:2000]}
+        # xarid ustunlari faqat faylda bo'lsa yangilanadi (bo'lmasa mavjud qiymat o'chmaydi)
+        if cols["price"] is not None:
+            digits = re.sub(r"[^0-9]", "", _cell(row, cols["price"]).split(".")[0])
+            fields["purchase_price"] = int(digits) if digits else None
+        if cols["pdate"] is not None:
+            d = parse_date_value(_cell(row, cols["pdate"]))
+            if d is False:
+                result["warnings"].append({"sheet": sheet, "row": n, "message": f"Sana tanilmadi: {_cell(row, cols['pdate'])}"})
+                d = None
+            fields["purchase_date"] = d
+        if cols["months"] is not None:
+            fields["warranty_months"] = _int(_cell(row, cols["months"])) if _cell(row, cols["months"]) else None
         item = None
         if inv_number:
             item = scoped(Item.objects.all(), request.user).filter(inv_number=inv_number).first()

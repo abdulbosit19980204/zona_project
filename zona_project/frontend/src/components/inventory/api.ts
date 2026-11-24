@@ -38,11 +38,12 @@ export interface Item {
   employee_name: string; employee_position: string; employee_phone: string; note: string; is_deleted: boolean;
   created_by: string; updated_by: string; created_at: string; updated_at: string; photos: PhotoRef[];
   history?: LogRow[]; duplicate?: { id: number; inv_number: string; branch: string } | null;
+  purchase_price: number | null; purchase_date: string | null; warranty_months: number | null; warranty_until: string | null;
 }
 export interface ItemInput {
   org: number | null; branch: number | null; location: string; device_type: number | null; brand: string;
   model: string; serial: string; quantity: number; condition: Condition; employee: number | null; note: string;
-  photos: number[];
+  photos: number[]; purchase_price: number | null; purchase_date: string; warranty_months: number | null;
 }
 export interface Page<T> { count: number; page: number; page_size: number; results: T[]; quantity?: number }
 export type AckStatus = "pending" | "signed" | "revoked";
@@ -72,6 +73,7 @@ export interface Stats {
     employees: number; employees_total: number; employees_with_devices: number; today: number; week: number;
     no_serial: number; no_employee: number; with_photo: number; broken: number; missing: number; deleted: number;
     collectors: number; collectors_logged_in: number; acks_signed: number; acks_pending: number;
+    total_value: number; priced_rows: number; warranty_expired: number; warranty_soon: number; warranty_active: number;
   };
   branches: BranchStat[];
   daily: { date: string; create: number; update: number; delete: number }[];
