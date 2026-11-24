@@ -25,9 +25,7 @@ class FakeClient:
     def __init__(self):
         from .runner import Handler
         Handler._answered.clear()
-        Handler._reacted.clear()
-        from . import tasks as _tasks
-        _tasks._DM_BLOCKED.clear()  # testlar orasida "yaqinda javob berilgan" xotirasi qolmasin (id'lar qayta ishlatiladi)
+        Handler._reacted.clear()  # testlar orasida "yaqinda javob berilgan" xotirasi qolmasin (id'lar qayta ishlatiladi)
         self.sent, self.callbacks, self.edited = [], [], []
 
     def send(self, chat_id, text, reply_to=None, buttons=None, html=True, **kw):
