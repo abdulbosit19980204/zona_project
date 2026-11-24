@@ -34,6 +34,8 @@ interface Conn {
   task_default_assignees: number[]; sync_minutes: number; auto_left: boolean; comment_devices: boolean; password_set: boolean;
   me: { full_name?: string; position?: string }; last_sync_at: string | null; last_error: string; sync_requested: boolean;
   worker_alive: boolean; task_watchers: number[]; close_on_done: boolean; named: Record<string, string>;
+  notify_done: boolean; notify_created: boolean; attach_files: boolean; assignee_map: Record<string, number>;
+  watch_self: boolean; ready: boolean; not_ready: string;
 }
 interface Person {
   id: number; prbc_user: number | null; tab_number: string; full_name: string; position: string; department: string; company: string;
@@ -51,7 +53,7 @@ interface PTask {
   id: number; code: string; title: string; kind: string; status: string; category: string; project: string; assignee: string;
   due_at: string | null; person_name: string; url: string; created_by: string; created_at: string | null; people: TPerson[];
   watchers: string; completed_at: string | null; completed_by: string; spent_minutes: number | null; overdue: boolean;
-  on_time: boolean | null; has_report: boolean; question: number | null;
+  on_time: boolean | null; has_report: boolean; question: number | null; files: number; notified: string[];
   report?: {
     completed_by?: string; spent_minutes?: number | null; on_time?: boolean | null;
     comments?: { at: string | null; by: string; text: string }[];
@@ -60,7 +62,8 @@ interface PTask {
     history?: { at: string | null; verb: string; by: string; meta: Record<string, unknown> }[];
   };
 }
-interface StatRow { name: string; total: number; done: number; open: number; overdue: number; late: number; avg_hours: number | null }
+interface StatRow { name: string; total: number; done: number; open: number; overdue: number; late: number; cancelled: number; avg_hours: number | null }
+interface GroupRow { name: string; total: number; done: number; open: number; overdue: number; cancelled: number }
 interface TestResult { ok: boolean; me: { full_name?: string }; checks: Record<string, { ok: boolean; count?: number; detail?: string }>; projects: { id: number; name: string }[] }
 
 const get = async <T,>(url: string, params?: Record<string, string | number>) => (await api.get<T>(url, { params })).data;
@@ -93,7 +96,8 @@ export function PrbcIntegration() {
               {c?.worker_alive ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}{c?.worker_alive ? t("workerOk") : t("workerDown")}
             </span>
             <span className="text-muted-foreground">{t("lastSync")}: {c?.last_sync_at ? d(c.last_sync_at, true) : t("never")}</span>
-            {c?.last_error && <span className="flex items-center gap-1.5 text-destructive"><CircleAlert className="size-4" />{c.last_error}</span>}
+            {c && !c.ready ? <span className="flex items-center gap-1.5 text-warning"><CircleAlert className="size-4" />{c.not_ready}</span>
+              : c?.last_error && <span className="flex items-center gap-1.5 text-destructive"><CircleAlert className="size-4" />{c.last_error}</span>}
           </div>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             <StatCard label={t("total")} value={ov.data.people.total} icon={Users} hint={t("month", ov.data.month)} />
@@ -252,7 +256,7 @@ function TasksTab({ conn }: { conn?: Conn }) {
   const [shown, setShown] = useState<number | null>(null);
   const params: Record<string, string> = { kind: kind === "all" ? "ours,leave,hire" : kind, ...(state !== "all" ? { [state]: "1" } : {}), ...(who ? { assignee: who } : {}) };
   const list = useQuery({ queryKey: ["prbc", "tasks", params], queryFn: () => get<PTask[]>("prbc/tasks/", params), refetchInterval: 30_000 });
-  const stats = useQuery({ queryKey: ["prbc", "task-stats"], queryFn: () => get<{ rows: StatRow[]; total: Record<string, number> }>("prbc/tasks/stats/", { days: 30 }), refetchInterval: 60_000 });
+  const stats = useQuery({ queryKey: ["prbc", "task-stats"], queryFn: () => get<{ rows: StatRow[]; total: Record<string, number>; groups: GroupRow[] }>("prbc/tasks/stats/", { days: 30 }), refetchInterval: 60_000 });
   const watcherNames = (conn?.task_watchers ?? []).map((id) => conn?.named?.[String(id)] ?? `#${id}`).join(", ");
   const [form, setForm] = useState({ title: "", description: "", assignees: [] as number[], priority: "2", due: "", project: "" });
   const [aq, setAq] = useState("");
@@ -274,6 +278,7 @@ function TasksTab({ conn }: { conn?: Conn }) {
               <span className="text-success">{t("cDone", { n: stats.data.total.done ?? 0 })}</span>
               <span className="text-primary">{t("cOpen", { n: stats.data.total.open ?? 0 })}</span>
               <span className="text-destructive">{t("cOverdue", { n: stats.data.total.overdue ?? 0 })}</span>
+              {!!stats.data.total.cancelled && <span className="text-muted-foreground">{t("cCancelled", { n: stats.data.total.cancelled })}</span>}
             </div>
             {stats.data.rows.length > 0 && (
               <Table>
@@ -281,7 +286,7 @@ function TasksTab({ conn }: { conn?: Conn }) {
                   <TableHead>{t("colAssignee")}</TableHead><TableHead className="text-right">{t("colTotal")}</TableHead>
                   <TableHead className="text-right">{t("colDone")}</TableHead><TableHead className="text-right">{t("colOpen")}</TableHead>
                   <TableHead className="text-right">{t("colOverdue")}</TableHead><TableHead className="text-right">{t("colLate")}</TableHead>
-                  <TableHead className="text-right">{t("colAvg")}</TableHead>
+                  <TableHead className="text-right">{t("colCancelled")}</TableHead><TableHead className="text-right">{t("colAvg")}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {stats.data.rows.slice(0, 12).map((r) => (
@@ -290,7 +295,27 @@ function TasksTab({ conn }: { conn?: Conn }) {
                       <TableCell className="text-right text-success">{r.done}</TableCell><TableCell className="text-right">{r.open}</TableCell>
                       <TableCell className={cn("text-right", r.overdue > 0 && "font-medium text-destructive")}>{r.overdue}</TableCell>
                       <TableCell className="text-right text-warning">{r.late || ""}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{r.cancelled || ""}</TableCell>
                       <TableCell className="text-right text-muted-foreground">{r.avg_hours != null ? t("hours", { n: r.avg_hours }) : "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {(stats.data.groups ?? []).length > 0 && (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>{t("colGroup")}</TableHead><TableHead className="text-right">{t("colTotal")}</TableHead>
+                  <TableHead className="text-right">{t("colDone")}</TableHead><TableHead className="text-right">{t("colOpen")}</TableHead>
+                  <TableHead className="text-right">{t("colOverdue")}</TableHead><TableHead className="text-right">{t("colCancelled")}</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {stats.data.groups.slice(0, 15).map((r) => (
+                    <TableRow key={r.name}>
+                      <TableCell className="max-w-56 truncate">{r.name}</TableCell><TableCell className="text-right">{r.total}</TableCell>
+                      <TableCell className="text-right text-success">{r.done}</TableCell><TableCell className="text-right">{r.open}</TableCell>
+                      <TableCell className={cn("text-right", r.overdue > 0 && "font-medium text-destructive")}>{r.overdue}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{r.cancelled || ""}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -321,6 +346,7 @@ function TasksTab({ conn }: { conn?: Conn }) {
                 <div className="w-full pl-0 text-xs text-muted-foreground sm:w-auto">
                   <span title={t("responsible")}>👤 {x.assignee || "—"}</span>
                   {x.watchers && <span title={t("watcher")}> · 👁 {x.watchers}</span>}
+                  {x.files > 0 && <span title={t("filesAttached", { n: x.files })}> · 📎 {x.files}</span>}
                   <span> · {x.category === "done" ? `✓ ${d(x.completed_at, true)}${x.completed_by ? ` (${x.completed_by})` : ""}` : d(x.due_at, true)}</span>
                 </div>
                 <a href={x.url} target="_blank" rel="noreferrer" className="text-primary" title={t("openInPrbc")} onClick={(e) => e.stopPropagation()}><ExternalLink className="size-4" /></a>
@@ -384,6 +410,13 @@ function TaskDialog({ id, onClose }: { id: number | null; onClose: () => void })
                 </div>
               )) : <span className="text-muted-foreground">👤 {x.assignee || "—"}</span>}
             </div>
+            {(x.files > 0 || x.notified?.length > 0) && (
+              <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+                {x.files > 0 && <span>📎 {t("filesAttached", { n: x.files })}</span>}
+                {x.notified?.includes("created") && <span>📌 {t("notifiedCreated")}</span>}
+                {x.notified?.includes("done") && <span className="text-success">✅ {t("notifiedDone")}</span>}
+              </div>
+            )}
             {x.category === "done" && !r && <p className="text-muted-foreground">{t("reportPending")}</p>}
             {r && (
               <>
@@ -461,7 +494,8 @@ function LogTab({ runs }: { runs: Overview["runs"] }) {
 
 function ConnTab({ conn }: { conn: Conn }) {
   const t = useTranslations("prbc");
-  const [f, setF] = useState({ ...conn, password: "", assignees: conn.task_default_assignees.join(", "), watchers: (conn.task_watchers ?? []).join(", ") });
+  const [f, setF] = useState({ ...conn, password: "", assignees: conn.task_default_assignees.join(", "), watchers: (conn.task_watchers ?? []).join(", "),
+    amap: Object.entries(conn.assignee_map ?? {}).map(([k, v]) => `${k}=${v}`).join(", ") });
   const ids = (s: string) => s.split(/[,\s]+/).filter(Boolean).map(Number).filter((n) => Number.isInteger(n) && n > 0);
   const names = (s: string) => ids(s).map((id) => conn.named?.[String(id)] ?? `#${id}`).join(", ");
   const [test, setTest] = useState<TestResult | null>(null);
@@ -469,6 +503,8 @@ function ConnTab({ conn }: { conn: Conn }) {
     enabled: f.enabled, base_url: f.base_url, phone: f.phone, sync_minutes: f.sync_minutes, auto_left: f.auto_left,
     comment_devices: f.comment_devices, task_project: f.task_project, lifecycle_project: f.lifecycle_project,
     task_default_assignees: ids(f.assignees), task_watchers: ids(f.watchers), close_on_done: f.close_on_done,
+    notify_done: f.notify_done, notify_created: f.notify_created, attach_files: f.attach_files, assignee_map: f.amap,
+    watch_self: f.watch_self,
     ...(f.password ? { password: f.password } : {}),
   }), t("saved"));
   const runTest = useAction(async () => {
@@ -497,11 +533,16 @@ function ConnTab({ conn }: { conn: Conn }) {
             {f.assignees && <span className="text-xs text-muted-foreground">{names(f.assignees)}</span>}</div>
           <div className="grid gap-1.5"><Label>{t("cWatchers")}</Label><Input value={f.watchers} onChange={(e) => setF({ ...f, watchers: e.target.value })} placeholder="2" />
             <span className="text-xs text-muted-foreground">{f.watchers ? names(f.watchers) : t("cWatchersHint")}</span></div>
+          <div className="grid gap-1.5 sm:col-span-2"><Label>{t("cMap")}</Label>
+            <Input value={f.amap} onChange={(e) => setF({ ...f, amap: e.target.value })} placeholder="xusniddin_it=60, StargroupSaid=51" />
+            <span className="text-xs text-muted-foreground">{t("cMapHint")}</span></div>
         </div>
         {[["enabled", "cEnabled", ""], ["auto_left", "cAutoLeft", "cAutoLeftHint"], ["comment_devices", "cDevices", "cDevicesHint"],
-          ["close_on_done", "cCloseDone", "cCloseDoneHint"]].map(([k, l, h]) => (
+          ["watch_self", "cWatchSelf", "cWatchSelfHint"],
+          ["close_on_done", "cCloseDone", "cCloseDoneHint"], ["attach_files", "cAttach", "cAttachHint"],
+          ["notify_created", "cNotifyCreated", "cNotifyCreatedHint"], ["notify_done", "cNotifyDone", "cNotifyDoneHint"]].map(([k, l, h]) => (
           <label key={k} className="flex items-start justify-between gap-4 text-sm">
-            <span>{t(l)}{h && <span className="block text-xs text-muted-foreground">{t(h)}</span>}</span>
+            <span>{t(l)}{h && <span className="block text-xs text-muted-foreground">{t(h, { me: conn.me?.full_name || "—" })}</span>}</span>
             <Switch checked={Boolean(f[k as "enabled"])} onCheckedChange={(v) => setF({ ...f, [k]: v })} />
           </label>
         ))}

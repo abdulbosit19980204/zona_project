@@ -1181,7 +1181,7 @@
     "cPassword": "Parol",
     "cPasswordSet": "O'rnatilgan — o'zgartirmaslik uchun bo'sh qoldiring",
     "cBase": "PRBC manzili",
-    "cEnabled": "Sinxronlash yoqilgan",
+    "cEnabled": "Ulanish yoqilgan (sinxronlash va vazifalar)",
     "cMinutes": "Har necha daqiqada",
     "cAutoLeft": "Bo'shaganni avtomatik qo'llash",
     "cAutoLeftHint": "Kontakt o'rni vakansiya bo'ladi (tarix saqlanadi), inventar xodimi nofaol. Mas'ullar o'zgartirilmaydi — ro'yxatda ko'rsatiladi.",
@@ -1240,6 +1240,22 @@
     "cWatchers": "Kuzatuvchilar (PRBC user id)",
     "cWatchersHint": "Har bir yangi vazifaga kuzatuvchi bo'lib qo'shiladi (masalan, 2 — Kamoliddin aka)",
     "cCloseDone": "Bajarilganda savolni yopish",
-    "cCloseDoneHint": "PRBC'da vazifa bajarildi bo'lsa — bog'langan savol \"hal bo'ldi\" deb belgilanadi va hisobot yoziladi"
+    "cCloseDoneHint": "PRBC'da vazifa bajarildi bo'lsa — bog'langan savol \"hal bo'ldi\" deb belgilanadi va hisobot yoziladi",
+    "cCancelled": "bekor qilingan {n}",
+    "colCancelled": "Bekor",
+    "colGroup": "Guruh (savollar)",
+    "filesAttached": "{n} ta fayl PRBC'ga yuklangan",
+    "notifiedCreated": "guruhga \"vazifa ochildi\" yozildi",
+    "notifiedDone": "guruhga \"bajarildi\" hisoboti yozildi",
+    "cMap": "Telegram → PRBC moslash",
+    "cMapHint": "username=PRBC user id, vergul bilan. Bo'sh bo'lsa — bog'langan xodim yoki ism bo'yicha avtomatik topiladi",
+    "cAttach": "Rasm va fayllarni vazifaga yuklash",
+    "cAttachHint": "Savoldagi va keyin yuborilgan rasm/fayllar PRBC vazifasiga biriktiriladi",
+    "cNotifyCreated": "Guruhga \"vazifa ochildi\" deb yozish",
+    "cNotifyCreatedHint": "Savolga reply: vazifa raqami va mas'ul",
+    "cNotifyDone": "Bajarilganda guruhga hisobot",
+    "cNotifyDoneHint": "Savolga reply: kim bajardi, qancha vaqtda va izohlari",
+    "cWatchSelf": "Meni ham kuzatuvchi qilish",
+    "cWatchSelfHint": "Ulangan akkaunt egasi ({me}) har bir yangi vazifaga kuzatuvchi bo'lib qo'shiladi"
   }
 }

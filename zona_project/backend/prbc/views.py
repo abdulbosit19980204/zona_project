@@ -16,7 +16,8 @@ from .models import Change, Connection, Person, SyncRun, Task
 
 ADMIN = [IsZonaAdmin]
 EDITABLE = ["enabled", "base_url", "phone", "lifecycle_project", "task_project", "task_default_assignees", "sync_minutes",
-            "auto_left", "comment_devices", "task_watchers", "close_on_done"]
+            "auto_left", "comment_devices", "task_watchers", "close_on_done", "notify_done", "notify_created",
+            "attach_files", "assignee_map", "watch_self"]
 
 
 def _actor(request):
@@ -28,7 +29,22 @@ def connection_payload(c):
     return {**{f: getattr(c, f) for f in EDITABLE}, "password_set": bool(c.password_enc), "organization": c.organization,
             "me": c.me, "last_sync_at": c.last_sync_at, "last_ok_at": c.last_ok_at, "last_error": c.last_error,
             "sync_requested": c.sync_requested, "worker_alive": alive, "worker_beat": c.worker_beat,
-            "named": _named([*(c.task_default_assignees or []), *(c.task_watchers or [])])}
+            "ready": not not_ready(c), "not_ready": not_ready(c),
+            "named": _named([*(c.task_default_assignees or []), *(c.task_watchers or []),
+                             *(c.assignee_map or {}).values()])}
+
+
+def parse_map(v):
+    """Telegram username -> PRBC user id: {"xusniddin": 15} yoki "xusniddin=15, said=7" matni."""
+    if isinstance(v, str):
+        pairs = [x.split("=", 1) for x in v.replace("\n", ",").split(",") if "=" in x]
+        v = {a: b for a, b in pairs}
+    out = {}
+    for k, val in (v or {}).items() if isinstance(v, dict) else []:
+        k, val = str(k).strip().lstrip("@").lower(), str(val).strip()
+        if k and val.isdigit():
+            out[k[:64]] = int(val)
+    return dict(list(out.items())[:50])
 
 
 def _named(ids):
@@ -51,8 +67,11 @@ def connection(request):
                     v = max(5, min(int(v or 30), 1440))
                 elif f in ("task_default_assignees", "task_watchers"):
                     v = [int(x) for x in (v or []) if str(x).isdigit()][:20]
-                elif f in ("enabled", "auto_left", "comment_devices", "close_on_done"):
+                elif f in ("enabled", "auto_left", "comment_devices", "close_on_done", "notify_done", "notify_created",
+                           "attach_files", "watch_self"):
                     v = bool(v)
+                elif f == "assignee_map":
+                    v = parse_map(v)
                 else:
                     v = str(v or "").strip()[:200]
                 setattr(c, f, v)
@@ -60,6 +79,8 @@ def connection(request):
             c.password_enc = encrypt(str(d["password"]))
             c.access_enc = c.refresh_enc = ""  # yangi parol — yangi seans
             c.access_until = None
+        if c.enabled and c.phone and c.password_enc and c.last_error.startswith("PRBC ulanishi yoqilmagan"):
+            c.last_error = ""  # eski "yoqilmagan" xatosi endi ahamiyatsiz
         c.save()
         Change.objects.create(kind=Change.UPDATED, text="PRBC sozlamalari o'zgartirildi", actor=_actor(request),
                               data={k: ("••••" if k == "password" else v) for k, v in d.items() if k in EDITABLE + ["password"]})
@@ -102,10 +123,21 @@ def test(request):
 @zona_api(["POST"], ADMIN)
 def sync(request):
     c = Connection.get()
-    if not (c.phone and c.password_enc):
-        return Response({"detail": "Avval PRBC telefon raqami va parolini kiriting."}, status=status.HTTP_400_BAD_REQUEST)
-    Connection.objects.filter(pk=1).update(sync_requested=True)
+    problem = not_ready(c)
+    if problem:  # worker'ga yuborib, keyin umumiy xato ko'rsatish o'rniga — aniq sabab darhol
+        return Response({"detail": problem}, status=status.HTTP_400_BAD_REQUEST)
+    Connection.objects.filter(pk=1).update(sync_requested=True, last_error="")
     return Response(connection_payload(Connection.get()))
+
+
+def not_ready(c):
+    if not c.phone:
+        return "PRBC telefon raqami kiritilmagan: Ulanish bo'limida kiriting va «Saqlash»ni bosing."
+    if not c.password_enc:
+        return "PRBC paroli kiritilmagan: Ulanish bo'limida kiriting va «Saqlash»ni bosing."
+    if not c.enabled:
+        return "PRBC ulanishi o'chiq: Ulanish bo'limida «Ulanish yoqilgan»ni yoqing va «Saqlash»ni bosing."
+    return ""
 
 
 def person_payload(p):
@@ -260,7 +292,8 @@ def task_payload(t, conn, full=False):
          "people": t.people, "watchers": t.watchers, "completed_at": t.completed_at, "completed_by": t.completed_by,
          "spent_minutes": t.spent_minutes, "overdue": bool(open_ and t.due_at and t.due_at < timezone.now()),
          "on_time": (t.report or {}).get("on_time"), "has_report": bool(t.report), "checked_at": t.checked_at,
-         "question": t.support_task.message_id if t.support_task_id else None}
+         "question": t.support_task.message_id if t.support_task_id else None,
+         "files": int((t.sync or {}).get("files") or 0), "notified": (t.sync or {}).get("notified") or []}
     if full:
         d["report"] = t.report
     return d
@@ -323,8 +356,9 @@ def task_stats(request):
         qs = qs.filter(tasks.since_q(since))
     total.update(total=qs.count(), done=qs.filter(status_category="done").count(),
                  open=qs.filter(status_category__in=tasks.OPEN).count(),
+                 cancelled=qs.filter(status_category="cancelled").count(),
                  overdue=qs.filter(status_category__in=tasks.OPEN, due_at__lt=timezone.now()).count())
-    return Response({"rows": rows, "total": total})
+    return Response({"rows": rows, "total": total, "groups": tasks.group_stats(since)})
 
 
 @zona_api(["GET"], ADMIN)

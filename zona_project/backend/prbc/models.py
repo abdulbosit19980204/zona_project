@@ -25,6 +25,11 @@ class Connection(models.Model):
     task_default_assignees = models.JSONField(default=list, blank=True)  # PRBC user id'lari
     task_watchers = models.JSONField(default=default_watchers, blank=True)  # kuzatuvchilar (observer) — PRBC user id
     close_on_done = models.BooleanField(default=True)  # PRBC'da bajarildi -> bizdagi savol "hal bo'ldi" + hisobot
+    watch_self = models.BooleanField(default=True)  # ulangan akkaunt egasi ham har vazifaga kuzatuvchi
+    notify_done = models.BooleanField(default=True)  # bajarilganda guruhdagi savolga izohlari bilan javob
+    notify_created = models.BooleanField(default=False)  # vazifa ochilganda guruhdagi savolga qisqa xabar
+    attach_files = models.BooleanField(default=True)  # savoldagi rasm/fayllar PRBC vazifasiga yuklanadi
+    assignee_map = models.JSONField(default=dict, blank=True)  # Telegram username -> PRBC user id (qo'lda moslash)
     sync_minutes = models.PositiveIntegerField(default=30)
     auto_left = models.BooleanField(default=True)  # bo'shaganni avtomatik belgilash (kontakt o'rni, inventar xodimi)
     comment_devices = models.BooleanField(default=True)  # bo'shash vazifasiga xodimdagi qurilmalar ro'yxati
@@ -143,6 +148,8 @@ class Task(models.Model):
     spent_minutes = models.PositiveIntegerField(null=True, blank=True)
     report = models.JSONField(default=dict, blank=True)  # bajarilganda: izohlar, chek-list, sarflangan vaqt, tarix
     checked_at = models.DateTimeField(null=True, blank=True, db_index=True)  # oxirgi marta PRBC'dan tekshirilgan
+    # savoldan PRBC'ga o'tkazilganlar: {"media": [Media id], "info": [qo'shimcha xabar id], "files": n, "notified": [...]}
+    sync = models.JSONField(default=dict, blank=True)
     created_by = models.CharField(max_length=150, blank=True)  # biz yaratganda: kim (panel foydalanuvchisi / bot)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

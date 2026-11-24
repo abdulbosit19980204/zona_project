@@ -50,9 +50,9 @@ class Command(BaseCommand):
                     if time.time() - last_task >= TASK_EVERY or conn.sync_requested:
                         last_task = time.time()
                         tasks.poll(client=Client(Connection.get()))  # holat va "bajarildi" hisoboti
-                elif conn.sync_requested:  # ulanish yoqilmagan — so'rov bajarilmaydi, sababi yoziladi
-                    Connection.objects.filter(pk=1).update(sync_requested=False,
-                                                           last_error="PRBC ulanishi yoqilmagan yoki parol kiritilmagan.")
+                elif conn.sync_requested:  # ulanish yoqilmagan — so'rov bajarilmaydi, aniq sababi yoziladi
+                    from prbc.views import not_ready
+                    Connection.objects.filter(pk=1).update(sync_requested=False, last_error=not_ready(conn))
             except PrbcError as e:
                 Connection.objects.filter(pk=1).update(last_error=str(e)[:2000])
             except Exception:  # noqa: BLE001 — worker hech qachon yiqilmasin

@@ -1181,7 +1181,7 @@
     "cPassword": "Password",
     "cPasswordSet": "Set — leave empty to keep it",
     "cBase": "PRBC address",
-    "cEnabled": "Sync enabled",
+    "cEnabled": "Connection enabled (sync and tasks)",
     "cMinutes": "Every N minutes",
     "cAutoLeft": "Apply leaving automatically",
     "cAutoLeftHint": "The contact seat becomes a vacancy (history kept) and the inventory employee inactive. Owners are not changed — they are listed.",
@@ -1240,6 +1240,22 @@
     "cWatchers": "Observers (PRBC user id)",
     "cWatchersHint": "Added as observers to every new task (e.g. 2 — Kamoliddin)",
     "cCloseDone": "Close the question when done",
-    "cCloseDoneHint": "When the PRBC task is done, the linked question is marked solved and the report is saved"
+    "cCloseDoneHint": "When the PRBC task is done, the linked question is marked solved and the report is saved",
+    "cCancelled": "cancelled {n}",
+    "colCancelled": "Cancelled",
+    "colGroup": "Group (questions)",
+    "filesAttached": "{n} file(s) uploaded to PRBC",
+    "notifiedCreated": "group told: task created",
+    "notifiedDone": "group got the done report",
+    "cMap": "Telegram → PRBC mapping",
+    "cMapHint": "username=PRBC user id, comma separated. Empty — found by the linked person or by name",
+    "cAttach": "Upload photos and files to the task",
+    "cAttachHint": "Photos and files from the question and sent later are attached to the PRBC task",
+    "cNotifyCreated": "Tell the group a task was created",
+    "cNotifyCreatedHint": "Reply to the question: task number and responsible",
+    "cNotifyDone": "Report to the group when done",
+    "cNotifyDoneHint": "Reply to the question: who did it, how long it took and the comments",
+    "cWatchSelf": "Add me as an observer",
+    "cWatchSelfHint": "The connected account owner ({me}) is added as an observer to every new task"
   }
 }

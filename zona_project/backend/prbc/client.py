@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime, timezone as dt_tz
 
 from zona.crypto import decrypt, encrypt
@@ -175,6 +176,51 @@ class Client:
             if value:
                 body[key] = [int(v) for v in value]
         return self.post("/tasks/", body)
+
+    def upload(self, path, filename, content, mime="application/octet-stream", field="file", extra=None):
+        """multipart/form-data (fayl biriktirish). Token eskirgan bo'lsa — bir marta qayta kiradi."""
+        url = f"{self.base}{path if path.startswith(API) else API + path}"
+        boundary = f"zona{uuid.uuid4().hex}"
+        safe = (filename or "file").replace('"', "").replace("\r", "").replace("\n", "")[:150]
+        parts = []
+        for k, v in (extra or {}).items():
+            parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; filename="{safe}"\r\n'
+                     f"Content-Type: {mime or 'application/octet-stream'}\r\n\r\n".encode() + content + b"\r\n")
+        body = b"".join(parts) + f"--{boundary}--\r\n".encode()
+
+        def send(token):
+            req = urllib.request.Request(url, data=body, method="POST", headers={
+                "Accept": "application/json", "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "User-Agent": "zona-prbc/1", "Authorization": f"Bearer {token}"})
+            try:
+                with self._open(req, timeout=TIMEOUT * 2) as r:
+                    raw = r.read()
+                    return r.status, (json.loads(raw) if raw else None)
+            except urllib.error.HTTPError as e:
+                raw = e.read()
+                try:
+                    return e.code, (json.loads(raw) if raw else None)
+                except ValueError:
+                    return e.code, None
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                raise PrbcError(f"PRBC serveriga ulanib bo'lmadi: {getattr(e, 'reason', e)}") from e
+
+        status, data = send(self.token())
+        if status == 401:
+            status, data = send(self.login())
+        if status >= 400:
+            raise PrbcError(error_text(data, status), status, data)
+        return data
+
+    def attach(self, task_id, filename, content, mime=""):
+        """Vazifaga fayl: POST /tasks/{id}/attachments/ (maydon nomi "file"; rad etilsa — "files")."""
+        try:
+            return self.upload(f"/tasks/{task_id}/attachments/", filename, content, mime)
+        except PrbcError as e:
+            if e.status == 400 and isinstance(e.payload, dict) and "files" in e.payload:
+                return self.upload(f"/tasks/{task_id}/attachments/", filename, content, mime, field="files")
+            raise
 
     def comment(self, task_id, text):
         try:

@@ -90,6 +90,9 @@ class FakePrbc:
     def comment(self, task_id, text):
         self.comments.append((task_id, text))
 
+    def profile(self):
+        return getattr(self, "me", {})
+
     def create_task(self, **kw):
         tid = 9000 + len(self.created)
         if self.ignore_watchers:
@@ -319,7 +322,8 @@ class TaskTests(TestCase):
         self.assertEqual(api.get("/api/prbc/overview/").status_code, 403)
         admin = User.objects.create_superuser("a", password="x")
         api.force_authenticate(admin)
-        r = api.patch("/api/prbc/connection/", {"phone": "998901234567", "password": "sir", "sync_minutes": 1}, format="json")
+        r = api.patch("/api/prbc/connection/", {"phone": "998901234567", "password": "sir", "sync_minutes": 1,
+                                                "enabled": True}, format="json")
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["password_set"])
         self.assertNotIn("sir", json.dumps(r.json()))
@@ -457,3 +461,243 @@ class ControlTests(TestCase):
         t = Task.objects.get(prbc_id=3300)
         self.assertEqual((t.status_category, t.kind, t.watchers), ("done", Task.LEAVE, "ATAQULOV KAMOLIDDIN"))
         self.assertEqual(t.completed_by, "Said Abror")
+
+
+class FakeTg:
+    """Telegram bot (worker guruhga yozadi va fayl yuklab oladi)."""
+
+    def __init__(self):
+        self.sent, self.edited = [], []
+
+    def send(self, chat_id, text, reply_to=None, **kw):
+        self.sent.append((chat_id, text, reply_to))
+        return {"message_id": 900 + len(self.sent)}
+
+    def edit_text(self, chat_id, message_id, text, **kw):
+        self.edited.append((chat_id, message_id, text))
+
+    def download(self, file_id, max_bytes=0):
+        return b"tg-bytes-" + file_id.encode()
+
+
+class AttachPrbc(FakePrbc):
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.files = []
+
+    def attach(self, task_id, filename, content, mime=""):
+        self.files.append((task_id, filename, content))
+        return {"id": len(self.files)}
+
+
+class SupportFlowTests(TestCase):
+    """Bot savoldan PRBC vazifasini o'zi ochadi: fayllar, qo'shimchalar, guruhga "ochildi" / "bajarildi" javobi."""
+
+    def setUp(self):
+        import tempfile
+        from unittest import mock
+
+        from support.models import Bot, Group, Settings, TgUser
+        from zona.models import Member
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        env = mock.patch.dict("os.environ", {"ZONA_SUPPORT_MEDIA": self.tmp.name})
+        env.start()
+        self.addCleanup(env.stop)
+        self.tg = FakeTg()
+        p = mock.patch.object(tasks, "_bot_client", lambda q: self.tg)
+        p.start()
+        self.addCleanup(p.stop)
+        self.conn = Connection.get()
+        self.conn.task_project, self.conn.task_default_assignees, self.conn.notify_created = 15, [48], True
+        self.conn.save()
+        s = Settings.load()
+        s.task_mode = "api"
+        s.save()
+        self.member = Member.objects.create(name="Xusniddin", role="IT operator", telegram="xusniddin_it")
+        Person.objects.create(prbc_user=60, full_name="TOSHMATOV XUSNIDDIN", name_key="toshmatov xusniddin", in_roster=True)
+        self.bot = Bot.objects.create(name="S", token_enc=encrypt("1:x"))
+        self.group = Group.objects.create(bot=self.bot, chat_id=-200, title="ROP Toshkent")
+        self.user = TgUser.objects.create(tg_id=881, name="Toshkent K1")
+
+    def _media(self, msg, name, data=b"", file_id=""):
+        import os
+
+        from support.models import Media
+        path = ""
+        if data:
+            path = name
+            with open(os.path.join(self.tmp.name, path), "wb") as f:
+                f.write(data)
+        return Media.objects.create(message=msg, kind=Media.PHOTO, path=path, mime="image/jpeg",
+                                    tg_file_ids={str(self.bot.pk): file_id} if file_id else {})
+
+    def test_full_flow_files_followups_and_group_reports(self):
+        from support.models import Message, SupportTask
+        from support.resolution import YES
+        q = Message.objects.create(bot=self.bot, group=self.group, chat_id=-200, message_id=10, user=self.user,
+                                   kind="question", text="ProTarget ochilmayapti, login xato", status=Message.ESCALATED,
+                                   confirm_msg_id=55)
+        self._media(q, "a.jpg", b"disk-bytes")
+        self._media(q, "", file_id="FILE9")  # serverga saqlanmagan — worker Telegram'dan oladi
+        Message.objects.create(bot=self.bot, group=self.group, chat_id=-200, message_id=11, user=self.user,
+                               kind=Message.INFO, question=q, text="login: k1_tash")
+        st = SupportTask.objects.create(message=q, assignee="xusniddin_it", title="ProTarget", text="Savol: ProTarget",
+                                        status=SupportTask.QUEUED)
+        fake = AttachPrbc()
+        self.assertEqual(tasks.process_support_queue(self.conn, fake), 1)
+        kw = fake.created[0]["kw"]
+        self.assertEqual(kw["assignee_ids"], [60])  # Xusniddin — zona xodimi ismi PRBC'da yagona
+        self.assertEqual(kw["watcher_ids"], [2])  # kuzatuvchi — Kamoliddin aka
+        self.assertIn("ProTarget ochilmayapti", kw["title"])
+        self.assertIn("login: k1_tash", kw["description"])
+        self.assertEqual(sorted(f[2] for f in fake.files), [b"disk-bytes", b"tg-bytes-FILE9"])
+        self.assertEqual(fake.comments, [])  # vazifa ochilishidagi qo'shimcha tavsifda — izoh takrorlanmaydi
+        st.refresh_from_db()
+        self.assertIn("2 ta fayl biriktirildi", st.reply)
+        self.assertEqual(len(self.tg.sent), 1)
+        self.assertIn("Vazifa ochildi", self.tg.sent[0][1])
+        self.assertEqual(self.tg.sent[0][2], 10)  # savolga reply
+
+        # savol egasi keyin yana rasm va izoh yubordi, boshqa savol takror — keyingi tekshiruvda vazifaga o'tadi
+        later = Message.objects.create(bot=self.bot, group=self.group, chat_id=-200, message_id=12, user=self.user,
+                                       kind=Message.INFO, question=q, text="yana skrin")
+        self._media(later, "b.jpg", b"later-bytes")
+        dup = Message.objects.create(bot=self.bot, group=self.group, chat_id=-200, message_id=13, user=self.user,
+                                     kind="question", text="ProTarget hali ham ochilmayapti")
+        SupportTask.objects.filter(pk=st.pk).update(duplicates=[dup.pk])
+        tasks.poll(self.conn, fake)
+        self.assertEqual(len(fake.files), 3)
+        texts = [c[1] for c in fake.comments]
+        self.assertTrue(any(c.startswith(tasks.INFO_MARK) and "yana skrin" in c for c in texts))
+        self.assertTrue(any(c.startswith("🔁") and "hali ham" in c for c in texts))
+        tasks.poll(self.conn, fake)  # takrorlanmaydi
+        self.assertEqual((len(fake.files), len(fake.comments)), (3, 2))
+
+        fake.task_status[9000] = {"name": "Done", "category": "done"}
+        tasks.poll(self.conn, fake)
+        done = self.tg.sent[-1][1]
+        self.assertIn("Bajarildi", done)
+        self.assertIn("TASK-9000", done)
+        self.assertIn("Kartrij almashtirildi", done)
+        self.assertIn("Said Abror", done)
+        self.assertEqual(self.tg.edited, [(-200, 55, "✅ Rahmat! Savol yopildi.")])  # "hal bo'ldimi?" tugmalari yopildi
+        q.refresh_from_db()
+        self.assertEqual(q.resolution, YES)
+        n = len(self.tg.sent)
+        tasks.poll(self.conn, fake)
+        self.assertEqual(len(self.tg.sent), n)  # guruhga ikkinchi marta yozilmaydi
+        t = Task.objects.get(prbc_id=9000)
+        self.assertEqual((t.sync["files"], t.sync["notified"]), (3, ["created", "done"]))
+
+    def test_russian_question_gets_russian_report_and_settings_off(self):
+        from support.models import Message, SupportTask
+        q = Message.objects.create(bot=self.bot, group=self.group, chat_id=-200, message_id=20, user=self.user,
+                                   kind="question", text="Не открывается ProTarget", lang="ru")
+        SupportTask.objects.create(message=q, assignee="xusniddin_it", title="ProTarget", status=SupportTask.QUEUED)
+        fake = AttachPrbc()
+        tasks.process_support_queue(self.conn, fake)
+        self.assertIn("Создана задача", self.tg.sent[0][1])
+        fake.task_status[9000] = {"name": "Done", "category": "done"}
+        tasks.poll(self.conn, fake)
+        self.assertIn("Выполнено", self.tg.sent[-1][1])
+        # sozlamada o'chirilsa — guruhga yozilmaydi, fayl yuklanmaydi
+        self.conn.notify_done = self.conn.notify_created = self.conn.attach_files = False
+        self.conn.save()
+        q2 = Message.objects.create(bot=self.bot, group=self.group, chat_id=-200, message_id=21, user=self.user,
+                                    kind="question", text="Yana")
+        self._media(q2, "c.jpg", b"x")
+        SupportTask.objects.create(message=q2, assignee="xusniddin_it", title="Yana", status=SupportTask.QUEUED)
+        n = len(self.tg.sent)
+        tasks.process_support_queue(self.conn, fake)
+        fake.task_status[9001] = {"name": "Done", "category": "done"}
+        tasks.poll(self.conn, fake)
+        self.assertEqual((len(self.tg.sent), fake.files), (n, []))
+
+    def test_assignee_mapping(self):
+        self.assertEqual(tasks.assignee_ids_for("@Xusniddin_IT", self.conn), [60])
+        self.conn.assignee_map = {"xusniddin_it": 61}
+        self.conn.save()
+        self.assertEqual(tasks.assignee_ids_for("xusniddin_it", self.conn), [61])  # qo'lda moslash ustun
+        self.conn.assignee_map = {}
+        self.conn.save()
+        Person.objects.create(prbc_user=62, full_name="ALIYEV XUSNIDDIN", name_key="aliyev xusniddin")
+        self.assertEqual(tasks.assignee_ids_for("xusniddin_it", self.conn), [])  # ikki xil Xusniddin — taxmin qilinmaydi
+        api = APIClient()
+        api.force_authenticate(User.objects.create_superuser("a", password="x"))
+        r = api.patch("/api/prbc/connection/", {"assignee_map": "xusniddin_it=60, @Said=51, bad=x",
+                                                "notify_created": True}, format="json").json()
+        self.assertEqual(r["assignee_map"], {"xusniddin_it": 60, "said": 51})
+        self.assertEqual(r["named"]["60"], "TOSHMATOV XUSNIDDIN")
+
+    def test_group_stats_and_cancelled(self):
+        from support.models import Message, SupportTask
+        q = Message.objects.create(bot=self.bot, group=self.group, chat_id=-200, message_id=30, user=self.user,
+                                   kind="question", text="x")
+        st = SupportTask.objects.create(message=q, title="x", status=SupportTask.SENT)
+        Task.objects.create(prbc_id=1, title="a", kind=Task.OURS, status_category="done", support_task=st, assignee="X")
+        Task.objects.create(prbc_id=2, title="b", kind=Task.OURS, status_category="cancelled", support_task=st, assignee="X")
+        Task.objects.create(prbc_id=3, title="c", kind=Task.OURS, status_category="new", assignee="X",
+                            due_at=timezone.now() - timedelta(hours=1))
+        api = APIClient()
+        api.force_authenticate(User.objects.create_superuser("a", password="x"))
+        d = api.get("/api/prbc/tasks/stats/").json()
+        self.assertEqual(d["total"]["cancelled"], 1)
+        g = {r["name"]: r for r in d["groups"]}
+        self.assertEqual((g["ROP Toshkent"]["done"], g["ROP Toshkent"]["cancelled"]), (1, 1))
+        self.assertEqual(g["Guruhsiz (panel yoki shaxsiy chat)"]["overdue"], 1)
+        self.assertEqual(d["rows"][0]["cancelled"], 1)
+
+    def test_client_upload_is_multipart(self):
+        self.conn.phone, self.conn.password_enc = "998901234567", encrypt("sir")
+        self.conn.save()
+        calls = []
+
+        def opener(req, timeout=None):
+            calls.append(req)
+            body = {"access": "a.eyJleHAiOjk5OTk5OTk5OTl9.s", "refresh": "r"} if "login" in req.full_url else {"id": 7}
+            r = io.BytesIO(json.dumps(body).encode())
+            r.status = 200
+            return type("R", (), {"__enter__": lambda s: r, "__exit__": lambda s, *a: None})()
+        out = Client(self.conn, opener=opener).attach(9000, 'skrin"1.jpg', b"\x89PNG", "image/png")
+        self.assertEqual(out, {"id": 7})
+        req = calls[-1]
+        self.assertTrue(req.full_url.endswith("/api/v1/tasks/9000/attachments/"))
+        self.assertIn("multipart/form-data; boundary=", req.headers["Content-type"])
+        self.assertIn(b'name="file"; filename="skrin1.jpg"', req.data)
+        self.assertIn(b"\x89PNG", req.data)
+
+
+class SelfWatcherAndSyncTests(TestCase):
+    def test_connected_account_owner_is_observer_too(self):
+        conn = Connection.get()
+        conn.task_default_assignees = [48]
+        conn.save()
+        Person.objects.create(prbc_user=495, full_name="TO‘YCHIYEV ABDULBOSIT ORIBJON O‘G‘LI",
+                              name_key=people.name_key("TO‘YCHIYEV ABDULBOSIT ORIBJON O‘G‘LI"))
+        fake = FakePrbc()
+        fake.me = {"id": 7, "full_name": "TO‘YCHIYEV ABDULBOSIT ORIBJON O‘G‘LI"}  # profil id'si boshqa — ism bo'yicha
+        tasks.create(title="x", conn=conn, client=fake)
+        self.assertEqual(fake.created[0]["kw"]["watcher_ids"], [2, 495])
+        self.assertEqual(Connection.get().me["full_name"], "TO‘YCHIYEV ABDULBOSIT ORIBJON O‘G‘LI")
+        tasks.create(title="y", assignee_ids=[495], conn=conn, client=fake)  # o'zi ijrochi — kuzatuvchi emas
+        self.assertEqual(fake.created[1]["kw"]["watcher_ids"], [2])
+        conn.watch_self = False
+        conn.save()
+        tasks.create(title="z", conn=conn, client=fake)
+        self.assertEqual(fake.created[2]["kw"]["watcher_ids"], [2])
+
+    def test_sync_says_exactly_what_is_missing(self):
+        api = APIClient()
+        api.force_authenticate(User.objects.create_superuser("a", password="x"))
+        self.assertIn("telefon", api.post("/api/prbc/sync/").json()["detail"])
+        api.patch("/api/prbc/connection/", {"phone": "998901234567", "password": "sir"}, format="json")
+        r = api.post("/api/prbc/sync/")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("«Ulanish yoqilgan»", r.json()["detail"])
+        self.assertFalse(Connection.get().sync_requested)
+        Connection.objects.filter(pk=1).update(last_error="PRBC ulanishi yoqilmagan yoki parol kiritilmagan.")
+        c = api.patch("/api/prbc/connection/", {"enabled": True}, format="json").json()
+        self.assertEqual((c["last_error"], c["ready"]), ("", True))  # eski xato tozalandi
+        self.assertEqual(api.post("/api/prbc/sync/").status_code, 200)
+        self.assertTrue(Connection.get().sync_requested)
