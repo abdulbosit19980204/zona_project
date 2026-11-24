@@ -28,6 +28,13 @@ def note_html(lang):
     return f"\n\n<i>{html.escape(NOTE['ru' if lang == 'ru' else 'uz'])}</i>"
 
 
+def ack_buttons(q, settings):
+    """"Qabul qilindi / javob beradi: @X" xabari ostida faqat ⚠️ Xato — noto'g'ri mas'ul yoki yo'naltirishni belgilash uchun."""
+    if not settings.review_button:
+        return None
+    return [[{"text": "⚠️ Неверно" if q.lang == "ru" else "⚠️ Xato", "callback_data": f"bad:{q.id}"}]]
+
+
 def buttons(q, settings):
     """Bot javobi ostidagi tugmalar — bitta ixcham qatorda: 👍 / 👎 (savol egasi) va ⚠️ Xato (har kim: javob yashiriladi,
     tuzatishga tushadi). Guruhda katta-katta tugmalar joy egallamasin."""

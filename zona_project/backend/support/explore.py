@@ -28,7 +28,7 @@ DIMS = {
     "activity": ["day", "week", "month", "weekday", "group", "person", "who"],
 }
 METRICS = {
-    "questions": ["count", "bot", "staff", "unanswered", "yes", "no", "work", "asked", "unknown", "open", "rate",
+    "questions": ["count", "bot", "staff", "staff_done", "unanswered", "yes", "no", "work", "asked", "unknown", "open", "rate",
                   "bot_share", "median_s", "avg_s", "p90_s", "within_15", "photo", "askers"],
     "staff": ["count", "answers", "clarifications", "handoffs", "questions", "median_s", "avg_s", "people"],
     "activity": ["messages", "people", "days"],
@@ -80,7 +80,7 @@ def _label(dim, key, names):
 
 def _q_rows(qs):
     """Savollar: har biri — o'lchovlar yorlig'i va hisob uchun maydonlar."""
-    rows = list(qs.values("id", "created_at", "answered_at", "status", "stage", "resolution", "source", "photo_file_id",
+    rows = list(qs.values("id", "created_at", "answered_at", "status", "stage", "resolution", "resolved_by", "source", "photo_file_id",
                           "category", "app", "origin", "answered_by", "group__title", "entry__title", "tags",
                           "entry__responsible__name", "user_id", "user__name", "user__username", "user__staff_person__role",
                           "user__staff_person__project__name", "user__staff_person__territory", "handler__member__name",
@@ -108,6 +108,8 @@ def _q_rows(qs):
         done = r["status"] in (Message.ANSWERED, Message.CLOSED) or r["resolution"] == Message.YES or fs is not None
         bot = r["status"] in (Message.ANSWERED, Message.CLOSED) and r["stage"] in BOT_STAGES
         staff = not bot and done and (r["stage"] in STAFF_STAGES or fs is not None)
+        # mas'ul xodim ishni bajarib tasdiqlagan (masalan, aksiyani yoqdi) — bot faqat ma'lumot bergan bo'lsa ham
+        staff_done = r["resolution"] == Message.YES and (r["resolved_by"] or "").startswith("xodim: ")
         # bot — haqiqiy soniyalar; xodim — faqat ish vaqti (tun va dam olish kunlari kutish hisoblanmaydi)
         cands = [x for x in ((max(0.0, (r["answered_at"] - r["created_at"]).total_seconds()) if bot and r["answered_at"] else None),
                              work_secs(r["created_at"], fs, hours) if fs else None) if x is not None]
@@ -121,7 +123,8 @@ def _q_rows(qs):
              "group": r["group__title"] or "—", "asker": uid, "role": roles.get(r["user__staff_person__role"] or "", "Noma'lum"),
              "project": r["user__staff_person__project__name"] or "Noma'lum",
              "territory": r["user__staff_person__territory"] or "Noma'lum",
-             "answer": "Bot" if bot else "Xodim" if staff else "Javobsiz" if not done else "Boshqa",
+             "answer": ("Xodim bajardi" if staff_done else "Bot" if bot else "Xodim" if staff else "Javobsiz" if not done
+                        else "Boshqa"),
              "staff": staff_name or "—", "status": r["status"], "resolution": r["resolution"] or "noma'lum",
              "topic": r["entry__title"] or "Turi aniqlanmagan", "responsible": r["entry__responsible__name"] or "—",
              "tag": list(r["tags"] or []) or ["—"],
@@ -129,7 +132,7 @@ def _q_rows(qs):
              "photo": "Rasmli" if r["photo_file_id"] else "Matnli",
              "screen": screen.get(r["id"]) or ("Turi aniqlanmagan ekran" if r["photo_file_id"] else "Rasmsiz"),
              "speed": next(lbl for lim, lbl in SPEED if secs <= lim) if secs is not None else "Javob yo'q"}
-        out.append((k, {"bot": bot, "staff": staff, "done": done, "res": r["resolution"], "secs": secs,
+        out.append((k, {"bot": bot, "staff": staff, "staff_done": staff_done, "done": done, "res": r["resolution"], "secs": secs,
                         "photo": bool(r["photo_file_id"]), "uid": uid, "id": r["id"]}))
     return out, names
 
@@ -143,6 +146,7 @@ def _q_metrics(items):
     bot = sum(1 for x in items if x["bot"])
     secs = sorted(x["secs"] for x in items if x["secs"] is not None)
     return {"count": n, "bot": bot, "staff": sum(1 for x in items if x["staff"]),
+            "staff_done": sum(1 for x in items if x.get("staff_done")),
             "unanswered": sum(1 for x in items if not x["done"]), "yes": yes, "no": no, "work": work, "asked": asked,
             "unknown": n - yes - no - work - asked, "open": no + work + asked,
             "rate": round(100 * yes / (yes + no)) if yes + no else None, "bot_share": round(100 * bot / n) if n else None,

@@ -166,10 +166,15 @@ class GroupSerializer(serializers.ModelSerializer):
         model = Group
         fields = ["id", "bot", "bot_name", "chat_id", "title", "mode", "effective_mode", "is_active", "is_admin",
                   "in_analytics", "joined_at", "last_message_at", "questions_7d", "redirect_to", "invite_link", "link",
-                  "redirect_count"]
+                  "redirect_count", "sees_all"]
         read_only_fields = ["bot", "chat_id", "title", "is_admin", "joined_at", "last_message_at", "redirect_count"]
 
     link = serializers.SerializerMethodField()
+    sees_all = serializers.SerializerMethodField()
+
+    def get_sees_all(self, g):
+        """Bot guruhdagi barcha xabarlarni ko'radimi: admin bo'lsa yoki botda privacy o'chiq bo'lsa."""
+        return bool(g.is_admin or g.bot.read_all)
 
     def get_link(self, g):
         return g.invite_link or (f"https://t.me/{g.username}" if g.username else "")
@@ -1094,7 +1099,7 @@ def analytics(request):
         elif stage in ("staff", "panel", "react"):
             d["staff"] += 1
     groups = list(questions.values("group__title").annotate(n=Count("id")).order_by("-n")[:15])
-    unanswered = questions.exclude(status__in=[Message.ANSWERED, Message.CLOSED]).count()
+    unanswered = questions.exclude(status__in=[Message.ANSWERED, Message.CLOSED]).exclude(resolution=Message.YES).count()
     total = questions.count()
     answered = questions.filter(status__in=[Message.ANSWERED, Message.CLOSED])
     bot_n = answered.filter(stage__in=BOT_STAGES).count()
@@ -1102,7 +1107,9 @@ def analytics(request):
     summary = {"total": total, "bot": bot_n, "staff": staff_n, "react": answered.filter(stage="react").count(),
                "unanswered": unanswered, "bot_share": round(100 * bot_n / total) if total else None,
                "staff_share": round(100 * staff_n / total) if total else None,
-               "open": questions.filter(resolution__in=[Message.NO, Message.WORK, Message.ASKED]).count()}
+               "open": questions.filter(resolution__in=[Message.NO, Message.WORK, Message.ASKED]).count(),
+               # mas'ul xodim ishni bajardi va o'zi tasdiqladi ("✅ Javob berildi / bajarildi")
+               "staff_done": questions.filter(resolution=Message.YES, resolved_by__startswith="xodim: ").count()}
     return Response({
         **info, "questions": total, "unanswered": unanswered, "summary": summary, "excluded": excluded,
         "by_source": dict(questions.values_list("source").annotate(c=Count("id"))),

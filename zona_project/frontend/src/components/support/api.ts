@@ -28,7 +28,7 @@ export interface SupportGroup {
   effective_mode: Mode; is_active: boolean; is_admin: boolean; joined_at: string; last_message_at: string | null;
   questions_7d: number; in_analytics: boolean;
   /** eski guruh: savollar shu guruhga yo'naltiriladi (bot javob bermaydi, havola yuboradi) */
-  redirect_to: number | null; invite_link: string; link: string; redirect_count: number;
+  redirect_to: number | null; invite_link: string; link: string; redirect_count: number; sees_all: boolean;
 }
 export interface EntryVersion {
   id: number; title: string; questions: string[]; triggers: string[]; extract: string[]; answer: string;
@@ -207,7 +207,7 @@ export interface Analytics extends Period {
   top_asks: { text: string; count: number }[];
   daily: { date: string; total: number; bot: number; staff: number; resolved?: number; unresolved?: number }[];
   summary?: { total: number; bot: number; staff: number; react: number; unanswered: number; bot_share: number | null;
-    staff_share: number | null; open: number };
+    staff_share: number | null; open: number; staff_done?: number };
   excluded?: { history: number; groups_off: number; duplicates: number; ignored: number; groups: string[] };
   resolution?: { total: number; yes: number; no: number; asked: number; work?: number; unknown: number; rate: number | null;
     confirmed_share: number | null; by: { by: string; n: number }[] };

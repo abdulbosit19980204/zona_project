@@ -8,7 +8,9 @@
 """
 import json
 import re
+import threading
 import time
+from contextlib import contextmanager
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -63,8 +65,29 @@ def api_key(provider):
     return decrypt(provider.api_key_enc)
 
 
+_LOCAL = threading.local()
+
+
+@contextmanager
+def deadline(seconds):
+    """Shu blok ichidagi barcha AI so'rovlari (zanjirdagi zaxira modellar bilan birga) jami `seconds` dan oshmaydi."""
+    prev = getattr(_LOCAL, "until", None)
+    _LOCAL.until = time.monotonic() + seconds
+    try:
+        yield
+    finally:
+        _LOCAL.until = prev
+
+
 def _timeout():
-    return conf.get("AI_TIMEOUT")
+    t = conf.get("AI_TIMEOUT")
+    until = getattr(_LOCAL, "until", None)
+    if until is None:
+        return t
+    left = until - time.monotonic()
+    if left <= 1:
+        raise AIError("Javob muddati tugadi (vaqt tugadi)")
+    return max(1.0, min(float(t), left))
 
 
 # ------------------------------------------------------------------ HTTP

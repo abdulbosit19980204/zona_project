@@ -56,13 +56,14 @@ export function SupportAnalytics() {
       {!a && <div className="grid gap-4"><Skeleton className="h-20" /><Skeleton className="h-96" /></div>}
       {a && (
         <div className="grid gap-5">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
             <Drill to="total" range={range}><Metric label={t("anQuestions")} value={a.questions} hint={`${t("anPhoto")}: ${a.with_photo}`} icon={Inbox} tone="primary" /></Drill>
             <Drill to="yes" range={range}><Metric label={t("resRate")} value={a.resolution?.rate != null ? `${a.resolution.rate}%` : "—"}
               hint={a.resolution ? `${t("r_yes")} ${a.resolution.yes} · ${t("r_no")} ${a.resolution.no}` : undefined} icon={CircleCheck} tone="success" /></Drill>
             <Drill to="bot" range={range}><Metric label={t("kpiBot")} value={sm?.bot ?? 0} hint={sm?.bot_share != null ? `${sm.bot_share}%` : undefined} icon={Bot} tone="success" /></Drill>
             <Drill to="staff" range={range}><Metric label={t("kpiStaff")} value={sm?.staff ?? 0}
               hint={sm ? `${sm.staff_share ?? 0}% · ${t("kpiReacts", { n: sm.react })}` : undefined} icon={UserRound} /></Drill>
+            <Metric label={t("kpiStaffDone")} value={sm?.staff_done ?? 0} hint={t("kpiStaffDoneHint")} icon={CircleCheck} tone="success" />
             <Drill to="unanswered" range={range}><Metric label={t("anUnanswered")} value={sm?.unanswered ?? a.unanswered} icon={HelpCircle} tone="warning" /></Drill>
             <Drill to="open" range={range}><Metric label={t("anOpenNow")} value={sm?.open ?? 0} hint={t("anOpenHint")} icon={ListChecks} tone="warning" /></Drill>
           </div>

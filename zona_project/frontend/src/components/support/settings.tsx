@@ -245,10 +245,14 @@ function RedirectRow({ g, list, t, onSave, pending }: {
           {list.filter((x) => x.id !== g.id && !x.redirect_to).map((x) => <option key={x.id} value={x.id}>{x.title || x.chat_id}</option>)}
         </select>
         {g.redirect_to && <span className="text-warning">{t("rdActive", { n: g.redirect_count })}</span>}
+        {g.redirect_to && !g.sees_all && <span className="leading-snug text-destructive">{t("rdBlind")}</span>}
       </label>
       <label className="grid gap-1">
-        <span className="text-muted-foreground">{t("rdLink")}{incoming > 0 && <> · {t("rdIncoming", { n: incoming })}</>}</span>
-        <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder={g.link || "https://t.me/+..."} className="h-8 text-xs"
+        <span className="text-muted-foreground">
+          {g.redirect_to ? t("rdLinkOld") : t("rdLink")}{incoming > 0 && <> · {t("rdIncoming", { n: incoming })}</>}
+        </span>
+        <Input value={link} onChange={(e) => setLink(e.target.value)} className="h-8 text-xs"
+          placeholder={(g.redirect_to ? list.find((x) => x.id === g.redirect_to)?.link : g.link) || "https://t.me/+..."}
           onBlur={() => link !== g.invite_link && onSave({ invite_link: link })} />
         {!g.invite_link && g.link && <span className="truncate text-muted-foreground">{t("rdAuto")}: {g.link}</span>}
         {incoming > 0 && !g.link && !g.invite_link && <span className="text-warning">{t("rdNoLink")}</span>}

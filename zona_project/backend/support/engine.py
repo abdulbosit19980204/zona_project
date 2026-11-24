@@ -646,6 +646,9 @@ def people_text():
     return _PEOPLE["text"]
 
 
+AI_LIVE_SECONDS = 25
+
+
 def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=(), asker="", history="", alert=""):
     """AI javobi o'zimizning ma'lumotlarga tayanadi: bilim bazasidagi eng yaqin javoblar, rasmdan tanilgan ekranlar,
     xodimlarning o'xshash savollarga bergan haqiqiy javoblari (misol sifatida) va qoida."""
@@ -690,8 +693,11 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
         message += f"\n\nEKRANDAGI QIZIL XATO XABARI (eng muhim — javob shu sababga):\n{alert[:500]}"
     if ocr:
         message += f"\n\nRASMDAGI MATN (OCR, xato o'qilgan bo'lishi mumkin):\n{ocr[:1500]}"
+    from zona.ai.providers import deadline
     try:
-        data, meta = ai.run(AITaskConfig.SUPPORT, None, raw[:200], system, message, AI_SCHEMA)
+        # guruhdagi odam kutyapti: AI (zaxira modellar bilan birga) ko'pi bilan AI_LIVE_SECONDS — keyin odamga uzatiladi
+        with deadline(AI_LIVE_SECONDS):
+            data, meta = ai.run(AITaskConfig.SUPPORT, None, raw[:200], system, message, AI_SCHEMA)
     except AIError:
         return None
     conf_pct = round(100 * max(0.0, min(1.0, float(data.get("confidence") or 0))))
@@ -880,6 +886,9 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
     # qidiruvga faqat savolning boshi (uzun rasm matni qidiruvni sekinlashtiradi, mas'ulni aniqlashga qo'shmaydi)
     query = qtext.strip()[:200]
     task, rule_conf, resp = rule_answer(query, lang) if query else (None, 0, [])
+    if rule_conf < settings.route_threshold:
+        # qoida ishonchsiz mos keldi — uning mas'uli (boshqa bo'lim xodimi) savolga biriktirilmaydi va belgilanmaydi
+        resp = []
     raw_t = list(dict.fromkeys(toks(alert + " " + qtext if alert else qtext)))[:MAX_TOKENS]
     index = _entry_tokens(faqs)
     ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
@@ -919,6 +928,8 @@ def followup(raw, lang, history, asker="", previous=""):
     index = _entry_tokens(faqs)
     ranked = sorted(faqs, key=lambda x: -max((_dice(raw_t, qt) for qt in index.get(x.pk) or []), default=0))
     task, _rc, resp = rule_answer(raw.strip()[:200], lang) if raw.strip() else (None, 0, [])
+    if _rc < settings.route_threshold:
+        resp = []
     ai = ai_answer(raw, lang, ranked, task, settings, asker=asker, history=history)
     resp = apply_owner(Decision("", None, 0, "", True, resp), raw).responsible
     if (ai and ai["text"] and not ai["needs_human"] and ai["confidence"] >= settings.ai_min_confidence

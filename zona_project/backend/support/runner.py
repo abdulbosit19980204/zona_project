@@ -373,7 +373,7 @@ class Handler:
         target = Group.objects.select_related("bot").filter(pk=group.redirect_to_id).first()
         if target is None:
             return None
-        link = invite_link(target, self.tg if target.bot_id == self.bot.pk else None)
+        link = group.invite_link or invite_link(target, self.tg if target.bot_id == self.bot.pk else None)
         Handler._redirected[key] = now
         html_text = redirect_text(user, text, target.title, link)
         sent = self._safe_send(group.chat_id, html_text, reply_to=msg["message_id"])
@@ -852,7 +852,9 @@ class Handler:
             if settings.mention_responsible and d.responsible and d.responsible[0].get("telegram"):
                 ack += " " + " ".join("@" + t for t in d.responsible[0]["telegram"][:3])
             if settings.escalation_ack:
-                sent = self._pg().finish(engine.html.escape(ack)) or self._safe_send(q.chat_id, engine.html.escape(ack), reply_to=q.message_id)
+                kb = review.ack_buttons(q, settings)
+                sent = (self._pg().finish(engine.html.escape(ack), kb)
+                        or self._safe_send(q.chat_id, engine.html.escape(ack), reply_to=q.message_id, buttons=kb))
                 if sent:
                     Message.objects.filter(pk=q.pk).update(bot_reply_id=sent.get("message_id"))
             else:
@@ -907,7 +909,9 @@ class Handler:
             if settings.mention_responsible and d.responsible and d.responsible[0].get("telegram"):
                 tags = " ".join("@" + t for t in d.responsible[0]["telegram"][:3])
                 ack += (" Ответит: " if q.lang == "ru" else " Javob beradi: ") + tags
-            sent = self._pg().finish(engine.html.escape(ack)) or self._safe_send(q.chat_id, engine.html.escape(ack), reply_to=q.message_id)
+            kb = review.ack_buttons(q, settings)  # noto'g'ri mas'ul / yo'naltirish ham "⚠️ Xato javob" bilan belgilanadi
+            sent = (self._pg().finish(engine.html.escape(ack), kb)
+                    or self._safe_send(q.chat_id, engine.html.escape(ack), reply_to=q.message_id, buttons=kb))
             if sent:
                 Message.objects.filter(pk=q.pk).update(bot_reply_id=sent.get("message_id"))
         else:
@@ -1888,9 +1892,11 @@ class BotWorker(threading.Thread):
             close_old_connections()
             try:
                 bot = Bot.objects.get(pk=self.bot_id)
-                if not bot.username:
+                if not bot.username or bot.read_all is None:
                     me = client.get_me()
-                    Bot.objects.filter(pk=bot.pk).update(username=me.get("username", ""), tg_id=me.get("id"))
+                    # read_all: privacy o'chiq — admin bo'lmagan guruhlardagi xabarlarni ham ko'radi
+                    Bot.objects.filter(pk=bot.pk).update(username=me.get("username", ""), tg_id=me.get("id"),
+                                                         read_all=bool(me.get("can_read_all_group_messages")))
                 updates = client.get_updates(bot.last_update_id + 1 if bot.last_update_id else None)
                 handler = Handler(bot, client, executor=pool)
                 for upd in updates or []:

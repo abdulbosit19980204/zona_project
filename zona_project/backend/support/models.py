@@ -134,6 +134,8 @@ class Bot(models.Model):
     name = models.CharField("Nomi", max_length=80)
     username = models.CharField("Username", max_length=64, blank=True)
     tg_id = models.BigIntegerField(null=True, blank=True)
+    # Telegram: can_read_all_group_messages (privacy o'chiq) — admin bo'lmagan guruhlardagi xabarlarni ham ko'radi
+    read_all = models.BooleanField(null=True, blank=True)
     token_enc = models.TextField(blank=True)
     enabled = models.BooleanField("Yoqilgan", default=True)
     mode = models.CharField("Rejim", max_length=8, choices=MODES, default=MODE_SHADOW)
