@@ -66,6 +66,9 @@ interface StatRow { name: string; total: number; done: number; open: number; ove
 interface GroupRow { name: string; total: number; done: number; open: number; overdue: number; cancelled: number }
 interface TestResult { ok: boolean; me: { full_name?: string }; checks: Record<string, { ok: boolean; count?: number; detail?: string }>; projects: { id: number; name: string }[] }
 
+interface Project { id: number; name: string; open?: number | null }
+interface GroupProject { id: number; title: string; questions: number; project: number | null; project_name: string; suggested: number | null; suggested_name: string }
+
 const get = async <T,>(url: string, params?: Record<string, string | number>) => (await api.get<T>(url, { params })).data;
 const d = (v: string | null | undefined, time = false) => (v ? format(new Date(v), time ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy") : "—");
 const STATUS_TONE: Record<Status, string> = { active: "bg-success/15 text-success", leaving: "bg-warning/15 text-warning", left: "bg-destructive/15 text-destructive" };
@@ -499,6 +502,8 @@ function ConnTab({ conn }: { conn: Conn }) {
   const ids = (s: string) => s.split(/[,\s]+/).filter(Boolean).map(Number).filter((n) => Number.isInteger(n) && n > 0);
   const names = (s: string) => ids(s).map((id) => conn.named?.[String(id)] ?? `#${id}`).join(", ");
   const [test, setTest] = useState<TestResult | null>(null);
+  const projects = useQuery({ queryKey: ["prbc", "projects"], queryFn: () => get<Project[]>("prbc/projects/"), enabled: conn.password_set, retry: false });
+  const plist: Project[] = test?.projects ?? projects.data ?? [];
   const save = useAction(() => api.patch("prbc/connection/", {
     enabled: f.enabled, base_url: f.base_url, phone: f.phone, sync_minutes: f.sync_minutes, auto_left: f.auto_left,
     comment_devices: f.comment_devices, task_project: f.task_project, lifecycle_project: f.lifecycle_project,
@@ -526,9 +531,10 @@ function ConnTab({ conn }: { conn: Conn }) {
           <div className="grid gap-1.5"><Label>{t("cTaskProject")}</Label>
             <Select value={String(f.task_project ?? "")} onValueChange={(v) => setF({ ...f, task_project: v ? Number(v) : null })}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>{(test?.projects ?? []).map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-                {f.task_project && !test?.projects.some((p) => p.id === f.task_project) && <SelectItem value={String(f.task_project)}>#{f.task_project}</SelectItem>}</SelectContent>
-            </Select></div>
+              <SelectContent>{plist.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                {f.task_project && !plist.some((p) => p.id === f.task_project) && <SelectItem value={String(f.task_project)}>#{f.task_project}</SelectItem>}</SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">{plist.length ? t("cProjectHint") : t("cProjectEmpty")}</span></div>
           <div className="grid gap-1.5"><Label>{t("cAssignees")}</Label><Input value={f.assignees} onChange={(e) => setF({ ...f, assignees: e.target.value })} placeholder="48, 167" />
             {f.assignees && <span className="text-xs text-muted-foreground">{names(f.assignees)}</span>}</div>
           <div className="grid gap-1.5"><Label>{t("cWatchers")}</Label><Input value={f.watchers} onChange={(e) => setF({ ...f, watchers: e.target.value })} placeholder="2" />
@@ -551,6 +557,7 @@ function ConnTab({ conn }: { conn: Conn }) {
           <Button variant="outline" onClick={() => runTest.mutate(undefined)} disabled={runTest.isPending}><Plug className="size-4" />{t("test")}</Button>
         </div>
       </Card>
+      <GroupProjects projects={plist} className="lg:col-span-2 lg:row-start-2" />
       {test && (
         <Card className="h-fit gap-2 p-5 text-sm">
           <div className="font-medium text-success">{t("testOk", { name: test.me?.full_name ?? "" })}</div>
@@ -563,5 +570,63 @@ function ConnTab({ conn }: { conn: Conn }) {
         </Card>
       )}
     </div>
+  );
+}
+
+function GroupProjects({ projects, className }: { projects: Project[]; className?: string }) {
+  const t = useTranslations("prbc");
+  const q = useQuery({ queryKey: ["prbc", "group-projects"], queryFn: () => get<{ default: number | null; default_name: string; groups: GroupProject[] }>("prbc/group-projects/") });
+  const save = useAction((body: Record<string, number | null>) => api.patch("prbc/group-projects/", body), t("saved"));
+  const refresh = useAction(() => api.get("prbc/projects/", { params: { refresh: 1 } }), t("projectsRefreshed"));
+  const rows = q.data?.groups ?? [];
+  const sugg = rows.filter((g) => !g.project && g.suggested);
+  return (
+    <Card className={cn("gap-0 overflow-hidden p-0", className)}>
+      <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{t("gpTitle")}</div>
+          <div className="text-xs text-muted-foreground">{t("gpHint", { name: q.data?.default_name || (q.data?.default ? `#${q.data.default}` : "—") })}</div>
+        </div>
+        {sugg.length > 0 && (
+          <Button size="sm" variant="outline" disabled={save.isPending}
+            onClick={() => save.mutate(Object.fromEntries(sugg.map((g) => [String(g.id), g.suggested])))}>{t("gpApplyAll", { n: sugg.length })}</Button>
+        )}
+        <Button size="sm" variant="ghost" disabled={refresh.isPending} onClick={() => refresh.mutate(undefined)}>
+          <RefreshCcwDot className={cn("size-4", refresh.isPending && "animate-spin")} />{t("gpRefresh")}
+        </Button>
+      </div>
+      {!rows.length ? <div className="px-4 py-6 text-sm text-muted-foreground">{t("gpEmpty")}</div> : (
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>{t("colGroup")}</TableHead><TableHead className="text-right">{t("gpQuestions")}</TableHead><TableHead>{t("gpProject")}</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {rows.map((g) => (
+              <TableRow key={g.id}>
+                <TableCell className="max-w-64 truncate">{g.title}</TableCell>
+                <TableCell className="text-right text-muted-foreground">{g.questions}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select value={String(g.project ?? 0)} onValueChange={(v) => save.mutate({ [String(g.id)]: Number(v) || null })}>
+                      <SelectTrigger className="h-8 w-64 max-w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">{t("gpDefault")}</SelectItem>
+                        {projects.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                        {g.project && !projects.some((p) => p.id === g.project) && <SelectItem value={String(g.project)}>{g.project_name || `#${g.project}`}</SelectItem>}
+                      </SelectContent>
+                    </Select>
+                    {!g.project && g.suggested && (
+                      <button type="button" className="text-xs text-primary hover:underline" onClick={() => save.mutate({ [String(g.id)]: g.suggested })}>
+                        {t("gpSuggest", { name: g.suggested_name })}
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Card>
   );
 }

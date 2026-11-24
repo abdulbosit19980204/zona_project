@@ -133,6 +133,40 @@ def create(*, title, description="", assignee_ids=(), watcher_ids=None, project=
     return t
 
 
+def load_projects(conn, client):
+    """PRBC loyihalar ro'yxati -> Connection.projects (kesh)."""
+    out = [{"id": p.get("id"), "name": (p.get("name") or "")[:200], "open": p.get("open_count")}
+           for p in client.pages("/task-projects/", max_pages=10) if p.get("id")]
+    Connection.objects.filter(pk=conn.pk).update(projects=out)
+    conn.projects = out
+    return out
+
+
+def _words(s):
+    import re
+    return {w for w in re.findall(r"\w+", (s or "").lower()) if len(w) >= 3 and not w.isdigit()}
+
+
+def suggest_project(title, projects):
+    """Guruh nomiga eng o'xshash loyiha (umumiy so'zlar soni bo'yicha; teng bo'lsa — taklif yo'q)."""
+    g = _words(title)
+    if not g:
+        return None
+    scored = sorted(((len(g & _words(p["name"])), p["id"]) for p in projects), reverse=True)
+    if not scored or scored[0][0] == 0 or (len(scored) > 1 and scored[1][0] == scored[0][0]):
+        return None
+    return scored[0][1]
+
+
+def project_for(conn, q):
+    """Savol kelgan guruhga bog'langan PRBC loyiha; bog'lanmagan bo'lsa — standart loyiha."""
+    if q is not None and q.group_id:
+        pid = (conn.group_projects or {}).get(str(q.group_id))
+        if pid:
+            return int(pid)
+    return conn.task_project
+
+
 def task_url(conn, t):
     return f"{(conn.base_url or 'https://prbc.uz').rstrip('/')}/tasks/{t.prbc_id}"
 
@@ -364,7 +398,7 @@ def process_support_queue(conn=None, client=None, limit=10):
                 body += "\n\nQo'shimcha (savol egasidan):\n" + "\n".join(f"• {x[:500]}" for x in extra[:10])
         try:
             t = create(title=title, description=body, assignee_ids=ids, actor="support-bot",
-                       support_task=st, conn=conn, client=client)
+                       project=project_for(conn, q), support_task=st, conn=conn, client=client)
         except PrbcError as e:
             st.status = SupportTask.QUEUED if st.attempts < 3 else SupportTask.FAILED
             st.error = str(e)[:250]

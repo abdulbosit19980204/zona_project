@@ -25,6 +25,8 @@ class Connection(models.Model):
     task_default_assignees = models.JSONField(default=list, blank=True)  # PRBC user id'lari
     task_watchers = models.JSONField(default=default_watchers, blank=True)  # kuzatuvchilar (observer) — PRBC user id
     close_on_done = models.BooleanField(default=True)  # PRBC'da bajarildi -> bizdagi savol "hal bo'ldi" + hisobot
+    group_projects = models.JSONField(default=dict, blank=True)  # Telegram guruh (support Group id) -> PRBC loyiha id
+    projects = models.JSONField(default=list, blank=True)  # PRBC loyihalar ro'yxati (kesh): [{id, name}]
     watch_self = models.BooleanField(default=True)  # ulangan akkaunt egasi ham har vazifaga kuzatuvchi
     notify_done = models.BooleanField(default=True)  # bajarilganda guruhdagi savolga izohlari bilan javob
     notify_created = models.BooleanField(default=False)  # vazifa ochilganda guruhdagi savolga qisqa xabar

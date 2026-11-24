@@ -20,4 +20,6 @@ urlpatterns = [
     path("tasks/stats/", views.task_stats, name="task-stats"),
     path("tasks/<int:pk>/", views.task_detail, name="task-detail"),
     path("assignable/", views.assignable, name="assignable"),
+    path("projects/", views.projects, name="projects"),
+    path("group-projects/", views.group_projects, name="group-projects"),
 ]

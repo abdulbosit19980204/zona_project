@@ -1256,6 +1256,18 @@
     "cNotifyDone": "Bajarilganda guruhga hisobot",
     "cNotifyDoneHint": "Savolga reply: kim bajardi, qancha vaqtda va izohlari",
     "cWatchSelf": "Meni ham kuzatuvchi qilish",
-    "cWatchSelfHint": "Ulangan akkaunt egasi ({me}) har bir yangi vazifaga kuzatuvchi bo'lib qo'shiladi"
+    "cWatchSelfHint": "Ulangan akkaunt egasi ({me}) har bir yangi vazifaga kuzatuvchi bo'lib qo'shiladi",
+    "cProjectHint": "Guruhga bog'lanmagan savollar va paneldan ochilgan vazifalar shu loyihaga tushadi",
+    "cProjectEmpty": "Ro'yxat bo'sh: login/parolni saqlang va «Ulanishni tekshirish»ni bosing",
+    "gpTitle": "Guruh → PRBC loyiha",
+    "gpHint": "Savol qaysi guruhdan kelsa, vazifa shu guruhga bog'langan loyihada ochiladi. Bog'lanmagan guruh — standart loyiha ({name})",
+    "gpApplyAll": "Takliflarni qo'llash ({n})",
+    "gpRefresh": "Loyihalarni yangilash",
+    "projectsRefreshed": "Loyihalar ro'yxati yangilandi",
+    "gpEmpty": "Faol guruhlar yo'q",
+    "gpQuestions": "Savollar",
+    "gpProject": "PRBC loyiha",
+    "gpDefault": "— standart loyiha —",
+    "gpSuggest": "taklif: {name}"
   }
 }

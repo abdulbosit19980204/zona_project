@@ -1256,6 +1256,18 @@
     "cNotifyDone": "Report to the group when done",
     "cNotifyDoneHint": "Reply to the question: who did it, how long it took and the comments",
     "cWatchSelf": "Add me as an observer",
-    "cWatchSelfHint": "The connected account owner ({me}) is added as an observer to every new task"
+    "cWatchSelfHint": "The connected account owner ({me}) is added as an observer to every new task",
+    "cProjectHint": "Questions from unmapped groups and tasks from the panel go here",
+    "cProjectEmpty": "Empty: save the login/password and press “Test connection”",
+    "gpTitle": "Group → PRBC project",
+    "gpHint": "The task is created in the project of the group the question came from. Unmapped group — default project ({name})",
+    "gpApplyAll": "Apply suggestions ({n})",
+    "gpRefresh": "Refresh projects",
+    "projectsRefreshed": "Project list refreshed",
+    "gpEmpty": "No active groups",
+    "gpQuestions": "Questions",
+    "gpProject": "PRBC project",
+    "gpDefault": "— default project —",
+    "gpSuggest": "suggested: {name}"
   }
 }

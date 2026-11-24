@@ -701,3 +701,63 @@ class SelfWatcherAndSyncTests(TestCase):
         self.assertEqual((c["last_error"], c["ready"]), ("", True))  # eski xato tozalandi
         self.assertEqual(api.post("/api/prbc/sync/").status_code, 200)
         self.assertTrue(Connection.get().sync_requested)
+
+
+class GroupProjectTests(TestCase):
+    def setUp(self):
+        from support.models import Bot, Group, Settings, TgUser
+        self.conn = Connection.get()
+        self.conn.task_project, self.conn.task_default_assignees = 15, [48]
+        self.conn.projects = [{"id": 15, "name": "STAR GROUP IT departmant"}, {"id": 21, "name": "ROP Toshkent BIC"},
+                              {"id": 22, "name": "Fergana Heinz"}]
+        self.conn.save()
+        s = Settings.load()
+        s.task_mode = "api"
+        s.save()
+        self.bot = Bot.objects.create(name="S", token_enc=encrypt("1:x"))
+        self.rop = Group.objects.create(bot=self.bot, chat_id=-300, title="ROP Toshkent")
+        self.other = Group.objects.create(bot=self.bot, chat_id=-301, title="Umumiy chat")
+        self.user = TgUser.objects.create(tg_id=991, name="Agent")
+        self.api = APIClient()
+        self.api.force_authenticate(User.objects.create_superuser("a", password="x"))
+
+    def _queue(self, group, mid):
+        from support.models import Message, SupportTask
+        q = Message.objects.create(bot=self.bot, group=group, chat_id=group.chat_id, message_id=mid, user=self.user,
+                                   kind="question", text="Zakaz o'tmayapti")
+        return SupportTask.objects.create(message=q, title="Zakaz", status=SupportTask.QUEUED)
+
+    def test_task_goes_to_the_group_project(self):
+        d = self.api.get("/api/prbc/group-projects/").json()
+        rows = {r["title"]: r for r in d["groups"]}
+        self.assertEqual(rows["ROP Toshkent"]["suggested"], 21)  # nomi o'xshash loyiha taklif qilinadi
+        self.assertIsNone(rows["Umumiy chat"]["suggested"])
+        r = self.api.patch("/api/prbc/group-projects/", {str(self.rop.pk): 21, str(self.other.pk): 999, "x": 1},
+                           format="json").json()
+        rows = {r_["title"]: r_ for r_ in r["groups"]}
+        self.assertEqual((rows["ROP Toshkent"]["project"], rows["ROP Toshkent"]["project_name"]), (21, "ROP Toshkent BIC"))
+        self.assertIsNone(rows["Umumiy chat"]["project"])  # PRBC'da yo'q loyiha qabul qilinmaydi
+        self._queue(self.rop, 1)
+        self._queue(self.other, 2)
+        fake = FakePrbc()
+        tasks.process_support_queue(Connection.get(), fake)
+        self.assertEqual([c["kw"]["project"] for c in fake.created], [21, 15])  # bog'lanmagan — standart loyiha
+        self.api.patch("/api/prbc/group-projects/", {str(self.rop.pk): None}, format="json")
+        self.assertEqual(Connection.get().group_projects, {})
+
+    def test_projects_endpoint_uses_cache_and_refreshes(self):
+        from unittest import mock
+        self.assertEqual(len(self.api.get("/api/prbc/projects/").json()), 3)  # keshdan, PRBC'ga so'rov yo'q
+        self.conn.phone, self.conn.password_enc = "998901234567", encrypt("sir")
+        self.conn.save()
+        fake = FakePrbc()
+        fake.pages = lambda path, params=None, max_pages=200, stop=None: iter([{"id": 30, "name": "Yangi", "open_count": 2}])
+        with mock.patch("prbc.views.Client", lambda c: fake):
+            r = self.api.get("/api/prbc/projects/", {"refresh": 1}).json()
+        self.assertEqual(r, [{"id": 30, "name": "Yangi", "open": 2}])
+        self.assertEqual(Connection.get().projects, r)
+
+    def test_suggestion_needs_a_clear_winner(self):
+        projects = [{"id": 1, "name": "ROP Toshkent"}, {"id": 2, "name": "ROP Samarqand"}]
+        self.assertEqual(tasks.suggest_project("ROP Toshkent agentlar", projects), 1)
+        self.assertIsNone(tasks.suggest_project("ROP", projects))  # ikkalasida bir xil — taxmin qilinmaydi

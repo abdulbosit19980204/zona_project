@@ -113,8 +113,7 @@ def test(request):
             checks[key] = {"ok": False, "detail": str(e)[:200]}
     projects = []
     try:
-        projects = [{"id": p.get("id"), "name": p.get("name"), "open": p.get("open_count")}
-                    for p in client.pages("/task-projects/", max_pages=5)]
+        projects = tasks.load_projects(c, client)
     except PrbcError:
         pass
     return Response({"ok": True, "me": c.me, "organization": c.organization, "checks": checks, "projects": projects})
@@ -359,6 +358,53 @@ def task_stats(request):
                  cancelled=qs.filter(status_category="cancelled").count(),
                  overdue=qs.filter(status_category__in=tasks.OPEN, due_at__lt=timezone.now()).count())
     return Response({"rows": rows, "total": total, "groups": tasks.group_stats(since)})
+
+
+@zona_api(["GET"], ADMIN)
+def projects(request):
+    """PRBC loyihalari (keshdan; ?refresh=1 yoki kesh bo'sh bo'lsa — PRBC'dan qayta o'qiladi)."""
+    c = Connection.get()
+    if request.query_params.get("refresh") or not c.projects:
+        if not (c.phone and c.password_enc):
+            return Response(c.projects or [])
+        try:
+            tasks.load_projects(c, Client(c))
+        except PrbcError as e:
+            if not c.projects:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(c.projects)
+
+
+@zona_api(["GET", "PATCH"], ADMIN)
+def group_projects(request):
+    """Telegram guruh -> PRBC loyiha. Savol qaysi guruhdan kelsa, vazifa shu loyihada ochiladi
+    (bog'lanmagan guruh — standart loyiha). PATCH {group_id: project_id | null, ...}."""
+    from support.models import Group
+    c = Connection.get()
+    if request.method == "PATCH":
+        cur = {str(k): v for k, v in (c.group_projects or {}).items()}
+        valid = {p["id"] for p in c.projects or [] if p.get("id")}
+        for k, v in (request.data or {}).items():
+            if not str(k).isdigit():
+                continue
+            if v in (None, "", 0, "0"):
+                cur.pop(str(k), None)
+            elif str(v).isdigit() and (not valid or int(v) in valid):
+                cur[str(k)] = int(v)
+        c.group_projects = cur
+        c.save(update_fields=["group_projects", "updated_at"])
+        Change.objects.create(kind=Change.UPDATED, text="Guruh → PRBC loyiha bog'lanishi o'zgartirildi",
+                              actor=_actor(request), data=request.data)
+    names = {p["id"]: p["name"] for p in c.projects or []}
+    rows = []
+    groups = Group.objects.filter(is_active=True).annotate(n=Count("messages", filter=Q(messages__kind="question"))).order_by("-n", "title")
+    for g in groups:
+        pid = (c.group_projects or {}).get(str(g.pk))
+        sug = tasks.suggest_project(g.title, c.projects or []) if not pid else None
+        rows.append({"id": g.pk, "title": g.title or str(g.chat_id), "questions": g.n, "project": pid,
+                     "project_name": names.get(pid, f"#{pid}" if pid else ""),
+                     "suggested": sug, "suggested_name": names.get(sug, "") if sug else ""})
+    return Response({"default": c.task_project, "default_name": names.get(c.task_project, ""), "groups": rows})
 
 
 @zona_api(["GET"], ADMIN)
