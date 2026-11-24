@@ -2000,7 +2000,9 @@ def invite_link(group, tg=None):
         if tg is None:
             token = decrypt(group.bot.token_enc)
             tg = Client(token) if token else None
-        link = tg.call("exportChatInviteLink", {"chat_id": group.chat_id}, timeout=8, retries=1) if tg else ""
+        # createChatInviteLink — qo'shimcha havola (exportChatInviteLink asosiy havolani bekor qiladi — tarqatilganlari buziladi)
+        res = tg.call("createChatInviteLink", {"chat_id": group.chat_id, "name": "Yo'naltirish (bot)"}, timeout=8, retries=1) if tg else {}
+        link = (res or {}).get("invite_link", "") if isinstance(res, dict) else ""
     except Exception:  # noqa: BLE001 — bot admin emas / huquqi yo'q
         link = ""
     if isinstance(link, str) and link.startswith("https://"):

@@ -237,3 +237,22 @@ class RedirectTests(OpenBase):
         self.assertEqual(bad.status_code, 400)
         ok = self.call("patch", f"support/groups/{self.new.id}/", {"invite_link": "t.me/+AbCd"}).json()
         self.assertEqual(ok["link"], "https://t.me/+AbCd")
+
+
+class InviteLinkTests(OpenBase):
+    def test_creates_additional_link_never_revokes_primary(self):
+        from .models import Group
+        from .runner import invite_link
+        g = Group.objects.create(bot=self.bot, chat_id=-400, title="ROP", is_admin=True)
+        calls = []
+
+        class TG:
+            def call(self, method, params=None, **kw):
+                calls.append(method)
+                return {"invite_link": "https://t.me/+NewExtra"}
+        self.assertEqual(invite_link(g, TG()), "https://t.me/+NewExtra")
+        self.assertEqual(calls, ["createChatInviteLink"])
+        self.assertEqual(Group.objects.get(pk=g.pk).invite_link, "https://t.me/+NewExtra")
+        g.refresh_from_db()
+        self.assertEqual(invite_link(g, TG()), "https://t.me/+NewExtra")  # saqlangan — qayta yaratilmaydi
+        self.assertEqual(len(calls), 1)
