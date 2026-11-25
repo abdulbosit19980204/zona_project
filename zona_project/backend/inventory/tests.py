@@ -70,7 +70,8 @@ class InventoryTests(InvBase):
     # ------------------------------------------------------------ huquqlar
     def test_catalog_seeded_from_template(self):
         self.assertEqual(Branch.objects.count(), 12)
-        self.assertEqual(DeviceType.objects.count(), 30)
+        from .catalog_extra import TYPES
+        self.assertEqual(DeviceType.objects.count(), 30 + len(TYPES))  # shablondan 30 + qo'shimcha turlar (0008)
         self.assertIn("Lenovo", self.laptop.brands)
 
     def test_collector_is_isolated_from_rest_of_platform(self):
@@ -517,3 +518,30 @@ class SpecsTests(InvBase):
                                        "options": ["Lotin", "Kirill"], "unit": ""}])
         self.assertEqual(self.col.post("/api/inventory/catalog/", {"kind": "device_type", "id": self.laptop.id, "name": "X"},
                                        format="json").status_code, 403)
+
+
+class CatalogMoreTypesTests(InvBase):
+    def test_video_types_active_others_inactive_existing_untouched(self):
+        from .catalog_extra import TYPES, VIDEO, add_missing
+        names = {x["name"]: x for x in TYPES}
+        rows = {d.name: d for d in DeviceType.objects.filter(name__in=names)}
+        self.assertEqual(set(rows), set(names))  # migratsiya hammasini yaratdi
+        for name, d in rows.items():
+            self.assertEqual(d.is_active, d.group == VIDEO, name)  # faqat video kuzatuv faol
+            self.assertTrue(d.name_ru and d.description_ru and d.serial_hint_ru, name)  # ikki tilda
+        self.assertTrue(rows["IP kamera (videokuzatuv)"].specs)
+        self.assertTrue(self.laptop.is_active)  # mavjud tur o'zgarmadi
+        self.assertEqual(len(self.laptop.specs), 18)
+        self.assertEqual(DeviceType.objects.filter(order__lt=30).exclude(name__in=names).filter(is_active=False).count(), 0)
+        self.assertEqual(add_missing(DeviceType), [])  # qayta ishga tushirilsa — takror yaratilmaydi
+        DeviceType.objects.filter(name="Planshet").update(name="PLANSHET", is_active=True)
+        self.assertEqual(add_missing(DeviceType), [])  # nomi katta harfda bo'lsa ham — mavjud deb hisoblanadi
+        self.assertTrue(DeviceType.objects.get(name="PLANSHET").is_active)  # boshqaruvchi yoqqani saqlanadi
+
+    def test_camera_item_with_specs(self):
+        cam = DeviceType.objects.get(name="IP kamera (videokuzatuv)")
+        it = self.add_item(device_type=cam.id, brand="Hikvision", model="DS-2CD1043", serial="K12345",
+                           specs={"cam_type": "Gumbaz (dome)", "megapixel": "4 MP", "placement": "Ichkarida", "view": "Kassa"})
+        self.assertEqual(it["specs"]["cam_type"], "Gumbaz (dome)")
+        boot = self.col.get("/api/inventory/bootstrap/").json()
+        self.assertIn("Videokuzatuv", {d["group"] for d in boot["device_types"] if d["is_active"]})

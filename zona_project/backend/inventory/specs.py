@@ -99,7 +99,8 @@ TEMPLATES = {
 
 
 def default_specs(type_name):
-    return [dict(x) for x in TEMPLATES.get(type_name, [])]
+    from .catalog_extra import SPECS
+    return [dict(x) for x in TEMPLATES.get(type_name) or SPECS.get(type_name, [])]
 
 
 def summary(specs_def, values, limit=None):

@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, AtSign, BatteryCharging, CalendarClock, Camera, ChevronDown, Cpu, Download, History, ImageOff, ImagePlus, Info, Keyboard, Loader2,
+  AlertTriangle, AtSign, BatteryCharging, CalendarClock, Camera, Cctv, ChevronDown, Cpu, Download, History, ImageOff, ImagePlus, Info, Keyboard, Loader2,
   MapPin, Minus, Monitor, Package, Phone, Plus, Printer, Projector, RotateCcw, Router, ScanBarcode, ShieldCheck,
   Smartphone, Trash2, User, Wallet, X,
 } from "lucide-react";
@@ -22,7 +22,7 @@ import {
 /* ------------------------------------------------------------------ yordamchilar */
 const GROUP_ICON: Record<string, typeof Monitor> = {
   Kompyuter: Monitor, Periferiya: Keyboard, Printer, Tarmoq: Router, Elektr: BatteryCharging, Xavfsizlik: ShieldCheck,
-  Aloqa: Smartphone, Savdo: ScanBarcode, Multimedia: Projector,
+  Aloqa: Smartphone, Savdo: ScanBarcode, Multimedia: Projector, Videokuzatuv: Cctv,
 };
 export function GroupIcon({ group, className }: { group: string; className?: string }) {
   const Icon = GROUP_ICON[group] ?? Package;
