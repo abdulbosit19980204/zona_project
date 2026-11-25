@@ -9,8 +9,9 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin", "cyr
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Responsibility Architecture", template: "%s · Responsibility Architecture" },
-  description: "Clear Ownership. Better Execution. — kim nimaga javob beradi.",
+  title: { default: "Foydali", template: "%s · Foydali" },
+  description: "Foydali — StarGroup IT platformasi: support bot, PRBC vazifalari, IT inventarizatsiya, mas'uliyat xaritasi.",
+  applicationName: "Foydali",
 };
 
 /** Ildiz layout (Server Component): statik qobiq. Brauzerga bog'liq hamma narsa provayderlar ichida. */

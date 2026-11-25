@@ -4,6 +4,8 @@
 
 ## 2026-11-26
 
+- **Logo va nom:** sayt endi **Foydali** — o'z logosi (ko'k-binafsha gradient, "F" va StarGroup yulduzchasi),
+  favicon, iPhone belgisi; brauzer sarlavhasi "… · Foydali". Next.js standart belgisi olib tashlandi.
 - **Qo'llanma moduli** — butun tizimning yo'riqnomasi (shu hujjat), qidiruv bilan; chap menyuda alohida bo'lim.
 - **PRBC vazifalar Support bot menyusida** — Vazifalar nazorati, Vazifalar, 1C xodimlari, Jurnal, PRBC sozlamalari;
   har PRBC sahifasi tepasida bo'limlar paneli.

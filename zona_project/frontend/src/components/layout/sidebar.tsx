@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronsLeft, ChevronsRight, MonitorCog } from "lucide-react";
 import Link from "next/link";
+import { useId } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -17,17 +18,33 @@ import { activeNav, moduleOf, MODULES, type NavItem, type NavModule } from "@/li
 import { cn } from "@/lib/utils";
 import { useUI } from "@/stores/ui";
 
+/** Foydali logosi: ko'k → binafsha gradient, "F" va StarGroup yulduzchasi (src/app/icon.svg bilan bir xil). */
+export function LogoMark({ className }: { className?: string }) {
+  const id = useId().replace(/:/g, "");
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id={`lg${id}`} x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#2f6feb" /><stop offset="1" stopColor="#6d4aff" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="16" fill={`url(#lg${id})`} />
+      <rect x="17" y="14" width="9" height="36" rx="4.5" fill="#fff" />
+      <rect x="17" y="14" width="28" height="9" rx="4.5" fill="#fff" />
+      <rect x="17" y="29" width="19" height="8.5" rx="4.25" fill="#fff" />
+      <path d="M48 35c1 4.6 2.8 6.4 7.4 7.4-4.6 1-6.4 2.8-7.4 7.4-1-4.6-2.8-6.4-7.4-7.4 4.6-1 6.4-2.8 7.4-7.4z" fill="#fff" fillOpacity=".92" />
+    </svg>
+  );
+}
+
 export function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="relative grid size-9 shrink-0 place-items-center rounded-xl border bg-gradient-to-br from-elevated to-card">
-        <span className="size-2.5 rounded-full bg-primary shadow-[0_0_0_4px_color-mix(in_srgb,var(--primary)_18%,transparent),0_0_16px_var(--primary)]" />
-        <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-violet" />
-      </span>
+      <LogoMark className="size-9 shrink-0 drop-shadow-[0_4px_12px_rgba(77,92,245,0.35)]" />
       {!collapsed && (
         <div className="min-w-0 leading-tight">
-          <div className="text-[13px] font-bold uppercase tracking-[0.08em]">Responsibility<br />Architecture</div>
-          <div className="mt-0.5 text-[10.5px] text-muted-foreground">Clear Ownership. Better Execution.</div>
+          <div className="text-[17px] font-bold tracking-tight">Foydali</div>
+          <div className="mt-0.5 text-[10.5px] text-muted-foreground">StarGroup · IT platforma</div>
         </div>
       )}
     </div>
