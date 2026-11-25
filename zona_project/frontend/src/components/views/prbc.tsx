@@ -3,8 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
-  CheckCircle2, CircleAlert, ExternalLink, Link2, ListTodo, Plug, RefreshCcwDot, RotateCcw, Search, ScrollText, UserMinus, Users,
-  XCircle,
+  CheckCircle2, CircleAlert, ExternalLink, Link2, ListTodo, Plug, RefreshCcwDot, RotateCcw, Search, Timer, UserMinus, Users,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -21,10 +20,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+
+import { PrbcControl } from "./prbc-control";
 
 type Status = "active" | "leaving" | "left";
 type LinkField = "staff_person" | "member" | "inv_employee" | "tg_user";
@@ -36,6 +36,8 @@ interface Conn {
   worker_alive: boolean; task_watchers: number[]; close_on_done: boolean; named: Record<string, string>;
   notify_done: boolean; notify_created: boolean; attach_files: boolean; assignee_map: Record<string, number>;
   watch_self: boolean; outlet_lookup: boolean; ready: boolean; not_ready: string;
+  sla_minutes: number; task_priority: number; work_start: number; work_end: number; work_days: number[];
+  sync_status: boolean; overdue_alert: boolean; task_all_escalated: boolean;
 }
 interface Person {
   id: number; prbc_user: number | null; tab_number: string; full_name: string; position: string; department: string; company: string;
@@ -81,54 +83,60 @@ function useAction<V>(fn: (v: V) => Promise<unknown>, ok?: string) {
     onError: (e) => toast.error(errorMessage(e)) });
 }
 
-export function PrbcIntegration() {
+export type PrbcView = "control" | "tasks" | "people" | "log" | "settings";
+
+export function PrbcIntegration({ view = "control" }: { view?: PrbcView }) {
   const t = useTranslations("prbc");
   const ov = useQuery({ queryKey: ["prbc", "overview"], queryFn: () => get<Overview>("prbc/overview/"), refetchInterval: 15_000 });
   const sync = useAction(() => api.post("prbc/sync/"), t("syncQueued"));
   const c = ov.data?.connection;
   return (
     <Page>
-      <PageHeader title={t("title")} description={t("desc")} actions={
-        <Button onClick={() => sync.mutate(undefined)} disabled={sync.isPending || c?.sync_requested}>
-          <RefreshCcwDot className={cn("size-4", c?.sync_requested && "animate-spin")} />{t("syncNow")}
-        </Button>} />
-      {ov.isPending ? <Skeleton className="h-40 rounded-xl" /> : ov.data && (
+      <PageHeader title={t(`v_${view}`)} description={t(`v_${view}Desc`)} actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn("hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs sm:flex",
+            c?.worker_alive ? "border-success/30 text-success" : "border-destructive/30 text-destructive")}>
+            <span className={cn("size-1.5 rounded-full", c?.worker_alive ? "animate-pulse bg-success" : "bg-destructive")} />
+            {c?.worker_alive ? t("workerOk") : t("workerDown")}
+          </span>
+          {c && <span className="hidden text-xs text-muted-foreground md:inline">{t("slaBadge", { n: c.sla_minutes, a: c.work_start, b: c.work_end })}</span>}
+          <Button variant="outline" onClick={() => sync.mutate(undefined)} disabled={sync.isPending || c?.sync_requested}>
+            <RefreshCcwDot className={cn("size-4", c?.sync_requested && "animate-spin")} />{t("syncNow")}
+          </Button>
+        </div>} />
+      {c && !c.ready && (
+        <Card className="mb-4 flex-row items-center gap-2 border-warning/40 bg-warning/5 p-3 text-sm text-warning"><CircleAlert className="size-4" />{c.not_ready}</Card>
+      )}
+      {c?.ready && c.last_error && (
+        <Card className="mb-4 flex-row items-center gap-2 border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><CircleAlert className="size-4" />{c.last_error}</Card>
+      )}
+      {view === "control" && <PrbcControl />}
+      {view === "tasks" && <TasksTab conn={c} />}
+      {view === "people" && (
         <>
-          <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-            <span className={cn("flex items-center gap-1.5", c?.worker_alive ? "text-success" : "text-destructive")}>
-              {c?.worker_alive ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}{c?.worker_alive ? t("workerOk") : t("workerDown")}
-            </span>
-            <span className="text-muted-foreground">{t("lastSync")}: {c?.last_sync_at ? d(c.last_sync_at, true) : t("never")}</span>
-            {c && !c.ready ? <span className="flex items-center gap-1.5 text-warning"><CircleAlert className="size-4" />{c.not_ready}</span>
-              : c?.last_error && <span className="flex items-center gap-1.5 text-destructive"><CircleAlert className="size-4" />{c.last_error}</span>}
-          </div>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <StatCard label={t("total")} value={ov.data.people.total} icon={Users} hint={t("month", ov.data.month)} />
-            <StatCard label={t("active")} value={ov.data.people.active ?? 0} icon={CheckCircle2} tone="success" />
-            <StatCard label={t("leaving")} value={ov.data.people.leaving ?? 0} icon={UserMinus} tone="warning" />
-            <StatCard label={t("left")} value={ov.data.people.left ?? 0} icon={UserMinus} tone="danger" />
-            <StatCard label={t("unlinked")} value={ov.data.linked.unlinked} icon={Link2} />
-          </div>
-          {ov.data.left_members.length > 0 && (
-            <Card className="mt-4 gap-1 border-warning/40 bg-warning/5 p-4 text-sm">
-              <div className="font-medium text-warning">{t("leftMembers")}</div>
-              {ov.data.left_members.map((m, i) => <div key={i}>{m.member} <span className="text-muted-foreground">— {m.person}, {d(m.left_on)}</span></div>)}
-            </Card>
+          {ov.isPending ? <Skeleton className="h-28 rounded-xl" /> : ov.data && (
+            <>
+              <div className="mb-1 text-sm text-muted-foreground">{t("lastSync")}: {c?.last_sync_at ? d(c.last_sync_at, true) : t("never")}</div>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+                <StatCard label={t("total")} value={ov.data.people.total} icon={Users} hint={t("month", ov.data.month)} />
+                <StatCard label={t("active")} value={ov.data.people.active ?? 0} icon={CheckCircle2} tone="success" />
+                <StatCard label={t("leaving")} value={ov.data.people.leaving ?? 0} icon={UserMinus} tone="warning" />
+                <StatCard label={t("left")} value={ov.data.people.left ?? 0} icon={UserMinus} tone="danger" />
+                <StatCard label={t("unlinked")} value={ov.data.linked.unlinked} icon={Link2} />
+              </div>
+              {ov.data.left_members.length > 0 && (
+                <Card className="mt-4 gap-1 border-warning/40 bg-warning/5 p-4 text-sm">
+                  <div className="font-medium text-warning">{t("leftMembers")}</div>
+                  {ov.data.left_members.map((m, i) => <div key={i}>{m.member} <span className="text-muted-foreground">— {m.person}, {d(m.left_on)}</span></div>)}
+                </Card>
+              )}
+            </>
           )}
+          <div className="mt-4"><PeopleTab /></div>
         </>
       )}
-      <Tabs defaultValue="people" className="mt-6">
-        <TabsList>
-          <TabsTrigger value="people"><Users className="size-4" />{t("tabPeople")}</TabsTrigger>
-          <TabsTrigger value="tasks"><ListTodo className="size-4" />{t("tabTasks")}</TabsTrigger>
-          <TabsTrigger value="log"><ScrollText className="size-4" />{t("tabLog")}</TabsTrigger>
-          <TabsTrigger value="conn"><Plug className="size-4" />{t("tabConn")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="people"><PeopleTab /></TabsContent>
-        <TabsContent value="tasks"><TasksTab conn={c} /></TabsContent>
-        <TabsContent value="log"><LogTab runs={ov.data?.runs ?? []} /></TabsContent>
-        <TabsContent value="conn">{c && <ConnTab conn={c} />}</TabsContent>
-      </Tabs>
+      {view === "log" && <LogTab runs={ov.data?.runs ?? []} />}
+      {view === "settings" && (c ? <ConnTab conn={c} /> : <Skeleton className="h-96 rounded-xl" />)}
     </Page>
   );
 }
@@ -509,7 +517,9 @@ function ConnTab({ conn }: { conn: Conn }) {
     comment_devices: f.comment_devices, task_project: f.task_project, lifecycle_project: f.lifecycle_project,
     task_default_assignees: ids(f.assignees), task_watchers: ids(f.watchers), close_on_done: f.close_on_done,
     notify_done: f.notify_done, notify_created: f.notify_created, attach_files: f.attach_files, assignee_map: f.amap,
-    watch_self: f.watch_self, outlet_lookup: f.outlet_lookup,
+    watch_self: f.watch_self, outlet_lookup: f.outlet_lookup, sla_minutes: f.sla_minutes, task_priority: f.task_priority,
+    work_start: f.work_start, work_end: f.work_end, work_days: f.work_days, sync_status: f.sync_status,
+    overdue_alert: f.overdue_alert, task_all_escalated: f.task_all_escalated,
     ...(f.password ? { password: f.password } : {}),
   }), t("saved"));
   const runTest = useAction(async () => {
@@ -558,7 +568,8 @@ function ConnTab({ conn }: { conn: Conn }) {
           <Button variant="outline" onClick={() => runTest.mutate(undefined)} disabled={runTest.isPending}><Plug className="size-4" />{t("test")}</Button>
         </div>
       </Card>
-      <GroupProjects projects={plist} className="lg:col-span-2 lg:row-start-2" />
+      <SlaCard f={f} setF={setF} onSave={() => save.mutate(undefined)} saving={save.isPending} />
+      <GroupProjects projects={plist} className="lg:col-span-2" />
       <OutletCheck className="lg:col-span-2" />
       {test && (
         <Card className="h-fit gap-2 p-5 text-sm">
@@ -572,6 +583,49 @@ function ConnTab({ conn }: { conn: Conn }) {
         </Card>
       )}
     </div>
+  );
+}
+
+type SlaFields = Pick<Conn, "sla_minutes" | "task_priority" | "work_start" | "work_end" | "work_days" | "sync_status" | "overdue_alert" | "task_all_escalated">;
+
+/** Vazifa nazorati (SLA): muddat, ish vaqti, ustuvorlik, ikki tomonlama holat, har savolga vazifa. */
+function SlaCard<F extends SlaFields>({ f, setF, onSave, saving }: { f: F; setF: (v: F) => void; onSave: () => void; saving: boolean }) {
+  const t = useTranslations("prbc");
+  const days = f.work_days?.length ? f.work_days : [0, 1, 2, 3, 4, 5];
+  const num = (k: keyof SlaFields, v: string) => setF({ ...f, [k]: Number(v) });
+  return (
+    <Card className="grid h-fit gap-4 p-5">
+      <div>
+        <div className="flex items-center gap-2 font-medium"><Timer className="size-4 text-primary" />{t("slaTitle")}</div>
+        <div className="text-xs text-muted-foreground">{t("slaHint")}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-1.5"><Label>{t("slaMinutes")}</Label><Input type="number" min={1} value={f.sla_minutes} onChange={(e) => num("sla_minutes", e.target.value)} /></div>
+        <div className="grid gap-1.5"><Label>{t("tPriority")}</Label>
+          <Select value={String(f.task_priority)} onValueChange={(v) => num("task_priority", v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{[0, 1, 2, 3, 4].map((n) => <SelectItem key={n} value={String(n)}>{t(`p${n}`)}</SelectItem>)}</SelectContent>
+          </Select></div>
+        <div className="grid gap-1.5"><Label>{t("slaFrom")}</Label><Input type="number" min={0} max={23} value={f.work_start} onChange={(e) => num("work_start", e.target.value)} /></div>
+        <div className="grid gap-1.5"><Label>{t("slaTo")}</Label><Input type="number" min={1} max={24} value={f.work_end} onChange={(e) => num("work_end", e.target.value)} /></div>
+      </div>
+      <div className="grid gap-1.5"><Label>{t("slaDays")}</Label>
+        <div className="flex flex-wrap gap-1">
+          {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+            <button key={n} type="button" onClick={() => setF({ ...f, work_days: days.includes(n) ? days.filter((x) => x !== n) : [...days, n].sort() })}
+              className={cn("h-8 w-10 rounded-md border text-xs font-medium", days.includes(n) ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground")}>
+              {t(`wd${n}`)}
+            </button>
+          ))}
+        </div></div>
+      {([["task_all_escalated", "slaAll", "slaAllHint"], ["sync_status", "slaSync", "slaSyncHint"], ["overdue_alert", "slaOverdue", "slaOverdueHint"]] as const).map(([k, l, h]) => (
+        <label key={k} className="flex items-start justify-between gap-4 text-sm">
+          <span>{t(l)}<span className="block text-xs text-muted-foreground">{t(h)}</span></span>
+          <Switch checked={Boolean(f[k])} onCheckedChange={(v) => setF({ ...f, [k]: v })} />
+        </label>
+      ))}
+      <Button onClick={onSave} disabled={saving}>{t("save")}</Button>
+    </Card>
   );
 }
 

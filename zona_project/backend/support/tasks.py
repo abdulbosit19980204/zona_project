@@ -74,7 +74,8 @@ def decide_task(q, d, s=None):
             return True, _tg_of(m, s), "entry"
         return True, (e.task_assignee.lstrip("@") or _tg_of(m, s)), "entry"
     deps, mems = targets(s)
-    if not (deps or mems):
+    every = bool(getattr(s, "task_all_escalated", False))
+    if not (deps or mems or every):
         return False, "", ""
     if not (d.needs_human or d.stage == "rule"):
         return False, "", ""
@@ -84,9 +85,15 @@ def decide_task(q, d, s=None):
     ids = [r.get("id") for r in d.responsible or [] if r.get("id")]
     if e is not None and e.responsible_id and not getattr(d, "owner", False):
         ids.insert(0, e.responsible_id)
-    for m in Member.objects.filter(id__in=ids).prefetch_related("contacts"):
+    found = list(Member.objects.filter(id__in=ids).prefetch_related("contacts"))
+    found.sort(key=lambda m: ids.index(m.id))
+    for m in found:
         if _member_matches(m, deps, mems):
             return True, _tg_of(m, s), f"responsible:{m.name}"[:200]
+    if every and d.needs_human:
+        # odamga uzatilgan har savol — vazifa: mas'ul (IT bo'limida bo'lmasa ham) yoki standart ijrochi
+        m = next((x for x in found if x.level != "EXT"), None)
+        return True, _tg_of(m, s), (f"escalated:{m.name}" if m else "escalated")[:200]
     return False, "", ""
 
 
@@ -121,7 +128,7 @@ def build_text(q, title, assignee):
     if link:
         lines.append(f"Havola: {link}")
     if q.answer_text and q.status == Message.ANSWERED:
-        lines.append(f"Bot javobi: {q.answer_text[:300]}")
+        lines.append(f"Bot javobi: {q.answer_text[:1500]}")
     return "\n".join(lines)[:3900], link
 
 
@@ -164,11 +171,27 @@ def maybe_create(q, d, tg=None):
 TASK_OK = re.compile(r"(TASK-\d+|vazifa\w* yaratildi|задача .*создан)", re.I)
 
 
+GREET_RE = re.compile(
+    r"^\W*((assalomu?|assalom|asalom|ассало\w*|асало\w*|salom|салом)\W*(alay?kum|alekum|алей?кум|алайкум|алейкум)?|"
+    r"(va\s*)?alay?kum\s*assalom|добр(ый|ое|ого)\s+(день|утро|вечер|дня)|здравствуй\w*|привет\w*|hayrli\s+(kun|tong)|"
+    r"xayrli\s+(kun|tong)|хайрли\s+(кун|тонг))[\s,.!)]*(\w+\s*(aka|opa|ака|опа)[\s,.!]*)?", re.I)
+
+
+def strip_greeting(text):
+    """"Ассалом алейкум. Акция не работает" -> "Акция не работает" (vazifa sarlavhasida salomlashuv kerak emas)."""
+    prev = None
+    text = text or ""
+    while prev != text:
+        prev = text
+        text = GREET_RE.sub("", text, count=1).strip()
+    return text
+
+
 def problem_text(q, title, entry=None):
     """Vazifa sarlavhasi: aniq yozilgan savol matni; bo'lmasa — tanilgan holat nomi (xom OCR emas). Oxirida — kimdan,
     rasmda topilgan UZ-kod va zakaz raqami (ijrochi tez topishi uchun)."""
     from .engine import substantive
-    text = " ".join(CMD_RE.sub("", (q.text or "").strip()).split())
+    text = strip_greeting(" ".join(CMD_RE.sub("", (q.text or "").strip()).split()))
     if substantive(text):
         body = text
     elif entry is not None:

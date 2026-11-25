@@ -33,6 +33,15 @@ class Connection(models.Model):
     attach_files = models.BooleanField(default=True)  # savoldagi rasm/fayllar PRBC vazifasiga yuklanadi
     assignee_map = models.JSONField(default=dict, blank=True)  # Telegram username -> PRBC user id (qo'lda moslash)
     outlet_lookup = models.BooleanField(default=True)  # bot savoldagi STIR/1C kodi bo'yicha mijoz arizasi holatini PRBC'dan o'qiydi
+    # vazifa nazorati (SLA): har savol vazifasiga boshlanish, muddat (ish vaqtida), taxminiy vaqt va ustuvorlik
+    sla_minutes = models.PositiveSmallIntegerField(default=10)  # savol shuncha daqiqada hal bo'lishi kerak
+    task_priority = models.PositiveSmallIntegerField(default=3)  # 0 yo'q, 1 past, 2 o'rta, 3 yuqori, 4 shoshilinch
+    work_start = models.PositiveSmallIntegerField(default=9)  # ish vaqti (soat, Toshkent)
+    work_end = models.PositiveSmallIntegerField(default=18)
+    work_days = models.JSONField(default=list, blank=True)  # 0=Du ... 6=Ya; bo'sh — Du–Sha
+    sync_status = models.BooleanField(default=True)  # savol holati PRBC vazifasiga: jarayonda / bajarildi / qayta ochildi
+    overdue_alert = models.BooleanField(default=True)  # muddat o'tsa — PRBC'da izoh va ustuvorlik "shoshilinch"
+    statuses = models.JSONField(default=dict, blank=True)  # kesh: {loyiha id yoki "none": {category: status id}}
     sync_minutes = models.PositiveIntegerField(default=30)
     auto_left = models.BooleanField(default=True)  # bo'shaganni avtomatik belgilash (kontakt o'rni, inventar xodimi)
     comment_devices = models.BooleanField(default=True)  # bo'shash vazifasiga xodimdagi qurilmalar ro'yxati

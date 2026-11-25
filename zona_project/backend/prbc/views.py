@@ -1,7 +1,7 @@
 """PRBC integratsiyasi API (/api/prbc/...). Faqat Zona administratori."""
 from datetime import timedelta
 
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -17,7 +17,8 @@ from .models import Change, Connection, Person, SyncRun, Task
 ADMIN = [IsZonaAdmin]
 EDITABLE = ["enabled", "base_url", "phone", "lifecycle_project", "task_project", "task_default_assignees", "sync_minutes",
             "auto_left", "comment_devices", "task_watchers", "close_on_done", "notify_done", "notify_created",
-            "attach_files", "assignee_map", "watch_self", "outlet_lookup"]
+            "attach_files", "assignee_map", "watch_self", "outlet_lookup", "sla_minutes", "task_priority", "work_start",
+            "work_end", "work_days", "sync_status", "overdue_alert"]
 
 
 def _actor(request):
@@ -29,9 +30,14 @@ def connection_payload(c):
     return {**{f: getattr(c, f) for f in EDITABLE}, "password_set": bool(c.password_enc), "organization": c.organization,
             "me": c.me, "last_sync_at": c.last_sync_at, "last_ok_at": c.last_ok_at, "last_error": c.last_error,
             "sync_requested": c.sync_requested, "worker_alive": alive, "worker_beat": c.worker_beat,
-            "ready": not not_ready(c), "not_ready": not_ready(c),
+            "ready": not not_ready(c), "not_ready": not_ready(c), "task_all_escalated": _support_flag(),
             "named": _named([*(c.task_default_assignees or []), *(c.task_watchers or []),
                              *(c.assignee_map or {}).values()])}
+
+
+def _support_flag():
+    from support.models import Settings
+    return bool(Settings.load().task_all_escalated)
 
 
 def parse_map(v):
@@ -65,10 +71,18 @@ def connection(request):
                     v = int(v) if str(v or "").isdigit() else None
                 elif f == "sync_minutes":
                     v = max(5, min(int(v or 30), 1440))
+                elif f == "sla_minutes":
+                    v = max(1, min(int(v or 10), 1440))
+                elif f == "task_priority":
+                    v = max(0, min(int(v or 0), 4))
+                elif f in ("work_start", "work_end"):
+                    v = max(0, min(int(v or 0), 24))
+                elif f == "work_days":
+                    v = sorted({int(x) for x in (v or []) if str(x).isdigit() and 0 <= int(x) <= 6})
                 elif f in ("task_default_assignees", "task_watchers"):
                     v = [int(x) for x in (v or []) if str(x).isdigit()][:20]
                 elif f in ("enabled", "auto_left", "comment_devices", "close_on_done", "notify_done", "notify_created",
-                           "attach_files", "watch_self", "outlet_lookup"):
+                           "attach_files", "watch_self", "outlet_lookup", "sync_status", "overdue_alert"):
                     v = bool(v)
                 elif f == "assignee_map":
                     v = parse_map(v)
@@ -82,6 +96,9 @@ def connection(request):
         if c.enabled and c.phone and c.password_enc and c.last_error.startswith("PRBC ulanishi yoqilmagan"):
             c.last_error = ""  # eski "yoqilmagan" xatosi endi ahamiyatsiz
         c.save()
+        if "task_all_escalated" in d:
+            from support.models import Settings
+            Settings.objects.filter(pk=Settings.load().pk).update(task_all_escalated=bool(d["task_all_escalated"]))
         Change.objects.create(kind=Change.UPDATED, text="PRBC sozlamalari o'zgartirildi", actor=_actor(request),
                               data={k: ("••••" if k == "password" else v) for k, v in d.items() if k in EDITABLE + ["password"]})
     return Response(connection_payload(c))
@@ -282,6 +299,16 @@ def changes(request):
                       "person": c.person_id} for c in qs[:300]])
 
 
+def _question_info(t):
+    st = t.support_task if t.support_task_id else None
+    q = st.message if st and st.message_id else None
+    if q is None:
+        return {"asker": "", "group": "", "q_text": "", "q_resolution": "", "q_link": ""}
+    return {"asker": q.user.name if q.user_id else "", "group": q.group.title if q.group_id else "",
+            "q_text": (q.problem or q.text or q.ocr_text or "")[:300], "q_resolution": q.resolution,
+            "q_link": q.group.message_link(q.message_id) if q.group_id else ""}
+
+
 def task_payload(t, conn, full=False):
     open_ = t.status_category in tasks.OPEN
     d = {"id": t.id, "prbc_id": t.prbc_id, "code": t.code, "title": t.title, "kind": t.kind, "status": t.status_name,
@@ -292,7 +319,10 @@ def task_payload(t, conn, full=False):
          "spent_minutes": t.spent_minutes, "overdue": bool(open_ and t.due_at and t.due_at < timezone.now()),
          "on_time": (t.report or {}).get("on_time"), "has_report": bool(t.report), "checked_at": t.checked_at,
          "question": t.support_task.message_id if t.support_task_id else None,
-         "files": int((t.sync or {}).get("files") or 0), "notified": (t.sync or {}).get("notified") or []}
+         "files": int((t.sync or {}).get("files") or 0), "notified": (t.sync or {}).get("notified") or [],
+         "due_in": int((t.due_at - timezone.now()).total_seconds()) if open_ and t.due_at else None,
+         "pushed": (t.sync or {}).get("pushed") or "", "status_error": (t.sync or {}).get("status_error") or "",
+         **_question_info(t)}
     if full:
         d["report"] = t.report
     return d
@@ -317,7 +347,7 @@ def task_list(request):
         except PrbcError as e:
             return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(task_payload(t, conn), status=status.HTTP_201_CREATED)
-    qs = Task.objects.select_related("person", "support_task")
+    qs = Task.objects.select_related("person", "support_task__message__user", "support_task__message__group")
     p = request.query_params
     if p.get("kind"):
         qs = qs.filter(kind__in=p["kind"].split(","))
@@ -437,3 +467,60 @@ def outlet_status(request):
         return Response({"detail": "PRBC javob bermadi — keyinroq urinib ko'ring."}, status=status.HTTP_502_BAD_GATEWAY)
     return Response({"ids": ids, "found": sum(len(r.get("requests") or []) + len(r.get("attachments") or []) for r in found.values()),
                      "text": outlets.card(found, "uz"), "text_ru": outlets.card(found, "ru"), "bot_enabled": c.enabled and c.outlet_lookup})
+
+
+# ====================================================================== nazorat (SLA)
+@zona_api(["GET"], ADMIN)
+def control(request):
+    """Nazorat paneli: xulosa + ochiq vazifalar (muddat bo'yicha) + bugun bajarilganlar + vazifasiz savollar."""
+    from . import control as ctl
+    conn = Connection.get()
+    rel = ("person", "support_task__message__user", "support_task__message__group")
+    open_ = (Task.objects.filter(kind=Task.OURS, status_category__in=ctl.OPEN).select_related(*rel)
+             .order_by(F("due_at").asc(nulls_last=True), "id")[:200])
+    today = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+    done = (Task.objects.filter(kind=Task.OURS, status_category="done", completed_at__gte=today - timedelta(days=1))
+            .select_related(*rel).order_by("-completed_at")[:50])
+    pending = [{"id": q.id, "text": (q.problem or q.text or q.ocr_text or "")[:200], "asker": q.user.name if q.user_id else "",
+                "group": q.group.title if q.group_id else "", "created_at": q.created_at, "status": q.status,
+                "link": q.group.message_link(q.message_id) if q.group_id else ""} for q in ctl.untasked()[:50]]
+    return Response({"summary": ctl.control_summary(conn), "open": [task_payload(t, conn) for t in open_],
+                     "done": [task_payload(t, conn) for t in done], "untasked": pending,
+                     "worker_alive": connection_payload(conn)["worker_alive"]})
+
+
+@zona_api(["POST"], ADMIN)
+def task_set_status(request, pk):
+    """Paneldan: {category: in_progress|done|cancelled|new} — PRBC'da holat + izoh (kim o'zgartirdi)."""
+    from . import control as ctl
+    t = Task.objects.filter(pk=pk, kind=Task.OURS).first()
+    if not t:
+        return Response({"detail": "Topilmadi"}, status=status.HTTP_404_NOT_FOUND)
+    cat = str(request.data.get("category") or "")
+    labels = {"in_progress": "jarayonda", "done": "bajarildi", "cancelled": "bekor qilindi", "new": "yangi"}
+    if cat not in labels:
+        return Response({"detail": "Noto'g'ri holat."}, status=status.HTTP_400_BAD_REQUEST)
+    conn = Connection.get()
+    try:
+        upd = ctl.set_status(conn, Client(conn), t, cat, f"🔄 Holat: {labels[cat]} — {_actor(request) or 'panel'} (Foydali paneli).")
+    except PrbcError as e:
+        return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+    if upd is None:
+        t.refresh_from_db()
+        return Response({"detail": "PRBC holatni o'zgartirmadi: " + ((t.sync or {}).get("status_error") or "sabab noma'lum")},
+                        status=status.HTTP_400_BAD_REQUEST)
+    Change.objects.create(kind=Change.TASK, actor=_actor(request), data={"task": t.prbc_id},
+                          text=f"{t.code}: holat → {labels[cat]}"[:500])
+    return Response(task_payload(upd, conn))
+
+
+@zona_api(["POST"], ADMIN)
+def backfill(request):
+    """Vazifasiz ochiq savollarga vazifa ochish: {days?: 7, dry?: true} -> {count}."""
+    from . import control as ctl
+    days = max(1, min(int(request.data.get("days") or ctl.BACKFILL_DAYS), 30))
+    dry = bool(request.data.get("dry"))
+    n = ctl.backfill(days, dry=dry, actor=_actor(request))
+    if n and not dry:
+        Change.objects.create(kind=Change.TASK, actor=_actor(request), text=f"{n} ta ochiq savolga vazifa navbatga qo'yildi")
+    return Response({"count": n, "dry": dry})

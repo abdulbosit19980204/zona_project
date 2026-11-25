@@ -52,7 +52,6 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/ai-history", key: "aiHistory", icon: Sparkles },
       { href: "/audit", key: "audit", icon: History },
-      { href: "/prbc", key: "prbc", icon: RefreshCcwDot, perm: "admin" },
       { href: "/settings", key: "settings", icon: Settings },
     ],
   },
@@ -131,8 +130,27 @@ export const INVENTORY_NAV: NavGroup[] = [
   },
 ];
 
+/** PRBC: savol vazifalarini nazorat (muddat, holat), vazifalar, 1C xodimlari, jurnal va sozlamalar — faqat administrator. */
+export const PRBC_NAV: NavGroup[] = [
+  {
+    key: "prbcMain",
+    items: [
+      { href: "/prbc", key: "prbcControl", icon: Gauge, perm: "admin" },
+      { href: "/prbc/tasks", key: "prbcTasks", icon: ListChecks, perm: "admin" },
+      { href: "/prbc/people", key: "prbcPeople", icon: UsersRound, perm: "admin" },
+    ],
+  },
+  {
+    key: "prbcConfig",
+    items: [
+      { href: "/prbc/log", key: "prbcLog", icon: ScrollText, perm: "admin" },
+      { href: "/prbc/settings", key: "prbcSettings", icon: SlidersHorizontal, perm: "admin" },
+    ],
+  },
+];
+
 export interface NavModule {
-  key: "zona" | "qrdrive" | "support" | "inventory"; // nav.modules.<key>
+  key: "zona" | "qrdrive" | "support" | "inventory" | "prbc"; // nav.modules.<key>
   icon: LucideIcon;
   groups: NavGroup[];
 }
@@ -143,6 +161,7 @@ export const MODULES: NavModule[] = [
   { key: "qrdrive", icon: QrCode, groups: QR_NAV },
   { key: "support", icon: BotMessageSquare, groups: SUPPORT_NAV },
   { key: "inventory", icon: ClipboardCheck, groups: INVENTORY_NAV },
+  { key: "prbc", icon: RefreshCcwDot, groups: PRBC_NAV },
 ];
 
 export const ALL_NAV = MODULES.flatMap((m) => m.groups.flatMap((g) => g.items));
@@ -157,6 +176,7 @@ export function moduleOf(pathname: string): NavModule {
   if (pathname === "/qr" || pathname.startsWith("/qr/")) return MODULES[1];
   if (pathname === "/support" || pathname.startsWith("/support/")) return MODULES[2];
   if (pathname === "/inv" || pathname.startsWith("/inv/")) return MODULES[3];
+  if (pathname === "/prbc" || pathname.startsWith("/prbc/")) return MODULES[4];
   return MODULES[0];
 }
 

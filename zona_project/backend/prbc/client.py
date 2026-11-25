@@ -148,6 +148,9 @@ class Client:
     def post(self, path, body=None):
         return self.request("POST", path, body=body or {})
 
+    def patch(self, path, body=None):
+        return self.request("PATCH", path, body=body or {})
+
     def pages(self, path, params=None, max_pages=MAX_PAGES, stop=None):
         """Sahifalangan ro'yxat ({count, next, results}) yoki oddiy ro'yxat. stop(item) True bo'lsa to'xtaydi."""
         params = dict(params or {})
@@ -167,10 +170,10 @@ class Client:
         return self.get("/auth/profile/")
 
     def create_task(self, *, title, description="", project=None, assignee_ids=(), co_assignee_ids=(), watcher_ids=(),
-                    priority=None, due_at=None, start_at=None, status=None, parent=None):
+                    priority=None, due_at=None, start_at=None, status=None, parent=None, estimated_minutes=None):
         body = {"title": title[:255], "description": description[:20000]}
         for key, value in (("project", project), ("priority", priority), ("due_at", due_at), ("start_at", start_at),
-                           ("status", status), ("parent", parent)):
+                           ("status", status), ("parent", parent), ("estimated_minutes", estimated_minutes)):
             if value not in (None, ""):
                 body[key] = value
         for key, value in (("assignee_ids", assignee_ids), ("co_assignee_ids", co_assignee_ids), ("watcher_ids", watcher_ids)):

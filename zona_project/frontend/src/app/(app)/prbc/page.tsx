@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 
 import { PrbcIntegration } from "@/components/views/prbc";
 
-export const metadata: Metadata = { title: "PRBC integratsiya" };
+export const metadata: Metadata = { title: "PRBC — nazorat" };
 
 export default function PrbcPage() {
-  return <PrbcIntegration />;
+  return <PrbcIntegration view="control" />;
 }

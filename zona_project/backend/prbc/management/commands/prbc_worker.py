@@ -11,12 +11,12 @@ from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 from django.utils import timezone
 
-from prbc import people, tasks
+from prbc import control, people, tasks
 from prbc.client import Client, PrbcError
 from prbc.models import Connection
 
 log = logging.getLogger("prbc")
-TICK, TASK_EVERY = 10, 120
+TICK, TASK_EVERY, PUSH_EVERY = 10, 120, 30
 
 
 class Command(BaseCommand):
@@ -32,7 +32,7 @@ class Command(BaseCommand):
             return
         stop = {"flag": False}
         signal.signal(signal.SIGTERM, lambda *_: stop.update(flag=True))
-        last_task = 0.0
+        last_task = last_push = 0.0
         self.stdout.write("PRBC worker ishga tushdi")
         while not stop["flag"]:
             close_old_connections()
@@ -47,6 +47,11 @@ class Command(BaseCommand):
                     from support.models import SupportTask
                     if SupportTask.objects.filter(status=SupportTask.QUEUED, attempts__lt=3).exists():
                         tasks.process_support_queue(client=Client(Connection.get()))  # bot navbati — ~10 soniyada
+                    if time.time() - last_push >= PUSH_EVERY:
+                        last_push = time.time()
+                        client = Client(Connection.get())
+                        control.push_status(client=client)  # savol hal bo'ldi -> Done, xodim javob yozdi -> In Progress
+                        control.watch_overdue(client=client)  # muddati o'tgan -> izoh + shoshilinch
                     if time.time() - last_task >= TASK_EVERY or conn.sync_requested:
                         last_task = time.time()
                         tasks.poll(client=Client(Connection.get()))  # holat va "bajarildi" hisoboti

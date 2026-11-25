@@ -19,7 +19,7 @@ from .client import Client, PrbcError
 from .models import Change, Connection, Person, Task
 
 log = logging.getLogger("prbc")
-OPEN = ("new", "in_progress", "")
+OPEN = ("new", "in_progress", "review", "")
 ROLES = {"assignee": "Ijrochi", "co_assignee": "Hamijrochi", "observer": "Kuzatuvchi"}
 
 
@@ -100,7 +100,7 @@ def self_id(conn, client=None):
 
 
 def create(*, title, description="", assignee_ids=(), watcher_ids=None, project=None, priority=None, due_at=None,
-           actor="", support_task=None, conn=None, client=None):
+           actor="", support_task=None, conn=None, client=None, start_at=None, estimated_minutes=None):
     """Mas'ul — ijrochi (assignee_ids, bo'lmasa standart ijrochilar); kuzatuvchi — sozlamadagi (Kamoliddin aka) va
     ulangan akkaunt egasi (watch_self)."""
     conn = conn or Connection.get()
@@ -113,7 +113,8 @@ def create(*, title, description="", assignee_ids=(), watcher_ids=None, project=
             pool.append(me)
     watchers = list(dict.fromkeys(int(x) for x in pool if int(x) not in assignees))
     data = client.create_task(title=title, description=description, project=project or conn.task_project,
-                              assignee_ids=assignees, watcher_ids=watchers, priority=priority, due_at=due_at)
+                              assignee_ids=assignees, watcher_ids=watchers, priority=priority, due_at=due_at,
+                              start_at=start_at, estimated_minutes=estimated_minutes)
     if not isinstance(data, dict) or not data.get("id"):
         raise PrbcError("PRBC vazifa yaratmadi (javobda id yo'q)", payload=data)
     data = _full(client, data)  # kod, ijrochilar, kuzatuvchilar
@@ -396,9 +397,15 @@ def process_support_queue(conn=None, client=None, limit=10):
             extra = [(i.text or "").strip() for i in _info(q) if (i.text or "").strip()]
             if extra:
                 body += "\n\nQo'shimcha (savol egasidan):\n" + "\n".join(f"• {x[:500]}" for x in extra[:10])
+        from .control import sla_window
+        start, due = sla_window(conn, at=st.created_at)  # me'yor: ish vaqtida sla_minutes daqiqa (standart 10)
+        body += (f"\n\n⏱ Muddat: {timezone.localtime(due):%d.%m %H:%M} gacha (me'yor — {conn.sla_minutes} daqiqa). "
+                 "Savol guruhda hal bo'lsa, vazifa avtomatik yopiladi.")
         try:
             t = create(title=title, description=body, assignee_ids=ids, actor="support-bot",
-                       project=project_for(conn, q), support_task=st, conn=conn, client=client)
+                       project=project_for(conn, q), support_task=st, conn=conn, client=client,
+                       priority=conn.task_priority, start_at=start.isoformat(), due_at=due.isoformat(),
+                       estimated_minutes=conn.sla_minutes)
         except PrbcError as e:
             st.status = SupportTask.QUEUED if st.attempts < 3 else SupportTask.FAILED
             st.error = str(e)[:250]
@@ -532,7 +539,8 @@ def _close_support(conn, t):
     st.save(update_fields=["status", "reply"])
     q0 = st.message if st.message_id else None
     sync = dict(t.sync or {})
-    if conn.notify_done and q0 is not None and "done" not in (sync.get("notified") or []):
+    already = sync.get("pushed") == "done"  # savol guruhda hal bo'lgani uchun biz yopdik — guruhga qayta yozilmaydi
+    if conn.notify_done and q0 is not None and not already and "done" not in (sync.get("notified") or []):
         if notify_group(st, done_text(t, q0.lang)):  # guruhdagi savolga: bajarildi + izohlar
             sync["notified"] = [*(sync.get("notified") or []), "done"]
             Task.objects.filter(pk=t.pk).update(sync=sync)

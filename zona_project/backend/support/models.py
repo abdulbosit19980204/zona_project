@@ -71,6 +71,8 @@ class Settings(models.Model):
     task_default_assignee = models.CharField("Jamoa savollari uchun ijrochi (username)", max_length=64, blank=True)
     task_departments = models.JSONField("Vazifa yaratiladigan bo'limlar (zona Department id)", default=list, blank=True)
     task_members = models.JSONField("Vazifa yaratiladigan xodimlar (zona Member id)", default=list, blank=True)
+    task_all_escalated = models.BooleanField("Odamga uzatilgan har bir savolga vazifa (mas'ul bo'lmasa — standart ijrochiga)",
+                                             default=True, db_default=True)
     task_daily_limit = models.PositiveIntegerField("Kuniga ko'pi bilan vazifa", default=40)
     task_gap = models.PositiveIntegerField("Vazifalar orasidagi tanaffus (soniya)", default=20)
     task_attach = models.BooleanField("Savoldagi fayllarni vazifaga biriktirish", default=True)

@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
 import { supportApi } from "@/components/support/api";
+import { api } from "@/lib/api/client";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOrg } from "@/hooks/use-org";
 import { useQrNotifications } from "@/hooks/use-qrdrive";
@@ -33,7 +34,7 @@ export function Brand({ collapsed = false }: { collapsed?: boolean }) {
   );
 }
 
-const WARN_KEYS = new Set(["gaps", "qrErrors"]);
+const WARN_KEYS = new Set(["gaps", "qrErrors", "prbcControl"]);
 const PRIMARY_KEYS = new Set(["approvals", "qrRequests"]);
 
 function NavLink({ item, active, count, collapsed }: { item: NavItem; active: boolean; count?: number; collapsed: boolean }) {
@@ -175,6 +176,10 @@ export function Sidebar() {
   const sup = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7), refetchInterval: 30_000,
     enabled: pathname === "/support" || pathname.startsWith("/support/") });
   const ss = sup.data;
+  // PRBC bo'limida: ochiq vazifalar soni (nazorat sahifasi bilan bitta kesh)
+  const prbc = useQuery({ queryKey: ["prbc", "control"], refetchInterval: 15_000,
+    queryFn: async () => (await api.get<{ summary: { open: number } }>("prbc/control/")).data,
+    enabled: Boolean(model?.state.me.can?.admin) && (pathname === "/prbc" || pathname.startsWith("/prbc/")) });
   const counts: Record<string, number | undefined> = {
     supInbox: ss ? (ss.by_status.escalated ?? 0) + (ss.by_status.drafted ?? 0) || undefined : undefined,
     supReview: ss ? (ss.entries.new ?? 0) + (ss.entries.review ?? 0) + (ss.pending_edits ?? 0) || undefined : undefined,
@@ -183,6 +188,7 @@ export function Sidebar() {
     employees: model?.state.members.length,
     qrRequests: qr.data?.pending_requests || undefined,
     qrErrors: qr.data?.failed_files || undefined,
+    prbcControl: prbc.data?.summary.open || undefined,
   };
   const down: Record<string, boolean> = { zona: org.isError, qrdrive: qr.isError };
 
@@ -197,6 +203,7 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
         {MODULES.filter((m) => m.key !== "inventory" || (model?.state.me && !model.state.me.anonymous && model.state.me.inventory))
+          .filter((m) => m.key !== "prbc" || Boolean(model?.state.me.can?.admin))
           .map((m) => <ModuleSection key={m.key} module={m} counts={counts} down={down[m.key]} />)}
       </nav>
       <ControlCenterLink collapsed={collapsed} />
