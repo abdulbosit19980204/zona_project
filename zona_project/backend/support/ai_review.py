@@ -328,7 +328,9 @@ def write_variants(job):
     """Ko'p ishlatiladigan tasdiqlangan javoblar uchun 3 tadan variant (mazmuni bir xil) — bot ulardan birini tanlaydi."""
     params = job.params or {}
     ids = [int(x) for x in params.get("ids") or []][:100]
-    qs = Entry.objects.filter(pk__in=ids) if ids else Entry.objects.filter(status=Entry.APPROVED, variants__isnull=True)
+    # standart holatlar (shablon) qayta yozilmaydi — bot ularga bazadagi javobning o'zini yuboradi
+    qs = (Entry.objects.filter(pk__in=ids) if ids else Entry.objects.filter(status=Entry.APPROVED, variants__isnull=True)) \
+        .exclude(kind=Entry.TEMPLATE)
     entries = sorted(qs, key=lambda e: (-(e.uses or 0), -e.image_examples.count(), e.id))[: len(ids) or int(params.get("limit") or 25)]
     done = 0
 

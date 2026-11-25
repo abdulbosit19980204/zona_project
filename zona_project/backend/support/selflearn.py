@@ -95,6 +95,6 @@ def daily_review():
     AIJob.objects.create(kind=AIJob.REVIEW_ENTRIES, created_by="avto: kunlik tahlil",
                          params={"scope": "priority", "limit": 24, "auto_safe": True})
     AIJob.objects.create(kind=AIJob.REVIEW_UNANSWERED, created_by="avto: kunlik tahlil", params={"days": 2})
-    if s.answer_variety and Entry.objects.filter(status=Entry.APPROVED, variants__isnull=True).exists():
+    if s.answer_variety and Entry.objects.filter(status=Entry.APPROVED, variants__isnull=True).exclude(kind=Entry.TEMPLATE).exists():
         AIJob.objects.create(kind=AIJob.VARIANTS, created_by="avto: kunlik tahlil", params={"limit": 25})
     return True

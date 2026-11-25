@@ -862,6 +862,10 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
         if te and all(te.pk != x[0].pk for x in distinct):
             return Decision("template", te, tconf, render_answer(te, tfields, lang), False, own(te), tfields,
                             te.status != Entry.APPROVED, note="ekrandagi matn (OCR) rasm o'xshashligidan ustun")
+    if distinct and ocr:
+        # siyrak ekran (o'rtada bitta belgi va 1-2 qator matn) rasm xeshi bo'yicha boshqa siyrak ekranga o'xshab ketadi:
+        # "Tasdiq kutilmoqda" ≠ "Request was throttled". Ekrandagi matn shablonga umuman aloqasi yo'q bo'lsa — rasmga ishonilmaydi
+        distinct = [x for x in distinct if not ocr_contradicts(x[0], ocr)]
     if alert and len(meaningful(alert)) >= 2 and not (strong_text and match_template(text, templates)[0]):
         # skrinshotdagi QIZIL xato yozuvi — eng aniq belgi ("Для данной ТТ не найдены активные маршруты доставки"):
         # ekrandagi boshqa so'zlar (to'lov turlari, menyu) emas, shu xabar bo'yicha javob
@@ -997,6 +1001,24 @@ def meaningful(text):
     return [w for w in dict.fromkeys(toks(text)) if w not in _FILLER and len(w) >= 2 and not w.isdigit()]
 
 
+OCR_GENERIC = {"prbc", "protarget", "x", "orqaga", "назад"}  # ilova sarlavhasi — holat haqida hech narsa demaydi
+
+
+def ocr_contradicts(e, ocr):
+    """Rasm o'xshashligi bo'yicha tanilgan SHABLON ekrandagi matnga zid: ekran siyrak (2-15 mazmunli so'z — o'qish oson,
+    xesh esa ishonchsiz), shablon shartlaridan birortasi ham yo'q va matnda shablon mavzusidan bitta so'z ham yo'q.
+    Tarixdagi ~750 ta rasm javobida faqat xato deb belgilanganlarini rad etadi."""
+    if e.kind != Entry.TEMPLATE or not e.triggers:
+        return False
+    words = [w for w in meaningful(ocr) if w not in OCR_GENERIC]
+    if not (2 <= len(words) <= 15):
+        return False
+    if match_template(ocr, [e])[0] is not None:
+        return False
+    topic = set(toks(" ".join([e.title, *(e.triggers or []), *(e.questions or []), e.answer or "", e.answer_ru or ""])))
+    return not (set(toks(" ".join(words))) & topic)
+
+
 def substantive(text):
     """Xodim aniq savol yozganmi (kamida 2 ta mazmunli so'z), yoki faqat "ko'rib bering" kabi umumiy so'zlarmi."""
     return len(meaningful(text)) >= 2
@@ -1072,6 +1094,8 @@ def vary(d, lang, settings, rnd=None):
     rnd = rnd or random
     if not getattr(settings, "answer_variety", False) or d.stage not in ("image", "template", "faq") or d.entry is None:
         return d.text
+    if d.entry.kind == Entry.TEMPLATE:
+        return d.text  # standart holat — bazadagi javob aynan o'zi: AI qayta yozmaydi, kirish so'zi qo'shilmaydi
     text = d.text
     key = "ru" if lang == "ru" else "uz"
     pool = [v.get(key) for v in (d.entry.variants or []) if isinstance(v, dict) and v.get(key)]
