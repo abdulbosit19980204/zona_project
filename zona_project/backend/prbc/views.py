@@ -347,21 +347,58 @@ def task_list(request):
         except PrbcError as e:
             return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(task_payload(t, conn), status=status.HTTP_201_CREATED)
-    qs = Task.objects.select_related("person", "support_task__message__user", "support_task__message__group")
     p = request.query_params
+    base = _filtered(p)
+    legacy = next((k for k in ("open", "overdue", "done") if p.get(k)), "")
+    state = p.get("state") or legacy or "all"
+    rows = _state(base, state)
+    if p.get("with_counts"):
+        counts = {s: len(_state(base, s)) for s in STATES}
+        return Response({"items": [task_payload(t, conn) for t in rows[:300]], "counts": counts, "state": state})
+    return Response([task_payload(t, conn) for t in rows[:300]])
+
+
+STATES = ("all", "open", "overdue", "done", "late", "cancelled")
+
+
+def _filtered(p):
+    """Ro'yxat va statistika uchun umumiy filtr: tur, davr (kun), ijrochi (statistika bilan aynan bir xil), guruh, qidiruv.
+    Qaytaradi: Task ro'yxati (Python'da — ijrochi nomi JSON ichidan aniq solishtiriladi)."""
+    qs = Task.objects.select_related("person", "support_task__message__user", "support_task__message__group")
     if p.get("kind"):
         qs = qs.filter(kind__in=p["kind"].split(","))
-    if p.get("open"):
-        qs = qs.filter(status_category__in=tasks.OPEN)
-    if p.get("done"):
-        qs = qs.filter(status_category="done")
-    if p.get("overdue"):
-        qs = qs.filter(status_category__in=tasks.OPEN, due_at__lt=timezone.now())
-    if p.get("assignee"):
-        qs = qs.filter(Q(assignee__icontains=p["assignee"]) | Q(people__icontains=p["assignee"]))
+    days = int(p.get("days") or 0) if str(p.get("days") or "0").isdigit() else 0
+    if days:
+        qs = qs.filter(tasks.since_q(timezone.now() - timedelta(days=days)))
+    if p.get("group"):
+        g = p["group"]
+        qs = qs.filter(support_task__message__group__isnull=True) if g.startswith("Guruhsiz") else \
+            qs.filter(support_task__message__group__title=g)
     if p.get("q"):
         qs = qs.filter(Q(title__icontains=p["q"]) | Q(code__icontains=p["q"]))
-    return Response([task_payload(t, conn) for t in qs[:300]])
+    who = (p.get("assignee") or "").strip()
+    if who and who != "—":
+        qs = qs.filter(Q(assignee__icontains=who) | Q(people__icontains=who))
+    rows = list(qs.order_by("-prbc_created_at", "-id")[:3000])
+    if who:
+        rows = [t for t in rows if who in tasks.assignee_names(t)]
+    return rows
+
+
+def _state(rows, state):
+    now = timezone.now()
+    if state == "open":
+        out = [t for t in rows if t.status_category in tasks.OPEN]
+        return sorted(out, key=lambda t: (t.due_at is None, t.due_at or now))
+    if state == "overdue":
+        out = [t for t in rows if t.status_category in tasks.OPEN and t.due_at and t.due_at < now]
+        return sorted(out, key=lambda t: t.due_at)
+    if state in ("done", "late"):
+        out = [t for t in rows if t.status_category == "done" and (state == "done" or (t.report or {}).get("on_time") is False)]
+        return sorted(out, key=lambda t: t.completed_at or t.prbc_updated_at or now, reverse=True)
+    if state == "cancelled":
+        return [t for t in rows if t.status_category == "cancelled"]
+    return rows
 
 
 @zona_api(["GET"], ADMIN)
@@ -375,19 +412,21 @@ def task_detail(request, pk):
 
 @zona_api(["GET"], ADMIN)
 def task_stats(request):
-    """Ijrochilar bo'yicha nazorat: ?days=30 (0 — hammasi)."""
+    """Ijrochilar bo'yicha nazorat: ?days=30 (0 — hammasi), ?kind=ours,leave,hire — ro'yxatdagi tanlov bilan bir xil."""
     days = int(request.query_params.get("days") or 30)
     since = timezone.now() - timedelta(days=days) if days > 0 else None
-    rows = tasks.stats(since)
+    kinds = [k for k in (request.query_params.get("kind") or "").split(",") if k] or [Task.OURS, Task.HIRE, Task.LEAVE]
+    rows = tasks.stats(since, kinds)
     total = {k: sum(r[k] for r in rows) for k in ("open", "overdue", "late")}
-    qs = Task.objects.filter(kind__in=[Task.OURS, Task.HIRE, Task.LEAVE])
+    qs = Task.objects.filter(kind__in=kinds)
     if since:
         qs = qs.filter(tasks.since_q(since))
     total.update(total=qs.count(), done=qs.filter(status_category="done").count(),
                  open=qs.filter(status_category__in=tasks.OPEN).count(),
                  cancelled=qs.filter(status_category="cancelled").count(),
                  overdue=qs.filter(status_category__in=tasks.OPEN, due_at__lt=timezone.now()).count())
-    return Response({"rows": rows, "total": total, "groups": tasks.group_stats(since)})
+    return Response({"rows": rows, "total": total, "days": days,
+                     "groups": tasks.group_stats(since) if Task.OURS in kinds else []})
 
 
 @zona_api(["GET"], ADMIN)

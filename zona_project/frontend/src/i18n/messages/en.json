@@ -1374,6 +1374,26 @@
     "ctlDetails": "Details",
     "colAvgMin": "Average time",
     "gpOld": "old group → {name}",
-    "gpOldHint": "An old (redirected) group never opens tasks"
+    "gpOldHint": "An old (redirected) group never opens tasks",
+    "st_all": "Total",
+    "st_open": "Open",
+    "st_overdue": "Overdue",
+    "st_done": "Done",
+    "st_late": "Done late",
+    "st_cancelled": "Cancelled",
+    "daysN": "{n} days",
+    "byAssigneeHint": "By assignee — click a number to list exactly those tasks",
+    "byGroupHint": "By group — click a number",
+    "allTasks": "All tasks",
+    "listCount": "{n} tasks",
+    "clearPick": "Clear selection",
+    "dMin": "{n} min",
+    "dHour": "{h} h",
+    "dHourMin": "{h} h {m} min",
+    "dDay": "{d} d",
+    "dDayHour": "{d} d {h} h",
+    "tookIn": "done in {d}",
+    "lateBy": "{d} late",
+    "leftUntil": "{d} left"
   }
 }

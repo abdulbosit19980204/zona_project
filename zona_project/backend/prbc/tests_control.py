@@ -389,3 +389,43 @@ class OldGroupAndDocsTests(Base):
         self.assertEqual(APIClient().get("/api/docs/img/prbc-muddat.jpg").status_code, 401)
         doc = api.get("/api/docs/sozlamalar/").json()
         self.assertIn("![Vazifa nazorati", doc["text"])
+
+
+class TaskListFilterTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.api = APIClient()
+        self.api.force_authenticate(User.objects.create_superuser("adm6", "f@x.uz", "x"))
+        now = timezone.now()
+
+        def mk(i, cat, who, due_min, kind=Task.OURS, on_time=None):
+            return Task.objects.create(prbc_id=70000 + i, code=f"T-{i}", title=f"v{i}", kind=kind, status_category=cat,
+                                       assignee=who, people=[{"id": i, "name": who, "position": "", "role": "assignee"}],
+                                       due_at=now + timedelta(minutes=due_min), prbc_created_at=now - timedelta(hours=1),
+                                       completed_at=now if cat == "done" else None,
+                                       report={"on_time": on_time} if on_time is not None else {})
+        mk(1, "new", "Said Abror", -30)        # muddati o'tgan
+        mk(2, "in_progress", "Said Abror", 30)  # ochiq
+        mk(3, "done", "Said Abror", 0, on_time=False)  # kech bajarilgan
+        mk(4, "done", "NE'MATOV JAHONGIR", 0, on_time=True)
+        mk(5, "cancelled", "Said Abror", 0)
+        mk(6, "new", "NE'MATOV JAHONGIR", -5, kind=Task.LEAVE)  # 1C bo'shash vazifasi
+
+    def get(self, **kw):
+        return self.api.get("/api/prbc/tasks/", {"kind": "ours", "with_counts": 1, "days": 30, **kw}).json()
+
+    def test_person_state_cells(self):
+        r = self.get(assignee="Said Abror", state="overdue")
+        self.assertEqual([x["code"] for x in r["items"]], ["T-1"])
+        self.assertEqual(r["counts"], {"all": 4, "open": 2, "overdue": 1, "done": 1, "late": 1, "cancelled": 1})
+        self.assertEqual([x["code"] for x in self.get(assignee="Said Abror", state="late")["items"]], ["T-3"])
+        self.assertEqual(self.get(assignee="Said", state="all")["counts"]["all"], 0)  # ism aniq — qismi emas
+        self.assertEqual(self.get(state="done")["counts"]["done"], 2)
+
+    def test_stats_follow_kind(self):
+        ours = self.api.get("/api/prbc/tasks/stats/", {"days": 30, "kind": "ours"}).json()
+        jah = next(r for r in ours["rows"] if r["name"] == "NE'MATOV JAHONGIR")
+        self.assertEqual((jah["total"], jah["overdue"]), (1, 0))  # 1C bo'shash vazifasi "Biz yaratgan"ga kirmaydi
+        both = self.api.get("/api/prbc/tasks/stats/", {"days": 30, "kind": "ours,leave"}).json()
+        self.assertEqual(next(r for r in both["rows"] if r["name"] == "NE'MATOV JAHONGIR")["overdue"], 1)
+        self.assertEqual(self.api.get("/api/prbc/tasks/stats/", {"kind": "leave"}).json()["groups"], [])

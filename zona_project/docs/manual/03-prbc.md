@@ -111,8 +111,20 @@ Sahifa har 15 soniyada yangilanadi; menyudagi raqam — ochiq vazifalar soni.
 
 ## Vazifalar (sahifa)
 
-Barcha vazifalar (bizniki, 1C'dan "Yangi xodim" / "Ishdan bo'shash"), ijrochilar va guruhlar statistikasi, vazifa
-tafsiloti (izohlar, chek-list, sarflangan vaqt, tarix) va paneldan **yangi vazifa** yaratish.
+- **Tur:** Biz yaratgan / Ishdan bo'shash / Yangi xodim / Hammasi; **davr:** 7, 30, 90 kun yoki hammasi. Statistika ham,
+  ro'yxat ham shu tanlov bo'yicha (bir xil sonlar).
+- **Tepadagi kartalar:** Jami, Bajarilgan, Ochiq, Muddati o'tgan, Kech bajarilgan, Bekor qilingan — bossangiz, ro'yxat shu
+  holat bo'yicha.
+- **Xodimlar bo'yicha jadval:** har raqam bosiladi. Masalan, xodim qatoridagi "Muddati o'tgan 14" — aynan uning 14 ta
+  muddati o'tgan vazifasi; "Bajarildi" — bajarganlari; "Kech bajarilgan" — muddatdan keyin yopilganlari. Ismni bossangiz —
+  xodimning barcha vazifalari. Tanlangan katak ko'k bilan belgilanadi.
+- **Guruhlar bo'yicha jadval** — xuddi shunday, guruh bo'yicha.
+- **Ro'yxat:** sarlavhada nima tanlangani ("Said Abror · Muddati o'tgan · 3 ta vazifa"), holat tugmalari soni bilan va
+  "Tanlovni tozalash". Har vazifa kartasida: rangli chiziq (qizil — muddati o'tgan, ko'k — ochiq, yashil — bajarilgan,
+  sariq — kech bajarilgan, kulrang — bekor), ijrochi, savol egasi va guruh, loyiha, **qancha qoldi / qancha kechikdi** yoki
+  **qancha vaqtda bajarildi**; PRBC'da ochish va guruhdagi savol tugmalari. Kartani bossangiz — tafsilot (izohlar,
+  chek-list, sarflangan vaqt, tarix).
+- O'ngda — paneldan **yangi vazifa** yaratish.
 
 ## 1C xodimlari
 

@@ -618,16 +618,20 @@ def since_q(since):
     return Q(prbc_created_at__gte=since) | Q(prbc_created_at__isnull=True, created_at__gte=since)
 
 
-def stats(since=None):
+def assignee_names(t):
+    """Vazifa ijrochilari ismi — statistika va ro'yxat filtri uchun bir xil qoida ("—" — ijrochisiz)."""
+    return [p["name"] for p in t.people or [] if p.get("role") == "assignee"] or [t.assignee.split(" +")[0] or "—"]
+
+
+def stats(since=None, kinds=None):
     """Ijrochilar bo'yicha nazorat: jami, bajarilgan, ochiq, muddati o'tgan, muddatida bajarilgan, o'rtacha vaqt."""
     now = timezone.now()
-    qs = Task.objects.filter(kind__in=[Task.OURS, Task.HIRE, Task.LEAVE])
+    qs = Task.objects.filter(kind__in=kinds or [Task.OURS, Task.HIRE, Task.LEAVE])
     if since:
         qs = qs.filter(since_q(since))
     rows = {}
     for t in qs.only("people", "assignee", "status_category", "due_at", "completed_at", "prbc_created_at", "report"):
-        names = [p["name"] for p in t.people or [] if p.get("role") == "assignee"] or [t.assignee.split(" +")[0] or "—"]
-        for name in names:
+        for name in assignee_names(t):
             r = rows.setdefault(name, {"name": name, "total": 0, "done": 0, "open": 0, "overdue": 0, "late": 0,
                                        "cancelled": 0, "hours": []})
             r["total"] += 1

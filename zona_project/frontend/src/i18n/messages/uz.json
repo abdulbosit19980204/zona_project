@@ -1374,6 +1374,26 @@
     "ctlDetails": "Batafsil",
     "colAvgMin": "O'rtacha vaqt",
     "gpOld": "eski guruh → {name}",
-    "gpOldHint": "Eski (yangi guruhga yo'naltirilgan) guruhdan vazifa ochilmaydi"
+    "gpOldHint": "Eski (yangi guruhga yo'naltirilgan) guruhdan vazifa ochilmaydi",
+    "st_all": "Jami",
+    "st_open": "Ochiq",
+    "st_overdue": "Muddati o'tgan",
+    "st_done": "Bajarilgan",
+    "st_late": "Kech bajarilgan",
+    "st_cancelled": "Bekor qilingan",
+    "daysN": "{n} kun",
+    "byAssigneeHint": "Xodimlar bo'yicha — raqamni bosing, ro'yxat shu bo'yicha chiqadi",
+    "byGroupHint": "Guruhlar bo'yicha — raqamni bosing",
+    "allTasks": "Barcha vazifalar",
+    "listCount": "{n} ta vazifa",
+    "clearPick": "Tanlovni tozalash",
+    "dMin": "{n} daq",
+    "dHour": "{h} soat",
+    "dHourMin": "{h} soat {m} daq",
+    "dDay": "{d} kun",
+    "dDayHour": "{d} kun {h} soat",
+    "tookIn": "{d} da bajarildi",
+    "lateBy": "{d} kechikdi",
+    "leftUntil": "{d} qoldi"
   }
 }

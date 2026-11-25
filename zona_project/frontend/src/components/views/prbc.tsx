@@ -3,11 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
-  CheckCircle2, CircleAlert, ExternalLink, Link2, ListTodo, Plug, RefreshCcwDot, RotateCcw, Search, Timer, UserMinus, Users,
+  CheckCircle2, CircleAlert, ExternalLink, Link2, ListTodo, MessageSquareText, Plug, RefreshCcwDot, RotateCcw, Search, Timer, UserMinus, Users,
 } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, Page, PageHeader, StatCard } from "@/components/common/page";
@@ -57,6 +57,7 @@ interface PTask {
   due_at: string | null; person_name: string; url: string; created_by: string; created_at: string | null; people: TPerson[];
   watchers: string; completed_at: string | null; completed_by: string; spent_minutes: number | null; overdue: boolean;
   on_time: boolean | null; has_report: boolean; question: number | null; files: number; notified: string[];
+  asker?: string; group?: string; q_link?: string; due_in?: number | null;
   report?: {
     completed_by?: string; spent_minutes?: number | null; on_time?: boolean | null;
     comments?: { at: string | null; by: string; text: string }[];
@@ -65,7 +66,7 @@ interface PTask {
     history?: { at: string | null; verb: string; by: string; meta: Record<string, unknown> }[];
   };
 }
-interface StatRow { name: string; total: number; done: number; open: number; overdue: number; late: number; cancelled: number; avg_hours: number | null }
+interface StatRow { name: string; total: number; done: number; open: number; overdue: number; late: number; cancelled: number; avg_hours: number | null; avg_minutes?: number | null }
 interface GroupRow { name: string; total: number; done: number; open: number; overdue: number; cancelled: number }
 interface TestResult { ok: boolean; me: { full_name?: string }; checks: Record<string, { ok: boolean; count?: number; detail?: string }>; projects: { id: number; name: string }[] }
 
@@ -272,15 +273,161 @@ function LinkDialog({ person, onClose }: { person: Person | null; onClose: () =>
   );
 }
 
+type TState = "all" | "open" | "overdue" | "done" | "late" | "cancelled";
+const STATES: TState[] = ["all", "open", "overdue", "done", "late", "cancelled"];
+const STATE_TONE: Record<TState, string> = {
+  all: "text-foreground", open: "text-primary", overdue: "text-destructive", done: "text-success", late: "text-warning", cancelled: "text-muted-foreground",
+};
+
+/** Daqiqa -> "45 daq" / "3 soat 20 daq" / "2 kun 4 soat". */
+function useDur() {
+  const t = useTranslations("prbc");
+  return (min: number) => {
+    const m = Math.max(0, Math.round(min));
+    if (m < 60) return t("dMin", { n: m });
+    if (m < 24 * 60) return m % 60 ? t("dHourMin", { h: Math.floor(m / 60), m: m % 60 }) : t("dHour", { h: Math.floor(m / 60) });
+    const d = Math.floor(m / 1440);
+    const h = Math.floor((m % 1440) / 60);
+    return h ? t("dDayHour", { d, h }) : t("dDay", { d });
+  };
+}
+
+/** Bitta vazifa kartasi: holat rangi, muddat / bajarilish vaqti, ijrochi, savol egasi va guruh. */
+function TaskCard({ x, now, onOpen }: { x: PTask; now: number; onOpen: () => void }) {
+  const t = useTranslations("prbc");
+  const dur = useDur();
+  const done = x.category === "done";
+  const cancelled = x.category === "cancelled";
+  const overdue = !done && !cancelled && !!x.due_at && +new Date(x.due_at) < now;
+  const late = done && x.on_time === false;
+  const bar = cancelled ? "bg-muted-foreground/40" : overdue ? "bg-destructive" : late ? "bg-warning" : done ? "bg-success" : "bg-primary";
+  const took = done && x.completed_at && x.created_at ? (+new Date(x.completed_at) - +new Date(x.created_at)) / 60000 : null;
+  return (
+    <div className="relative flex cursor-pointer gap-3 rounded-xl border bg-card py-3 pl-5 pr-3 shadow-xs transition-colors hover:border-primary/40" onClick={onOpen}>
+      <span className={cn("absolute inset-y-0 left-0 w-1 rounded-l-xl", bar)} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2">
+          <span className="mt-0.5 font-mono text-[11px] text-muted-foreground">{x.code}</span>
+          <span className="line-clamp-2 min-w-0 flex-1 text-sm font-medium">{x.title}</span>
+          <Badge variant="outline" className={cn("shrink-0", done && "border-success/40 text-success", x.category === "in_progress" && "border-primary/40 text-primary",
+            overdue && "border-destructive/40 text-destructive", cancelled && "text-muted-foreground")}>{x.status || "—"}</Badge>
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span title={t("responsible")}>👤 <span className="text-foreground/80">{x.assignee || "—"}</span></span>
+          {x.asker && <span>🙋 {x.asker}{x.group && ` · ${x.group}`}</span>}
+          {!x.asker && x.person_name && <span>🧑 {x.person_name}</span>}
+          {x.project && <span className="truncate">📁 {x.project}</span>}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+          {done && (
+            <>
+              <span className="text-success">✓ {d(x.completed_at, true)}{x.completed_by && x.completed_by !== x.assignee && ` · ${x.completed_by}`}</span>
+              {took != null && <span className={cn("rounded-full px-2 py-0.5", late ? "bg-warning/15 text-warning" : "bg-success/10 text-success")}>{t("tookIn", { d: dur(took) })}</span>}
+              {late && <span className="rounded-full bg-warning/15 px-2 py-0.5 text-warning">{t("late")}</span>}
+            </>
+          )}
+          {!done && !cancelled && x.due_at && (
+            <span className={cn("rounded-full px-2 py-0.5", overdue ? "bg-destructive/12 text-destructive" : "bg-primary/10 text-primary")}>
+              {overdue ? t("lateBy", { d: dur((now - +new Date(x.due_at)) / 60000) }) : t("leftUntil", { d: dur((+new Date(x.due_at) - now) / 60000) })}
+              <span className="opacity-70"> · {d(x.due_at, true)}</span>
+            </span>
+          )}
+          {!done && !cancelled && !x.due_at && <span className="text-muted-foreground">{t("ctlNoDue")}</span>}
+          {cancelled && <span className="text-muted-foreground">{t("colCancelled")}</span>}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+        <Button size="icon" variant="ghost" className="size-8" asChild title={t("openInPrbc")}>
+          <a href={x.url} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a>
+        </Button>
+        {x.q_link && (
+          <Button size="icon" variant="ghost" className="size-8" asChild title={t("ctlOpenQuestion")}>
+            <a href={x.q_link} target="_blank" rel="noreferrer"><MessageSquareText className="size-4" /></a>
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Statistika jadvali: har raqam bosiladi — ro'yxat aynan shu xodim / guruh va shu holat bo'yicha ko'rsatiladi. */
+function PickTable({ title, rows, cols, sel, field, onPick, avg }: {
+  title: string; rows: (StatRow | GroupRow)[]; cols: [TState, keyof StatRow, string][]; sel: { key: string; state: TState } | null;
+  field: "who" | "group"; onPick: (name: string, state: TState) => void; avg?: boolean;
+}) {
+  const t = useTranslations("prbc");
+  const dur = useDur();
+  if (!rows.length) return null;
+  return (
+    <Card className="gap-0 overflow-hidden p-0">
+      <div className="border-b px-4 py-2.5 text-sm font-semibold">{title}</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40 text-xs text-muted-foreground">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium">{field === "who" ? t("colAssignee") : t("colGroup")}</th>
+              {cols.map(([st, , label]) => <th key={st} className="px-2 py-2 text-right font-medium">{t(label)}</th>)}
+              {avg && <th className="px-4 py-2 text-right font-medium">{t("colAvg")}</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.slice(0, 20).map((r) => {
+              const mine = sel?.key === r.name;
+              return (
+                <tr key={r.name} className={cn(mine && "bg-primary/5")}>
+                  <td className="max-w-64 px-4 py-1.5">
+                    <button type="button" className="max-w-full truncate text-left hover:text-primary hover:underline" onClick={() => onPick(r.name, "all")}>{r.name}</button>
+                  </td>
+                  {cols.map(([st, k]) => {
+                    const v = Number(r[k as keyof typeof r] ?? 0);
+                    const on = mine && sel?.state === st;
+                    return (
+                      <td key={st} className="px-1 py-1 text-right">
+                        {v > 0 ? (
+                          <button type="button" onClick={() => onPick(r.name, st)}
+                            className={cn("min-w-9 rounded-md px-2 py-1 font-medium tabular-nums transition-colors hover:bg-muted", STATE_TONE[st],
+                              on && "bg-primary text-primary-foreground hover:bg-primary")}>{v}</button>
+                        ) : <span className="px-2 text-muted-foreground/40">·</span>}
+                      </td>
+                    );
+                  })}
+                  {avg && <td className="px-4 py-1.5 text-right text-xs text-muted-foreground">{"avg_minutes" in r && r.avg_minutes != null ? dur(r.avg_minutes) : "—"}</td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 function TasksTab({ conn }: { conn?: Conn }) {
   const t = useTranslations("prbc");
   const [kind, setKind] = useState("ours");
-  const [state, setState] = useState("open");
+  const [days, setDays] = useState(30);
+  const [state, setState] = useState<TState>("open");
   const [who, setWho] = useState("");
+  const [group, setGroup] = useState("");
   const [shown, setShown] = useState<number | null>(null);
-  const params: Record<string, string> = { kind: kind === "all" ? "ours,leave,hire" : kind, ...(state !== "all" ? { [state]: "1" } : {}), ...(who ? { assignee: who } : {}) };
-  const list = useQuery({ queryKey: ["prbc", "tasks", params], queryFn: () => get<PTask[]>("prbc/tasks/", params), refetchInterval: 30_000 });
-  const stats = useQuery({ queryKey: ["prbc", "task-stats"], queryFn: () => get<{ rows: StatRow[]; total: Record<string, number>; groups: GroupRow[] }>("prbc/tasks/stats/", { days: 30 }), refetchInterval: 60_000 });
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const kinds = kind === "all" ? "ours,leave,hire" : kind;
+  const params: Record<string, string | number> = { kind: kinds, state, with_counts: 1, ...(days ? { days } : {}), ...(who ? { assignee: who } : {}), ...(group ? { group } : {}) };
+  const list = useQuery({ queryKey: ["prbc", "tasks", params], queryFn: () => get<{ items: PTask[]; counts: Record<TState, number> }>("prbc/tasks/", params), refetchInterval: 30_000 });
+  const stats = useQuery({ queryKey: ["prbc", "task-stats", kinds, days], refetchInterval: 60_000,
+    queryFn: () => get<{ rows: StatRow[]; total: Record<string, number>; groups: GroupRow[] }>("prbc/tasks/stats/", { days, kind: kinds }) });
+  const pick = (field: "who" | "group") => (name: string, st: TState) => {
+    setWho(field === "who" ? name : "");
+    setGroup(field === "group" ? name : "");
+    setState(st);
+  };
+  const clear = () => { setWho(""); setGroup(""); };
+  const counts = list.data?.counts;
+  const items = list.data?.items ?? [];
   const watcherNames = (conn?.task_watchers ?? []).map((id) => conn?.named?.[String(id)] ?? `#${id}`).join(", ");
   const [form, setForm] = useState({ title: "", description: "", assignees: [] as number[], priority: "2", due: "", project: "" });
   const [aq, setAq] = useState("");
@@ -291,93 +438,69 @@ function TasksTab({ conn }: { conn?: Conn }) {
     toast.success(t("created", { code: r.data.code }));
     setForm({ ...form, title: "", description: "", assignees: [] });
   });
+  const personCols: [TState, keyof StatRow, string][] = [["all", "total", "colTotal"], ["done", "done", "colDone"], ["open", "open", "colOpen"],
+    ["overdue", "overdue", "colOverdue"], ["late", "late", "colLate"], ["cancelled", "cancelled", "colCancelled"]];
+  const groupCols: [TState, keyof StatRow, string][] = [["all", "total", "colTotal"], ["done", "done", "colDone"], ["open", "open", "colOpen"],
+    ["overdue", "overdue", "colOverdue"], ["cancelled", "cancelled", "colCancelled"]];
+  const tot = stats.data?.total ?? {};
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
-      <div className="min-w-0">
-        {stats.data && (
-          <Card className="mb-4 gap-0 overflow-hidden p-0">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm">
-              <span className="font-medium">{t("control30")}</span>
-              <span className="text-muted-foreground">{t("cTotal", { n: stats.data.total.total ?? 0 })}</span>
-              <span className="text-success">{t("cDone", { n: stats.data.total.done ?? 0 })}</span>
-              <span className="text-primary">{t("cOpen", { n: stats.data.total.open ?? 0 })}</span>
-              <span className="text-destructive">{t("cOverdue", { n: stats.data.total.overdue ?? 0 })}</span>
-              {!!stats.data.total.cancelled && <span className="text-muted-foreground">{t("cCancelled", { n: stats.data.total.cancelled })}</span>}
-            </div>
-            {stats.data.rows.length > 0 && (
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>{t("colAssignee")}</TableHead><TableHead className="text-right">{t("colTotal")}</TableHead>
-                  <TableHead className="text-right">{t("colDone")}</TableHead><TableHead className="text-right">{t("colOpen")}</TableHead>
-                  <TableHead className="text-right">{t("colOverdue")}</TableHead><TableHead className="text-right">{t("colLate")}</TableHead>
-                  <TableHead className="text-right">{t("colCancelled")}</TableHead><TableHead className="text-right">{t("colAvg")}</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {stats.data.rows.slice(0, 12).map((r) => (
-                    <TableRow key={r.name} className={cn("cursor-pointer", who === r.name && "bg-muted")} onClick={() => setWho(who === r.name ? "" : r.name)}>
-                      <TableCell className="max-w-56 truncate">{r.name}</TableCell><TableCell className="text-right">{r.total}</TableCell>
-                      <TableCell className="text-right text-success">{r.done}</TableCell><TableCell className="text-right">{r.open}</TableCell>
-                      <TableCell className={cn("text-right", r.overdue > 0 && "font-medium text-destructive")}>{r.overdue}</TableCell>
-                      <TableCell className="text-right text-warning">{r.late || ""}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{r.cancelled || ""}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{r.avg_hours != null ? t("hours", { n: r.avg_hours }) : "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-            {(stats.data.groups ?? []).length > 0 && (
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>{t("colGroup")}</TableHead><TableHead className="text-right">{t("colTotal")}</TableHead>
-                  <TableHead className="text-right">{t("colDone")}</TableHead><TableHead className="text-right">{t("colOpen")}</TableHead>
-                  <TableHead className="text-right">{t("colOverdue")}</TableHead><TableHead className="text-right">{t("colCancelled")}</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {stats.data.groups.slice(0, 15).map((r) => (
-                    <TableRow key={r.name}>
-                      <TableCell className="max-w-56 truncate">{r.name}</TableCell><TableCell className="text-right">{r.total}</TableCell>
-                      <TableCell className="text-right text-success">{r.done}</TableCell><TableCell className="text-right">{r.open}</TableCell>
-                      <TableCell className={cn("text-right", r.overdue > 0 && "font-medium text-destructive")}>{r.overdue}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{r.cancelled || ""}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </Card>
-        )}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+      <div className="grid min-w-0 content-start gap-4">
+        <div className="flex flex-wrap items-center gap-2">
           {[["ours", "kindOurs"], ["leave", "kindLeave"], ["hire", "kindHire"], ["all", "all"]].map(([k, l]) => (
-            <Button key={k} size="sm" variant={kind === k ? "default" : "outline"} onClick={() => setKind(k)}>{t(l)}</Button>
+            <Button key={k} size="sm" variant={kind === k ? "default" : "outline"} onClick={() => { setKind(k); clear(); }}>{t(l)}</Button>
           ))}
-          <div className="ml-auto flex flex-wrap gap-1">
-            {[["open", "stOpen"], ["overdue", "stOverdue"], ["done", "stDone"], ["all", "all"]].map(([k, l]) => (
-              <Button key={k} size="sm" variant={state === k ? "secondary" : "ghost"} onClick={() => setState(k)}>{t(l)}</Button>
+          <div className="ml-auto flex items-center gap-1 rounded-lg border p-0.5">
+            {[7, 30, 90, 0].map((n) => (
+              <button key={n} type="button" onClick={() => setDays(n)}
+                className={cn("h-7 rounded-md px-2.5 text-xs font-medium", days === n ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+                {n ? t("daysN", { n }) : t("all")}
+              </button>
             ))}
           </div>
-          {who && <Badge variant="outline" className="cursor-pointer" onClick={() => setWho("")}>{who} ✕</Badge>}
         </div>
-        {!list.data?.length ? <EmptyState icon={ListTodo} title={t("noTasks")} /> : (
-          <Card className="gap-0 divide-y p-0">
-            {list.data.map((x) => (
-              <div key={x.id} className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm hover:bg-muted/50" onClick={() => setShown(x.id)}>
-                <span className="font-mono text-xs text-muted-foreground">{x.code}</span>
-                <span className="min-w-0 flex-1 truncate">{x.title}</span>
-                {x.overdue && <Badge className="border-0 bg-destructive/15 text-destructive">{t("overdue")}</Badge>}
-                {x.on_time === false && <Badge className="border-0 bg-warning/15 text-warning">{t("late")}</Badge>}
-                <Badge variant="outline" className={cn(x.category === "done" && "text-success", x.category === "in_progress" && "text-primary")}>{x.status || "—"}</Badge>
-                <div className="w-full pl-0 text-xs text-muted-foreground sm:w-auto">
-                  <span title={t("responsible")}>👤 {x.assignee || "—"}</span>
-                  {x.watchers && <span title={t("watcher")}> · 👁 {x.watchers}</span>}
-                  {x.files > 0 && <span title={t("filesAttached", { n: x.files })}> · 📎 {x.files}</span>}
-                  <span> · {x.category === "done" ? `✓ ${d(x.completed_at, true)}${x.completed_by ? ` (${x.completed_by})` : ""}` : d(x.due_at, true)}</span>
-                </div>
-                <a href={x.url} target="_blank" rel="noreferrer" className="text-primary" title={t("openInPrbc")} onClick={(e) => e.stopPropagation()}><ExternalLink className="size-4" /></a>
+
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {([["all", tot.total], ["done", tot.done], ["open", tot.open], ["overdue", tot.overdue], ["late", tot.late], ["cancelled", tot.cancelled]] as [TState, number | undefined][]).map(([st, v]) => (
+            <button key={st} type="button" onClick={() => { clear(); setState(st); }}
+              className={cn("rounded-xl border bg-card px-3 py-2.5 text-left transition-colors hover:border-primary/40",
+                !who && !group && state === st && "border-primary ring-2 ring-primary/20")}>
+              <div className="text-[11px] text-muted-foreground">{t(`st_${st}`)}</div>
+              <div className={cn("font-mono text-xl font-semibold", STATE_TONE[st])}>{v ?? 0}</div>
+            </button>
+          ))}
+        </div>
+
+        <PickTable title={t("byAssigneeHint")} rows={stats.data?.rows ?? []} cols={personCols} field="who" avg
+          sel={who ? { key: who, state } : null} onPick={pick("who")} />
+        <PickTable title={t("byGroupHint")} rows={stats.data?.groups ?? []} cols={groupCols} field="group"
+          sel={group ? { key: group, state } : null} onPick={pick("group")} />
+
+        <Card className="gap-0 overflow-hidden p-0">
+          <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-semibold">
+                {who || group || t("allTasks")}
+                <span className={cn("ml-2", STATE_TONE[state])}>· {t(`st_${state}`)}</span>
               </div>
+              <div className="text-xs text-muted-foreground">{t("listCount", { n: counts?.[state] ?? items.length })}{days ? ` · ${t("daysN", { n: days })}` : ""}</div>
+            </div>
+            {(who || group) && <Button size="sm" variant="ghost" onClick={clear}>{t("clearPick")} ✕</Button>}
+          </div>
+          <div className="flex flex-wrap gap-1.5 border-b bg-muted/30 px-4 py-2">
+            {STATES.map((st) => (
+              <button key={st} type="button" onClick={() => setState(st)}
+                className={cn("h-8 rounded-full border px-3 text-xs font-medium transition-colors",
+                  state === st ? "border-primary bg-primary text-primary-foreground" : cn("bg-card hover:border-primary/40", STATE_TONE[st]))}>
+                {t(`st_${st}`)} · {counts?.[st] ?? 0}
+              </button>
             ))}
-          </Card>
-        )}
+          </div>
+          <div className="grid gap-2 p-3">
+            {list.isPending ? <Skeleton className="h-40" /> : !items.length ? <EmptyState icon={ListTodo} title={t("noTasks")} /> :
+              items.map((x) => <TaskCard key={x.id} x={x} now={now} onOpen={() => setShown(x.id)} />)}
+          </div>
+        </Card>
         <TaskDialog id={shown} onClose={() => setShown(null)} />
       </div>
       <Card className="h-fit gap-3 p-4">

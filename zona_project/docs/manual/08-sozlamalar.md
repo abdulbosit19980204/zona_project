@@ -214,7 +214,12 @@ Support bot → PRBC vazifalar → **Vazifalar nazorati**.
 
 ### Vazifalar va 1C xodimlari
 
-![Vazifalar: barcha vazifalar, statistika, yangi vazifa](img/prbc-vazifalar.jpg)
+![Vazifalar: tur va davr, holat kartalari, xodimlar va guruhlar jadvali, tanlangan vazifalar](img/prbc-vazifalar.jpg)
+
+**Vazifalar** sahifasida jadvaldagi istalgan raqamni bosing — ro'yxat aynan shu xodim (yoki guruh) va shu holat bo'yicha
+chiqadi. Masalan, xodimning "Kech bajarilgan" raqami:
+
+![Xodim jadvalidagi raqam bosildi: faqat shu xodimning kech bajarilgan vazifalari](img/prbc-vazifalar-tanlov.jpg)
 
 ![1C xodimlari: ishlayapti, bo'shayapti, bo'shagan, bog'lanishlar](img/prbc-1c-xodimlar.jpg)
 
