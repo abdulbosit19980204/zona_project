@@ -1,11 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { ZoomIn } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 
-import { api } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+
+import { ImageViewer, useDocImage, type ViewerImage } from "./image-viewer";
 
 /** Qo'llanma uchun kichik Markdown renderer (tashqi kutubxonasiz): sarlavhalar, paragraflar, ro'yxatlar, jadvallar,
  * kod bloklari, iqtiboslar (> — eslatma), **qalin**, *kursiv*, `kod`, [havola](url). HTML qabul qilinmaydi (xavfsiz). */
@@ -40,25 +41,22 @@ function inline(text: string, key = 0): ReactNode[] {
   return out;
 }
 
-/** Jadval qatori: "\|" — katak ichidagi oddiy "|" belgisi (ajratuvchi emas). */
-/** Qo'llanma skrinshoti: kirish talab qiladi (token bilan yuklanadi), bosilsa — to'liq o'lchamda ochiladi. */
-function DocImage({ src, alt }: { src: string; alt: string }) {
-  const q = useQuery({
-    queryKey: ["docs", "img", src], staleTime: Infinity,
-    queryFn: async () => (await api.get<Blob>(`docs/${src.replace(/^\.?\//, "")}`, { responseType: "blob" })).data,
-  });
-  const url = useMemo(() => (q.data ? URL.createObjectURL(q.data) : ""), [q.data]);
-  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+/** Qo'llanma skrinshoti: bosilsa — shu sahifada ko'rish oynasi (kattalashtirish, siljitish) ochiladi. */
+function DocImage({ src, alt, onOpen }: { src: string; alt: string; onOpen: () => void }) {
+  const { url, error } = useDocImage(src);
   return (
     <figure className="my-4">
       {url ? (
-        <a href={url} target="_blank" rel="noreferrer" title="To'liq o'lchamda ochish">
+        <button type="button" onClick={onOpen} title="Kattalashtirib ko'rish" className="group relative mx-auto block max-w-full cursor-zoom-in">
           {/* eslint-disable-next-line @next/next/no-img-element -- blob URL (token bilan yuklangan) */}
-          <img src={url} alt={alt} className="mx-auto block h-auto w-auto max-w-full rounded-lg border shadow-sm" loading="lazy" />
-        </a>
+          <img src={url} alt={alt} className="block h-auto w-auto max-w-full rounded-lg border shadow-sm transition group-hover:brightness-110" loading="lazy" />
+          <span className="pointer-events-none absolute right-2 top-2 grid size-8 place-items-center rounded-md bg-black/55 text-white opacity-0 transition group-hover:opacity-100">
+            <ZoomIn className="size-4" />
+          </span>
+        </button>
       ) : (
         <div className="grid h-48 place-items-center rounded-lg border bg-muted/40 text-xs text-muted-foreground">
-          {q.isError ? "Rasm yuklanmadi" : "Rasm yuklanmoqda…"}
+          {error ? "Rasm yuklanmadi" : "Rasm yuklanmoqda…"}
         </div>
       )}
       {alt && <figcaption className="mt-1.5 text-center text-xs text-muted-foreground">{alt}</figcaption>}
@@ -66,9 +64,12 @@ function DocImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
+/** Jadval qatori: "\|" — katak ichidagi oddiy "|" belgisi (ajratuvchi emas). */
 const cells = (line: string) => line.trim().replace(/^\||(?<!\\)\|$/g, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
 
 export function Markdown({ text, className }: { text: string; className?: string }) {
+  const [shown, setShown] = useState<number | null>(null);
+  const images: ViewerImage[] = [];
   const lines = text.replace(/\r/g, "").split("\n");
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -97,7 +98,8 @@ export function Markdown({ text, className }: { text: string; className?: string
     }
     const img = /^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/.exec(line.trim());
     if (img) {
-      blocks.push(<DocImage key={k} src={img[2]} alt={img[1]} />);
+      const at = images.push({ src: img[2], alt: img[1] }) - 1;
+      blocks.push(<DocImage key={k} src={img[2]} alt={img[1]} onOpen={() => setShown(at)} />);
       i++;
       continue;
     }
@@ -145,7 +147,14 @@ export function Markdown({ text, className }: { text: string; className?: string
     if (!para.length) { para.push(line); i++; }
     blocks.push(<p key={k} className="my-2 text-sm leading-relaxed text-foreground/90">{inline(para.join(" "), k)}</p>);
   }
-  return <div className={className}>{blocks.map((b, j) => <Fragment key={j}>{b}</Fragment>)}</div>;
+  return (
+    <div className={className}>
+      {blocks.map((b, j) => <Fragment key={j}>{b}</Fragment>)}
+      {shown !== null && images[shown] && (
+        <ImageViewer images={images} index={shown} onIndex={setShown} onClose={() => setShown(null)} />
+      )}
+    </div>
+  );
 }
 
 /** Bobdagi ## va ### sarlavhalar — o'ng tomondagi mundarija uchun. */

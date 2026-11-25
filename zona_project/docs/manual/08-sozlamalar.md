@@ -1,7 +1,8 @@
 # Sozlamalar qo'llanmasi (skrinshotlar bilan)
 
 > Qaysi sozlama qayerda, qanday o'zgartiriladi va nimaga ta'sir qiladi — har biri skrinshot bilan. Rasmni bossangiz,
-> to'liq o'lchamda ochiladi.
+> shu sahifada ko'rish oynasi ochiladi: g'ildirak yoki +/− — kattalashtirish, sudrash — siljitish, ikki marta bosish —
+> 200% / moslash, ← → — bobdagi boshqa rasmlar, Esc yoki ✕ — yopish.
 
 > Skrinshotlar **namunaviy ma'lumot** bilan olingan (sahifa ko'rinishi prod bilan bir xil; guruh, vazifa, ism-familiyalar
 > misol uchun). Telefon raqamlari va parollar rasmlarda yashirilgan.

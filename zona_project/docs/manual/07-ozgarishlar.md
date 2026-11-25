@@ -4,6 +4,8 @@
 
 ## 2026-11-26
 
+- **Qo'llanma rasmlari ko'rish oynasida** — rasm yangi tabda emas, shu sahifadagi modal oynada ochiladi:
+  kattalashtirish/kichraytirish (g'ildirak, +/−, ikki marta bosish), sudrab siljitish, ← → boshqa rasmlar, Esc — yopish.
 - **Sozlamalar qo'llanmasi skrinshotlar bilan** — yangi bob: har sozlama qayerda va nima qiladi, 31 ta skrinshot
   (rasmlar faqat kirgan foydalanuvchiga ko'rinadi). Eski guruh kartasida "PRBC vazifa" kaliti endi bloklangan.
 - **Logo va nom:** sayt endi **Foydali** — o'z logosi (ko'k-binafsha gradient, "F" va StarGroup yulduzchasi),
