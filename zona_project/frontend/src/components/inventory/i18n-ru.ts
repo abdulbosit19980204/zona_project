@@ -589,4 +589,15 @@ export const RU: Record<string, string> = {
   "Loginlar va huquqlar": "Логины и доступ",
   "Filial loginlari, rahbarlar va boshqaruvchilar; loginlar fayli": "Логины филиалов, руководители и администраторы; файл логинов",
   "Qurilma turlari va brendlar, tashkilotlar, joylar": "Типы устройств и бренды, организации, места",
+  // ---------------------------------------------------------------- katalog: yoqish / o'chirish
+  "Nofaol": "Неактивные",
+  "Yoqish": "Включить",
+  "Nofaol qilish": "Отключить",
+  "Yoqildi — xodimlar formasida chiqadi": "Включено — появится в форме сотрудников",
+  "Nofaol qilindi — xodimlar formasida ko'rinmaydi": "Отключено — в форме сотрудников не показывается",
+  "Faol turlar xodimlarning qurilma qo'shish formasida chiqadi. Nofaol turni yoqish uchun o'ngdagi tugmani bosing yoki guruhni birdan yoqing.": "Активные типы показываются в форме добавления устройства у сотрудников. Чтобы включить неактивный тип, нажмите переключатель справа или включите всю группу сразу.",
+  "Faol tur filial xodimlarining qurilma qo'shish formasida chiqadi. Nofaol — ko'rinmaydi, kiritilgan qurilmalar saqlanib qoladi.": "Активный тип показывается в форме добавления устройства у сотрудников филиалов. Неактивный — скрыт, уже внесённые устройства сохраняются.",
+  "{a} / {n} faol": "активно {a} из {n}",
+  "Guruhni yoqish ({n})": "Включить группу ({n})",
+  "Bu ro'yxat bo'sh": "Список пуст",
 };

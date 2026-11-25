@@ -778,6 +778,19 @@ def catalog_save(request):
     """{kind: org|location|device_type, id?, ...maydonlar, delete?: true}."""
     kind, data = request.data.get("kind"), request.data
     pk = _int(data.get("id"))
+    if kind == "device_type_active":  # {ids: [..], is_active: bool} — faqat holat; boshqa maydonlarga tegilmaydi
+        ids = [i for i in (_int(x) for x in (data.get("ids") or [])) if i]
+        if not ids:
+            return bad("Tur tanlanmagan.")
+        on = bool(data.get("is_active"))
+        rows = list(DeviceType.objects.filter(pk__in=ids).exclude(is_active=on))
+        for d in rows:
+            d.is_active = on
+            d.save(update_fields=["is_active"])
+        if rows:
+            log(request, Log.UPDATE, entity="catalog", summary=f"Katalog: {'yoqildi' if on else 'nofaol qilindi'} — "
+                + ", ".join(d.name for d in rows)[:400])
+        return Response({"updated": len(rows), "device_types": [type_payload(d) for d in DeviceType.objects.filter(pk__in=ids)]})
     if kind == "org":
         model, fields = Org, {"name": _s(data.get("name"), 120), "code": _s(data.get("code"), 60)}
     elif kind == "location":

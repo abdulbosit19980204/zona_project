@@ -180,6 +180,7 @@ export const inv = {
   updateBranch: (id: number, body: Partial<Branch>) => patch<Branch>(`branches/${id}/`, body),
   deleteBranch: (id: number) => del<null>(`branches/${id}/`),
   saveCatalog: (body: Record<string, unknown>) => post<unknown>("catalog/", body),
+  setTypesActive: (ids: number[], is_active: boolean) => post<{ updated: number }>("catalog/", { kind: "device_type_active", ids, is_active }),
 
   users: () => get<AccessRow[]>("users/"),
   createUser: (body: Record<string, unknown>) => post<AccessRow>("users/", body),

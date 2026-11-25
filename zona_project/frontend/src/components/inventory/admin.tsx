@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { download, inv, type AccessRow, type Branch, type DeviceType, type Level, type SpecField } from "./api";
 import { levelLabel, loc, statusLabel, tr, useLang, useT } from "./i18n";
 import { ImportDialog } from "./import-dialog";
-import { actionLabel, fieldLabel } from "./items";
+import { GroupIcon, actionLabel, fieldLabel } from "./items";
 import { Btn, Card, Empty, Field, FilterBar, Overlay, Picker, SectionTitle, Spinner, StatusBadge, ago, dt, inputCls, useBoot, type FilterChip } from "./ui";
 
 const fail = (e: unknown) => toast.error(errorMessage(e));
@@ -437,6 +437,11 @@ function TypeFormBody({ onClose, type }: { open: boolean; onClose: () => void; t
         {pair("Seriya raqami qayerda?", "serial_hint", "serial_hint_ru")}
         {pair("Qo'shimcha nima yozish kerak", "extra_hint", "extra_hint_ru")}
         <Field label={t("Brendlar")} hint={t("Vergul bilan: HP, Lenovo, Dell")}><input className={inputCls} value={f.brandsText ?? ""} onChange={(e) => setF({ ...f, brandsText: e.target.value })} /></Field>
+        <label className="flex items-start gap-3 rounded-2xl border bg-muted/30 p-3">
+          <input type="checkbox" className="mt-0.5 size-5" checked={f.is_active ?? true} onChange={(e) => setF({ ...f, is_active: e.target.checked })} />
+          <span><span className="block text-sm font-semibold">{t("Faol")}</span>
+            <span className="block text-xs text-muted-foreground">{t("Faol tur filial xodimlarining qurilma qo'shish formasida chiqadi. Nofaol — ko'rinmaydi, kiritilgan qurilmalar saqlanib qoladi.")}</span></span>
+        </label>
         <SpecsEditor rows={rows} setRows={setRows} />
         {type && <Btn variant="danger" onClick={remove}><Trash2 className="size-4" />{t("O'chirish (ishlatilgan bo'lsa — nofaol qilinadi)")}</Btn>}
       </div>
@@ -530,28 +535,94 @@ function SimpleList({ title, kind, rows }: { title: string; kind: "org" | "locat
   );
 }
 
+/** Yoqish / o'chirish tugmasi (faqat holat — boshqa maydonlarga tegilmaydi). */
+function ActiveSwitch({ on, busy, onChange, label }: { on: boolean; busy?: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} title={label} disabled={busy} onClick={() => onChange(!on)}
+      className={cn("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-50",
+        on ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-700")}>
+      <span className={cn("inline-block size-5 rounded-full bg-white shadow transition-transform", on ? "translate-x-6" : "translate-x-1")} />
+    </button>
+  );
+}
+
+type TypeFilter = "all" | "active" | "inactive";
+
 export function CatalogView() {
   const boot = useBoot().data!;
+  const qc = useQueryClient();
   const t = useT();
   const lang = useLang();
   const [edit, setEdit] = useState<DeviceType | null>(null);
   const [creating, setCreating] = useState(false);
+  const [filter, setFilter] = useState<TypeFilter>("all");
+  const [busy, setBusy] = useState("");
+  const types = boot.device_types;
+  const nActive = types.filter((d) => d.is_active).length;
+  const shown = types.filter((d) => filter === "all" || (filter === "active") === d.is_active);
+  const groups: [string, DeviceType[]][] = [];
+  for (const d of shown) {
+    const g = groups.find((x) => x[0] === d.group);
+    if (g) g[1].push(d); else groups.push([d.group, [d]]);
+  }
+  const setActive = async (ids: number[], on: boolean, key: string) => {
+    setBusy(key);
+    try {
+      await inv.setTypesActive(ids, on);
+      await qc.invalidateQueries({ queryKey: ["inv", "boot"] });
+      toast.success(t(on ? "Yoqildi — xodimlar formasida chiqadi" : "Nofaol qilindi — xodimlar formasida ko'rinmaydi"));
+    } catch (e) { fail(e); } finally { setBusy(""); }
+  };
+  const chips: [TypeFilter, string, number][] = [["all", "Hammasi", types.length], ["active", "Faol", nActive], ["inactive", "Nofaol", types.length - nActive]];
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 p-3 pb-28 sm:p-4">
       <Card>
-        <SectionTitle right={<Btn size="sm" onClick={() => setCreating(true)}><Plus className="size-4" />{t("Tur")}</Btn>}>{t("Qurilma turlari ({n})", { n: boot.device_types.length })}</SectionTitle>
-        <div className="divide-y">
-          {boot.device_types.map((d) => (
-            <button key={d.id} onClick={() => setEdit(d)} className={cn("flex w-full items-start gap-3 py-2.5 text-left hover:bg-muted/30", !d.is_active && "opacity-50")}>
-              <span className="w-24 shrink-0 text-xs text-muted-foreground">{tr(d.group, undefined, lang)}</span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">{loc(d, "name", lang)}{!d.is_active && ` (${t("nofaol")})`}{!d.name_ru && <span className="ml-2 text-[11px] text-amber-600">{t("ruscha nomi yo'q")}</span>}</div>
-                <div className="truncate text-xs text-muted-foreground">{d.brands.join(", ")}{d.specs?.length ? ` · ${t("{n} ta maxsus maydon", { n: d.specs.length })}` : ""}</div>
-              </div>
-              <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
+        <SectionTitle right={<Btn size="sm" onClick={() => setCreating(true)}><Plus className="size-4" />{t("Tur")}</Btn>}>{t("Qurilma turlari ({n})", { n: types.length })}</SectionTitle>
+        <p className="mb-3 text-xs text-muted-foreground">{t("Faol turlar xodimlarning qurilma qo'shish formasida chiqadi. Nofaol turni yoqish uchun o'ngdagi tugmani bosing yoki guruhni birdan yoqing.")}</p>
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {chips.map(([k, label, n]) => (
+            <button key={k} type="button" onClick={() => setFilter(k)}
+              className={cn("h-9 rounded-full border px-3.5 text-sm font-medium md:h-8 md:text-xs", filter === k ? "border-indigo-600 bg-indigo-600 text-white" : "bg-card text-muted-foreground hover:text-foreground")}>
+              {t(label)} · {n}
             </button>
           ))}
         </div>
+        {!shown.length && <p className="py-6 text-center text-sm text-muted-foreground">{t("Bu ro'yxat bo'sh")}</p>}
+        {groups.map(([group, rows]) => {
+          const all = types.filter((d) => d.group === group);
+          const off = all.filter((d) => !d.is_active);
+          return (
+            <div key={group} className="mt-3">
+              <div className="flex flex-wrap items-center gap-2 border-b pb-1.5">
+                <GroupIcon group={group} className="size-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">{group ? tr(group, undefined, lang) : t("Boshqa")}</span>
+                <span className="text-xs text-muted-foreground">{t("{a} / {n} faol", { a: all.length - off.length, n: all.length })}</span>
+                {off.length > 0 && (
+                  <Btn size="sm" variant="outline" className="ml-auto" disabled={!!busy} loading={busy === `g:${group}`} onClick={() => setActive(off.map((d) => d.id), true, `g:${group}`)}>
+                    {t("Guruhni yoqish ({n})", { n: off.length })}
+                  </Btn>
+                )}
+              </div>
+              <div className="divide-y">
+                {rows.map((d) => (
+                  <div key={d.id} className="flex items-center gap-3 py-2">
+                    <button onClick={() => setEdit(d)} className={cn("flex min-w-0 flex-1 items-start gap-2 rounded-lg text-left hover:bg-muted/30", !d.is_active && "opacity-55")}>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium">{loc(d, "name", lang)}
+                          {!d.is_active && <span className="ml-2 rounded-full bg-zinc-500/12 px-2 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">{t("nofaol")}</span>}
+                          {!d.name_ru && <span className="ml-2 text-[11px] text-amber-600">{t("ruscha nomi yo'q")}</span>}</div>
+                        <div className="truncate text-xs text-muted-foreground">{d.brands.join(", ")}{d.specs?.length ? ` · ${t("{n} ta maxsus maydon", { n: d.specs.length })}` : ""}</div>
+                      </div>
+                      <Pencil className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
+                    </button>
+                    <ActiveSwitch on={d.is_active} busy={!!busy} label={t(d.is_active ? "Nofaol qilish" : "Yoqish")}
+                      onChange={(v) => setActive([d.id], v, `t:${d.id}`)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </Card>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <SimpleList title={t("Tashkilotlar (loyihalar)")} kind="org" rows={boot.orgs} />

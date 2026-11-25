@@ -538,6 +538,27 @@ class CatalogMoreTypesTests(InvBase):
         self.assertEqual(add_missing(DeviceType), [])  # nomi katta harfda bo'lsa ham — mavjud deb hisoblanadi
         self.assertTrue(DeviceType.objects.get(name="PLANSHET").is_active)  # boshqaruvchi yoqqani saqlanadi
 
+    def test_manager_enables_inactive_types_one_or_group(self):
+        server, nas = DeviceType.objects.get(name="Server"), DeviceType.objects.get(name="Tarmoq xotirasi (NAS)")
+        before = (server.name_ru, server.specs, server.brands, nas.description)
+        self.assertNotIn(server.id, {d["id"] for d in self.col.get("/api/inventory/bootstrap/").json()["device_types"] if d["is_active"]})
+        url = "/api/inventory/catalog/"
+        self.assertEqual(self.col.post(url, {"kind": "device_type_active", "ids": [server.id], "is_active": True},
+                                       format="json").status_code, 403)  # xodim yoqa olmaydi
+        r = self.api.post(url, {"kind": "device_type_active", "ids": [server.id, nas.id], "is_active": True}, format="json").json()
+        self.assertEqual(r["updated"], 2)
+        self.assertTrue(all(d["is_active"] for d in r["device_types"]))
+        server.refresh_from_db(); nas.refresh_from_db()
+        self.assertEqual((server.name_ru, server.specs, server.brands, nas.description), before)  # faqat holat o'zgardi
+        active = {d["id"] for d in self.col.get("/api/inventory/bootstrap/").json()["device_types"] if d["is_active"]}
+        self.assertTrue({server.id, nas.id} <= active)  # xodim formasida chiqadi
+        self.assertEqual(self.api.post(url, {"kind": "device_type_active", "ids": [server.id], "is_active": True},
+                                       format="json").json()["updated"], 0)  # takror — o'zgarish yo'q
+        self.api.post(url, {"kind": "device_type_active", "ids": [server.id], "is_active": False}, format="json")
+        server.refresh_from_db()
+        self.assertFalse(server.is_active)
+        self.assertEqual(self.api.post(url, {"kind": "device_type_active", "ids": []}, format="json").status_code, 400)
+
     def test_camera_item_with_specs(self):
         cam = DeviceType.objects.get(name="IP kamera (videokuzatuv)")
         it = self.add_item(device_type=cam.id, brand="Hikvision", model="DS-2CD1043", serial="K12345",
