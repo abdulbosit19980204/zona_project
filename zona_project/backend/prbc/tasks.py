@@ -388,7 +388,8 @@ def process_support_queue(conn=None, client=None, limit=10):
     for st in SupportTask.objects.filter(status=SupportTask.QUEUED, attempts__lt=3).select_related(
             "message", "message__user", "message__group", "message__bot", "entry").order_by("created_at")[:limit]:
         st.attempts += 1
-        ids = assignee_ids_for(st.assignee, conn)
+        from .control import pick_assignees
+        ids, why = pick_assignees(conn, st, st.message if st.message_id else None)
         body = "\n".join(line for line in (st.text or "").splitlines() if not line.startswith("/vazifa")).strip()
         q = st.message if st.message_id else None
         title = st.title or "Savol"
@@ -399,13 +400,21 @@ def process_support_queue(conn=None, client=None, limit=10):
                 body += "\n\nQo'shimcha (savol egasidan):\n" + "\n".join(f"• {x[:500]}" for x in extra[:10])
         from .control import sla_window
         start, due = sla_window(conn, at=st.created_at)  # me'yor: ish vaqtida sla_minutes daqiqa (standart 10)
+        body += f"\n\n👤 Ijrochi tanlandi: {why}."
         body += (f"\n\n⏱ Muddat: {timezone.localtime(due):%d.%m %H:%M} gacha (me'yor — {conn.sla_minutes} daqiqa). "
                  "Savol guruhda hal bo'lsa, vazifa avtomatik yopiladi.")
+        kw = dict(title=title, description=body, assignee_ids=ids, actor="support-bot", support_task=st, conn=conn,
+                  client=client, priority=conn.task_priority, start_at=start.isoformat(), due_at=due.isoformat(),
+                  estimated_minutes=conn.sla_minutes)
+        project = project_for(conn, q)
         try:
-            t = create(title=title, description=body, assignee_ids=ids, actor="support-bot",
-                       project=project_for(conn, q), support_task=st, conn=conn, client=client,
-                       priority=conn.task_priority, start_at=start.isoformat(), due_at=due.isoformat(),
-                       estimated_minutes=conn.sla_minutes)
+            try:
+                t = create(project=project, **kw)
+            except PrbcError as e:
+                if not project or project == conn.task_project or e.status not in (400, 403):
+                    raise
+                log.info("project %s refused (%s) — default project", project, e)
+                t = create(project=conn.task_project, **kw)  # guruh loyihasiga ruxsat yo'q — standart loyiha
         except PrbcError as e:
             st.status = SupportTask.QUEUED if st.attempts < 3 else SupportTask.FAILED
             st.error = str(e)[:250]
@@ -416,6 +425,8 @@ def process_support_queue(conn=None, client=None, limit=10):
             files, _ = sync_question(conn, client, t, st)
         except Exception:  # noqa: BLE001 — fayl xatosi vazifani bekor qilmaydi
             log.exception("files for %s", t.prbc_id)
+        Task.objects.filter(pk=t.pk).update(sync={**(t.sync or {}), "assignee_why": why})
+        t.sync = {**(t.sync or {}), "assignee_why": why}
         st.status, st.sent_at, st.error = SupportTask.SENT, timezone.now(), ""
         st.reply = (f"{t.code} yaratildi: {task_url(conn, t)}\nMas'ul: {t.assignee or '—'}"
                     + (f" · Kuzatuvchi: {t.watchers}" if t.watchers else "")

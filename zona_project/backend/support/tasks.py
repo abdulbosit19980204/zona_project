@@ -66,6 +66,8 @@ def decide_task(q, d, s=None):
     s = s or Settings.load()
     if not s.tasks_enabled or q.kind != Message.QUESTION:
         return False, "", ""
+    if q.group_id and not q.group.creates_tasks:
+        return False, "", ""  # guruh sozlamasi: bu guruhdan vazifa ochilmaydi (masalan, VAZIFALAR — test guruhi)
     e = d.entry
     if e is not None and e.creates_task:
         m = e.responsible if e.responsible_id else None

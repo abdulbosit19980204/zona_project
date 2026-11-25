@@ -1353,6 +1353,11 @@
     "ctlDoneListHint": "Bugun va kecha — qancha vaqtda hal qilingani bilan",
     "ctlNoneDone": "Hali bajarilgan vazifa yo'q",
     "ctlAutoClosed": "avtomatik",
-    "ctlAutoClosedHint": "Savol guruhda hal bo'lgani uchun tizim o'zi yopdi"
+    "ctlAutoClosedHint": "Savol guruhda hal bo'lgani uchun tizim o'zi yopdi",
+    "gpTasks": "Vazifa",
+    "gpTasksHint": "Shu guruh savollaridan PRBC vazifa ochiladi (VAZIFALAR kabi test guruhlarida o'chiring)",
+    "gpOwner": "Ijrochi",
+    "gpOwnerAuto": "Avto: {name}",
+    "gpOwnerDefault": "Avto (standart ijrochi)"
   }
 }

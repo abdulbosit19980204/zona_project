@@ -171,7 +171,7 @@ class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ["id", "bot", "bot_name", "chat_id", "title", "mode", "effective_mode", "is_active", "is_admin",
-                  "in_analytics", "joined_at", "last_message_at", "questions_7d", "redirect_to", "invite_link", "link",
+                  "in_analytics", "creates_tasks", "joined_at", "last_message_at", "questions_7d", "redirect_to", "invite_link", "link",
                   "redirect_count", "sees_all"]
         read_only_fields = ["bot", "chat_id", "title", "is_admin", "joined_at", "last_message_at", "redirect_count"]
 

@@ -413,28 +413,50 @@ def group_projects(request):
     c = Connection.get()
     if request.method == "PATCH":
         cur = {str(k): v for k, v in (c.group_projects or {}).items()}
+        owners = {str(k): v for k, v in (c.group_assignees or {}).items()}
         valid = {p["id"] for p in c.projects or [] if p.get("id")}
         for k, v in (request.data or {}).items():
-            if not str(k).isdigit():
+            k = str(k)
+            if k.startswith("tasks:") and k[6:].isdigit():  # guruhdan vazifa ochiladimi
+                Group.objects.filter(pk=int(k[6:])).update(creates_tasks=bool(v))
+                continue
+            if k.startswith("owner:") and k[6:].isdigit():  # guruh ijrochisi (PRBC user id; bo'sh — avtomatik)
+                if str(v or "").isdigit() and int(v):
+                    owners[k[6:]] = int(v)
+                else:
+                    owners.pop(k[6:], None)
+                continue
+            if not k.isdigit():
                 continue
             if v in (None, "", 0, "0"):
                 cur.pop(str(k), None)
             elif str(v).isdigit() and (not valid or int(v) in valid):
                 cur[str(k)] = int(v)
-        c.group_projects = cur
-        c.save(update_fields=["group_projects", "updated_at"])
+        c.group_projects, c.group_assignees = cur, owners
+        c.save(update_fields=["group_projects", "group_assignees", "updated_at"])
         Change.objects.create(kind=Change.UPDATED, text="Guruh → PRBC loyiha bog'lanishi o'zgartirildi",
                               actor=_actor(request), data=request.data)
+    from . import control as ctl
     names = {p["id"]: p["name"] for p in c.projects or []}
+    pool = {int(x) for x in [*(c.task_default_assignees or []), *(c.assignee_map or {}).values(),
+                             *(c.group_assignees or {}).values()] if str(x).isdigit()}
+    pool |= set(Person.objects.filter(member__isnull=False, prbc_user__isnull=False).values_list("prbc_user", flat=True))
+    people_ = dict(Person.objects.filter(prbc_user__in=pool).exclude(status=Person.LEFT).values_list("prbc_user", "full_name"))
     rows = []
     groups = Group.objects.filter(is_active=True).annotate(n=Count("messages", filter=Q(messages__kind="question"))).order_by("-n", "title")
     for g in groups:
         pid = (c.group_projects or {}).get(str(g.pk))
         sug = tasks.suggest_project(g.title, c.projects or []) if not pid else None
+        owner = (c.group_assignees or {}).get(str(g.pk))
+        auto = None if owner else ctl.group_answerer(g, c)
         rows.append({"id": g.pk, "title": g.title or str(g.chat_id), "questions": g.n, "project": pid,
                      "project_name": names.get(pid, f"#{pid}" if pid else ""),
-                     "suggested": sug, "suggested_name": names.get(sug, "") if sug else ""})
-    return Response({"default": c.task_project, "default_name": names.get(c.task_project, ""), "groups": rows})
+                     "suggested": sug, "suggested_name": names.get(sug, "") if sug else "",
+                     "creates_tasks": g.creates_tasks, "owner": owner, "owner_name": people_.get(owner, ""),
+                     "auto_owner": auto, "auto_owner_name": people_.get(auto) or (
+                         Person.objects.filter(prbc_user=auto).values_list("full_name", flat=True).first() if auto else "") or ""})
+    return Response({"default": c.task_project, "default_name": names.get(c.task_project, ""), "groups": rows,
+                     "people": sorted([{"id": k, "name": v} for k, v in people_.items()], key=lambda x: x["name"])})
 
 
 @zona_api(["GET"], ADMIN)

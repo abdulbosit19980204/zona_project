@@ -69,7 +69,10 @@ interface GroupRow { name: string; total: number; done: number; open: number; ov
 interface TestResult { ok: boolean; me: { full_name?: string }; checks: Record<string, { ok: boolean; count?: number; detail?: string }>; projects: { id: number; name: string }[] }
 
 interface Project { id: number; name: string; open?: number | null }
-interface GroupProject { id: number; title: string; questions: number; project: number | null; project_name: string; suggested: number | null; suggested_name: string }
+interface GroupProject {
+  id: number; title: string; questions: number; project: number | null; project_name: string; suggested: number | null; suggested_name: string;
+  creates_tasks: boolean; owner: number | null; owner_name: string; auto_owner: number | null; auto_owner_name: string;
+}
 
 const get = async <T,>(url: string, params?: Record<string, string | number>) => (await api.get<T>(url, { params })).data;
 const d = (v: string | null | undefined, time = false) => (v ? format(new Date(v), time ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy") : "—");
@@ -664,8 +667,9 @@ function OutletCheck({ className }: { className?: string }) {
 
 function GroupProjects({ projects, className }: { projects: Project[]; className?: string }) {
   const t = useTranslations("prbc");
-  const q = useQuery({ queryKey: ["prbc", "group-projects"], queryFn: () => get<{ default: number | null; default_name: string; groups: GroupProject[] }>("prbc/group-projects/") });
-  const save = useAction((body: Record<string, number | null>) => api.patch("prbc/group-projects/", body), t("saved"));
+  const q = useQuery({ queryKey: ["prbc", "group-projects"], queryFn: () => get<{ default: number | null; default_name: string; groups: GroupProject[]; people: { id: number; name: string }[] }>("prbc/group-projects/") });
+  const save = useAction((body: Record<string, number | boolean | null>) => api.patch("prbc/group-projects/", body), t("saved"));
+  const people = q.data?.people ?? [];
   const refresh = useAction(() => api.get("prbc/projects/", { params: { refresh: 1 } }), t("projectsRefreshed"));
   const rows = q.data?.groups ?? [];
   const sugg = rows.filter((g) => !g.project && g.suggested);
@@ -687,13 +691,15 @@ function GroupProjects({ projects, className }: { projects: Project[]; className
       {!rows.length ? <div className="px-4 py-6 text-sm text-muted-foreground">{t("gpEmpty")}</div> : (
         <Table>
           <TableHeader><TableRow>
-            <TableHead>{t("colGroup")}</TableHead><TableHead className="text-right">{t("gpQuestions")}</TableHead><TableHead>{t("gpProject")}</TableHead>
+            <TableHead>{t("colGroup")}</TableHead><TableHead className="text-right">{t("gpQuestions")}</TableHead>
+            <TableHead title={t("gpTasksHint")}>{t("gpTasks")}</TableHead><TableHead>{t("gpProject")}</TableHead><TableHead>{t("gpOwner")}</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {rows.map((g) => (
-              <TableRow key={g.id}>
+              <TableRow key={g.id} className={cn(!g.creates_tasks && "opacity-60")}>
                 <TableCell className="max-w-64 truncate">{g.title}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{g.questions}</TableCell>
+                <TableCell><Switch checked={g.creates_tasks} disabled={save.isPending} onCheckedChange={(v) => save.mutate({ [`tasks:${g.id}`]: v })} /></TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-2">
                     <Select value={String(g.project ?? 0)} onValueChange={(v) => save.mutate({ [String(g.id)]: Number(v) || null })}>
@@ -710,6 +716,16 @@ function GroupProjects({ projects, className }: { projects: Project[]; className
                       </button>
                     )}
                   </div>
+                </TableCell>
+                <TableCell>
+                  <Select value={String(g.owner ?? 0)} onValueChange={(v) => save.mutate({ [`owner:${g.id}`]: Number(v) || null })}>
+                    <SelectTrigger className="h-8 w-56 max-w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">{g.auto_owner_name ? t("gpOwnerAuto", { name: g.auto_owner_name }) : t("gpOwnerDefault")}</SelectItem>
+                      {people.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                      {g.owner && !people.some((p) => p.id === g.owner) && <SelectItem value={String(g.owner)}>{g.owner_name || `#${g.owner}`}</SelectItem>}
+                    </SelectContent>
+                  </Select>
                 </TableCell>
               </TableRow>
             ))}

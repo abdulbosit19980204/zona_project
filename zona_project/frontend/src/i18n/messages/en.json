@@ -1353,6 +1353,11 @@
     "ctlDoneListHint": "Today and yesterday — with time to resolve",
     "ctlNoneDone": "No tasks done yet",
     "ctlAutoClosed": "auto",
-    "ctlAutoClosedHint": "The question was solved in the group, so the system closed it"
+    "ctlAutoClosedHint": "The question was solved in the group, so the system closed it",
+    "gpTasks": "Task",
+    "gpTasksHint": "Questions from this group open PRBC tasks (turn off for test groups like VAZIFALAR)",
+    "gpOwner": "Assignee",
+    "gpOwnerAuto": "Auto: {name}",
+    "gpOwnerDefault": "Auto (default assignee)"
   }
 }

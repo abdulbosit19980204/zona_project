@@ -242,3 +242,104 @@ class ApiTests(Base):
                            format="json").json()
         self.assertEqual((r["sla_minutes"], r["work_days"], r["task_all_escalated"]), (15, [0, 1, 2, 3, 4], False))
         self.assertEqual(self.api.post("/api/prbc/tasks/backfill/", {"dry": True}, format="json").json()["count"], 1)
+
+
+class OwnerPrbc(ControlPrbc):
+    """Ijrochi qo'shish / olib tashlash va loyiha ruxsati (soxta)."""
+
+    def __init__(self, *a, refuse_project=None, **kw):
+        super().__init__(*a, **kw)
+        self.refuse_project = refuse_project
+
+    def create_task(self, **kw):
+        from .client import PrbcError
+        if self.refuse_project and kw.get("project") == self.refuse_project:
+            raise PrbcError("Loyihaga ruxsat yo'q", 403)
+        return super().create_task(**kw)
+
+    def get(self, path, params=None):
+        data = super().get(path, params)
+        if isinstance(data, dict) and data.get("assignees"):
+            data["assignees"] = [{**a, "id": a["user"]["id"] * 10} for a in data["assignees"]]
+        return data
+
+    def post(self, path, body=None):
+        tid = int(path.strip("/").split("/")[1])
+        if "/assignees/" in path:
+            for c in self.created:
+                if c["id"] == tid:
+                    c["kw"]["assignee_ids"] = [*c["kw"]["assignee_ids"], body["user_id"]]
+            return {}
+        return super().post(path, body)
+
+    def request(self, method, path, params=None, body=None):
+        parts = path.strip("/").split("/")
+        tid, aid = int(parts[1]), int(parts[3])
+        for c in self.created:
+            if c["id"] == tid:
+                c["kw"]["assignee_ids"] = [u for u in c["kw"]["assignee_ids"] if u * 10 != aid]
+        return {}
+
+
+class OwnerTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.fake = OwnerPrbc()
+        self.said_tg = TgUser.objects.create(tg_id=51, name="Said Abror", username="StargroupSaid")
+        self.said = Member.objects.create(name="Saidabror", role="Operator", telegram="StargroupSaid")
+        Person.objects.create(prbc_user=51, full_name="Said Abror", name_key="said abror", in_roster=True, tg_user=self.said_tg,
+                              member=self.said)
+        self.it_tg = TgUser.objects.create(tg_id=168, name="STAR GROUP | IT SUPPORT", username="IT_StarGroup")
+
+    def staff_reply(self, q, user):
+        return Message.objects.create(bot=self.bot, group=self.group, chat_id=-300, message_id=9000 + Message.objects.count(),
+                                      kind=Message.STAFF, question=q, user=user, text="ko'ryapman")
+
+    def test_test_group_opens_no_task(self):
+        Group.objects.filter(pk=self.group.pk).update(creates_tasks=False)
+        self.group.refresh_from_db()
+        q = self.question("Klient chiqmayapti")
+        self.assertFalse(st_tasks.decide_task(q, Decision("", None, 0, "", True, []))[0])
+        self.assertEqual(control.untasked().count(), 0)
+
+    def test_owner_order(self):
+        q = self.question("Aksiya ishlamayapti")
+        st = SupportTask(message=q, assignee="")
+        self.assertEqual(control.pick_assignees(self.conn, st, q), ([167], "standart ijrochi"))
+        other = self.question("boshqa savol")
+        self.staff_reply(other, self.said_tg)  # Said shu guruhda javob beradi
+        self.staff_reply(other, self.it_tg)
+        self.staff_reply(other, self.it_tg)  # umumiy akkaunt — hisobga olinmaydi
+        self.assertEqual(control.pick_assignees(self.conn, st, q)[0], [51])
+        Connection.objects.update(group_assignees={str(self.group.pk): 49})
+        self.conn.refresh_from_db()
+        self.assertEqual(control.pick_assignees(self.conn, st, q), ([49], "guruh ijrochisi (HEINZ ROP)"))
+        Settings.objects.update(category_owners={"promo": self.said.pk})
+        Message.objects.filter(pk=q.pk).update(category="promo")
+        q.refresh_from_db()
+        self.assertEqual(control.pick_assignees(self.conn, st, q)[0], [51])  # toifa mas'uli guruh sozlamasidan ustun
+        self.staff_reply(q, self.said_tg)
+        self.assertEqual(control.pick_assignees(self.conn, st, q)[1], "savolga javob yozgan: Said Abror")
+
+    def test_group_project_with_fallback_and_reassign_on_reply(self):
+        Connection.objects.update(group_projects={str(self.group.pk): 45})
+        self.conn.refresh_from_db()
+        self.fake.refuse_project = 45
+        q = self.question("Zakaz o'tmayapti")
+        t = self.open_task(q)
+        self.assertEqual(self.fake.created[-1]["kw"]["project"], 15)  # 45 ga ruxsat yo'q — standart loyiha
+        self.assertIn("Ijrochi tanlandi: standart ijrochi", self.fake.created[-1]["kw"]["description"])
+        self.staff_reply(q, self.said_tg)
+        control.push_status(self.conn, self.fake)
+        t.refresh_from_db()
+        self.assertEqual([p["id"] for p in t.people if p["role"] == "assignee"], [51])  # javob yozgan Said — ijrochi
+        self.assertEqual(t.status_category, "in_progress")
+        self.assertTrue(any("Said Abror — savolga u javob yozdi" in c[1] for c in self.fake.comments))
+
+    def test_group_table_api(self):
+        api = APIClient()
+        api.force_authenticate(User.objects.create_superuser("adm2", "b@x.uz", "x"))
+        r = api.patch("/api/prbc/group-projects/", {f"tasks:{self.group.pk}": False, f"owner:{self.group.pk}": 51},
+                      format="json").json()
+        row = next(g for g in r["groups"] if g["id"] == self.group.pk)
+        self.assertEqual((row["creates_tasks"], row["owner"], row["owner_name"]), (False, 51, "Said Abror"))

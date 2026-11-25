@@ -162,6 +162,19 @@ def push_status(conn=None, client=None, limit=40):
                                       text=f"Bajarildi (savol hal bo'ldi): {t.code} — {t.title}"[:500])
                 n += 1
             continue
+        if sync.get("assignee_why") == "standart ijrochi" and not sync.get("reassigned"):
+            r = Message.objects.filter(question=q, kind=Message.STAFF).select_related("user").order_by("created_at").first()
+            pid = _prbc_of_tg(r.user, conn) if r else None
+            if pid and pid not in {p_["id"] for p_ in t.people or [] if p_.get("role") == "assignee"}:
+                try:
+                    t = reassign(conn, client, t, pid, f"👤 Ijrochi: {r.user.name} — savolga u javob yozdi.")
+                    sync = {**sync, "reassigned": pid}
+                    Task.objects.filter(pk=t.pk).update(sync={**(t.sync or {}), **sync})
+                    n += 1
+                except PrbcError as e:
+                    log.info("reassign %s: %s", t.code, e)
+                    sync = {**sync, "reassigned": -1}
+                    Task.objects.filter(pk=t.pk).update(sync=sync)
         if t.status_category == "new" and _staff_touched(q) and sync.get("pushed") != "in_progress":
             who = q.answered_by or "xodim"
             if set_status(conn, client, t, "in_progress", f"⏳ Ish boshlandi: {who} savolga javob yozdi ({_when(timezone.now())})."):
@@ -224,6 +237,7 @@ def untasked(days=BACKFILL_DAYS):
     from support.models import Message
     since = timezone.now() - timedelta(days=days)
     return (Message.objects.filter(kind=Message.QUESTION, source="live", created_at__gte=since, task__isnull=True)
+            .exclude(group__creates_tasks=False)
             .filter(Q(status=Message.ESCALATED) | Q(resolution__in=[Message.NO, Message.WORK]))
             .exclude(resolution=Message.YES).exclude(status__in=[Message.IGNORED, Message.CLOSED])
             .select_related("user", "group", "entry", "entry__responsible").order_by("created_at"))
@@ -275,3 +289,114 @@ def control_summary(conn=None):
         "median_minutes": round(mins[len(mins) // 2]) if mins else None,
         "untasked": untasked().count(), "sla_minutes": conn.sla_minutes,
     }
+
+
+# ------------------------------------------------------------------ ijrochi: vazifa kimga tegishli
+GENERIC = {"it_stargroup"}  # umumiy akkauntlar — ular javob yozsa ham aniq ijrochi emas
+
+
+def _prbc_of_tg(user, conn):
+    """Telegram foydalanuvchi -> PRBC user id (bog'langan shaxs, qo'lda moslash, zona xodimi)."""
+    from .models import Person
+    from .tasks import assignee_ids_for
+    if user is None or (user.username or "").lower() in GENERIC:
+        return None
+    pid = Person.objects.filter(tg_user=user, prbc_user__isnull=False).exclude(status=Person.LEFT) \
+        .values_list("prbc_user", flat=True).first()
+    if pid and pid != 168:
+        return int(pid)
+    ids = assignee_ids_for(user.username, conn) if user.username else []
+    return ids[0] if ids else None
+
+
+def _member_ids(m, conn):
+    from .tasks import assignee_ids_for
+    if m is None:
+        return []
+    names = [m.telegram] if getattr(m, "telegram", "") and not getattr(m, "is_team", False) else []
+    if getattr(m, "is_team", False) and hasattr(m, "contacts"):
+        names += [c.telegram for c in m.contacts.exclude(telegram="").order_by("order", "id")]
+    for n in names:
+        if (n or "").lstrip("@").lower() in GENERIC:
+            continue
+        ids = assignee_ids_for(n, conn)
+        if ids:
+            return ids
+    return []
+
+
+def group_answerer(group, conn, days=30):
+    """Shu guruhda savollarga eng ko'p javob yozgan xodim (umumiy akkauntsiz) -> PRBC user id."""
+    import collections
+    from support.models import Message, TgUser
+    if group is None:
+        return None
+    since = timezone.now() - timedelta(days=days)
+    cnt = collections.Counter(Message.objects.filter(group=group, kind=Message.STAFF, created_at__gte=since,
+                                                     user__isnull=False).values_list("user_id", flat=True))
+    for uid, _n in cnt.most_common(6):
+        pid = _prbc_of_tg(TgUser.objects.filter(pk=uid).first(), conn)
+        if pid:
+            return pid
+    return None
+
+
+def pick_assignees(conn, st, q):
+    """Vazifa kimga tegishli — (PRBC id'lar, sabab). Tartib: savolga javob yozgan xodim -> mavzu mas'uli (bilim bazasi)
+    -> toifa mas'uli (aksiya, to'lov, login...) -> guruh ijrochisi (sozlama) -> guruhda ko'p javob beradigan -> standart."""
+    from support.engine import category_owner
+    from support.models import Message
+    from .tasks import assignee_ids_for
+    if q is not None:
+        for r in Message.objects.filter(question=q, kind=Message.STAFF).select_related("user").order_by("created_at")[:5]:
+            pid = _prbc_of_tg(r.user, conn)
+            if pid:
+                return [pid], f"savolga javob yozgan: {r.user.name}"
+    if st is not None and st.entry_id and st.entry.responsible_id:
+        ids = _member_ids(st.entry.responsible, conn)
+        if ids:
+            return ids, f"mavzu mas'uli: {st.entry.responsible.name}"
+    if st is not None and st.assignee and st.assignee.lstrip("@").lower() not in GENERIC:
+        ids = assignee_ids_for(st.assignee, conn)
+        if ids:
+            return ids, f"mas'ul: @{st.assignee.lstrip('@')}"
+    if q is not None and q.category:
+        owner = category_owner(q.category)
+        ids = _member_ids(owner, conn) if owner is not None else []  # xodim (Member) yoki jamoa a'zosi (ContactOwner)
+        if ids:
+            return ids, f"toifa mas'uli ({q.category}): {getattr(owner, 'name', '')}"
+    if q is not None and q.group_id:
+        pid = (conn.group_assignees or {}).get(str(q.group_id))
+        if str(pid or "").isdigit():
+            return [int(pid)], f"guruh ijrochisi ({q.group.title})"
+        pid = group_answerer(q.group, conn)
+        if pid:
+            return [pid], f"guruhda ko'p javob beradi ({q.group.title})"
+    ids = [int(x) for x in conn.task_default_assignees or []]
+    return ids, "standart ijrochi"
+
+
+def reassign(conn, client, t, new_id, note=""):
+    """PRBC vazifa ijrochisini almashtiradi: yangisi qo'shiladi, eski ijrochi(lar) olib tashlanadi."""
+    from .tasks import _full, _mirror
+    data = _full(client, {"id": t.prbc_id})
+    rows = [a for a in data.get("assignees") or [] if a.get("role") == "assignee"]
+    if any((a.get("user") or {}).get("id") == new_id for a in rows):
+        return t
+    try:
+        client.post(f"/tasks/{t.prbc_id}/assignees/", {"user_id": new_id, "role": "assignee"})
+    except PrbcError as e:
+        if e.status != 400:
+            raise
+        client.post(f"/tasks/{t.prbc_id}/assignees/", {"user": new_id, "role": "assignee"})
+    for a in rows:
+        try:
+            client.request("DELETE", f"/tasks/{t.prbc_id}/assignees/{a['id']}/")
+        except PrbcError as e:
+            log.info("remove assignee %s from %s: %s", a.get("id"), t.code, e)
+    if note:
+        try:
+            client.comment(t.prbc_id, note)
+        except PrbcError:
+            pass
+    return _mirror(_full(client, {"id": t.prbc_id}), kind=t.kind)

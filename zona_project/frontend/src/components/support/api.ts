@@ -26,7 +26,7 @@ export interface SupportBot {
 export interface SupportGroup {
   id: number; bot: number; bot_name: string; chat_id: number; title: string; mode: Mode | "inherit";
   effective_mode: Mode; is_active: boolean; is_admin: boolean; joined_at: string; last_message_at: string | null;
-  questions_7d: number; in_analytics: boolean;
+  questions_7d: number; in_analytics: boolean; creates_tasks: boolean;
   /** eski guruh: savollar shu guruhga yo'naltiriladi (bot javob bermaydi, havola yuboradi) */
   redirect_to: number | null; invite_link: string; link: string; redirect_count: number; sees_all: boolean;
 }

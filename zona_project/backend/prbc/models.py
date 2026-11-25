@@ -41,6 +41,7 @@ class Connection(models.Model):
     work_days = models.JSONField(default=list, blank=True)  # 0=Du ... 6=Ya; bo'sh — Du–Sha
     sync_status = models.BooleanField(default=True)  # savol holati PRBC vazifasiga: jarayonda / bajarildi / qayta ochildi
     overdue_alert = models.BooleanField(default=True)  # muddat o'tsa — PRBC'da izoh va ustuvorlik "shoshilinch"
+    group_assignees = models.JSONField(default=dict, blank=True)  # support Group id -> PRBC user id (guruh ijrochisi)
     statuses = models.JSONField(default=dict, blank=True)  # kesh: {loyiha id yoki "none": {category: status id}}
     sync_minutes = models.PositiveIntegerField(default=30)
     auto_left = models.BooleanField(default=True)  # bo'shaganni avtomatik belgilash (kontakt o'rni, inventar xodimi)
