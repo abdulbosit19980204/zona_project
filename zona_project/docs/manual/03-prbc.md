@@ -72,6 +72,10 @@ PRBC sozlamalari → **Guruh → loyiha** jadvali. Hozirgi bog'lanish:
 
 PRBC guruh loyihasiga ruxsat bermasa — vazifa standart loyihada ochiladi.
 
+> **Vazifa ochilmaydigan guruhlar (hozir):** VAZIFALAR (test guruhi, kalit o'chiq) va eski — yangi guruhga
+> yo'naltirilgan guruhlar: BIC, Silver, СХЗ - Protarget; Bic Sxz Silver Добавление Точек; HEINZ REGION;
+> Heinz .Vitana Pro target филиалы; LOREAL REGION. Jadvalda ular "eski guruh → …" deb belgilangan.
+
 ## Muddat (SLA)
 
 - Har vazifaga: **boshlanish**, **muddat**, **taxminiy vaqt** va **ustuvorlik** (standart "High") qo'yiladi.
