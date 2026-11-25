@@ -647,6 +647,7 @@ def stats(since=None):
     for r in rows.values():
         h = r.pop("hours")
         r["avg_hours"] = round(sum(h) / len(h), 1) if h else None
+        r["avg_minutes"] = round(60 * sum(h) / len(h)) if h else None
         out.append(r)
     return sorted(out, key=lambda r: (-r["open"], -r["total"]))
 

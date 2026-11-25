@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import {
   CheckCircle2, CircleAlert, ExternalLink, Link2, ListTodo, Plug, RefreshCcwDot, RotateCcw, Search, Timer, UserMinus, Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -71,7 +72,7 @@ interface TestResult { ok: boolean; me: { full_name?: string }; checks: Record<s
 interface Project { id: number; name: string; open?: number | null }
 interface GroupProject {
   id: number; title: string; questions: number; project: number | null; project_name: string; suggested: number | null; suggested_name: string;
-  creates_tasks: boolean; owner: number | null; owner_name: string; auto_owner: number | null; auto_owner_name: string;
+  creates_tasks: boolean; old: boolean; redirect_title: string; owner: number | null; owner_name: string; auto_owner: number | null; auto_owner_name: string;
 }
 
 const get = async <T,>(url: string, params?: Record<string, string | number>) => (await api.get<T>(url, { params })).data;
@@ -107,6 +108,15 @@ export function PrbcIntegration({ view = "control" }: { view?: PrbcView }) {
             <RefreshCcwDot className={cn("size-4", c?.sync_requested && "animate-spin")} />{t("syncNow")}
           </Button>
         </div>} />
+      <nav className="mb-5 flex flex-wrap gap-1.5 border-b pb-3">
+        {(["control", "tasks", "people", "log", "settings"] as PrbcView[]).map((v) => (
+          <Link key={v} href={v === "control" ? "/prbc" : `/prbc/${v}`}
+            className={cn("rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+              view === v ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
+            {t(`v_${v}`)}
+          </Link>
+        ))}
+      </nav>
       {c && !c.ready && (
         <Card className="mb-4 flex-row items-center gap-2 border-warning/40 bg-warning/5 p-3 text-sm text-warning"><CircleAlert className="size-4" />{c.not_ready}</Card>
       )}
@@ -696,10 +706,14 @@ function GroupProjects({ projects, className }: { projects: Project[]; className
           </TableRow></TableHeader>
           <TableBody>
             {rows.map((g) => (
-              <TableRow key={g.id} className={cn(!g.creates_tasks && "opacity-60")}>
-                <TableCell className="max-w-64 truncate">{g.title}</TableCell>
+              <TableRow key={g.id} className={cn((!g.creates_tasks || g.old) && "opacity-60")}>
+                <TableCell className="max-w-64">
+                  <div className="truncate">{g.title}</div>
+                  {g.old && <div className="truncate text-xs text-warning" title={g.redirect_title}>{t("gpOld", { name: g.redirect_title })}</div>}
+                </TableCell>
                 <TableCell className="text-right text-muted-foreground">{g.questions}</TableCell>
-                <TableCell><Switch checked={g.creates_tasks} disabled={save.isPending} onCheckedChange={(v) => save.mutate({ [`tasks:${g.id}`]: v })} /></TableCell>
+                <TableCell><Switch checked={g.creates_tasks && !g.old} disabled={save.isPending || g.old} title={g.old ? t("gpOldHint") : undefined}
+                  onCheckedChange={(v) => save.mutate({ [`tasks:${g.id}`]: v })} /></TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-2">
                     <Select value={String(g.project ?? 0)} onValueChange={(v) => save.mutate({ [String(g.id)]: Number(v) || null })}>

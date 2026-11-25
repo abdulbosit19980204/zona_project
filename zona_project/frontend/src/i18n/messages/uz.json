@@ -31,8 +31,8 @@
       "supConfig": "Sozlash",
       "invMain": "Inventarizatsiya",
       "invConfig": "Boshqaruv",
-      "prbcMain": "Nazorat",
-      "prbcConfig": "Sozlash"
+      "supTasks": "PRBC vazifalar",
+      "docsMain": "Boblar"
     },
     "staff": "Kontaktlar",
     "qrOverview": "Bosh sahifa",
@@ -51,7 +51,7 @@
       "qrdrive": "QR Drive",
       "support": "Support bot",
       "inventory": "IT inventarizatsiya",
-      "prbc": "PRBC vazifalar"
+      "docs": "Qo'llanma"
     },
     "serviceDown": "Servis ishlamayapti",
     "qrAnalytics": "Analitika",
@@ -79,7 +79,14 @@
     "prbcTasks": "Vazifalar",
     "prbcPeople": "1C xodimlari",
     "prbcLog": "Jurnal",
-    "prbcSettings": "Sozlamalar"
+    "prbcSettings": "PRBC sozlamalari",
+    "docsOverview": "Umumiy ko'rinish",
+    "docsSupport": "Support bot",
+    "docsPrbc": "PRBC va vazifalar",
+    "docsInventory": "IT inventarizatsiya",
+    "docsZona": "Mas'uliyat platformasi",
+    "docsTech": "Server va texnik",
+    "docsChanges": "O'zgarishlar tarixi"
   },
   "top": {
     "search": "Qidirish…",
@@ -1133,7 +1140,7 @@
     "month": "30 kunda: {left} ta bo'shadi, {new} ta yangi",
     "all": "Hammasi",
     "search": "Ism, lavozim, tabel, telefon…",
-    "colName": "Xodim",
+    "colName": "Nomi",
     "colPosition": "Lavozim / bo'lim",
     "colStatus": "Holat",
     "colLinks": "Bizdagi yozuvlar",
@@ -1358,6 +1365,14 @@
     "gpTasksHint": "Shu guruh savollaridan PRBC vazifa ochiladi (VAZIFALAR kabi test guruhlarida o'chiring)",
     "gpOwner": "Ijrochi",
     "gpOwnerAuto": "Avto: {name}",
-    "gpOwnerDefault": "Avto (standart ijrochi)"
+    "gpOwnerDefault": "Avto (standart ijrochi)",
+    "ctlByAssignee": "Xodimlar bo'yicha",
+    "ctlByGroup": "Guruhlar bo'yicha",
+    "ctl30days": "oxirgi 30 kun",
+    "ctlPeople": "1C xodimlari:",
+    "ctlDetails": "Batafsil",
+    "colAvgMin": "O'rtacha vaqt",
+    "gpOld": "eski guruh → {name}",
+    "gpOldHint": "Eski (yangi guruhga yo'naltirilgan) guruhdan vazifa ochilmaydi"
   }
 }

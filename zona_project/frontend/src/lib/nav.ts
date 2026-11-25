@@ -1,5 +1,5 @@
 import {
-  Activity, BadgeCheck, ClipboardCheck, FileSpreadsheet, KeyRound, Laptop, Smartphone, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History, LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert, Inbox, Signpost, Sparkles, SlidersHorizontal, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, RefreshCcwDot, type LucideIcon,
+  Activity, BadgeCheck, BookOpen, ClipboardCheck, FileSpreadsheet, KeyRound, Laptop, Smartphone, BookOpenCheck, Bot, BotMessageSquare, Building2, ChartColumn, ChartPie, FileChartColumn, FolderOpen, Gauge, Grid3x3, HardDrive, History, LayoutDashboard, ListChecks, MessageCircleQuestion, Network, Orbit, PlugZap, QrCode, ScrollText, Settings, ShieldAlert, Inbox, Signpost, Sparkles, SlidersHorizontal, TriangleAlert, UserPlus, Users, UsersRound, Wand2, Workflow, RefreshCcwDot, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -102,8 +102,20 @@ export const SUPPORT_NAV: NavGroup[] = [
     ],
   },
   {
+    key: "supTasks",
+    items: [
+      { href: "/prbc", key: "prbcControl", icon: Gauge, perm: "admin" },
+      { href: "/prbc/tasks", key: "prbcTasks", icon: ListChecks, perm: "admin" },
+      { href: "/prbc/people", key: "prbcPeople", icon: UsersRound, perm: "admin" },
+      { href: "/prbc/log", key: "prbcLog", icon: ScrollText, perm: "admin" },
+    ],
+  },
+  {
     key: "supConfig",
-    items: [{ href: "/support/settings", key: "supSettings", icon: SlidersHorizontal, perm: "admin" }],
+    items: [
+      { href: "/support/settings", key: "supSettings", icon: SlidersHorizontal, perm: "admin" },
+      { href: "/prbc/settings", key: "prbcSettings", icon: RefreshCcwDot, perm: "admin" },
+    ],
   },
 ];
 
@@ -130,27 +142,24 @@ export const INVENTORY_NAV: NavGroup[] = [
   },
 ];
 
-/** PRBC: savol vazifalarini nazorat (muddat, holat), vazifalar, 1C xodimlari, jurnal va sozlamalar — faqat administrator. */
-export const PRBC_NAV: NavGroup[] = [
+/** Qo'llanma: butun tizimning yo'riqnomasi (docs/manual/*.md) — har bob alohida. */
+export const DOCS_NAV: NavGroup[] = [
   {
-    key: "prbcMain",
+    key: "docsMain",
     items: [
-      { href: "/prbc", key: "prbcControl", icon: Gauge, perm: "admin" },
-      { href: "/prbc/tasks", key: "prbcTasks", icon: ListChecks, perm: "admin" },
-      { href: "/prbc/people", key: "prbcPeople", icon: UsersRound, perm: "admin" },
-    ],
-  },
-  {
-    key: "prbcConfig",
-    items: [
-      { href: "/prbc/log", key: "prbcLog", icon: ScrollText, perm: "admin" },
-      { href: "/prbc/settings", key: "prbcSettings", icon: SlidersHorizontal, perm: "admin" },
+      { href: "/docs", key: "docsOverview", icon: BookOpen },
+      { href: "/docs/support-bot", key: "docsSupport", icon: BotMessageSquare },
+      { href: "/docs/prbc", key: "docsPrbc", icon: RefreshCcwDot },
+      { href: "/docs/inventarizatsiya", key: "docsInventory", icon: ClipboardCheck },
+      { href: "/docs/zona", key: "docsZona", icon: Orbit },
+      { href: "/docs/texnik", key: "docsTech", icon: Settings },
+      { href: "/docs/ozgarishlar", key: "docsChanges", icon: History },
     ],
   },
 ];
 
 export interface NavModule {
-  key: "zona" | "qrdrive" | "support" | "inventory" | "prbc"; // nav.modules.<key>
+  key: "zona" | "qrdrive" | "support" | "inventory" | "docs"; // nav.modules.<key>
   icon: LucideIcon;
   groups: NavGroup[];
 }
@@ -161,7 +170,7 @@ export const MODULES: NavModule[] = [
   { key: "qrdrive", icon: QrCode, groups: QR_NAV },
   { key: "support", icon: BotMessageSquare, groups: SUPPORT_NAV },
   { key: "inventory", icon: ClipboardCheck, groups: INVENTORY_NAV },
-  { key: "prbc", icon: RefreshCcwDot, groups: PRBC_NAV },
+  { key: "docs", icon: BookOpen, groups: DOCS_NAV },
 ];
 
 export const ALL_NAV = MODULES.flatMap((m) => m.groups.flatMap((g) => g.items));
@@ -174,9 +183,9 @@ export function activeNav(pathname: string): NavItem | undefined {
 
 export function moduleOf(pathname: string): NavModule {
   if (pathname === "/qr" || pathname.startsWith("/qr/")) return MODULES[1];
-  if (pathname === "/support" || pathname.startsWith("/support/")) return MODULES[2];
+  if (pathname === "/support" || pathname.startsWith("/support/") || pathname === "/prbc" || pathname.startsWith("/prbc/")) return MODULES[2];
   if (pathname === "/inv" || pathname.startsWith("/inv/")) return MODULES[3];
-  if (pathname === "/prbc" || pathname.startsWith("/prbc/")) return MODULES[4];
+  if (pathname === "/docs" || pathname.startsWith("/docs/")) return MODULES[4];
   return MODULES[0];
 }
 

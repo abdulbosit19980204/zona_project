@@ -31,8 +31,8 @@
       "supConfig": "Configuration",
       "invMain": "Inventory",
       "invConfig": "Management",
-      "prbcMain": "Control",
-      "prbcConfig": "Setup"
+      "supTasks": "PRBC tasks",
+      "docsMain": "Chapters"
     },
     "staff": "Contacts",
     "qrOverview": "Overview",
@@ -51,7 +51,7 @@
       "qrdrive": "QR Drive",
       "support": "Support bot",
       "inventory": "IT inventory",
-      "prbc": "PRBC tasks"
+      "docs": "Manual"
     },
     "serviceDown": "Service unavailable",
     "qrAnalytics": "Analytics",
@@ -79,7 +79,14 @@
     "prbcTasks": "Tasks",
     "prbcPeople": "1C staff",
     "prbcLog": "Log",
-    "prbcSettings": "Settings"
+    "prbcSettings": "PRBC settings",
+    "docsOverview": "System overview",
+    "docsSupport": "Support bot",
+    "docsPrbc": "PRBC and tasks",
+    "docsInventory": "IT inventory",
+    "docsZona": "Responsibility platform",
+    "docsTech": "Server and technical",
+    "docsChanges": "Change history"
   },
   "top": {
     "search": "Search…",
@@ -1133,7 +1140,7 @@
     "month": "Last 30 days: {left} left, {new} new",
     "all": "All",
     "search": "Name, position, personnel no., phone…",
-    "colName": "Employee",
+    "colName": "Name",
     "colPosition": "Position / department",
     "colStatus": "Status",
     "colLinks": "Our records",
@@ -1358,6 +1365,14 @@
     "gpTasksHint": "Questions from this group open PRBC tasks (turn off for test groups like VAZIFALAR)",
     "gpOwner": "Assignee",
     "gpOwnerAuto": "Auto: {name}",
-    "gpOwnerDefault": "Auto (default assignee)"
+    "gpOwnerDefault": "Auto (default assignee)",
+    "ctlByAssignee": "By assignee",
+    "ctlByGroup": "By group",
+    "ctl30days": "last 30 days",
+    "ctlPeople": "1C staff:",
+    "ctlDetails": "Details",
+    "colAvgMin": "Average time",
+    "gpOld": "old group → {name}",
+    "gpOldHint": "An old (redirected) group never opens tasks"
   }
 }

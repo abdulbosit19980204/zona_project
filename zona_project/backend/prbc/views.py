@@ -443,7 +443,7 @@ def group_projects(request):
     pool |= set(Person.objects.filter(member__isnull=False, prbc_user__isnull=False).values_list("prbc_user", flat=True))
     people_ = dict(Person.objects.filter(prbc_user__in=pool).exclude(status=Person.LEFT).values_list("prbc_user", "full_name"))
     rows = []
-    groups = Group.objects.filter(is_active=True).annotate(n=Count("messages", filter=Q(messages__kind="question"))).order_by("-n", "title")
+    groups = Group.objects.filter(is_active=True).select_related("redirect_to").annotate(n=Count("messages", filter=Q(messages__kind="question"))).order_by("-n", "title")
     for g in groups:
         pid = (c.group_projects or {}).get(str(g.pk))
         sug = tasks.suggest_project(g.title, c.projects or []) if not pid else None
@@ -452,7 +452,8 @@ def group_projects(request):
         rows.append({"id": g.pk, "title": g.title or str(g.chat_id), "questions": g.n, "project": pid,
                      "project_name": names.get(pid, f"#{pid}" if pid else ""),
                      "suggested": sug, "suggested_name": names.get(sug, "") if sug else "",
-                     "creates_tasks": g.creates_tasks, "owner": owner, "owner_name": people_.get(owner, ""),
+                     "creates_tasks": g.creates_tasks, "old": bool(g.redirect_to_id),
+                     "redirect_title": g.redirect_to.title if g.redirect_to_id else "", "owner": owner, "owner_name": people_.get(owner, ""),
                      "auto_owner": auto, "auto_owner_name": people_.get(auto) or (
                          Person.objects.filter(prbc_user=auto).values_list("full_name", flat=True).first() if auto else "") or ""})
     return Response({"default": c.task_project, "default_name": names.get(c.task_project, ""), "groups": rows,
@@ -506,8 +507,15 @@ def control(request):
     pending = [{"id": q.id, "text": (q.problem or q.text or q.ocr_text or "")[:200], "asker": q.user.name if q.user_id else "",
                 "group": q.group.title if q.group_id else "", "created_at": q.created_at, "status": q.status,
                 "link": q.group.message_link(q.message_id) if q.group_id else ""} for q in ctl.untasked()[:50]]
+    since = timezone.now() - timedelta(days=30)
+    ppl = dict(Person.objects.values_list("status").annotate(n=Count("id")))
     return Response({"summary": ctl.control_summary(conn), "open": [task_payload(t, conn) for t in open_],
                      "done": [task_payload(t, conn) for t in done], "untasked": pending,
+                     "by_assignee": tasks.stats(since), "by_group": tasks.group_stats(since),
+                     "people": {"total": sum(ppl.values()), **ppl,
+                                "unlinked": Person.objects.filter(status=Person.ACTIVE, staff_person__isnull=True,
+                                                                  member__isnull=True, inv_employee__isnull=True,
+                                                                  tg_user__isnull=True).count()},
                      "worker_alive": connection_payload(conn)["worker_alive"]})
 
 

@@ -3,10 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
-  AlarmClock, CheckCheck, CheckCircle2, CircleAlert, CircleDot, ExternalLink, Flame, ListTodo, MessageSquareText, Play,
-  Search, Timer, TrendingUp, XCircle,
+  AlarmClock, ArrowRight, CheckCheck, CheckCircle2, CircleAlert, CircleDot, ExternalLink, Flame, ListTodo, MessageSquareText, Play,
+  Search, Timer, TrendingUp, UserRound, Users, XCircle,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -30,7 +31,12 @@ interface Summary {
   open: number; overdue: number; due_soon: number; in_progress: number; done_today: number; done_week: number;
   on_time_pct: number | null; median_minutes: number | null; untasked: number; sla_minutes: number;
 }
-interface ControlData { summary: Summary; open: CTask[]; done: CTask[]; untasked: Pending[]; worker_alive: boolean }
+interface StatRow { name: string; total: number; done: number; open: number; overdue: number; late?: number; cancelled: number; avg_minutes?: number | null }
+interface ControlData {
+  summary: Summary; open: CTask[]; done: CTask[]; untasked: Pending[]; worker_alive: boolean;
+  by_assignee: StatRow[]; by_group: StatRow[];
+  people: { total: number; active?: number; leaving?: number; left?: number; unlinked: number };
+}
 
 type Filter = "all" | "overdue" | "new" | "in_progress";
 
@@ -255,6 +261,76 @@ export function PrbcControl() {
           )}
         </Card>
       </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <StatTable title={t("ctlByAssignee")} hint={t("ctl30days")} icon={UserRound} rows={data.by_assignee} sla={s.sla_minutes} who={who}
+          onPick={(n) => setWho(who === n ? "" : n)} t={t} />
+        <StatTable title={t("ctlByGroup")} hint={t("ctl30days")} icon={Users} rows={data.by_group} sla={s.sla_minutes} t={t} />
+      </div>
+
+      <Card className="flex-row flex-wrap items-center gap-x-6 gap-y-2 p-4 text-sm">
+        <span className="font-medium">{t("ctlPeople")}</span>
+        <span>{t("total")}: <b>{data.people.total}</b></span>
+        <span className="text-success">{t("active")}: <b>{data.people.active ?? 0}</b></span>
+        <span className="text-warning">{t("leaving")}: <b>{data.people.leaving ?? 0}</b></span>
+        <span className="text-destructive">{t("left")}: <b>{data.people.left ?? 0}</b></span>
+        <span className="text-muted-foreground">{t("unlinked")}: <b>{data.people.unlinked}</b></span>
+        <Link href="/prbc/people" className="ml-auto inline-flex items-center gap-1 text-primary hover:underline">{t("ctlDetails")}<ArrowRight className="size-3.5" /></Link>
+      </Card>
     </div>
+  );
+}
+
+function StatTable({ title, hint, icon: Icon, rows, sla, who, onPick, t }: {
+  title: string; hint: string; icon: typeof Users; rows: StatRow[]; sla: number; who?: string; onPick?: (name: string) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  return (
+    <Card className="gap-0 overflow-hidden p-0">
+      <div className="flex items-center gap-2 border-b px-4 py-3">
+        <Icon className="size-4 text-primary" /><span className="font-semibold">{title}</span>
+        <span className="ml-auto text-xs text-muted-foreground">{hint}</span>
+      </div>
+      {!rows.length ? <div className="px-4 py-6 text-sm text-muted-foreground">{t("noTasks")}</div> : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2 text-left font-medium">{t("colName")}</th>
+                <th className="px-2 py-2 text-right font-medium">{t("colOpen")}</th>
+                <th className="px-2 py-2 text-right font-medium">{t("colOverdue")}</th>
+                <th className="px-2 py-2 text-right font-medium">{t("colDone")}</th>
+                <th className="px-2 py-2 text-right font-medium">{t("colTotal")}</th>
+                {rows.some((r) => r.avg_minutes !== undefined) && <th className="px-4 py-2 text-right font-medium">{t("colAvgMin")}</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {rows.slice(0, 15).map((r) => (
+                <tr key={r.name} className={cn(onPick && "cursor-pointer hover:bg-muted/40", who === r.name && "bg-primary/5")} onClick={() => onPick?.(r.name)}>
+                  <td className="max-w-56 px-4 py-2">
+                    <div className="truncate">{r.name}</div>
+                    <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-muted" style={{ width: `${Math.max(8, (100 * r.total) / max)}%` }}>
+                      <span className="bg-success" style={{ width: `${(100 * r.done) / Math.max(1, r.total)}%` }} />
+                      <span className="bg-primary" style={{ width: `${(100 * (r.open - r.overdue)) / Math.max(1, r.total)}%` }} />
+                      <span className="bg-destructive" style={{ width: `${(100 * r.overdue) / Math.max(1, r.total)}%` }} />
+                    </div>
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">{r.open || ""}</td>
+                  <td className={cn("px-2 py-2 text-right tabular-nums", r.overdue > 0 && "font-semibold text-destructive")}>{r.overdue || ""}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-success">{r.done || ""}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{r.total}</td>
+                  {r.avg_minutes !== undefined && (
+                    <td className={cn("px-4 py-2 text-right tabular-nums", r.avg_minutes != null && r.avg_minutes > sla ? "text-warning" : "text-muted-foreground")}>
+                      {r.avg_minutes == null ? "—" : r.avg_minutes >= 120 ? t("hours", { n: Math.round(r.avg_minutes / 6) / 10 }) : t("ctlMin", { n: r.avg_minutes })}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }

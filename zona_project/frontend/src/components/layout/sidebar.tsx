@@ -179,7 +179,8 @@ export function Sidebar() {
   // PRBC bo'limida: ochiq vazifalar soni (nazorat sahifasi bilan bitta kesh)
   const prbc = useQuery({ queryKey: ["prbc", "control"], refetchInterval: 15_000,
     queryFn: async () => (await api.get<{ summary: { open: number } }>("prbc/control/")).data,
-    enabled: Boolean(model?.state.me.can?.admin) && (pathname === "/prbc" || pathname.startsWith("/prbc/")) });
+    enabled: Boolean(model?.state.me.can?.admin) && (pathname === "/prbc" || pathname.startsWith("/prbc/")
+      || pathname === "/support" || pathname.startsWith("/support/")) });
   const counts: Record<string, number | undefined> = {
     supInbox: ss ? (ss.by_status.escalated ?? 0) + (ss.by_status.drafted ?? 0) || undefined : undefined,
     supReview: ss ? (ss.entries.new ?? 0) + (ss.entries.review ?? 0) + (ss.pending_edits ?? 0) || undefined : undefined,
@@ -203,7 +204,6 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
         {MODULES.filter((m) => m.key !== "inventory" || (model?.state.me && !model.state.me.anonymous && model.state.me.inventory))
-          .filter((m) => m.key !== "prbc" || Boolean(model?.state.me.can?.admin))
           .map((m) => <ModuleSection key={m.key} module={m} counts={counts} down={down[m.key]} />)}
       </nav>
       <ControlCenterLink collapsed={collapsed} />

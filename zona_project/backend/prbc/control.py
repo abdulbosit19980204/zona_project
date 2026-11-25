@@ -237,7 +237,7 @@ def untasked(days=BACKFILL_DAYS):
     from support.models import Message
     since = timezone.now() - timedelta(days=days)
     return (Message.objects.filter(kind=Message.QUESTION, source="live", created_at__gte=since, task__isnull=True)
-            .exclude(group__creates_tasks=False)
+            .exclude(group__creates_tasks=False).exclude(group__redirect_to__isnull=False).exclude(group__is_active=False)
             .filter(Q(status=Message.ESCALATED) | Q(resolution__in=[Message.NO, Message.WORK]))
             .exclude(resolution=Message.YES).exclude(status__in=[Message.IGNORED, Message.CLOSED])
             .select_related("user", "group", "entry", "entry__responsible").order_by("created_at"))

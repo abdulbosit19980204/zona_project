@@ -343,3 +343,37 @@ class OwnerTests(Base):
                       format="json").json()
         row = next(g for g in r["groups"] if g["id"] == self.group.pk)
         self.assertEqual((row["creates_tasks"], row["owner"], row["owner_name"]), (False, 51, "Said Abror"))
+
+
+class OldGroupAndDocsTests(Base):
+    def test_old_redirected_group_opens_no_task(self):
+        new = Group.objects.create(bot=self.bot, chat_id=-301, title="HEINZ ROP (yangi)")
+        Group.objects.filter(pk=self.group.pk).update(redirect_to=new)
+        self.group.refresh_from_db()
+        q = self.question("Klient chiqmayapti")
+        self.assertFalse(st_tasks.decide_task(q, Decision("", None, 0, "", True, []))[0])
+        self.assertEqual(control.untasked().count(), 0)
+
+    def test_manual_chapters_api(self):
+        api = APIClient()
+        api.force_authenticate(User.objects.create_superuser("adm3", "c@x.uz", "x"))
+        rows = api.get("/api/docs/").json()
+        slugs = [r["slug"] for r in rows]
+        for s in ("umumiy", "support-bot", "prbc", "inventarizatsiya", "zona", "texnik", "ozgarishlar"):
+            self.assertIn(s, slugs)
+        doc = api.get("/api/docs/prbc/").json()
+        self.assertTrue(doc["title"].startswith("PRBC"))
+        self.assertIn("Ijrochi: vazifa kimga tegishli", doc["text"])
+        hits = api.get("/api/docs/", {"q": "VAZIFALAR"}).json()
+        self.assertTrue(any(r["slug"] == "prbc" and r["hits"] > 0 for r in hits))
+        self.assertEqual(api.get("/api/docs/yoq/").status_code, 404)
+        self.assertEqual(APIClient().get("/api/docs/").status_code, 401)
+
+    def test_control_has_stats(self):
+        self.open_task(self.question())
+        api = APIClient()
+        api.force_authenticate(User.objects.create_superuser("adm4", "d@x.uz", "x"))
+        r = api.get("/api/prbc/control/").json()
+        self.assertEqual(r["by_assignee"][0]["open"], 1)
+        self.assertEqual(r["by_group"][0]["name"], "HEINZ ROP")
+        self.assertIn("unlinked", r["people"])

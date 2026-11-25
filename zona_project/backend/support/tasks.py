@@ -66,8 +66,10 @@ def decide_task(q, d, s=None):
     s = s or Settings.load()
     if not s.tasks_enabled or q.kind != Message.QUESTION:
         return False, "", ""
-    if q.group_id and not q.group.creates_tasks:
-        return False, "", ""  # guruh sozlamasi: bu guruhdan vazifa ochilmaydi (masalan, VAZIFALAR — test guruhi)
+    if q.group_id and (not q.group.creates_tasks or q.group.redirect_to_id or not q.group.is_active):
+        # guruh sozlamasi: bu guruhdan vazifa ochilmaydi (VAZIFALAR — test guruhi), eski (yangi guruhga yo'naltirilgan)
+        # yoki nofaol guruh
+        return False, "", ""
     e = d.entry
     if e is not None and e.creates_task:
         m = e.responsible if e.responsible_id else None

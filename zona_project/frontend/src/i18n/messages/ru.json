@@ -31,8 +31,8 @@
       "supConfig": "Настройка",
       "invMain": "Инвентаризация",
       "invConfig": "Управление",
-      "prbcMain": "Контроль",
-      "prbcConfig": "Настройка"
+      "supTasks": "Задачи PRBC",
+      "docsMain": "Разделы"
     },
     "staff": "Контакты",
     "qrOverview": "Главная",
@@ -51,7 +51,7 @@
       "qrdrive": "QR Drive",
       "support": "Support бот",
       "inventory": "ИТ-инвентаризация",
-      "prbc": "PRBC задачи"
+      "docs": "Руководство"
     },
     "serviceDown": "Сервис недоступен",
     "qrAnalytics": "Аналитика",
@@ -79,7 +79,14 @@
     "prbcTasks": "Задачи",
     "prbcPeople": "Сотрудники 1С",
     "prbcLog": "Журнал",
-    "prbcSettings": "Настройки"
+    "prbcSettings": "Настройки PRBC",
+    "docsOverview": "Обзор системы",
+    "docsSupport": "Support bot",
+    "docsPrbc": "PRBC и задачи",
+    "docsInventory": "IT инвентаризация",
+    "docsZona": "Платформа ответственности",
+    "docsTech": "Сервер и техника",
+    "docsChanges": "История изменений"
   },
   "top": {
     "search": "Поиск…",
@@ -1133,7 +1140,7 @@
     "month": "За 30 дней: уволено {left}, новых {new}",
     "all": "Все",
     "search": "Имя, должность, табель, телефон…",
-    "colName": "Сотрудник",
+    "colName": "Название",
     "colPosition": "Должность / отдел",
     "colStatus": "Статус",
     "colLinks": "Наши записи",
@@ -1358,6 +1365,14 @@
     "gpTasksHint": "Из вопросов этой группы открываются задачи PRBC (выключите для тестовых групп, как VAZIFALAR)",
     "gpOwner": "Исполнитель",
     "gpOwnerAuto": "Авто: {name}",
-    "gpOwnerDefault": "Авто (по умолчанию)"
+    "gpOwnerDefault": "Авто (по умолчанию)",
+    "ctlByAssignee": "По сотрудникам",
+    "ctlByGroup": "По группам",
+    "ctl30days": "последние 30 дней",
+    "ctlPeople": "Сотрудники 1С:",
+    "ctlDetails": "Подробнее",
+    "colAvgMin": "Среднее время",
+    "gpOld": "старая группа → {name}",
+    "gpOldHint": "Из старой (перенаправленной) группы задачи не открываются"
   }
 }
