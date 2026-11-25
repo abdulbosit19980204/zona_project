@@ -377,3 +377,15 @@ class OldGroupAndDocsTests(Base):
         self.assertEqual(r["by_assignee"][0]["open"], 1)
         self.assertEqual(r["by_group"][0]["name"], "HEINZ ROP")
         self.assertIn("unlinked", r["people"])
+
+    def test_manual_images_need_login(self):
+        api = APIClient()
+        api.force_authenticate(User.objects.create_superuser("adm5", "e@x.uz", "x"))
+        r = api.get("/api/docs/img/prbc-muddat.jpg")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r["Content-Type"], "image/jpeg")
+        self.assertEqual(api.get("/api/docs/img/..%2Fsettings.py").status_code, 404)
+        self.assertEqual(api.get("/api/docs/img/yoq.jpg").status_code, 404)
+        self.assertEqual(APIClient().get("/api/docs/img/prbc-muddat.jpg").status_code, 401)
+        doc = api.get("/api/docs/sozlamalar/").json()
+        self.assertIn("![Vazifa nazorati", doc["text"])

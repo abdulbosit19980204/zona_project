@@ -1,8 +1,10 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, type ReactNode } from "react";
 
+import { api } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 /** Qo'llanma uchun kichik Markdown renderer (tashqi kutubxonasiz): sarlavhalar, paragraflar, ro'yxatlar, jadvallar,
@@ -39,6 +41,31 @@ function inline(text: string, key = 0): ReactNode[] {
 }
 
 /** Jadval qatori: "\|" — katak ichidagi oddiy "|" belgisi (ajratuvchi emas). */
+/** Qo'llanma skrinshoti: kirish talab qiladi (token bilan yuklanadi), bosilsa — to'liq o'lchamda ochiladi. */
+function DocImage({ src, alt }: { src: string; alt: string }) {
+  const q = useQuery({
+    queryKey: ["docs", "img", src], staleTime: Infinity,
+    queryFn: async () => (await api.get<Blob>(`docs/${src.replace(/^\.?\//, "")}`, { responseType: "blob" })).data,
+  });
+  const url = useMemo(() => (q.data ? URL.createObjectURL(q.data) : ""), [q.data]);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  return (
+    <figure className="my-4">
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer" title="To'liq o'lchamda ochish">
+          {/* eslint-disable-next-line @next/next/no-img-element -- blob URL (token bilan yuklangan) */}
+          <img src={url} alt={alt} className="mx-auto block h-auto w-auto max-w-full rounded-lg border shadow-sm" loading="lazy" />
+        </a>
+      ) : (
+        <div className="grid h-48 place-items-center rounded-lg border bg-muted/40 text-xs text-muted-foreground">
+          {q.isError ? "Rasm yuklanmadi" : "Rasm yuklanmoqda…"}
+        </div>
+      )}
+      {alt && <figcaption className="mt-1.5 text-center text-xs text-muted-foreground">{alt}</figcaption>}
+    </figure>
+  );
+}
+
 const cells = (line: string) => line.trim().replace(/^\||(?<!\\)\|$/g, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
 
 export function Markdown({ text, className }: { text: string; className?: string }) {
@@ -65,6 +92,12 @@ export function Markdown({ text, className }: { text: string; className?: string
       const cls = ["", "text-2xl font-bold tracking-tight", "mt-8 border-b pb-2 text-xl font-semibold", "mt-6 text-base font-semibold", "mt-4 text-sm font-semibold"][level];
       const Tag = (["h1", "h1", "h2", "h3", "h4"] as const)[level];
       blocks.push(<Tag key={k} id={id} className={cn("scroll-mt-20", cls)}>{inline(h[2], k)}</Tag>);
+      i++;
+      continue;
+    }
+    const img = /^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/.exec(line.trim());
+    if (img) {
+      blocks.push(<DocImage key={k} src={img[2]} alt={img[1]} />);
       i++;
       continue;
     }
@@ -108,7 +141,7 @@ export function Markdown({ text, className }: { text: string; className?: string
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|>|\s*([-*]|\d+\.)\s+|\s*\|)/.test(lines[i])) para.push(lines[i++].trim());
+    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|>|!\[|\s*([-*]|\d+\.)\s+|\s*\|)/.test(lines[i])) para.push(lines[i++].trim());
     if (!para.length) { para.push(line); i++; }
     blocks.push(<p key={k} className="my-2 text-sm leading-relaxed text-foreground/90">{inline(para.join(" "), k)}</p>);
   }

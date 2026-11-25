@@ -86,7 +86,8 @@
     "docsInventory": "IT inventory",
     "docsZona": "Responsibility platform",
     "docsTech": "Server and technical",
-    "docsChanges": "Change history"
+    "docsChanges": "Change history",
+    "docsSettings": "Settings (with screenshots)"
   },
   "top": {
     "search": "Search…",

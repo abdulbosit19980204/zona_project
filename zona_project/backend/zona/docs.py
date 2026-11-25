@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from django.conf import settings
+from django.http import FileResponse
 from django.urls import path
 from rest_framework import status
 from rest_framework.response import Response
@@ -15,6 +16,7 @@ from .api import zona_api
 from .permissions import CanView
 
 NAME = re.compile(r"^(\d+)-([a-z0-9-]+)\.md$")
+IMG = re.compile(r"^[a-z0-9-]+\.(jpg|png)$")
 
 
 def manual_dir():
@@ -59,7 +61,19 @@ def chapter(request, slug):
     return Response({"detail": "Bob topilmadi"}, status=status.HTTP_404_NOT_FOUND)
 
 
+@zona_api(["GET"], [CanView])
+def image(request, name):
+    """Qo'llanma skrinshoti (docs/manual/img/*.jpg|png) — faqat kirgan foydalanuvchiga."""
+    f = manual_dir() / "img" / name
+    if not IMG.match(name) or not f.is_file():
+        return Response({"detail": "Rasm topilmadi"}, status=status.HTTP_404_NOT_FOUND)
+    resp = FileResponse(open(f, "rb"), content_type="image/png" if name.endswith(".png") else "image/jpeg")
+    resp["Cache-Control"] = "private, max-age=3600"
+    return resp
+
+
 urlpatterns = [
+    path("img/<str:name>", image, name="docs-image"),
     path("", chapters, name="docs"),
     path("<slug:slug>/", chapter, name="docs-chapter"),
 ]

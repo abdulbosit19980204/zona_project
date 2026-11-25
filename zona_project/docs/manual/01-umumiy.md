@@ -37,6 +37,7 @@ chap menyuda har biri alohida bo'lim bo'lib ko'rinadi.
 
 - Chap menyu → **Qo'llanma**. Har bob alohida; yuqoridagi qidiruv barcha boblardan so'z qidiradi.
 - O'ng tomonda bob mundarijasi bor (katta ekranda).
+- Qayerda nima sozlanishi skrinshotlar bilan — [Sozlamalar qo'llanmasi](/docs/sozlamalar).
 - Qo'llanma kod bilan birga yangilanadi: tizimga har o'zgarish kiritilganda tegishli bob ham yangilanadi va
   [O'zgarishlar tarixi](/docs/ozgarishlar)ga yoziladi. Fayllar: `docs/manual/*.md`.
 

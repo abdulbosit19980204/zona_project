@@ -219,7 +219,8 @@ function GroupsSection({ t }: { t: ST }) {
               {t("grpAnalytics")}
             </label>
             <label className="flex items-center gap-2 text-xs" title={t("grpTasksHint")}>
-              <Switch checked={g.creates_tasks} disabled={upd.isPending} onCheckedChange={(v) => upd.mutate({ id: g.id, creates_tasks: v })} />
+              <Switch checked={g.creates_tasks && !g.redirect_to} disabled={upd.isPending || Boolean(g.redirect_to)}
+                onCheckedChange={(v) => upd.mutate({ id: g.id, creates_tasks: v })} />
               {t("grpTasks")}
             </label>
             {g.mode === "inherit" && <div className="flex items-center gap-1.5 text-xs text-muted-foreground">{t("nowActs")}: <ModeBadge mode={g.effective_mode} t={t} /></div>}

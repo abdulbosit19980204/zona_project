@@ -152,6 +152,7 @@ export const DOCS_NAV: NavGroup[] = [
       { href: "/docs/prbc", key: "docsPrbc", icon: RefreshCcwDot },
       { href: "/docs/inventarizatsiya", key: "docsInventory", icon: ClipboardCheck },
       { href: "/docs/zona", key: "docsZona", icon: Orbit },
+      { href: "/docs/sozlamalar", key: "docsSettings", icon: SlidersHorizontal },
       { href: "/docs/texnik", key: "docsTech", icon: Settings },
       { href: "/docs/ozgarishlar", key: "docsChanges", icon: History },
     ],

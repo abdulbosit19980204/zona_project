@@ -4,6 +4,8 @@
 
 ## 2026-11-26
 
+- **Sozlamalar qo'llanmasi skrinshotlar bilan** — yangi bob: har sozlama qayerda va nima qiladi, 31 ta skrinshot
+  (rasmlar faqat kirgan foydalanuvchiga ko'rinadi). Eski guruh kartasida "PRBC vazifa" kaliti endi bloklangan.
 - **Logo va nom:** sayt endi **Foydali** — o'z logosi (ko'k-binafsha gradient, "F" va StarGroup yulduzchasi),
   favicon, iPhone belgisi; brauzer sarlavhasi "… · Foydali". Next.js standart belgisi olib tashlandi.
 - **Qo'llanma moduli** — butun tizimning yo'riqnomasi (shu hujjat), qidiruv bilan; chap menyuda alohida bo'lim.
