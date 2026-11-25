@@ -23,7 +23,7 @@ KEEP_PER_TYPE = 6
 KNOWN_AFTER = timezone.timedelta(hours=1)
 OPEN_KEEP = timezone.timedelta(days=14)
 SOURCES = ("question", "history", "live")
-BOT_STAGES = ("template", "faq", "rule", "ai", "image")
+BOT_STAGES = ("template", "faq", "rule", "ai", "image", "prbc")
 
 
 def thumb_bytes(data, side=THUMB_SIDE):

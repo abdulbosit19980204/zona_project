@@ -17,7 +17,7 @@ from .models import Change, Connection, Person, SyncRun, Task
 ADMIN = [IsZonaAdmin]
 EDITABLE = ["enabled", "base_url", "phone", "lifecycle_project", "task_project", "task_default_assignees", "sync_minutes",
             "auto_left", "comment_devices", "task_watchers", "close_on_done", "notify_done", "notify_created",
-            "attach_files", "assignee_map", "watch_self"]
+            "attach_files", "assignee_map", "watch_self", "outlet_lookup"]
 
 
 def _actor(request):
@@ -68,7 +68,7 @@ def connection(request):
                 elif f in ("task_default_assignees", "task_watchers"):
                     v = [int(x) for x in (v or []) if str(x).isdigit()][:20]
                 elif f in ("enabled", "auto_left", "comment_devices", "close_on_done", "notify_done", "notify_created",
-                           "attach_files", "watch_self"):
+                           "attach_files", "watch_self", "outlet_lookup"):
                     v = bool(v)
                 elif f == "assignee_map":
                     v = parse_map(v)
@@ -415,3 +415,25 @@ def assignable(request):
     if q:
         qs = qs.filter(Q(full_name__icontains=q) | Q(position__icontains=q))
     return Response([{"id": p.prbc_user, "name": p.full_name, "position": p.position} for p in qs[:50]])
+
+
+@zona_api(["GET"], ADMIN)
+def outlet_status(request):
+    """Mijoz arizasining PRBC'dagi holati — bot guruhda beradigan javobning o'zi (panelda tekshirish uchun).
+    ?q=STIR / JShShIR / 1C kodi (UZ-...)."""
+    from . import outlets
+    q = (request.query_params.get("q") or "")[:300]
+    ids = outlets.find_ids(q)
+    if not ids:
+        return Response({"detail": "STIR (9 raqam), JShShIR (14 raqam) yoki 1C kodini (UZ-…) yozing."},
+                        status=status.HTTP_400_BAD_REQUEST)
+    c = Connection.get()
+    if not c.phone or not c.password_enc:
+        return Response({"detail": "PRBC ulanishi sozlanmagan."}, status=status.HTTP_400_BAD_REQUEST)
+    client = outlets.Client(c)
+    client.timeout = outlets.TIMEOUT
+    found = outlets.lookup(ids, client=client)
+    if not found:
+        return Response({"detail": "PRBC javob bermadi — keyinroq urinib ko'ring."}, status=status.HTTP_502_BAD_GATEWAY)
+    return Response({"ids": ids, "found": sum(len(r.get("requests") or []) + len(r.get("attachments") or []) for r in found.values()),
+                     "text": outlets.card(found, "uz"), "text_ru": outlets.card(found, "ru"), "bot_enabled": c.enabled and c.outlet_lookup})

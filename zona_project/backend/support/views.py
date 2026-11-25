@@ -1208,7 +1208,7 @@ def _askers(questions):
         r = rows[uid]
         r.update(name=name, username=uname, staff=sp or "")
         r["questions"] += 1
-        r["bot"] += stage in ("template", "faq", "rule", "ai", "image")
+        r["bot"] += stage in ("template", "faq", "rule", "ai", "image", "prbc")
         r["escalated"] += status == Message.ESCALATED
         if title:
             r["types"][title] += 1
@@ -1454,7 +1454,7 @@ def _protarget(questions, since, end=None):
     times = [max(0.0, (r.created_at - r.question.created_at).total_seconds())
              for r in Message.objects.filter(kind=Message.STAFF, question__in=questions)
              .select_related("user__contact", "user__member", "question") if r.user and r.user.staff_name() in team]
-    return {"questions": pt.count(), "by_bot": pt.filter(stage__in=["template", "faq", "rule", "ai", "image"]).count(),
+    return {"questions": pt.count(), "by_bot": pt.filter(stage__in=["template", "faq", "rule", "ai", "image", "prbc"]).count(),
             "unanswered": pt.exclude(status__in=[Message.ANSWERED, Message.CLOSED, Message.IGNORED]).count(),
             "types": [{"title": t, "n": n} for t, n in types.most_common(10)],
             "team_answers": len(times), "team_median_s": round(median(times), 1) if times else None}

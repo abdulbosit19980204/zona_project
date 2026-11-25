@@ -37,6 +37,7 @@ class Decision:
     note: str = ""
     parts: list = field(default_factory=list)  # albomda turli ekranlar: [(rasm_tartibi, yozuv, ishonch)] — alohida javoblar
     owner: bool = False        # mas'ul toifa sozlamasidan (category_owners) — butun tizimda ustun, supervayzer belgilanmaydi
+    live: str = ""             # PRBC'dagi jonli holat kartasi (mijoz arizasi) — javob boshida turadi
 
 
 # ------------------------------------------------------------------ yordamchilar
@@ -708,7 +709,7 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
 
 # ------------------------------------------------------------------ yig'ish
 def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="", images=None, fast=False,
-           asker="", history="", alert="", leader=False):
+           asker="", history="", alert="", leader=False, live=False):
     """Savol -> Decision (_decide) + toifa mas'uli: masalan, barcha aksiya savollari — operatorga (category_owners).
 
     alert — skrinshotdagi QIZIL xato yozuvi (ocr.red_text): ekrandagi boshqa so'zlardan ustun.
@@ -716,7 +717,7 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
     (AI uning o'zi bajaradigan amalni aytadi; bo'lmasa — xodimga uzatiladi)."""
     d = _decide(raw, lang, allow_unapproved, image, text, ocr, images, fast, asker, history, alert)
     if d is None:
-        return d
+        return live_prbc(None, raw, text, ocr, lang) if live else None
     if leader and not d.needs_human and needs_supervisor(d):
         if fast:
             return None  # AI kerak — sekin yo'lda
@@ -725,7 +726,31 @@ def decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr=""
         # "Проверьте", "qayta tekshiring" — agentga javob emas: so'rovni bajaradigan mas'ulga uzatiladi (belgilanadi)
         d.needs_human, d.note = True, ("javob faqat holat xabari — mas'ulga uzatildi. " + d.note)[:300]
     apply_owner(d, text if text is not None else raw, ocr)
-    return d
+    return live_prbc(d, raw, text, ocr, lang) if live else d
+
+
+def live_prbc(d, raw, text, ocr, lang):
+    """Savolda/skrinshotda mijozning STIR, JShShIR yoki 1C kodi bo'lsa — arizaning PRBC'dagi haqiqiy holati (prbc.outlets).
+
+    Bazadagi standart javob (shablon, ekran, o'xshash savol) bo'lsa — holat kartasi uning ustiga qo'shiladi; javob
+    topilmagan yoki faqat AI/qoida bo'lsa — javob shu karta (aniq ma'lumot taxmindan ustun). PRBC o'chiq, javob bermadi
+    yoki ariza topilmadi — avvalgi qaror o'zgarmaydi."""
+    import logging
+    try:
+        from prbc import outlets
+        card, ids = outlets.status_for("\n".join(x for x in (text, ocr) if x) or raw, lang)
+    except Exception:  # noqa: BLE001 — jonli holat qo'shimcha: xatosi javobni to'xtatmasin
+        logging.getLogger("support").exception("PRBC jonli holat")
+        return d
+    if not card:
+        return d
+    note = "PRBC jonli holat: " + ", ".join(ids)
+    if d is not None and not d.needs_human and d.text and d.stage in ("template", "image", "faq") and not d.parts:
+        d.text, d.live = f"{card}\n\n{d.text}", card
+        d.note = (note + ". " + d.note)[:300]
+        return d
+    resp = list(d.responsible) if d is not None else []
+    return Decision("prbc", None, 100, card, False, resp, live=card, note=note)
 
 
 LEADER_ROLES = ("SVR", "RSM", "ASM", "ROP")
@@ -1069,6 +1094,8 @@ def allowed(d, settings):
     policy = getattr(settings, "answer_policy", "all")
     if policy == "all":
         return True
+    if d.stage == "prbc":
+        return True  # PRBC'dan o'qilgan aniq holat — taxmin emas
     known = e is not None and d.stage in ("image", "template", "faq")
     if policy == "kb":
         return known
@@ -1089,7 +1116,14 @@ OPENERS = {
 
 def vary(d, lang, settings, rnd=None):
     """Standart javobni har safar biroz boshqacha: AI oldindan yozgan variantlardan biri (mazmuni bir xil) va qisqa
-    insoniy kirish so'zi. Bir zumda — javob paytida AI chaqirilmaydi."""
+    insoniy kirish so'zi. Bir zumda — javob paytida AI chaqirilmaydi. PRBC holat kartasi (d.live) doim saqlanadi."""
+    text = _vary(d, lang, settings, rnd)
+    if d.live and d.live not in text:
+        text = f"{d.live}\n\n{text}"
+    return text
+
+
+def _vary(d, lang, settings, rnd=None):
     import random
     rnd = rnd or random
     if not getattr(settings, "answer_variety", False) or d.stage not in ("image", "template", "faq") or d.entry is None:

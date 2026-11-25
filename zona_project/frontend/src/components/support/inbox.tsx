@@ -104,7 +104,7 @@ function InboxInner() {
     (m) => `${m.user_name} ${m.user_username} ${m.group_title} ${m.problem} ${m.text} ${m.ocr_text} ${m.entry_title}`) : undefined), [list.data, q]);
   const s = stats.data;
   const bs = s?.by_status ?? {};
-  const botClosed = ["template", "faq", "rule", "ai", "image"].reduce((n, k) => n + (s?.by_stage[k] ?? 0), 0);
+  const botClosed = ["template", "faq", "rule", "ai", "image", "prbc"].reduce((n, k) => n + (s?.by_stage[k] ?? 0), 0);
   const current = useMemo(() => shown?.find((m) => m.id === selected) ?? null, [shown, selected]);
   const queue = (s?.entries.new ?? 0) + (s?.entries.review ?? 0) + (s?.pending_edits ?? 0);
   const can = useCan();

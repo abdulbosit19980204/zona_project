@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from .models import Message, SupportTask
 
-BOT_STAGES = ("template", "faq", "rule", "ai", "image")
+BOT_STAGES = ("template", "faq", "rule", "ai", "image", "prbc")
 BUCKETS = [(10, "≤10s"), (60, "10s–1m"), (300, "1–5m"), (900, "5–15m"), (3600, "15–60m"), (14400, "1–4h"), (10 ** 9, ">4h")]
 TZ = ZoneInfo("Asia/Tashkent")
 

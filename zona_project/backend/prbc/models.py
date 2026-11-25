@@ -32,6 +32,7 @@ class Connection(models.Model):
     notify_created = models.BooleanField(default=False)  # vazifa ochilganda guruhdagi savolga qisqa xabar
     attach_files = models.BooleanField(default=True)  # savoldagi rasm/fayllar PRBC vazifasiga yuklanadi
     assignee_map = models.JSONField(default=dict, blank=True)  # Telegram username -> PRBC user id (qo'lda moslash)
+    outlet_lookup = models.BooleanField(default=True)  # bot savoldagi STIR/1C kodi bo'yicha mijoz arizasi holatini PRBC'dan o'qiydi
     sync_minutes = models.PositiveIntegerField(default=30)
     auto_left = models.BooleanField(default=True)  # bo'shaganni avtomatik belgilash (kontakt o'rni, inventar xodimi)
     comment_devices = models.BooleanField(default=True)  # bo'shash vazifasiga xodimdagi qurilmalar ro'yxati

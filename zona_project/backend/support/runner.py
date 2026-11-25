@@ -743,7 +743,7 @@ class Handler:
             if strong or (exact and not image[0].extract and len({e.pk for e, _c, _i in images}) == 1):
                 # tez yo'l: aniq matnli savol yoki tanilgan ekran — OCR'ni kutmasdan javob, OCR keyin (tahlil uchun)
                 d = engine.decide(q.text or "", q.lang, allow_unapproved=unapproved, text=q.text, images=images, fast=True,
-                                  leader=leader)
+                                  leader=leader, live=not self.history)
                 deferred_ocr = d is not None and mode == MODE_LIVE
                 mark("decide")
             if settings.ocr_enabled and not deferred_ocr:
@@ -760,7 +760,7 @@ class Handler:
             q.lang = engine.detect_lang(q.text or q.ocr_text)
             pg.phase("think")
             d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
-                              asker=_asker(q), fast=True, alert=q.alert_text, leader=leader)  # avval tez (shablon/baza)
+                              asker=_asker(q), fast=True, alert=q.alert_text, leader=leader, live=not self.history)  # avval tez (shablon/baza)
             if d is None and self.history:
                 # tarix: eski savolga AI taklifi kerak emas (o'rganish xodimning haqiqiy javobidan) — tez va
                 # AI kunlik limiti jonli guruhlardagi javoblar uchun qoladi
@@ -769,7 +769,7 @@ class Handler:
                 pg.phase("write")  # AI kutilayotganda matn almashib turadi
                 try:
                     d = engine.decide(raw, q.lang, allow_unapproved=unapproved, text=q.text, ocr=q.ocr_text, images=images,
-                                      asker=_asker(q), alert=q.alert_text, leader=leader)
+                                      asker=_asker(q), alert=q.alert_text, leader=leader, live=not self.history)
                 finally:
                     pg.stop()
             mark("decide")
@@ -1324,7 +1324,7 @@ class Handler:
         esc = engine.html.escape
         head = "🚨 Odamga uzatildi" if escalated else "🕶 Soya rejimi"
         parts = []
-        label = {"template": "Shablon", "faq": "Bazadan", "rule": "Qoida", "ai": "AI"}.get(d.stage, "Taklif")
+        label = {"template": "Shablon", "faq": "Bazadan", "rule": "Qoida", "ai": "AI", "prbc": "PRBC holati"}.get(d.stage, "Taklif")
         if not d.text:
             parts.append("❔ Javob topilmadi")
         if d.entry and d.entry.attachments:

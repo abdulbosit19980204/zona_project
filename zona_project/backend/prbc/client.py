@@ -68,6 +68,7 @@ class Client:
         self.conn = conn
         self.base = (conn.base_url or "https://prbc.uz").rstrip("/")
         self._open = opener or urllib.request.urlopen
+        self.timeout = TIMEOUT
 
     # ---------------------------------------------------------------- past daraja
     def _http(self, method, path, params=None, body=None, token=None):
@@ -79,7 +80,7 @@ class Client:
             "Accept": "application/json", "Content-Type": "application/json", "User-Agent": "zona-prbc/1",
             **({"Authorization": f"Bearer {token}"} if token else {})})
         try:
-            with self._open(req, timeout=TIMEOUT) as r:
+            with self._open(req, timeout=self.timeout) as r:
                 raw = r.read()
                 return r.status, (json.loads(raw) if raw else None)
         except urllib.error.HTTPError as e:

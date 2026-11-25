@@ -35,7 +35,7 @@ interface Conn {
   me: { full_name?: string; position?: string }; last_sync_at: string | null; last_error: string; sync_requested: boolean;
   worker_alive: boolean; task_watchers: number[]; close_on_done: boolean; named: Record<string, string>;
   notify_done: boolean; notify_created: boolean; attach_files: boolean; assignee_map: Record<string, number>;
-  watch_self: boolean; ready: boolean; not_ready: string;
+  watch_self: boolean; outlet_lookup: boolean; ready: boolean; not_ready: string;
 }
 interface Person {
   id: number; prbc_user: number | null; tab_number: string; full_name: string; position: string; department: string; company: string;
@@ -509,7 +509,7 @@ function ConnTab({ conn }: { conn: Conn }) {
     comment_devices: f.comment_devices, task_project: f.task_project, lifecycle_project: f.lifecycle_project,
     task_default_assignees: ids(f.assignees), task_watchers: ids(f.watchers), close_on_done: f.close_on_done,
     notify_done: f.notify_done, notify_created: f.notify_created, attach_files: f.attach_files, assignee_map: f.amap,
-    watch_self: f.watch_self,
+    watch_self: f.watch_self, outlet_lookup: f.outlet_lookup,
     ...(f.password ? { password: f.password } : {}),
   }), t("saved"));
   const runTest = useAction(async () => {
@@ -546,7 +546,8 @@ function ConnTab({ conn }: { conn: Conn }) {
         {[["enabled", "cEnabled", ""], ["auto_left", "cAutoLeft", "cAutoLeftHint"], ["comment_devices", "cDevices", "cDevicesHint"],
           ["watch_self", "cWatchSelf", "cWatchSelfHint"],
           ["close_on_done", "cCloseDone", "cCloseDoneHint"], ["attach_files", "cAttach", "cAttachHint"],
-          ["notify_created", "cNotifyCreated", "cNotifyCreatedHint"], ["notify_done", "cNotifyDone", "cNotifyDoneHint"]].map(([k, l, h]) => (
+          ["notify_created", "cNotifyCreated", "cNotifyCreatedHint"], ["notify_done", "cNotifyDone", "cNotifyDoneHint"],
+          ["outlet_lookup", "cOutletLookup", "cOutletLookupHint"]].map(([k, l, h]) => (
           <label key={k} className="flex items-start justify-between gap-4 text-sm">
             <span>{t(l)}{h && <span className="block text-xs text-muted-foreground">{t(h, { me: conn.me?.full_name || "—" })}</span>}</span>
             <Switch checked={Boolean(f[k as "enabled"])} onCheckedChange={(v) => setF({ ...f, [k]: v })} />
@@ -558,6 +559,7 @@ function ConnTab({ conn }: { conn: Conn }) {
         </div>
       </Card>
       <GroupProjects projects={plist} className="lg:col-span-2 lg:row-start-2" />
+      <OutletCheck className="lg:col-span-2" />
       {test && (
         <Card className="h-fit gap-2 p-5 text-sm">
           <div className="font-medium text-success">{t("testOk", { name: test.me?.full_name ?? "" })}</div>
@@ -570,6 +572,39 @@ function ConnTab({ conn }: { conn: Conn }) {
         </Card>
       )}
     </div>
+  );
+}
+
+/** Mijoz arizasining PRBC'dagi holati — bot guruhda beradigan javobning o'zi (STIR / JShShIR / 1C kodi bo'yicha). */
+function OutletCheck({ className }: { className?: string }) {
+  const t = useTranslations("prbc");
+  const [q, setQ] = useState("");
+  const [ru, setRu] = useState(false);
+  const check = useMutation({
+    mutationFn: (v: string) => get<{ ids: string[]; found: number; text: string; text_ru: string; bot_enabled: boolean }>("prbc/outlet-status/", { q: v }),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const r = check.data;
+  const text = r ? (ru ? r.text_ru : r.text) : "";
+  return (
+    <Card className={cn("gap-3 p-5", className)}>
+      <div>
+        <div className="font-medium">{t("ocTitle")}</div>
+        <div className="text-xs text-muted-foreground">{t("ocHint")}</div>
+      </div>
+      <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); if (q.trim()) check.mutate(q.trim()); }}>
+        <Input className="max-w-sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="309035202 / UZ-00069292" />
+        <Button type="submit" disabled={check.isPending || !q.trim()}><Search className="size-4" />{t("ocCheck")}</Button>
+        <Button type="button" variant="ghost" onClick={() => setRu(!ru)}>{ru ? "RU" : "UZ"}</Button>
+      </form>
+      {r && (
+        <>
+          {!r.bot_enabled && <p className="text-xs text-warning">{t("ocBotOff")}</p>}
+          {text ? <pre className="whitespace-pre-wrap rounded-lg bg-muted/50 p-3 font-sans text-sm">{text.replace(/\*\*/g, "")}</pre>
+            : <p className="text-sm text-muted-foreground">{t("ocNone", { ids: r.ids.join(", ") })}</p>}
+        </>
+      )}
+    </Card>
   );
 }
 

@@ -22,4 +22,5 @@ urlpatterns = [
     path("assignable/", views.assignable, name="assignable"),
     path("projects/", views.projects, name="projects"),
     path("group-projects/", views.group_projects, name="group-projects"),
+    path("outlet-status/", views.outlet_status, name="outlet-status"),
 ]
