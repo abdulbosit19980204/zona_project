@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Copy, Download, FileSpreadsheet, FileText, KeyRound, Pencil, Plus, Sheet, ShieldCheck, Trash2, Upload, UserPlus, Users,
+  Copy, Download, Eye, FileSpreadsheet, FileText, KeyRound, Pencil, Plus, Sheet, ShieldCheck, Trash2, Upload, UserPlus, Users,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -67,9 +67,11 @@ export function ExchangeView() {
           <Tile icon={<Users className="size-5" />} tone="violet" title={t("Xodimlar ro'yxati")}
             hint={t("Excel — filial, tashkilot, loyiha, telefon, Telegram va qurilmalar soni bilan")}
             onClick={() => download("employees/export/", { ...params, fmt: "xlsx" }).catch(fail)} />
-          <Tile icon={<FileSpreadsheet className="size-5" />} tone="emerald" title={t("Tasdiqnomalar (havolalar bilan)")}
-            hint={t("Har bir xodimning tasdiqlash havolasi, holati va imzolangan vaqti")}
-            onClick={() => download("acks/export/", params).catch(fail)} />
+          {boot.me.can.manage && (
+            <Tile icon={<FileSpreadsheet className="size-5" />} tone="emerald" title={t("Tasdiqlash havolalari (Excel)")}
+              hint={t("Qurilmasi bor har bir xodimning havolasi, telefoni, Telegrami va holati — ichki tizim orqali yuborish uchun. Yo'q havolalar avval yaratiladi.")}
+              onClick={() => inv.acksBulk(branch ? Number(branch) : null).then(() => download("acks/export/", params)).catch(fail)} />
+          )}
         </div>
       </div>
       {boot.me.can.write && (
@@ -208,7 +210,7 @@ function UserForm(props: { open: boolean; onClose: () => void; row: AccessRow | 
 
 const LEVEL_HINT: Record<Level, string> = {
   manager: "Hamma narsa: filiallar, loginlar, katalog, import/eksport",
-  director: "Barcha filiallar natijasi va analitikasini ko'radi, o'zgartira olmaydi",
+  director: "Natija va analitikani ko'radi, o'zgartira olmaydi. Filial tanlansa — faqat shu filial (filial direktori)",
   collector: "Faqat o'z filiali: qurilma va xodim qo'shadi",
 };
 
@@ -286,8 +288,8 @@ function UserFormBody({ onClose, row }: { open: boolean; onClose: () => void; ro
               ))}
             </div>
           </Field>
-          {f.level === "collector" && (
-            <Field label={t("Filiallar")} hint={t("Faqat shu filiallarni ko'radi va to'ldiradi")}>
+          {f.level !== "manager" && (
+            <Field label={t("Filiallar")} hint={f.level === "director" ? t("Faqat shu filiallarni ko'radi. Hech biri tanlanmasa — barcha filiallar") : t("Faqat shu filiallarni ko'radi va to'ldiradi")}>
               <div className="flex flex-wrap gap-2">
                 {boot.branches.map((b) => (
                   <button key={b.id} onClick={() => toggleBranch(b.id)}
@@ -315,17 +317,20 @@ export function UsersView() {
   const users = useQuery({ queryKey: ["inv", "users"], queryFn: inv.users });
   const [edit, setEdit] = useState<AccessRow | null>(null);
   const [creating, setCreating] = useState(false);
-  const [generated, setGenerated] = useState<{ username: string; password: string; branch: string }[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const generate = async () => {
-    if (!confirm(t("Logini yo'q har bir filial uchun bitta login (inv.sam, inv.and…) yaratilsinmi?"))) return;
-    setBusy(true);
+  const [generated, setGenerated] = useState<{ username: string; password: string; branch: string; level?: Level }[] | null>(null);
+  const [busy, setBusy] = useState<"" | "collector" | "director">("");
+  const generate = async (level: "collector" | "director") => {
+    const ask = level === "director"
+      ? t("Direktor logini yo'q har bir filial uchun bitta «faqat ko'rish» logini (dir.sam, dir.and…) yaratilsinmi? Direktor faqat o'z filialini ko'radi.")
+      : t("Logini yo'q har bir filial uchun bitta login (inv.sam, inv.and…) yaratilsinmi?");
+    if (!confirm(ask)) return;
+    setBusy(level);
     try {
-      const r = await inv.generateUsers();
+      const r = await inv.generateUsers(level);
       setGenerated(r.created);
       qc.invalidateQueries({ queryKey: ["inv", "users"] });
-      if (!r.created.length) toast.info(t("Barcha filiallarda login bor"));
-    } catch (e) { fail(e); } finally { setBusy(false); }
+      if (!r.created.length) toast.info(level === "director" ? t("Barcha filiallarda direktor logini bor") : t("Barcha filiallarda login bor"));
+    } catch (e) { fail(e); } finally { setBusy(""); }
   };
   const reset = async (row: AccessRow) => {
     if (!confirm(t("{n} uchun yangi parol yaratilsinmi? Eski parol ishlamay qoladi.", { n: row.username }))) return;
@@ -345,7 +350,8 @@ export function UsersView() {
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-lg font-bold">{t("Foydalanuvchilar va huquqlar")}</h2>
         <Btn variant="outline" size="sm" onClick={() => download("users/credentials/").catch(fail)}><Download className="size-4" />{t("Loginlar fayli (Excel)")}</Btn>
-        <Btn variant="outline" size="sm" loading={busy} onClick={generate}><KeyRound className="size-4" />{t("Filiallarga login yaratish")}</Btn>
+        <Btn variant="outline" size="sm" loading={busy === "collector"} disabled={!!busy} onClick={() => generate("collector")}><KeyRound className="size-4" />{t("Filiallarga login yaratish")}</Btn>
+        <Btn variant="outline" size="sm" loading={busy === "director"} disabled={!!busy} onClick={() => generate("director")}><Eye className="size-4" />{t("Direktorlarga login (faqat ko'rish)")}</Btn>
         <Btn size="sm" onClick={() => setCreating(true)}><UserPlus className="size-4" />{t("Foydalanuvchi")}</Btn>
       </div>
       <p className="text-xs text-muted-foreground">{t("Platforma administratorlari bu modulga avtomatik «Boshqaruvchi» sifatida kiradi. Filial loginlari platformaning boshqa sahifalarini ko'rmaydi.")}</p>
@@ -376,14 +382,14 @@ export function UsersView() {
       <UserForm open={!!edit || creating} row={edit} onClose={() => { setEdit(null); setCreating(false); }} />
       <Overlay open={!!generated?.length} onClose={() => setGenerated(null)} title={t("Yangi loginlar")}
         footer={<div className="flex gap-2">
-          <Btn variant="outline" className="flex-1" onClick={() => copy((generated ?? []).map((g) => `${g.branch}: ${g.username} / ${g.password}`).join("\n") + `\n${t("Sayt")}: ${window.location.origin}/inventory`)}><Copy className="size-4" />{t("Nusxa")}</Btn>
+          <Btn variant="outline" className="flex-1" onClick={() => copy((generated ?? []).map((g) => `${g.branch}${g.level ? ` (${levelLabel(g.level, lang)})` : ""}: ${g.username} / ${g.password}`).join("\n") + `\n${t("Sayt")}: ${window.location.origin}/inventory`)}><Copy className="size-4" />{t("Nusxa")}</Btn>
           <Btn className="flex-1" onClick={() => download("users/credentials/").catch(fail)}><Download className="size-4" />{t("Excel fayl")}</Btn>
         </div>}>
         <div className="space-y-2 p-4">
           <p className="text-sm text-muted-foreground">{t("Parollarni hozir saqlab oling. Keyin ham «Loginlar fayli» orqali yuklab olish mumkin (foydalanuvchi parolini o'zi o'zgartirmagan bo'lsa).")}</p>
           {(generated ?? []).map((g) => (
             <div key={g.username} className="flex items-center gap-3 rounded-xl border p-3">
-              <div className="min-w-0 flex-1"><div className="text-xs text-muted-foreground">{g.branch}</div><div className="font-mono font-semibold">{g.username}</div></div>
+              <div className="min-w-0 flex-1"><div className="text-xs text-muted-foreground">{g.branch}{g.level ? ` · ${levelLabel(g.level, lang)}` : ""}</div><div className="font-mono font-semibold">{g.username}</div></div>
               <div className="font-mono text-lg font-bold">{g.password}</div>
             </div>
           ))}

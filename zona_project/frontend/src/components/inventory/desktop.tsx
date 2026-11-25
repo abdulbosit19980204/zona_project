@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, FileSignature, FileSpreadsheet, History, KeyRound, Laptop, Plus, Settings2, ShieldCheck, Smartphone, Users } from "lucide-react";
+import { BarChart3, Building2, FileSpreadsheet, History, KeyRound, Laptop, Plus, Settings2, ShieldCheck, Smartphone, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-import { AcksView } from "./acks";
 import { BranchesView, CatalogView, ExchangeView, HistoryView, UsersView } from "./admin";
 import { AnalyticsView } from "./analytics";
 import { download, inv } from "./api";
@@ -21,13 +20,12 @@ import { useT } from "./i18n";
 import { ItemForm, ItemsView, type ItemFilters } from "./items";
 import { Empty, Spinner, useBoot } from "./ui";
 
-export type DesktopView = "overview" | "items" | "employees" | "acks" | "branches" | "history" | "exchange" | "users" | "catalog";
+export type DesktopView = "overview" | "items" | "employees" | "branches" | "history" | "exchange" | "users" | "catalog";
 
 const META: Record<DesktopView, { title: string; description: string; icon: typeof Laptop }> = {
   overview: { title: "Inventarizatsiya natijalari", description: "Filiallar holati, sust filiallar, kunlik faollik va kim qancha ish qilgani — rahbarlarga ko'rsatish uchun", icon: BarChart3 },
   items: { title: "Qurilmalar", description: "Filiallardan kiritilgan barcha qurilmalar: rasm, seriya raqami, holati va kimda turgani", icon: Laptop },
   employees: { title: "Xodimlar", description: "Filial, tashkilot (loyiha) va bo'lim bo'yicha xodimlar; import / eksport va shablon", icon: Users },
-  acks: { title: "Tasdiqnomalar", description: "Xodimlarga havola yuborish va ularning imzosi: kim tasdiqladi, kim kutilmoqda, kimda e'tiroz bor", icon: FileSignature },
   branches: { title: "Filiallar", description: "Har bir filialning inventarizatsiya holati, o'tkazuvchisi va loginlari", icon: Building2 },
   history: { title: "Tarix", description: "Kim, qachon, qaysi filialda nima qo'shdi, o'zgartirdi yoki o'chirdi", icon: History },
   exchange: { title: "Import / Eksport", description: "CSV, Excel va asl shablon formatida yuklab olish; to'ldirilgan fayldan yuklash", icon: FileSpreadsheet },
@@ -114,7 +112,6 @@ export function InvDesktop({ view }: { view: DesktopView }) {
         {view === "overview" && <AnalyticsView embedded onOpenBranch={openBranch} />}
         {view === "items" && <ItemsView key={params.toString()} table initial={initial} onAdd={() => setAdding(true)} />}
         {view === "employees" && <EmployeesView table onShowItems={(id) => router.push(`/inv/items?employee=${id}`)} />}
-        {view === "acks" && <AcksView table />}
         {view === "branches" && <BranchesView onOpen={(id) => openBranch(id)} />}
         {view === "history" && <HistoryView table onOpenItem={setOpenItemId} />}
         {view === "exchange" && <ExchangeView />}

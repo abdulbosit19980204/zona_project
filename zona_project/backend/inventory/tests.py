@@ -234,10 +234,43 @@ class InventoryTests(InvBase):
         self.assertTrue(u.check_password(next(x["password"] for x in r["created"] if x["username"] == "inv.bux")))
         self.assertEqual(self.col.post("/api/inventory/users/generate/", {}, format="json").status_code, 403)
         wb = load_workbook(io.BytesIO(self.api.get("/api/inventory/users/credentials/").content))
-        rows = list(wb["Loginlar"].iter_rows(min_row=5, values_only=True))
+        rows = list(wb["Barcha loginlar"].iter_rows(min_row=2, values_only=True))
         self.assertEqual(len(rows), 12)
         sam = next(r for r in rows if r[1] == "inv.sam")
         self.assertEqual(sam[2], self.pw)
+
+    def test_branch_director_logins_view_only_own_branch_and_one_file(self):
+        r = self.api.post("/api/inventory/users/generate/", {"level": "director"}, format="json").json()
+        self.assertEqual(len(r["created"]), 12)  # har filialga bittadan (xodim logini borligi to'sqinlik qilmaydi)
+        again = self.api.post("/api/inventory/users/generate/", {"level": "director"}, format="json").json()
+        self.assertEqual(again["created"], [])  # ikkinchi marta — takror yaratilmaydi
+        self.assertEqual(self.api.post("/api/inventory/users/generate/", {"level": "manager"}, format="json").status_code, 400)
+        sam_pw = next(x["password"] for x in r["created"] if x["username"] == "dir.sam")
+        acc = Access.objects.get(user__username="dir.sam")
+        self.assertEqual((acc.level, [b.id for b in acc.branches.all()]), (Access.DIRECTOR, [self.sam.id]))
+        d = client_for(acc.user)
+        self.add_item()  # Samarqand
+        self.add_item(client=self.api, branch=self.bux.id)  # Buxoro — direktor ko'rmasligi kerak
+        self.assertEqual(d.get("/api/inventory/items/").json()["count"], 1)
+        self.assertEqual([b["id"] for b in d.get("/api/inventory/branches/").json()], [self.sam.id])
+        self.assertEqual(d.get("/api/inventory/stats/").status_code, 200)
+        me = d.get("/api/inventory/bootstrap/").json()["me"]
+        self.assertEqual((me["branches"], me["can"]["write"], me["can"]["manage"]), ([self.sam.id], False, False))
+        bad = d.post("/api/inventory/items/", {"branch": self.sam.id, "device_type": self.laptop.id}, format="json")
+        self.assertEqual(bad.status_code, 403)  # faqat ko'rish
+        # filial biriktirilmagan rahbar — avvalgidek hamma filial
+        top, _ = create_access_user("rahbar", level=Access.DIRECTOR)
+        self.assertEqual(client_for(top.user).get("/api/inventory/items/").json()["count"], 2)
+        # bitta fayl: 1-varaq — filial bo'yicha xodim va direktor yonma-yon, 2-varaq — hammasi
+        wb = load_workbook(io.BytesIO(self.api.get("/api/inventory/users/credentials/").content))
+        self.assertEqual(wb.sheetnames, ["Filiallar", "Barcha loginlar"])
+        rows = list(wb["Filiallar"].iter_rows(min_row=5, values_only=True))
+        self.assertEqual(len(rows), Branch.objects.count())
+        sam = next(x for x in rows if x[0] == self.sam.name)
+        self.assertEqual(sam[1:5], ("inv.sam", self.pw, "dir.sam", sam_pw))
+        bux = next(x for x in rows if x[0] == self.bux.name)
+        self.assertEqual((bux[1], bux[3]), ("—", "dir.bux"))  # Buxoroga xodim logini hali yaratilmagan
+        self.assertEqual(len(list(wb["Barcha loginlar"].iter_rows(min_row=2, values_only=True))), 14)
 
     def test_stats(self):
         self.add_item()

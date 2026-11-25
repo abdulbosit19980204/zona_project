@@ -964,30 +964,37 @@ def user_reset_password(request, pk):
     return Response({"password": password, "username": acc.user.username})
 
 
-def branch_login(branch):
-    base = "inv." + "".join(c for c in branch.code.lower() if c.isalnum())
+def branch_login(branch, prefix="inv"):
+    base = f"{prefix}." + "".join(c for c in branch.code.lower() if c.isalnum())
     return base
 
 
 @inv_api(["POST"], [IsManager])
 def users_generate(request):
-    """Har bir filial uchun (login hali yo'q bo'lsa) bitta filial xodimi logini: inv.sam, inv.and..."""
+    """Har bir filial uchun (login hali yo'q bo'lsa) bitta login:
+    level=collector (standart) — filial xodimi: inv.sam, inv.and...;
+    level=director — filial direktori, faqat o'z filialini ko'radi (o'zgartira olmaydi): dir.sam, dir.and..."""
+    level = request.data.get("level") or COLLECTOR
+    if level not in (COLLECTOR, DIRECTOR):
+        return bad("Daraja noto'g'ri.")
+    prefix, last, note, what = ("dir", "filiali direktori", "filiali direktori (faqat ko'rish)", "Direktor") \
+        if level == DIRECTOR else ("inv", "filiali", "filiali uchun", "Filial")
     created = []
     ids = [_int(x) for x in request.data.get("branches") or []]
     qs = Branch.objects.all() if not ids else Branch.objects.filter(pk__in=ids)
     for b in qs:
-        if Access.objects.filter(level=COLLECTOR, branches=b).exists() and not request.data.get("extra"):
+        if Access.objects.filter(level=level, branches=b).exists() and not request.data.get("extra"):
             continue
-        base, n = branch_login(b), 1
+        base, n = branch_login(b, prefix), 1
         username = base
         while User.objects.filter(username__iexact=username).exists():
             n += 1
             username = f"{base}{n}"
-        acc, password = create_access_user(username, first_name=b.name, last_name="filiali", level=COLLECTOR,
-                                           branch_ids=[b.id], note=f"{b.name} filiali uchun")
-        created.append({"username": username, "password": password, "branch": b.name})
+        acc, password = create_access_user(username, first_name=b.name, last_name=last, level=level,
+                                           branch_ids=[b.id], note=f"{b.name} {note}")
+        created.append({"username": username, "password": password, "branch": b.name, "level": level})
     if created:
-        log(request, Log.CREATE, entity="user", summary=f"Filial loginlari yaratildi: {len(created)} ta")
+        log(request, Log.CREATE, entity="user", summary=f"{what} loginlari yaratildi: {len(created)} ta")
     return Response({"created": created})
 
 

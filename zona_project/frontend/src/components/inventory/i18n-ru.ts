@@ -212,6 +212,9 @@ export const RU: Record<string, string> = {
 
   // ---------------------------------------------------------------- tasdiqnomalar
   "Tasdiqlash": "Подтверждение",
+  "Hammasi tugagach «Yakunlash» ni bosing. Tasdiqlash havolasini xodimlarga IT bo'limi yuboradi.": "Когда всё готово — нажмите «Завершить». Ссылку для подтверждения сотрудникам отправляет ИТ-отдел.",
+  "Tasdiqlash havolalari (Excel)": "Ссылки для подтверждения (Excel)",
+  "Qurilmasi bor har bir xodimning havolasi, telefoni, Telegrami va holati — ichki tizim orqali yuborish uchun. Yo'q havolalar avval yaratiladi.": "Ссылка, телефон, Telegram и статус каждого сотрудника с устройствами — для отправки через внутреннюю систему. Недостающие ссылки создаются автоматически.",
   "Texnik xususiyatlar": "Технические характеристики",
   "{n} / {m} to'ldirilgan": "Заполнено {n} из {m}",
   "Maxsus maydonlar (texnik xususiyatlar)": "Особые поля (технические характеристики)",
@@ -416,6 +419,11 @@ export const RU: Record<string, string> = {
   "Faol (o'chirilsa — kira olmaydi)": "Активен (если выключить — не сможет войти)",
   "Logini yo'q har bir filial uchun bitta login (inv.sam, inv.and…) yaratilsinmi?": "Создать по логину для каждого филиала без логина (inv.sam, inv.and…)?",
   "Barcha filiallarda login bor": "Во всех филиалах есть логины",
+  "Direktor logini yo'q har bir filial uchun bitta «faqat ko'rish» logini (dir.sam, dir.and…) yaratilsinmi? Direktor faqat o'z filialini ko'radi.": "Создать для каждого филиала без логина директора по логину «только просмотр» (dir.sam, dir.and…)? Директор видит только свой филиал.",
+  "Barcha filiallarda direktor logini bor": "Во всех филиалах есть логин директора",
+  "Direktorlarga login (faqat ko'rish)": "Логины директорам (только просмотр)",
+  "Faqat shu filiallarni ko'radi. Hech biri tanlanmasa — barcha filiallar": "Видит только эти филиалы. Если ничего не выбрано — все филиалы",
+  "Natija va analitikani ko'radi, o'zgartira olmaydi. Filial tanlansa — faqat shu filial (filial direktori)": "Видит результаты и аналитику, изменять не может. Если выбран филиал — только этот филиал (директор филиала)",
   "{n} uchun yangi parol yaratilsinmi? Eski parol ishlamay qoladi.": "Создать новый пароль для {n}? Старый перестанет работать.",
   "{n} dan huquq olinsinmi?": "Забрать доступ у {n}?",
   "Foydalanuvchilar va huquqlar": "Пользователи и доступ",
@@ -435,7 +443,6 @@ export const RU: Record<string, string> = {
   "Excel fayl": "Файл Excel",
   "Parollarni hozir saqlab oling. Keyin ham «Loginlar fayli» orqali yuklab olish mumkin (foydalanuvchi parolini o'zi o'zgartirmagan bo'lsa).": "Сохраните пароли сейчас. Позже их можно скачать через «Файл логинов» (если пользователь сам не сменил пароль).",
   "Hamma narsa: filiallar, loginlar, katalog, import/eksport": "Всё: филиалы, логины, справочник, импорт/экспорт",
-  "Barcha filiallar natijasi va analitikasini ko'radi, o'zgartira olmaydi": "Видит результаты и аналитику всех филиалов, изменять не может",
   "Faqat o'z filiali: qurilma va xodim qo'shadi": "Только свой филиал: добавляет устройства и сотрудников",
 
   // ---------------------------------------------------------------- katalog

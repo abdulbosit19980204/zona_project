@@ -1,7 +1,8 @@
 """Modulga kirish huquqlari.
 
 - manager (IT, boshqaruvchi): hamma filial, katalog, foydalanuvchilar, import/eksport. Zona administratori — avtomatik.
-- director (rahbar): hamma filialni ko'radi (analitika, ro'yxatlar), o'zgartira olmaydi.
+- director (rahbar): ko'radi (analitika, ro'yxatlar), o'zgartira olmaydi. Filial biriktirilmagan — hamma filial;
+  biriktirilgan (filial direktori) — faqat o'z filiali.
 - collector (filial xodimi): faqat o'ziga biriktirilgan filial(lar)ni ko'radi va to'ldiradi.
 
 Zona'da "inventory" rolidagi foydalanuvchilar platformaning boshqa sahifalari va API'lariga kira olmaydi
@@ -41,11 +42,15 @@ def level_of(user):
 
 
 def branch_scope(user):
-    """None — hamma filial; aks holda ko'rinadigan filial id'lari to'plami."""
+    """None — hamma filial; aks holda ko'rinadigan filial id'lari to'plami.
+    Rahbar: filial biriktirilmagan — hamma filial; biriktirilgan (filial direktori) — faqat o'sha filial(lar)."""
     level = level_of(user)
-    if level in (MANAGER, DIRECTOR):
+    if level == MANAGER:
         return None
     acc = access_of(user)
+    if level == DIRECTOR:
+        ids = {b.id for b in acc.branches.all()} if acc else set()
+        return ids or None
     return {b.id for b in acc.branches.all()} if acc else set()
 
 

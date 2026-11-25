@@ -777,40 +777,78 @@ def employees_import(request):
 
 
 # ====================================================================== loginlar fayli
+def _cred(acc):
+    """(parol, holat): boshlang'ich parol faqat foydalanuvchi uni o'zgartirmagan bo'lsa ko'rsatiladi."""
+    from zona.crypto import decrypt
+    u = acc.user
+    pw = decrypt(acc.password_enc) if acc.password_enc else ""
+    state = "Bloklangan" if not u.is_active else ""
+    if pw and not u.check_password(pw):
+        state, pw = "Parolni o'zi o'zgartirgan", ""
+    elif not pw:
+        state = state or "Zona paroli (bu yerda yo'q)"
+    return pw, state
+
+
 @inv_api(["GET"], [IsManager])
 def credentials(request):
-    """Barcha modul foydalanuvchilari: login, boshlang'ich parol va filial — tarqatish uchun."""
+    """Barcha modul loginlari bitta faylda — tarqatish uchun:
+    1-varaq "Filiallar": har filialga bitta qator — filial xodimi va filial direktori login/paroli yonma-yon;
+    2-varaq "Barcha loginlar": har bir foydalanuvchi (boshqaruvchi, rahbar, xodim) alohida qator."""
     from zona import conf
-    from zona.crypto import decrypt
     site = (conf.get("FRONTEND_URL") or "").rstrip("/")
     if not site.startswith("http"):
         site = _abs(request, "/").rstrip("/")
     link = f"{site}/inventory"
+    rows = list(Access.objects.select_related("user").prefetch_related("branches").order_by("level", "user__username"))
+    creds = {acc.pk: _cred(acc) for acc in rows}
+    level_label = dict(Access.LEVELS)
+    note = (f"Sayt: {link}   ·   Telefonda shu manzilni oching, login va parolni yozing. Parolni boshqalarga bermang. "
+            "Filial xodimi — qurilma va xodimlarni kiritadi; direktor — faqat ko'radi (o'z filiali).")
+
     wb = Workbook()
     ws = wb.active
-    ws.title = "Loginlar"
-    ws.append(["IT inventarizatsiya — kirish ma'lumotlari"])
+    ws.title = "Filiallar"
+    ws.append(["IT inventarizatsiya — kirish ma'lumotlari (filiallar bo'yicha)"])
     ws["A1"].font = Font(bold=True, size=13)
-    ws.append([f"Sayt: {link}   ·   Telefonda shu manzilni oching, login va parolni yozing. "
-               "Parolni boshqalarga bermang."])
+    ws.append([note])
     ws.append([])
+    columns = [("Filial", 18), ("Xodim logini", 16), ("Xodim paroli", 14), ("Direktor logini", 16),
+               ("Direktor paroli", 14), ("Izoh", 30), ("Sayt", 36)]
+    ws.append([c[0] for c in columns])
+
+    def pick(accs):
+        """Filial uchun asosiy login: faol, paroli ma'lum, keyin — login nomi bo'yicha."""
+        accs = sorted(accs, key=lambda a: (not a.user.is_active, not creds[a.pk][0], a.user.username))
+        return accs[0] if accs else None
+
+    for b in Branch.objects.all():
+        mine = [a for a in rows if any(x.id == b.id for x in a.branches.all())]
+        staff = pick([a for a in mine if a.level == Access.COLLECTOR])
+        boss = pick([a for a in mine if a.level == Access.DIRECTOR])
+        notes = [f"{'Xodim' if a.level == Access.COLLECTOR else 'Direktor'}: {creds[a.pk][1]}"
+                 for a in (staff, boss) if a and creds[a.pk][1]]
+        extra = len(mine) - len([a for a in (staff, boss) if a])
+        if extra > 0:
+            notes.append(f"yana {extra} ta login — 2-varaqda")
+        ws.append([b.name, staff.user.username if staff else "—", creds[staff.pk][0] if staff else "",
+                   boss.user.username if boss else "—", creds[boss.pk][0] if boss else "", "; ".join(notes), link])
+    style_table(ws, [c[1] for c in columns], header_row=4)
+    for row in ws.iter_rows(min_row=5, min_col=2, max_col=5):
+        for c in row:
+            c.font = Font(name="Consolas", bold=True)
+
+    ws2 = wb.create_sheet("Barcha loginlar")
     columns = [("Filial", 16), ("Login", 16), ("Parol", 14), ("Ism", 22), ("Daraja", 20), ("Holat", 22),
                ("Oxirgi kirish", 17), ("Sayt", 36)]
-    ws.append([c[0] for c in columns])
-    rows = Access.objects.select_related("user").prefetch_related("branches").order_by("level", "user__username")
-    level_label = dict(Access.LEVELS)
+    ws2.append([c[0] for c in columns])
     for acc in rows:
         u = acc.user
-        pw = decrypt(acc.password_enc) if acc.password_enc else ""
-        state = "Bloklangan" if not u.is_active else ""
-        if pw and not u.check_password(pw):
-            state, pw = "Parolni o'zi o'zgartirgan", ""
-        elif not pw:
-            state = state or "Zona paroli (bu yerda yo'q)"
-        ws.append([", ".join(b.name for b in acc.branches.all()) or "Hammasi", u.username, pw, user_name(u),
-                   level_label.get(acc.level, acc.level), state, _local(u.last_login), link])
-    style_table(ws, [c[1] for c in columns], header_row=4)
-    for row in ws.iter_rows(min_row=5, min_col=3, max_col=3):
+        pw, state = creds[acc.pk]
+        ws2.append([", ".join(b.name for b in acc.branches.all()) or "Hammasi", u.username, pw, user_name(u),
+                    level_label.get(acc.level, acc.level), state, _local(u.last_login), link])
+    style_table(ws2, [c[1] for c in columns])
+    for row in ws2.iter_rows(min_row=2, min_col=2, max_col=3):
         for c in row:
             c.font = Font(name="Consolas", bold=True)
     log(request, Log.LOGIN, entity="user", summary="Loginlar fayli yuklab olindi")

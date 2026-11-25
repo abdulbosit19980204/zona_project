@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, BarChart3, Building2, CheckCircle2, ClipboardList, FileSignature, History, Laptop, LogOut, Moon, Package,
+  ArrowLeft, BarChart3, Building2, CheckCircle2, ClipboardList, History, Laptop, LogOut, Moon, Package,
   Plus, RefreshCw, Search, Settings2, ShieldCheck, Sun, Upload, Users,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -17,7 +17,6 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/stores/auth";
 import { useUI } from "@/stores/ui";
 
-import { AcksView } from "./acks";
 import { BranchesView, CatalogView, ExchangeView, HistoryView, UsersView } from "./admin";
 import { AnalyticsView } from "./analytics";
 import { inv, type Boot } from "./api";
@@ -26,7 +25,7 @@ import { levelLabel, useLang, useT } from "./i18n";
 import { ItemForm, ItemsView, type ItemFilters } from "./items";
 import { Btn, Card, Empty, FlagBadge, Kpi, Progress, SectionTitle, Spinner, ago, useBoot } from "./ui";
 
-type Tab = "home" | "items" | "employees" | "acks" | "analytics" | "history" | "branches" | "exchange" | "users" | "catalog";
+type Tab = "home" | "items" | "employees" | "analytics" | "history" | "branches" | "exchange" | "users" | "catalog";
 
 function tabsFor(boot: Boot): { key: Tab; label: string; icon: typeof Laptop }[] {
   const m = boot.me;
@@ -34,7 +33,6 @@ function tabsFor(boot: Boot): { key: Tab; label: string; icon: typeof Laptop }[]
     { key: "home", label: "Menyu", icon: ClipboardList },
     { key: "items", label: "Qurilmalar", icon: Laptop },
     { key: "employees", label: "Xodimlar", icon: Users },
-    { key: "acks", label: "Tasdiqlash", icon: FileSignature },
     { key: "analytics", label: m.level === "collector" ? "Natijalar" : "Analitika", icon: BarChart3 },
     { key: "history", label: "Tarix", icon: History },
     ...(m.level !== "collector" ? [{ key: "branches" as Tab, label: "Filiallar", icon: Building2 }] : []),
@@ -91,7 +89,7 @@ function CollectorHome({ boot, go, add }: { boot: Boot; go: (t: Tab) => void; ad
       <div className="grid grid-cols-2 gap-3">
         <MenuTile icon={<Laptop className="size-6" />} label={t("Kiritilganlar")} tone="bg-emerald-500/10 text-emerald-600" onClick={() => go("items")} />
         <MenuTile icon={<Users className="size-6" />} label={t("Xodimlar")} tone="bg-amber-500/10 text-amber-600" onClick={() => go("employees")} />
-        <MenuTile wide icon={<FileSignature className="size-6" />} label={t("Xodimlar tasdig'i (imzo)")} tone="bg-teal-500/10 text-teal-600" onClick={() => go("acks")} />
+
       </div>
       {s?.branches.map((b) => (
         <Card key={b.id}>
@@ -103,7 +101,7 @@ function CollectorHome({ boot, go, add }: { boot: Boot; go: (t: Tab) => void; ad
           <div className="mt-3 grid grid-cols-3 gap-2">
             <Kpi label={t("Jami (dona)")} value={b.qty} />
             <Kpi label={t("Bugun")} value={b.today} tone="green" />
-            <Kpi label={t("Imzolagan")} value={`${b.acks_signed}/${b.employees_with_devices}`} tone="amber" onClick={() => go("acks")} />
+            <Kpi label={t("Imzolagan")} value={`${b.acks_signed}/${b.employees_with_devices}`} tone="amber" />
           </div>
           {b.coverage !== null && (
             <div className="mt-3">
@@ -137,7 +135,7 @@ function CollectorHome({ boot, go, add }: { boot: Boot; go: (t: Tab) => void; ad
           <li><b>3.</b> {t("«Kamera» bilan qurilmani va yorlig'ini suratga oling.")}</li>
           <li><b>4.</b> {t("Kimda turganini tanlang (yo'q bo'lsa — ismini yozib qo'shing), telefoni va Telegramini yozing.")}</li>
           <li><b>5.</b> {t("«Saqlash va yana» — keyingi qurilmaga o'ting.")}</li>
-          <li><b>6.</b> {t("«Tasdiqlash» bo'limidan xodimlarga havola yuboring — ular imzo qo'yadi. Hammasi tugagach «Yakunlash» ni bosing.")}</li>
+          <li><b>6.</b> {t("Hammasi tugagach «Yakunlash» ni bosing. Tasdiqlash havolasini xodimlarga IT bo'limi yuboradi.")}</li>
         </ol>
       </Card>
     </div>
@@ -155,7 +153,6 @@ function ManagerHome({ boot, go, add, openBranch }: { boot: Boot; go: (t: Tab) =
         {boot.me.can.write && <MenuTile icon={<Plus className="size-6" />} label={t("Yangi qurilma")} tone="bg-indigo-500/10 text-indigo-600" onClick={add} />}
         <MenuTile icon={<Laptop className="size-6" />} label={t("Qurilmalar")} tone="bg-emerald-500/10 text-emerald-600" onClick={() => go("items")} />
         <MenuTile icon={<Users className="size-6" />} label={t("Xodimlar")} tone="bg-amber-500/10 text-amber-600" onClick={() => go("employees")} />
-        <MenuTile icon={<FileSignature className="size-6" />} label={t("Tasdiqlash")} tone="bg-teal-500/10 text-teal-600" onClick={() => go("acks")} />
         <MenuTile icon={<BarChart3 className="size-6" />} label={t("Analitika")} tone="bg-violet-500/10 text-violet-600" onClick={() => go("analytics")} />
         <MenuTile icon={<Building2 className="size-6" />} label={t("Filiallar")} tone="bg-sky-500/10 text-sky-600" onClick={() => go("branches")} />
         <MenuTile icon={<Upload className="size-6" />} label={t("Import / Eksport")} tone="bg-rose-500/10 text-rose-600" onClick={() => go("exchange")} />
@@ -170,7 +167,7 @@ function ManagerHome({ boot, go, add, openBranch }: { boot: Boot; go: (t: Tab) =
             <Kpi label={t("Jami qurilmalar (dona)")} value={tt.qty} onClick={() => go("items")} />
             <Kpi label={t("Bugun kiritildi")} value={tt.today} tone="green" />
             <Kpi label={t("Yakunlangan filiallar")} value={`${tt.done}/${tt.branches}`} tone="amber" onClick={() => go("analytics")} />
-            <Kpi label={t("Imzolagan xodimlar")} value={`${tt.acks_signed}/${tt.employees_with_devices}`} tone="violet" onClick={() => go("acks")} />
+            <Kpi label={t("Imzolagan xodimlar")} value={`${tt.acks_signed}/${tt.employees_with_devices}`} tone="violet" />
           </div>
         )}
       </Card>
@@ -269,7 +266,6 @@ function App() {
   const current = tabs.some((x) => x.key === tab) ? tab : "home";
   const counts: Partial<Record<Tab, string>> = stats.data ? {
     items: `${stats.data.totals.rows}`, employees: `${stats.data.totals.employees_total}`,
-    acks: `${stats.data.totals.acks_signed}/${stats.data.totals.employees_with_devices}`,
   } : {};
   const initials = me.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "U";
   const subtitle = me.level === "collector" ? b.branches.map((x) => x.name).join(", ") || levelLabel(me.level, lang) : levelLabel(me.level, lang);
@@ -311,7 +307,6 @@ function App() {
           : <ManagerHome boot={b} go={setTab} add={() => setAdding(true)} openBranch={openBranch} />)}
         {current === "items" && <ItemsView key={JSON.stringify(itemFilters ?? null)} initial={itemFilters} onAdd={() => setAdding(true)} />}
         {current === "employees" && <EmployeesView onShowItems={(id) => { setItemFilters({ employee: String(id) }); setTab("items"); }} />}
-        {current === "acks" && <AcksView />}
         {current === "analytics" && <AnalyticsView onOpenBranch={openBranch} />}
         {current === "history" && <HistoryView onOpenItem={setOpenItemId} />}
         {current === "branches" && <BranchesView onOpen={openBranch} />}

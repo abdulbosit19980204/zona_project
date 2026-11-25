@@ -186,7 +186,8 @@ export const inv = {
   updateUser: (id: number, body: Record<string, unknown>) => patch<AccessRow>(`users/${id}/`, body),
   deleteUser: (id: number) => del<null>(`users/${id}/`),
   resetPassword: (id: number) => post<{ password: string; username: string }>(`users/${id}/reset-password/`, {}),
-  generateUsers: () => post<{ created: { username: string; password: string; branch: string }[] }>("users/generate/", {}),
+  generateUsers: (level: "collector" | "director" = "collector") =>
+    post<{ created: { username: string; password: string; branch: string; level?: Level }[] }>("users/generate/", { level }),
 
   createAck: (employeeId: number) => post<Ack>(`employees/${employeeId}/ack/`),
   acks: (params: Params) => get<{ count: number; results: Ack[] }>("acks/", clean(params)),

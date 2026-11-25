@@ -1,14 +1,14 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, Download, FileDown, FileSignature, Laptop, Phone, Plus, Send, Upload, Users, Workflow } from "lucide-react";
+import { AtSign, Download, FileDown, FileSignature, Laptop, Phone, Plus, Upload, Users, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-import { AckBadge, AckDetail, useCreateAck } from "./acks";
+import { AckBadge, AckDetail } from "./acks";
 import { download, inv, type Employee } from "./api";
 import { useT } from "./i18n";
 import { ImportDialog } from "./import-dialog";
@@ -27,7 +27,6 @@ function EmployeeFormBody({ onClose, emp, onShowItems }: {
   const [f, setF] = useState<Partial<Employee>>(() => emp ?? { branch: boot.me.branches?.length === 1 ? boot.me.branches[0] : null, is_active: true });
   const [busy, setBusy] = useState(false);
   const [ackOpen, setAckOpen] = useState<number | null>(null);
-  const { create, dialog } = useCreateAck();
   const set = <K extends keyof Employee>(k: K, v: Employee[K]) => setF((x) => ({ ...x, [k]: v }));
   const save = async () => {
     if ((f.full_name ?? "").trim().length < 3) return toast.error(t("F.I.Sh. ni yozing"));
@@ -106,7 +105,6 @@ function EmployeeFormBody({ onClose, emp, onShowItems }: {
                 <AckBadge status={emp.ack?.status ?? "none"} opened={!!emp.ack?.opened_at} />
                 <div className="ml-auto flex gap-1.5">
                   {emp.ack && <Btn variant="ghost" size="sm" onClick={() => setAckOpen(emp.ack!.id)}>{t("Ko'rish")}</Btn>}
-                  {canWrite && <Btn variant="soft" size="sm" onClick={() => create(emp)}><Send className="size-4" />{t("Tasdiqlash havolasi")}</Btn>}
                 </div>
               </div>
             )}
@@ -118,7 +116,6 @@ function EmployeeFormBody({ onClose, emp, onShowItems }: {
         )}
       </div>
       <AckDetail id={ackOpen} onClose={() => setAckOpen(null)} />
-      {dialog}
     </Overlay>
   );
 }
@@ -139,7 +136,6 @@ export function EmployeesView({ onShowItems, table }: { onShowItems: (employeeId
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [limit, setLimit] = useState(100);
-  const { create, dialog } = useCreateAck();
   useEffect(() => {
     const tm = setTimeout(() => setQuery(q), 250);
     return () => clearTimeout(tm);
@@ -185,10 +181,6 @@ export function EmployeesView({ onShowItems, table }: { onShowItems: (employeeId
   const ackCell = (e: Employee) => e.devices > 0 ? (
     <div className="flex items-center justify-end gap-1.5">
       <AckBadge status={e.ack?.status ?? "none"} opened={!!e.ack?.opened_at} />
-      {boot.me.can.write && e.ack?.status !== "signed" && (
-        <button onClick={(ev) => { ev.stopPropagation(); create(e); }} title={t("Tasdiqlash havolasi")}
-          className="grid size-7 place-items-center rounded-lg text-indigo-600 hover:bg-indigo-500/10"><Send className="size-3.5" /></button>
-      )}
     </div>
   ) : null;
 
@@ -310,7 +302,6 @@ export function EmployeesView({ onShowItems, table }: { onShowItems: (employeeId
       <ImportDialog open={importing} onClose={() => setImporting(false)} title={t("Xodimlarni import qilish")}
         hint={t("«Shablon» tugmasi bilan faylni yuklab oling, to'ldiring va shu yerga yuklang. Bir xil ismli xodim (shu filialda) qayta yaratilmaydi — yangilanadi. Inventarizatsiya shablonining «Xodimlar» varag'i ham qabul qilinadi.")}
         run={(file, dry) => inv.importEmployees(file, dry)} />
-      {dialog}
     </div>
   );
 }
