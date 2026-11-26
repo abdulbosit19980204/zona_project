@@ -903,6 +903,18 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
         if fe and fscore >= settings.faq_threshold:
             return Decision("faq", fe, fscore, render_answer(fe, {}, lang), False, own(fe), {}, fe.status != Entry.APPROVED,
                             note="qizil xato yozuvi: " + alert[:120])
+    if strong_text and (ocr or distinct) and match_template(text, templates)[0] is None:
+        info = info_screen(ocr, distinct, templates)
+        if info:
+            # ma'lumot ekrani ("Торговая точка ... отправлена на модерацию!"): ekranning o'zi javob — imzodagi
+            # "Qo'shib bering, Navoiy SRZ" kabi iltimos boshqa savol emas (nuqtani Pro-target tasdiqlaydi, o'zi qo'shiladi).
+            # Matn boshqa savolga aniq mos kelsa (bilim bazasidagi savol-javob) — matn ustun.
+            ie, iconf, how = info
+            fe, fscore = match_faq(text, faqs)
+            if not fe or fe.pk == ie.pk or fscore < settings.faq_threshold:
+                fields = extract_fields(ie, raw)
+                return Decision(how, ie, iconf, render_answer(ie, fields, lang), False, own(ie), fields,
+                                ie.status != Entry.APPROVED, note="ma'lumot ekrani: imzodagi iltimos ekran holatini so'raydi")
     if strong_text and ocr and match_template(text, templates)[0] is None:
         # matn — umumiy alomat ("zakaz o'tmayapti"), ekrandagi xabar esa aniq sababni aytadi ("Заказ не оформлен:
         # на складе недостаточно остатка") — aniq holat shabloni ustun (matn shu mavzuda bo'lsa: umumiy so'z bor)
@@ -1042,6 +1054,19 @@ def ocr_contradicts(e, ocr):
         return False
     topic = set(toks(" ".join([e.title, *(e.triggers or []), *(e.questions or []), e.answer or "", e.answer_ru or ""])))
     return not (set(toks(" ".join(words))) & topic)
+
+
+def info_screen(ocr, distinct, templates):
+    """Rasm — ma'lumot ekrani (yozuvda auto_close > 0: "nuqta moderatsiyaga yuborildi"): (yozuv, ishonch, bosqich) yoki None.
+    Avval ekrandagi matn (OCR) bo'yicha, bo'lmasa rasm o'xshashligi bo'yicha."""
+    if ocr:
+        te, _f, tconf = match_template(ocr, templates)  # ekrandagi eng mos holat ma'lumot xabari bo'lsagina
+        if te and te.auto_close:
+            return te, tconf, "template"
+    for e, c, _i in distinct or []:
+        if e.auto_close:
+            return e, c, "image"
+    return None
 
 
 def substantive(text):

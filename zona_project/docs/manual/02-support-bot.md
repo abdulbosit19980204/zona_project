@@ -34,6 +34,11 @@ Bot eng arzon va eng aniq bosqichdan boshlaydi:
 Qo'shimcha:
 - **Mijoz holati (PRBC):** savol yoki skrinshotda STIR (9 raqam), JShShIR (14 raqam) yoki 1C kodi (UZ-…) bo'lsa,
   bot PRBC'dan mijoz arizasining jonli holatini o'qib javob boshiga qo'shadi. Batafsil — [PRBC](/docs/prbc#mijoz-holati-jonli-tekshiruv).
+- **Ma'lumot ekrani:** skrinshot "Торговая точка … отправлена на модерацию!" bo'lsa, ostidagi "Qo'shib bering, Navoiy
+  SRZ" / "Tasdiqlab bering" kabi iltimos alohida savol hisoblanmaydi. Bot xodimga uzatmaydi, **moderatsiya standart
+  javobini** beradi: nuqtani Pro-target tasdiqlaydi va u o'zi qo'shiladi. Matn bilim bazasidagi boshqa savolga aniq mos
+  kelsa (masalan, "perechisleniya qo'shib bering"), shu javob beriladi. Qaysi yozuv ma'lumot ekrani hisoblanadi —
+  bilim bazasida **Avto yopish (daqiqa)** 0 dan katta bo'lganlari (moderatsiya yozuvida 30).
 - **Imlo:** "qóshb bómayapti", kirill/lotin, ruscha — bir xil tushuniladi (normalizatsiya va savol ko'rinishlari).
 - **Albom va ketma-ket xabarlar** bitta savol sifatida olinadi (sozlamada soniya).
 - **Takror savol** — shu odam shu savolni qisqa vaqtda qayta yuborsa, bot ikkinchi marta javob bermaydi.
