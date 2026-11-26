@@ -63,7 +63,29 @@ def read_text(image_bytes, timeout=25):
         except OSError:
             pass
     lines = [" ".join(line.split()) for line in text.splitlines()]
-    return "\n".join(line for line in lines if len(line) > 1)[:4000]
+    return fix_homoglyphs("\n".join(line for line in lines if len(line) > 1)[:4000])
+
+
+# Tesseract (rus+uzb+eng) ruscha qisqa so'zni ba'zan lotin harflari bilan o'qiydi: "отправлена Ha модерацию" ("на" emas) —
+# shunda "на модерацию" sharti topilmaydi. Faqat qisqa (≤3 harf), butunlay o'xshash harflardan iborat va kirillcha so'z
+# yonidagi so'z kirillchaga aylantiriladi; "BABAYEVA AMINA" kabi lotincha nomlar tegmaydi.
+_LAT2CYR = str.maketrans("AaBCcEeHKkMOoPpTXxy", "АаВСсЕеНКкМОоРрТХху")
+_HOMO = re.compile(r"^[AaBCcEeHKkMOoPpTXxy]{1,3}$")
+_CYR = re.compile(r"[а-яё]", re.IGNORECASE)
+
+
+def fix_homoglyphs(text):
+    parts = re.split(r"(\s+)", text or "")
+    words = [i for i, p in enumerate(parts) if p and not p.isspace()]
+    bare = {i: parts[i].strip(".,!?:;«»\"'()") for i in words}
+    for n, i in enumerate(words):
+        w = bare[i]
+        if not _HOMO.match(w):
+            continue
+        near = [bare[words[j]] for j in (n - 1, n + 1) if 0 <= j < len(words)]
+        if any(_CYR.search(x) and not re.search(r"[a-z]", x, re.IGNORECASE) for x in near):
+            parts[i] = parts[i].replace(w, w.translate(_LAT2CYR))
+    return "".join(parts)
 
 
 # ------------------------------------------------------------------ qizil yozuv (xato izohi)

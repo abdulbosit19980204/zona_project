@@ -39,6 +39,8 @@ Qo'shimcha:
   javobini** beradi: nuqtani Pro-target tasdiqlaydi va u o'zi qo'shiladi. Matn bilim bazasidagi boshqa savolga aniq mos
   kelsa (masalan, "perechisleniya qo'shib bering"), shu javob beriladi. Qaysi yozuv ma'lumot ekrani hisoblanadi —
   bilim bazasida **Avto yopish (daqiqa)** 0 dan katta bo'lganlari (moderatsiya yozuvida 30).
+- **OCR imlosi:** Tesseract ruscha qisqa so'zni ba'zan lotin harflari bilan o'qiydi ("Ha" — "На" o'rniga). Kirillcha so'z
+  yonidagi bunday so'z avtomatik kirillchaga aylantiriladi.
 - **Imlo:** "qóshb bómayapti", kirill/lotin, ruscha — bir xil tushuniladi (normalizatsiya va savol ko'rinishlari).
 - **Albom va ketma-ket xabarlar** bitta savol sifatida olinadi (sozlamada soniya).
 - **Takror savol** — shu odam shu savolni qisqa vaqtda qayta yuborsa, bot ikkinchi marta javob bermaydi.

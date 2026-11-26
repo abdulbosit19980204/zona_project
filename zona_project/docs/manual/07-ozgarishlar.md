@@ -8,6 +8,8 @@
   модерацию!" ekrani bilan "Кушиб беринг Навоий СР3" kabi iltimos kelsa, bot moderatsiya standart javobini beradi:
   nuqtani Pro-target tasdiqlaydi, u o'zi qo'shiladi. Oldin imzodagi so'zlar alohida savol deb olinib, xodim
   belgilanardi.
+- **Rasm matni (OCR) aniqroq:** kirillcha qatordagi qisqa so'z lotin harflari bilan o'qilsa ("отправлена Ha
+  модерацию"), u kirillchaga aylantiriladi. Shunda shartlar topiladi; lotincha nomlar o'zgarmaydi.
 - **Vazifalar sahifasi qayta ishlandi:** jadvaldagi har raqam bosiladi — ro'yxat aynan shu xodim / guruh va holat
   (muddati o'tgan, bajarilgan, kech bajarilgan, ochiq, bekor) bo'yicha; statistika tanlangan tur va davrga mos (1C
   bo'shash vazifalari "Biz yaratgan"ga aralashmaydi); vazifalar chiroyli kartalarda — qancha qoldi / kechikdi / qancha

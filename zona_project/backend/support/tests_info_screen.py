@@ -4,7 +4,7 @@ from unittest import mock
 
 from django.test import TestCase
 
-from . import engine
+from . import engine, ocr
 from .models import Entry, Message, Settings
 from .tests import group_msg
 from .tests_v6 import FlowBase
@@ -66,3 +66,25 @@ class InfoScreenFlowTests(FlowBase):
         sent = [x["text"] for x in self.tg.sent if x["chat"] == -100]
         self.assertEqual(len(sent), 1)
         self.assertNotIn("Ответит", sent[0])
+
+
+class HomoglyphTests(TestCase):
+    """OCR ruscha "на" ni lotincha "Ha" deb o'qiydi (prod, 2026-11-25) — shart topilishi uchun kirillchaga aylantiriladi."""
+    OCR_HA = ("11:32 © - $ ани GD\nНовая торговая точка\nТорговая точка BABAYEVA AMINA\nMUHAMMATOVNA отправлена Ha\n"
+              "модерацию!\nПосле прохождения модерации вы сможете\nделать заказы для точки.\nв © «4")
+
+    def test_fix_short_latin_lookalike_next_to_cyrillic(self):
+        out = ocr.fix_homoglyphs(self.OCR_HA)
+        self.assertIn("отправлена На\nмодерацию!", out)
+        self.assertIn("BABAYEVA AMINA\nMUHAMMATOVNA", out)  # lotincha nom tegmaydi
+        self.assertEqual(ocr.fix_homoglyphs("Token has been expired OK"), "Token has been expired OK")
+
+    def test_stored_ocr_with_latin_ha_gets_moderation_answer(self):
+        Settings.load()
+        Settings.objects.update(ai_enabled=False, ai_primary=False, faq_threshold=60)
+        moder = Entry.objects.create(kind=Entry.TEMPLATE, title="ProTarget: yangi nuqta moderatsiyaga yuborilgan",
+                                     status=Entry.APPROVED, auto_close=30, answer="Moderatsiyada.",
+                                     triggers=["на модерацию", "отправлена на модерацию", "moderatsiyaga", "moderatsiya"])
+        text = "Салом алейкум шуни кушип беринг"
+        d = engine.decide(text + "\n" + self.OCR_HA, "ru", text=text, ocr=self.OCR_HA)
+        self.assertEqual((d.entry, d.needs_human), (moder, False))

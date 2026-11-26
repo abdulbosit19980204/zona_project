@@ -18,6 +18,7 @@ from zona.search import search as run_search
 from zona.search.normalize import fold, tokens
 
 from .models import Entry, Settings, TgUser
+from .ocr import fix_homoglyphs
 
 GREETING = {"salom", "assalomu", "alaykum", "rahmat", "raxmat", "spasibo", "privet", "zdravstvuyte", "ok", "okey",
             "xop", "xo'p", "xorosho", "yaxshi", "tushunarli", "ponyatno", "ha", "yoq", "da", "net", "+", "👍"}
@@ -861,6 +862,7 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
     settings = Settings.load()
     if text is None:
         text = raw
+    ocr = fix_homoglyphs(ocr)  # saqlangan eski OCR'da ham: "отправлена Ha модерацию"
     strong_text = substantive(text)
     imgs = list(images or ([(image[0], image[1], 0)] if image and image[0] is not None else []))
     statuses = [Entry.APPROVED, Entry.REVIEW, Entry.NEW] if allow_unapproved else [Entry.APPROVED]
