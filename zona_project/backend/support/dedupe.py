@@ -190,6 +190,7 @@ def absorb(target_id, ids, by):
     """Claude mos deb topgan o'rganilgan yozuvlar standart javobga qo'shiladi: savol ko'rinishlari (mijoz nomi va
     kodlarsiz) standartning savollariga, rasm namunalari unga o'tadi, o'zlari ARXIVga (o'chirilmaydi). Javob matni
     o'zgarmaydi. Qaytaradi: nechta yozuv qo'shildi."""
+    from .engine import learnable_question
     from .runner import snapshot
     target = Entry.objects.select_for_update().get(pk=target_id)
     others = list(Entry.objects.filter(pk__in=ids, status__in=[Entry.NEW, Entry.REVIEW]).exclude(pk=target.pk))
@@ -201,6 +202,8 @@ def absorb(target_id, ids, by):
     for o in others:
         for raw in [o.title, *(o.questions or [])[:3]]:
             g = generic_phrase(raw)
+            if not learnable_question(g):
+                continue  # salomlashuv standartning savol ko'rinishiga tushmasin
             if g and g.lower() not in have and len(qs) < 60:
                 have.add(g.lower())
                 qs.append(g)

@@ -1114,6 +1114,42 @@ def substantive(text):
     return len(meaningful(text)) >= 2
 
 
+# ------------------------------------------------------------------ o'rganish filtri (bilim bazasiga nomzod)
+# Salomlashuv, "тоже самое", "почему так", "vot shu" — savol mazmuni emas: bular nomzod bo'lsa, bot salomga ham
+# birovning holatiga yozilgan javobni qaytaradi. Faqat o'rganishda ishlatiladi (javob berish oqimiga ta'sir qilmaydi).
+LEARN_STOP_TEXT = ("assalom assalomu asalom aleykum alaykum alekum aleykim yaxshimisiz yaxshimisizlar qalaysiz "
+                   "salomatmisiz xayrli hayrli kun tong kech dobriy dobroe dobrogo den dnya utro vecher zdravstvuyte "
+                   "privet tut toje samoe samoye tak pochemu vot shu mana bu ham xuddi bunda bunaqa takoy takaya "
+                   "здравствуйте добрый доброе день утро вечер привет тут тоже самое так почему вот это такой такая "
+                   "ассалом ассалому алейкум алайкум яхшимисиз шу мана бу хам худди")
+_LEARN_STOP: set = set()
+_DONE_RX = re.compile(r"готов|сделал|исправил|подключ|отвязал|привязал|переподключ|добавил|включил|"
+                      r"tuzatil|to.g.rila|qo.sh(dim|ildi)|ulan(di|dim)|uladim|yoq(dim|ildi)|bo.ldi|tayyor|✅", re.I)
+_BOT_HANDOFF_RX = re.compile(r"bu so.rovni .{1,80} bajaradi|этот запрос выполняет|so.rovingiz .{1,80} yetkazildi|"
+                             r"запрос передан|so.rov unga yuborildi", re.I)
+
+
+def learnable_question(text):
+    """Savoldan o'rganish mumkinmi: mijoz nomi, kod, hudud ("Нукус к3"), @murojaat va havola olib tashlangach
+    salomlashuv/«тоже самое»/«почему так» dan tashqari kamida 2 ta mazmunli so'z qolishi kerak."""
+    from .dedupe import generic_phrase
+    g = generic_phrase(text or "")
+    if not g:
+        return False
+    if not _LEARN_STOP:
+        _LEARN_STOP.update(toks(LEARN_STOP_TEXT))
+    return len([w for w in meaningful(g) if w not in _LEARN_STOP]) >= 2
+
+
+def learnable_answer(text):
+    """Javob bilim bo'ladimi: aniq holatga yozilgan qisqa «bajarildi» ("Готово", "отвязала, переподключите",
+    "Tuzatildi ✅") va botning o'z uzatish matni ("Bu so'rovni … bajaradi") — nomzod emas."""
+    t = (text or "").strip()
+    if not t or _BOT_HANDOFF_RX.search(t):
+        return False
+    return not (len(t) <= 60 and _DONE_RX.search(t))
+
+
 _STAFF = {"key": None, "rows": []}
 
 

@@ -50,7 +50,8 @@ class ClarifyTests(ControlsBase):
         self.assertFalse(Entry.objects.filter(source="staff").exists())  # aniqlashtirish javob emas
         self.assertEqual(len(self.tg.sent), n_sent)                      # nomzod ham yuborilmadi
         h.handle(group_msg(3, 10, "STIR 301234567", reply_to=2))
-        h.handle(group_msg(4, 77, "Klientni marshrutingizga qo'shdim, sinxronlang", "op_saida", reply_to=3))
+        h.handle(group_msg(4, 77, "Klient marshrutingizda yo'q: supervayzer PRBC'da marshrutingizga qo'shadi, keyin "
+                                  "sinxronlang", "op_saida", reply_to=3))
         q = Message.objects.get(message_id=1)
         self.assertEqual((q.status, q.answered_by), (Message.ANSWERED, "Saida"))
         kinds = list(q.staff_replies.order_by("message_id").values_list("kind", flat=True))
@@ -199,7 +200,8 @@ class AnalyticsTests(ControlsBase):
         h.handle(group_msg(1, 10, "Klientim agentda ko'rinmayapti, nima qilay?"))
         h.handle(group_msg(2, 77, "STIR raqamini yuboring", "op_saida", reply_to=1))
         h.handle(group_msg(3, 10, "STIR 301234567", reply_to=2))
-        h.handle(group_msg(4, 77, "Klientni marshrutingizga qo'shdim", "op_saida", reply_to=3))
+        h.handle(group_msg(4, 77, "Klient marshrutingizda yo'q: supervayzer PRBC'da marshrutingizga qo'shadi", "op_saida",
+                           reply_to=3))
         self.login("viewer")
         r = self.call("get", "support/analytics/?days=30")
         self.assertEqual(r.status_code, 200, r.content)

@@ -108,6 +108,17 @@ Bot guruhda **admin** bo'lishi kerak (yoki BotFather'da privacy o'chiq) — aks 
 - Javob ostidagi **"⚠️ Xato javob"** tugmasi (xodimlar uchun) — noto'g'ri javob guruhda yashiriladi va tasdiqlash
   navbatiga tushadi.
 - Rasm turlari xodim javobi va ishonchli moslikdan avtomatik o'rgatiladi.
+- **Nimadan o'rganmaydi (filtr).** Savol: salomlashuv va mazmunsiz xabarlar — «Assalomu alaykum», «Нукус к3» (faqat
+  hudud/kod), «Тут тоже самое», «@Guzel_Taipova», «Почему так ?» (mijoz nomi, kod, @murojaat olib tashlangach
+  kamida 2 ta mazmunli so'z qolishi kerak). Javob: aniq holatga yozilgan qisqa «bajarildi» («Готово», «отвязала,
+  переподключите», «Tuzatildi ✅» — 60 belgigacha) va botning «Bu so'rovni … bajaradi» uzatish matni. Bular review
+  navbatiga tushmaydi va standartga qo'shilganda ham savol ko'rinishi bo'lmaydi. Rasmli savolda ekranning o'zi
+  o'rganiladi (izoh «bu nima» bo'lsa ham). Paneldan qo'lda qo'shilgan yozuvlarga filtr qo'llanmaydi.
+- **Review navbatini yopish — faqat server buyrug'i bilan** (interfeysdan ommaviy amal qilmang: har amal ro'yxatni
+  rasmlar bilan qayta yuklaydi va prod sekinlashadi). `manage.py support_close_review --dry-run` — sonlar va
+  namunalar; keyin baza zaxirasi va `--dry-run` siz: mavzusi standartga mos «Standartga mos» yozuvlar standartga
+  qo'shiladi, qolgan new/review rad etiladi (o'chirilmaydi, id'lar `/tmp/review_rejected_ids.txt` da). Haftalik:
+  `--older-than 7`; faqat qo'shish: `--only-same`. Qaytarish: `Entry.objects.filter(pk__in=ids).update(status="new")`.
 
 ## Barcha sozlamalar (Botlar va sozlamalar)
 

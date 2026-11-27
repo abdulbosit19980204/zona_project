@@ -1611,6 +1611,11 @@ def learn(q, answer, staff_name, priority=False, ask_first="", source="staff", r
         question = " — ".join(x for x in (text, main) if x) or q.ocr_text.strip()[:300]
     if not question or len(answer.strip()) < 3 or (source != "panel" and engine.not_an_answer(answer)):
         return None, False
+    if source != "panel" and (not engine.learnable_answer(answer)
+                              or (not q.photo_file_id and not engine.learnable_question(question))):
+        # salomlashuv / "Нукус к3" / "тоже самое" (rasmsiz) yoki "Готово ✅", "Bu so'rovni X bajaradi" — bilim emas.
+        # Rasmli savolda savol — ekranning o'zi (izoh "bu nima" bo'lsa ham ekran o'rganiladi)
+        return None, False
     pool = list(Entry.objects.filter(kind=Entry.FAQ, status__in=[Entry.NEW, Entry.REVIEW, Entry.APPROVED]))
     match, score = engine.match_faq(question, pool)
     if match and score >= 88:

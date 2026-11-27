@@ -4,6 +4,10 @@
 
 ## 2026-11-27
 
+- **Bot salomlashuv va mazmunsiz savollardan o'rganmaydi.** «Assalomu alaykum», «Нукус к3», «Тут тоже самое»,
+  «@Guzel_Taipova», «Почему так ?» kabi savollar va «Готово», «отвязала, переподключите», «Tuzatildi ✅», «Bu
+  so'rovni … bajaradi» kabi javoblar endi bilim bazasiga nomzod bo'lmaydi (standartga qo'shishda ham). Navbatni
+  yopish uchun server buyrug'i: `support_close_review` (--dry-run, --older-than, --only-same).
 - **Toifa mas'uli — asosiy va zaxira.** Support sozlamalarida har toifaga ikkinchi ustun: zaxira mas'ul (aralash ishlar,
   masalan aksiya). Javobda asosiy bilan birga belgilanadi, PRBC vazifasida kuzatuvchi.
 - **Dasturchilar jamoasi:** xodim kartochkasida yangi maydon «Jamoa a'zosi» — Kamoliddin va Timur «Dasturchilar

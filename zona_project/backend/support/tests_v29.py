@@ -51,11 +51,9 @@ class HandoffTests(PeopleBase):
         q.refresh_from_db()
         self.assertEqual(q.status, Message.ESCALATED)  # javob emas — savol hali javob kutadi
         self.assertEqual(q.handler_id, said_u.pk)  # eslatmalar endi Saidabrorni belgilaydi
-        e = Entry.objects.get(source="staff")
-        self.assertEqual(e.responsible, self.said)
-        self.assertIn("**Saidabror** bajaradi", e.answer)
-        self.assertIn("Saidabror", e.answer_ru)
-        self.assertNotIn("Саиду", e.answer)
+        # «Bu so'rovni X bajaradi» — bilim bazasiga nomzod emas (o'rganish filtri, 2026-11-27): review navbati
+        # shunday yozuvlar bilan to'lardi; yo'naltirishni toifa mas'uli va bilim bazasidagi mas'ul qiladi
+        self.assertFalse(Entry.objects.filter(source="staff").exists())
         self.assertEqual(guzel.pk, TgUser.objects.get(tg_id=3).pk)
 
 
