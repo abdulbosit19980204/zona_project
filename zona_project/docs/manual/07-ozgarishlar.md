@@ -2,6 +2,11 @@
 
 > Tizimga kiritilgan o'zgarishlar — eng yangisi tepada. Har deploy bilan shu yerga yoziladi.
 
+## 2026-11-28
+
+- **Bot aniqligini o'lchash:** yangi server buyrug'i `support_eval` — xodim javob bergan savollarga bot nima javob
+  berardi va u to'g'rimi (AI-hakam), qamrov va mas'ul to'g'riligi; natija faylga. Hech kimga hech narsa yuborilmaydi.
+
 ## 2026-11-27
 
 - **PRBC vazifalari sifati:** takror qoidasi «bitta holat — bitta vazifa» (agent + klient/zakaz/STIR + muammo): turli

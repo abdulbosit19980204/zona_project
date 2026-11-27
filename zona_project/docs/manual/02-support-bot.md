@@ -117,6 +117,13 @@ Bot guruhda **admin** bo'lishi kerak (yoki BotFather'da privacy o'chiq) — aks 
   переподключите», «Tuzatildi ✅» — 60 belgigacha) va botning «Bu so'rovni … bajaradi» uzatish matni. Bular review
   navbatiga tushmaydi va standartga qo'shilganda ham savol ko'rinishi bo'lmaydi. Rasmli savolda ekranning o'zi
   o'rganiladi (izoh «bu nima» bo'lsa ham). Paneldan qo'lda qo'shilgan yozuvlarga filtr qo'llanmaydi.
+- **Aniqlikni o'lchash (`support_eval`).** Server buyrug'i: oxirgi 30 kunda xodim javob bergan savollarga bot HOZIR
+  nima javob berardi (hech kimga yuborilmaydi) — va AI-hakam uni xodimning haqiqiy javobi bilan solishtiradi:
+  to'g'ri / qisman / xato; bot uzatgan savollarda mas'ul to'g'riligi. Baholanayotgan savolning o'z javobi AI'ga
+  namuna sifatida berilmaydi. Natija: `/var/lib/foydali/eval/eval_YYYYMMDD_HHMM.md` (xulosa, xato va qisman javoblar
+  jadvali) va `.json`. Maqsad: yuborilgan javoblarning ≥90% i to'g'ri, qamrov ≥80%. Buyruq:
+  `manage.py support_eval --days 30 --limit 200` (tez sinov: `--limit 20 --no-judge`). Har ishga tushirish AI
+  so'rovlari sarflaydi (har yuborilgan javobga bitta hakam so'rovi).
 - **Review navbatini yopish — faqat server buyrug'i bilan** (interfeysdan ommaviy amal qilmang: har amal ro'yxatni
   rasmlar bilan qayta yuklaydi va prod sekinlashadi). `manage.py support_close_review --dry-run` — sonlar va
   namunalar; keyin baza zaxirasi va `--dry-run` siz: mavzusi standartga mos «Standartga mos» yozuvlar standartga

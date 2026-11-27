@@ -1169,6 +1169,7 @@ def learnable_answer(text):
 
 
 _STAFF = {"key": None, "rows": []}
+EVAL_HOLDOUT: set = set()  # support_eval: shu savollarning xodim javoblari namuna sifatida berilmaydi
 
 
 def staff_examples(query, k=3, min_score=35):
@@ -1186,12 +1187,14 @@ def staff_examples(query, k=3, min_score=35):
             qt = (m.question.text or m.question.ocr_text[:300]).strip()
             if len(m.text.strip()) < 12 or not qt or not_an_answer(m.text):
                 continue  # "Проверьте", "Готово", "Eldar можете помочь" — namuna emas (AI agentga shuni takrorlamasin)
-            rows.append((list(dict.fromkeys(toks(qt)))[:MAX_TOKENS], qt[:300], m.text.strip()[:500]))
+            rows.append((list(dict.fromkeys(toks(qt)))[:MAX_TOKENS], qt[:300], m.text.strip()[:500], m.question_id))
         _STAFF["rows"], _STAFF["key"] = rows, key
     qt = list(dict.fromkeys(toks(query or "")))[:MAX_TOKENS]
     if not qt:
         return []
-    scored = sorted(((_dice(qt, t), q, a) for t, q, a in _STAFF["rows"]), key=lambda x: -x[0])
+    # baholash (support_eval): baholanayotgan savolning o'z javobi AI'ga namuna bo'lmasin
+    scored = sorted(((_dice(qt, t), q, a) for t, q, a, qid in _STAFF["rows"] if qid not in EVAL_HOLDOUT),
+                    key=lambda x: -x[0])
     out, seen = [], set()
     for s, q, a in scored:
         if s < min_score or len(out) >= k:
