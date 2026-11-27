@@ -229,7 +229,7 @@ export interface SupportStats {
 }
 export interface StaffRow {
   type: "member" | "contact"; id: number; name: string; role: string; level: string; telegram: string; phone: string;
-  team: string; linked?: boolean;
+  team: string; linked?: boolean; team_id?: number;
 }
 export interface TestResult {
   stage: string; confidence: number; text: string; needs_human: boolean; entry: number | null; entry_title: string;

@@ -214,10 +214,18 @@ Har amal alohida yoqiladi, standart — **o'chiq**. Avval «Sinab ko'rish» bila
 | Guruh bo'limi | Savol yozilgan guruhga mos bo'limga qo'shadi; asosiy bo'lim bo'lmasa — asosiy | ha (asosiy belgisi — qo'lda) |
 | 1C pozivnoy biriktirish | Xodim yozgan pozivnoyni aniq topib biriktiradi | ha |
 | 1C ma'lumotnomalarini yangilash | Pozivnoy topilmasa — ma'lumotnomani bir marta yangilab qayta qidiradi (soatiga 1 marta) | yo'q (zararsiz) |
+| Telegram ma'lumotini yangilash | Savol bergan xodimning Telegram username'i PRBC'dagidan farq qilsa — PRBC'dagi nusxani Telegram'dan qayta o'qitadi (faqat ism, username, rasm) | yo'q (zararsiz) |
+| «Vazifalar» moduli — A'zo | «PRBC'da vazifalar ko'rinmayapti / ochilmayapti» — ruxsati yo'q xodimga A'zo | ha |
+| «Chat» moduli — A'zo | «PRBC chat ochilmayapti» — ruxsati yo'q xodimga A'zo | ha |
 | Arizani 1C ga qayta yuborish | «1C rad etdi» + sababi baza band / javob bermadi — arizani qayta yuboradi. Ma'lumot xatosida yubormaydi | yo'q |
+| Mavjud nuqtani marshrutga qayta qo'shish | «Marshrutimga qo'shish» 1C da xato bergan + sababi baza band / javob bermadi — so'rovni qayta navbatga qo'yadi | yo'q |
 
-**Keyingi bosqich** (API bor, bot hali bajarmaydi — panelda ro'yxati): kutilayotgan hisobni tasdiqlash, Telegram
-ma'lumotini yangilash, Vazifalar / Chat / Uchrashuvlar ruxsati, mavjud nuqtani marshrutga qayta qo'shish.
+**Modul savollari** («PRBC'da vazifalar ko'rinmayapti», «Задачи не открываются» + skrinshotda PRBC, «PRBC chat
+ochilmayapti») — bot faqat savolda yoki skrinshotda **PRBC** bo'lsa aralashadi (ProTarget ilovasida ham «Задачи»
+bor). Ruxsati bor bo'lsa — aralashmaydi; menejer / admin darajasiga tegilmaydi.
+
+**Hisobni tasdiqlash** (pending) — bot tegmaydi: xodim PRBC'ga bog'langan guruhga qo'shilganda PRBC uni o'zi
+tasdiqlaydi.
 
 ### Tarix va ortga qaytarish
 
@@ -237,7 +245,7 @@ qaytariladi. `food_copy` (test baza) ishlatilmaydi.
 |---|---|
 | Bot savolda tekshiradi | yoqiq — o'chirilsa bot bu savollarga odatdagidek javob beradi |
 | Avtomatik amallar | har amal uchun kalit (standart o'chiq), nima qilishi va qaysi API |
-| Sinab ko'rish | xodimni tanlang, savol va guruhni yozing — bot javobi aynan qanday bo'lardi va qaysi amallarni bajarardi; PRBC o'zgarmaydi |
+| Sinab ko'rish | xodimni tanlang, savol turi (yangi tochka / PRBC vazifalar / PRBC chat), savol va guruhni yozing — bot javobi aynan qanday bo'lardi va qaysi amallarni bajarardi; PRBC o'zgarmaydi |
 | Nazorat | har 60 daqiqada barcha faol savdo vakillari — **faqat hisobot** (o'zgarish faqat xodim savol berganda) |
 | Kamchiligi bor xodimlar | nima yetishmaydi, shart bo'yicha filtr |
 | Guruh → PRBC bo'limi | qaysi guruh qaysi bo'limga mos (guruh bo'limi amali shu bo'yicha) |

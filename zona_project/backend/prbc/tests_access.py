@@ -92,7 +92,16 @@ class FakePrbc:
         m = re.match(r"/auth/admin/users/(\d+)/$", path)
         if m:
             return copy.deepcopy(self.details.get(int(m.group(1)), {"assignments": []}))
+        m = re.match(r"/admin/organization-modules/3/(task|chat)-access/$", path)
+        if m:
+            return self.mod_roster(m.group(1))
         raise AssertionError(path)
+
+    mod_seats = None
+
+    def mod_roster(self, mod):
+        self.mod_seats = self.mod_seats or {"task": {11: "member", 13: "admin"}, "chat": {}}
+        return {"members": [{"id": i, "level": lv} for i, lv in self.mod_seats[mod].items() if lv != "none"], "candidates": []}
 
     def roster(self):
         return {"members": [{"id": i, "full_name": "", "position": "", "level": lv} for i, lv in self.seats.items() if lv != "none"],
@@ -104,6 +113,12 @@ class FakePrbc:
             for i in body["user_ids"]:
                 self.seats[i] = body["level"]
             return self.roster()
+        m = re.match(r"/admin/organization-modules/3/(task|chat)-access/$", path)
+        if m:
+            self.mod_roster(m.group(1))
+            for i in body["user_ids"]:
+                self.mod_seats[m.group(1)][i] = body["level"]
+            return self.mod_roster(m.group(1))
         m = re.match(r"/auth/admin/users/(\d+)/(roles|nodes)/$", path)
         if m:
             uid, kind = int(m.group(1)), m.group(2)
@@ -470,3 +485,71 @@ class BotFlowTests(FlowBase):
         self.assertIn("kerak:", last)
         self.assertIn("qabul qilindi", last)
         self.assertEqual(self.p.writes, [])
+
+
+class ModuleSeatTests(Base):
+    actions = {}
+
+    def mod(self, text, tg=10, ocr=""):
+        from . import modules
+        return modules.handle(text, ocr, tg_id=tg, client=self.p, conn=Connection.get(), question=4)
+
+    def test_default_only_reports(self):
+        r = self.mod("PRBC da vazifalar ko'rinmayapti")
+        self.assertEqual(r.kind, "escalate")
+        self.assertIn("kerak: A'zo", r.text)
+        self.assertIn("avtomatik o'zgartirish o'chiq", r.text)
+        self.assertEqual(self.p.writes, [])
+
+    def test_grants_member_and_reverts(self):
+        Connection.objects.filter(pk=1).update(auto_actions={"task_seat": True, "chat_seat": True})
+        r = self.mod("PRBC chat ochilmayapti")
+        self.assertEqual(r.kind, "answer")
+        self.assertIn("yo'q → A'zo (berildi)", r.text)
+        self.assertEqual(self.p.mod_seats["chat"][10], "member")
+        e = AccessLog.objects.get(action="chat_seat")
+        self.assertEqual((e.before, e.after["level"], e.reversible), ({"level": "none"}, "member", True))
+        ok, _text = access.revert(e, actor="admin", client=self.p)
+        self.assertTrue(ok)
+        self.assertEqual(self.p.mod_seats["chat"][10], "none")
+
+    def test_has_access_or_not_prbc_is_left_alone(self):
+        Connection.objects.filter(pk=1).update(auto_actions={"task_seat": True})
+        self.assertIsNone(self.mod("PRBC da vazifalar ko'rinmayapti", tg=11))  # ruxsati bor
+        self.assertIsNone(self.mod("Не получается перейти в задание"))  # ProTarget ilovasi — PRBC emas
+        self.assertFalse([w for w in self.p.writes if "task-access" in w[1]])
+
+    def test_simulate_module(self):
+        Connection.objects.filter(pk=1).update(auto_actions={"task_seat": True})
+        r = access.simulate(10, "", client=self.p, conn=Connection.get(), mod="task")
+        self.assertEqual(r["planned"][0]["key"], "task_seat")
+        self.assertTrue(r["planned"][0]["enabled"])
+        self.assertEqual(self.p.writes, [])
+
+
+class TelegramSyncTests(Base):
+    def test_sync_when_username_changed(self):
+        r = access.handle("yangi tochka qo'sha olmayapman 2.1 Навои SR3", "", tg_id=10, username="shohruh_new",
+                          client=self.p, conn=Connection.get())
+        self.assertIn(("POST", "/auth/admin/users/10/telegram-sync/", None), self.p.writes)
+        self.assertIn("@shohruh → @shohruh_new (yangilandi)", r.text)
+
+    def test_no_sync_when_same_or_off(self):
+        access.handle("yangi tochka qo'sha olmayapman", "", tg_id=10, username="Shohruh", client=self.p, conn=Connection.get())
+        self.assertFalse([w for w in self.p.writes if "telegram-sync" in w[1]])
+        Connection.objects.filter(pk=1).update(auto_actions={})
+        access.handle("yangi tochka qo'sha olmayapman", "", tg_id=10, username="other", client=self.p, conn=Connection.get())
+        self.assertFalse([w for w in self.p.writes if "telegram-sync" in w[1]])
+
+
+class RouteResendTests(Base):
+    def test_requeue_transient_attachment_only(self):
+        busy = {"id": 8, "status": "failed", "counterparty_name": "Do'kon", "actions": ["requeue", "cancel"],
+                "last_error": "HTTP 503 from DMS"}
+        data = {"id": 9, "status": "failed", "counterparty_name": "Boshqa", "actions": ["requeue"],
+                "last_error": "REF_NOT_FOUND Элемент не найден"}
+        lines = outlets.resend_failed({"301111111": {"attachments": [busy]}, "301111112": {"attachments": [data]}},
+                                      client=self.p, conn=Connection.get())
+        self.assertEqual(self.p.writes, [("POST", "/integrations/route-attachments/8/requeue/", None)])
+        self.assertIn("qayta yuborildi", lines[0])
+        self.assertTrue(AccessLog.objects.filter(action="route_resend", ok=True).exists())

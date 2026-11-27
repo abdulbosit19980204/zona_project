@@ -1487,6 +1487,15 @@
     "reverted": "Qaytarilgan: {at} ({by})",
     "a_revert": "Ortga qaytarildi",
     "a_refresh_refs": "Ma'lumotnoma yangilandi",
-    "a_outlet_resend": "Ariza qayta yuborildi"
+    "a_outlet_resend": "Ariza qayta yuborildi",
+    "grp_module": "PRBC modullari (vazifalar, chat)",
+    "approveNote": "Kutilayotgan hisobni tasdiqlashga bot tegmaydi: xodim PRBC'ga bog'langan guruhga qo'shilganda PRBC uni o'zi tasdiqlaydi.",
+    "sim_outlet": "Yangi tochka",
+    "sim_task": "PRBC vazifalar",
+    "sim_chat": "PRBC chat",
+    "a_telegram_sync": "Telegram yangilandi",
+    "a_task_seat": "Vazifalar ruxsati",
+    "a_chat_seat": "Chat ruxsati",
+    "a_route_resend": "Marshrut qayta yuborildi"
   }
 }

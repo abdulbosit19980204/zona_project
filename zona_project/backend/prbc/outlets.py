@@ -384,6 +384,34 @@ def resend_failed(found, client=None, conn=None, lang="uz", dry=False):
                 _log("bot", None, "outlet_resend", False, f"«{name}» (ariza #{row['id']}): {e}")
                 lines.append(_t(lang, f"❌ «{name}»: qayta yuborib bo'lmadi — mutaxassis ko'radi.",
                                 f"❌ «{name}»: не удалось отправить повторно — посмотрит специалист."))
+        # «Marshrutimga qo'shish» so'rovi: 1C xato bergan + vaqtinchalik sabab -> qayta navbat (amal «route_resend»)
+        for row in (res.get("attachments") or [])[:1]:
+            acts = row.get("actions")
+            if row.get("status") != "failed" or (isinstance(acts, list) and "requeue" not in acts):
+                continue
+            if not TRANSIENT.search(row.get("last_error") or ""):
+                continue
+            name = row.get("counterparty_name") or ident
+            if dry or not allowed(conn, "route_resend"):
+                lines.append(_t(lang, f"🧪 «{name}»: marshrutga qo'shish so'rovini qayta yuborish kerak (avtomatik o'chiq — "
+                                      "mutaxassis bajaradi)",
+                                f"🧪 «{name}»: нужно повторить добавление в маршрут (автоматически выключено — сделает специалист)"))
+                continue
+            try:
+                if client is None:
+                    client = Client(conn)
+                    client.timeout = TIMEOUT
+                client.post(f"/integrations/route-attachments/{row['id']}/requeue/")
+                with _lock:
+                    _cache.pop(ident, None)
+                _log("bot", None, "route_resend", True, f"«{name}» (marshrut so'rovi #{row['id']}) qayta navbatga qo'yildi",
+                     before={"status": "failed", "error": (row.get("last_error") or "")[:300]}, after={"requeued": row["id"]})
+                lines.append(_t(lang, f"🔧 «{name}»: marshrutga qo'shish 1C ga qayta yuborildi — natija bir necha daqiqada.",
+                                f"🔧 «{name}»: добавление в маршрут повторно отправлено в 1С — результат через несколько минут."))
+            except PrbcError as e:
+                _log("bot", None, "route_resend", False, f"«{name}» (marshrut so'rovi #{row['id']}): {e}")
+                lines.append(_t(lang, f"❌ «{name}»: marshrut so'rovini qayta yuborib bo'lmadi — mutaxassis ko'radi.",
+                                f"❌ «{name}»: не удалось повторить добавление в маршрут — посмотрит специалист."))
     return lines
 
 

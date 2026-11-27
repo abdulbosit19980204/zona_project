@@ -595,6 +595,12 @@ function CategoryOwners({ t, value, onSave }: {
             </optgroup>
             {[...teams.entries()].map(([team, list]) => (
               <optgroup key={team} label={team}>
+                {list[0]?.team_id != null && (
+                  /* butun jamoa — barcha a'zolari belgilanadi (masalan Pro-target: Guzel va Eldar) */
+                  <option key={`t${list[0].team_id}`} value={list[0].team_id}>
+                    {t("ownerTeam")}: {team} ({list.map((m) => m.name.split(" ")[0]).join(", ")})
+                  </option>
+                )}
                 {list.map((m) => <option key={`c${m.id}`} value={`c:${m.id}`}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>)}
               </optgroup>
             ))}

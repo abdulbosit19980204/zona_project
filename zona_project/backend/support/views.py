@@ -831,7 +831,8 @@ def staff(request):
     out = [{"type": "member", "id": m.id, "name": m.name, "role": m.role, "level": m.level, "telegram": m.telegram,
             "phone": m.phone, "team": ""} for m in Member.objects.filter(is_team=False).exclude(telegram="")]
     out += [{"type": "contact", "id": c.id, "name": c.name, "role": c.role or c.member.role, "level": c.member.level,
-             "telegram": c.telegram, "phone": c.phone, "team": c.member.name, "linked": bool(c.telegram_id)}
+             "telegram": c.telegram, "phone": c.phone, "team": c.member.name, "team_id": c.member_id,
+             "linked": bool(c.telegram_id)}
             for c in TeamContact.objects.select_related("member")]
     return Response(out)
 

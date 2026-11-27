@@ -422,7 +422,10 @@ def revert(entry, actor="", client=None):
     uid, a, b = entry.prbc_user, entry.after or {}, entry.before or {}
     u = st.user(uid) or {"id": uid, "full_name": entry.name}
     try:
-        if entry.action == "seat":
+        if entry.action in ("task_seat", "chat_seat"):
+            from . import modules
+            text = modules.revert(entry, client, st.org)
+        elif entry.action == "seat":
             lvl = b.get("level") or "none"
             client.post(f"/admin/organization-modules/{st.org}/integration-access/",
                         {"level": lvl, "user_ids": [uid], "include_subtree": False})
@@ -461,7 +464,7 @@ def revert(entry, actor="", client=None):
     return True, text
 
 
-REVERSIBLE_ACTIONS = ("seat", "role", "node", "mapping")
+REVERSIBLE_ACTIONS = ("seat", "role", "node", "mapping", "task_seat", "chat_seat")
 
 
 # ------------------------------------------------------------------ tekshirish
@@ -514,6 +517,7 @@ LABEL = {
     "node": ("Bo'lim", "Отдел"),
     "seat": ("«Integratsiyalar» ruxsati", "Доступ к модулю «Интеграции»"),
     "mapping": ("1C pozivnoy (savdo vakili)", "Позывной 1С (торговый представитель)"),
+    "telegram_sync": ("Telegram ma'lumoti PRBC'da", "Данные Telegram в PRBC"),
 }
 LEVEL = {"employee": ("Xodim", "Сотрудник"), "viewer": ("Ko'ruvchi", "Наблюдатель"), "admin": ("Administrator", "Администратор"),
          "reviewer": ("Tekshiruvchi", "Проверяющий"), "none": ("yo'q", "нет")}
@@ -598,7 +602,9 @@ def handle(text, ocr="", tg_id=None, username="", group_title="", lang="uz", ask
         if not dry:
             _log("bot", None, "escalate", False, f"PRBC foydalanuvchisi topilmadi (tg {tg_id}, @{username})", question=question)
         return Result("escalate", msg, note="PRBC ruxsatlari: foydalanuvchi topilmadi")
-    return Run(st, u, conn, text, lang, asked, screen or force, group_title, question, dry).go()
+    run = Run(st, u, conn, text, lang, asked, screen or force, group_title, question, dry)
+    run.tg_id, run.username = tg_id, (username or "").lstrip("@")
+    return run.go()
 
 
 class Run:
@@ -608,6 +614,7 @@ class Run:
         self.st, self.u, self.conn, self.text, self.lang = st, u, conn, text, lang
         self.asked, self.screen, self.group_title, self.question, self.dry = asked, screen, group_title, question, dry
         self.lines, self.fixed, self.planned, self.problems, self.ask = [], [], [], [], ""
+        self.tg_id, self.username = None, ""
 
     def t(self, uz, ru):
         return _t(self.lang, uz, ru)
@@ -649,6 +656,16 @@ class Run:
             self.log("escalate", False, f"faol emas ({u.get('status')})")
             return Result("escalate", body, note="PRBC ruxsatlari: hisob faol emas")
         self.lines.append(_line(lang, "active", "ok"))
+        # Telegram username o'zgargan (PRBC'dagi nusxa eski) — faqat o'zi yozgan bo'lsa; tugmaga ta'sir qilmaydi
+        old = (u.get("telegram_username") or "").lstrip("@")
+        if (self.tg_id and u.get("telegram_id") == self.tg_id and self.username
+                and old.lower() != self.username.lower()):
+            def sync():
+                st.client.post(f"/auth/admin/users/{u['id']}/telegram-sync/")
+                return {"telegram_username": old}, {"telegram_username": self.username}
+            self.act("telegram_sync", sync, f"@{old or '—'} → @{self.username} (yangilandi)",
+                     f"@{old or '—'} → @{self.username} (обновлено)", f"@{old or '—'} → @{self.username}",
+                     f"@{old or '—'} → @{self.username}", blocking=False)
         # rol
         if u.get("role_codes"):
             self.lines.append(_line(lang, "role", "ok", ", ".join(u["role_codes"])))
@@ -794,9 +811,18 @@ def diagnose_text(query, lang="uz", client=None):
     return {"items": out}
 
 
-def simulate(user_id, text="", group_title="", lang="uz", client=None, conn=None):
+def simulate(user_id, text="", group_title="", lang="uz", client=None, conn=None, mod="outlet"):
     """Panel sinovi: bot shu xodimga shu savolda nima yozardi va nima qilardi — PRBC'da hech narsa o'zgarmaydi."""
     conn = conn or connection()
+    if mod in ("task", "chat"):
+        from . import modules
+        r = modules.handle(text or "PRBC", "", lang=lang, client=client, conn=conn, dry=True, target=int(user_id), mod=mod)
+        if r is None:
+            return {"kind": "none", "text": "Ruxsati bor — bot aralashmaydi (odatdagi javob)", "planned": []}
+        from .actions import CATALOG
+        titles = {a["key"]: a["title"] for a in CATALOG}
+        return {"kind": r.kind, "text": r.text, "note": r.note, "planned": [
+            {"key": k, "title": titles.get(k, k), "need": n, "enabled": allowed(conn, k)} for k, n in r.planned]}
     r = handle(text or "yangi tochka qo'sha olmayapman", "", group_title=group_title, lang=lang, client=client,
                conn=conn, dry=True, target=int(user_id), force=True, asked=bool(text and "\n" in text))
     if r is None:

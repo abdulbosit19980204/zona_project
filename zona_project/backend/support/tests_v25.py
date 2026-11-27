@@ -102,3 +102,25 @@ class MentionIsNotContentTests(ControlsBase):
         ocr = "Уведомления\nЗаказ не оформлен\nЗаказ №377340 не оформлен: на складе «0.1 L'Oreal» недостаточно остатка"
         d = engine.decide(ocr, "uz", text="@StargroupSaid нима бовоти", ocr=ocr)
         self.assertEqual((d.stage, d.entry, d.fields.get("zakaz")), ("template", stock, "377340"))
+
+
+class TeamOwnerTests(ControlsBase):
+    """Toifa mas'uli — butun jamoa (masalan Pro-target: Guzel va Eldar): sozlamada tanlanadi, barcha a'zolari belgilanadi."""
+
+    def setUp(self):
+        super().setUp()
+        from zona.models import TeamContact
+        dep = Department.objects.create(name="Test bo'lim")
+        self.team = Member.objects.create(name="Pro-target", role="Pro-target", department=dep, is_team=True)
+        TeamContact.objects.create(member=self.team, name="Guzel Taipova", telegram="Guzel_Taipova")
+        TeamContact.objects.create(member=self.team, name="Eldar", telegram="eldar_pt")
+
+    def test_staff_lists_team_id_and_team_owner_tags_all(self):
+        self.login("admin")
+        rows = self.call("get", "support/staff/").json()
+        self.assertEqual({r["team_id"] for r in rows if r["type"] == "contact" and r["team"] == "Pro-target"}, {self.team.pk})
+        r = self.call("patch", "support/settings/", {"category_owners": {"visit": self.team.pk}})
+        self.assertEqual(r.status_code, 200, r.content)
+        owner = engine.category_owner("visit")
+        self.assertEqual(owner.pk, self.team.pk)
+        self.assertEqual(sorted(engine._person(owner)["telegram"]), ["Guzel_Taipova", "eldar_pt"])

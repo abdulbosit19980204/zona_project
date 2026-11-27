@@ -805,6 +805,10 @@ class Handler:
             r = access.handle(q.text or "", q.ocr_text or "", tg_id=u.tg_id if u else None, username=u.username if u else "",
                               group_title=q.group.title if q.group_id else "", lang=q.lang, asked=q.stage == "ask",
                               question=q.pk)
+            if r is None:  # «PRBC'da vazifalar ko'rinmayapti», «PRBC chat ochilmayapti» — modul ruxsati (prbc.modules)
+                from prbc import modules
+                r = modules.handle(q.text or "", q.ocr_text or "", tg_id=u.tg_id if u else None,
+                                   username=u.username if u else "", lang=q.lang, question=q.pk)
         except Exception:  # noqa: BLE001 — tekshiruv qo'shimcha: xatosi javobni to'xtatmasin
             log.exception("PRBC ruxsat tekshiruvi")
             return None

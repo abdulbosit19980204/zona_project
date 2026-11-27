@@ -31,29 +31,39 @@ CATALOG = [
      "does": "Xodim yozgan pozivnoy 1C ro'yxatida topilmasa — bazaning ma'lumotnomalarini bir marta yangilab, qayta "
              "qidiradi (yangi qo'shilgan savdo vakili). Bir baza uchun soatiga ko'pi bilan bir marta.",
      "api": "POST /integrations/connections/{id}/refresh-refs/?groups=employees"},
+    {"key": "telegram_sync", "group": "outlet", "reversible": False,
+     "title": "Telegram ma'lumotini yangilash",
+     "does": "Savol bergan xodimning Telegram username'i PRBC'dagidan farq qilsa (o'zgartirgan) — PRBC'dagi nusxani "
+             "Telegram'dan qayta o'qitadi. Faqat Telegram ma'lumoti (ism, username, rasm) yangilanadi; kirish huquqiga "
+             "tegilmaydi.",
+     "api": "POST /auth/admin/users/{id}/telegram-sync/"},
+    # --- PRBC modullari («PRBC'da vazifalar ko'rinmayapti», «PRBC chat ochilmayapti»)
+    {"key": "task_seat", "group": "module", "reversible": True,
+     "title": "«Vazifalar» moduli — A'zo",
+     "does": "«PRBC'da vazifalar ko'rinmayapti / ochilmayapti» — moduldan ruxsati yo'q xodimga «A'zo» darajasini beradi. "
+             "Ruxsati bor bo'lsa — aralashmaydi; menejer/admin darajasiga tegilmaydi.",
+     "api": "POST /admin/organization-modules/{org}/task-access/"},
+    {"key": "chat_seat", "group": "module", "reversible": True,
+     "title": "«Chat» moduli — A'zo",
+     "does": "«PRBC chat ochilmayapti» — moduldan ruxsati yo'q xodimga «A'zo» darajasini beradi. Ruxsati bor bo'lsa — "
+             "aralashmaydi.",
+     "api": "POST /admin/organization-modules/{org}/chat-access/"},
     # --- mijoz arizasi (savolda STIR / JShShIR / 1C kodi)
     {"key": "outlet_resend", "group": "request", "reversible": False,
      "title": "Arizani 1C ga qayta yuborish",
      "does": "Ariza «1C rad etdi» holatida va sababi 1C bazasi band / javob bermagani bo'lsa — arizani 1C ga qayta "
              "yuboradi. Ma'lumot xatosi (bo'linma, ma'lumotnoma) bo'lsa — qayta yubormaydi, nima qilishni yozadi.",
      "api": "POST /integrations/outlet-requests/{id}/send/"},
-]
-
-# keyingi bosqich: API bor, lekin bot savoldan hali bajarmaydi (sinovdan keyin qo'shiladi)
-PLANNED = [
-    {"key": "account_approve", "title": "Kutilayotgan hisobni tasdiqlash",
-     "does": "«PRBC'ga kira olmayapman / ожидает подтверждения» — holati pending xodimni tasdiqlash (Employee + bo'lim + "
-             "rol). HR qarori talab qilinishi mumkin.", "api": "POST /auth/admin/users/{id}/approve/"},
-    {"key": "telegram_sync", "title": "Telegram ma'lumotini yangilash",
-     "does": "Xodim Telegram nomi yoki username'ini o'zgartirgan bo'lsa — PRBC'dagi nusxani yangilash.",
-     "api": "POST /auth/admin/users/{id}/telegram-sync/"},
-    {"key": "module_seats", "title": "Vazifalar / Chat / Uchrashuvlar ruxsati",
-     "does": "«Vazifalar ko'rinmayapti», «chat ochilmayapti» — tegishli modulga xodim darajasini berish.",
-     "api": "POST /admin/organization-modules/{org}/task-access/ (chat-access, meeting-access)"},
-    {"key": "route_resend", "title": "Mavjud nuqtani marshrutga qayta qo'shish",
-     "does": "«Marshrutimga qo'shish» 1C da xato bergan bo'lsa — so'rovni qayta navbatga qo'yish.",
+    {"key": "route_resend", "group": "request", "reversible": False,
+     "title": "Mavjud nuqtani marshrutga qayta qo'shish",
+     "does": "«Marshrutimga qo'shish» so'rovi 1C da xato bergan va sababi 1C bazasi band / javob bermagani bo'lsa — "
+             "so'rovni qayta navbatga qo'yadi. Ma'lumot xatosida qayta yubormaydi.",
      "api": "POST /integrations/route-attachments/{id}/requeue/"},
 ]
+
+# keyingi bosqich: API bor, lekin bot savoldan hali bajarmaydi. Hisobni tasdiqlash (pending -> approve) bu yerda YO'Q:
+# xodim PRBC'ga bog'langan guruhga qo'shilganda PRBC o'zi tasdiqlaydi — bot bunga tegmaydi.
+PLANNED = []
 
 KEYS = {a["key"] for a in CATALOG}
 REVERSIBLE = {a["key"] for a in CATALOG if a["reversible"]}

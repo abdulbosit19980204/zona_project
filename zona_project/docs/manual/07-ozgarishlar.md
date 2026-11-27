@@ -4,6 +4,13 @@
 
 ## 2026-11-27
 
+- **Toifa mas'uli — butun jamoa:** Support sozlamalarida har jamoa ro'yxati boshida «Butun jamoa» varianti (masalan
+  Pro-target — Guzel va Eldar); tanlansa javobda va vazifada jamoaning barcha a'zolari belgilanadi. Oldin backend
+  qabul qilardi, lekin sozlamada tanlab bo'lmasdi.
+- **Yangi bot amallari (har biri ruxsat bilan, standart o'chiq):** Telegram ma'lumotini yangilash; «Vazifalar» va
+  «Chat» moduliga A'zo ruxsati («PRBC'da vazifalar ko'rinmayapti», «PRBC chat ochilmayapti»); mavjud nuqtani
+  marshrutga qayta qo'shish (1C band bo'lgan bo'lsa). Panel sinovida savol turi tanlanadi. Hisobni tasdiqlashga bot
+  tegmaydi — guruhga qo'shilganda PRBC o'zi tasdiqlaydi.
 - **Bot amallari — har biri alohida ruxsat bilan.** Standart holatda bot «yangi tochka» muammosini faqat aniqlaydi va
   javobda yozadi (nima yetishmaydi, nima kerak) — PRBC'da hech narsa o'zgarmaydi, savol mutaxassisga o'tadi. Panelda
   amal yoqilsa (ruxsat, rol, guruh bo'limi, pozivnoy, ma'lumotnoma yangilash, arizani 1C ga qayta yuborish) — bot o'zi

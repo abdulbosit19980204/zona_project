@@ -114,7 +114,7 @@ export function PrbcAccess() {
           <div className="flex items-center gap-2 font-semibold"><Wrench className="size-4" />{t("actionsTitle")}</div>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("actionsHint")}</p>
         </div>
-        {(["outlet", "request"] as const).map((g) => (
+        {(["outlet", "module", "request"] as const).map((g) => (
           <div key={g} className="space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(`grp_${g}`)}</div>
             {d.actions.filter((a) => a.group === g).map((a) => (
@@ -135,12 +135,15 @@ export function PrbcAccess() {
             ))}
           </div>
         ))}
-        <div className="rounded-lg border border-dashed p-3">
-          <div className="text-sm font-medium">{t("plannedTitle")}</div>
-          <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
-            {d.planned.map((p) => <li key={p.key}><span className="font-medium text-foreground">{p.title}</span> — {p.does}</li>)}
-          </ul>
-        </div>
+        {d.planned.length > 0 && (
+          <div className="rounded-lg border border-dashed p-3">
+            <div className="text-sm font-medium">{t("plannedTitle")}</div>
+            <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+              {d.planned.map((p) => <li key={p.key}><span className="font-medium text-foreground">{p.title}</span> — {p.does}</li>)}
+            </ul>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">{t("approveNote")}</p>
       </Card>
 
       <Simulator ready={d.ready} />
@@ -250,6 +253,7 @@ function Simulator({ ready }: { ready: boolean }) {
   const [pick, setPick] = useState<CheckItem | null>(null);
   const [question, setQuestion] = useState("");
   const [group, setGroup] = useState("");
+  const [mod, setMod] = useState<"outlet" | "task" | "chat">("outlet");
   const [res, setRes] = useState<SimResult | null>(null);
   const groups = useQuery({
     queryKey: ["prbc", "access-groups"], enabled: ready, retry: false,
@@ -261,7 +265,7 @@ function Simulator({ ready }: { ready: boolean }) {
     onError: (e) => toast.error(errorMessage(e)),
   });
   const sim = useMutation({
-    mutationFn: async () => (await api.post<SimResult>("prbc/access/simulate/", { user_id: pick?.id, text: question, group })).data,
+    mutationFn: async () => (await api.post<SimResult>("prbc/access/simulate/", { user_id: pick?.id, text: question, group, mod })).data,
     onSuccess: setRes,
     onError: (e) => toast.error(errorMessage(e)),
   });
@@ -295,6 +299,15 @@ function Simulator({ ready }: { ready: boolean }) {
       ))}
       {pick && (
         <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+          <div className="flex flex-wrap gap-1.5">
+            {(["outlet", "task", "chat"] as const).map((m) => (
+              <button key={m} type="button" onClick={() => { setMod(m); setRes(null); }}
+                className={cn("rounded-full border px-3 py-1 text-xs font-medium",
+                  mod === m ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+                {t(`sim_${m}`)}
+              </button>
+            ))}
+          </div>
           <div className="grid gap-2 md:grid-cols-2">
             <div>
               <Label className="text-xs">{t("simQuestion")}</Label>

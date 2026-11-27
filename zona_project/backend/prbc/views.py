@@ -690,7 +690,8 @@ def access_simulate(request):
         return err
     try:
         return Response(access.simulate(int(uid), str(d.get("text") or "")[:1000], str(d.get("group") or "")[:200],
-                                        "ru" if d.get("lang") == "ru" else "uz", client=client))
+                                        "ru" if d.get("lang") == "ru" else "uz", client=client,
+                                        mod=d.get("mod") if d.get("mod") in ("task", "chat") else "outlet"))
     except PrbcError as e:
         return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
 

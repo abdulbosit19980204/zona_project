@@ -1487,6 +1487,15 @@
     "reverted": "Reverted: {at} ({by})",
     "a_revert": "Reverted",
     "a_refresh_refs": "References refreshed",
-    "a_outlet_resend": "Request resent"
+    "a_outlet_resend": "Request resent",
+    "grp_module": "PRBC modules (tasks, chat)",
+    "approveNote": "The bot does not touch pending account approval: PRBC approves it itself when the employee is added to a linked group.",
+    "sim_outlet": "New outlet",
+    "sim_task": "PRBC tasks",
+    "sim_chat": "PRBC chat",
+    "a_telegram_sync": "Telegram refreshed",
+    "a_task_seat": "Tasks access",
+    "a_chat_seat": "Chat access",
+    "a_route_resend": "Route resent"
   }
 }
