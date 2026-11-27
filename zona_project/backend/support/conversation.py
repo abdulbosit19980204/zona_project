@@ -89,7 +89,7 @@ Noaniq bo'lsa — "continue". Qisqa sabab (o'zbekcha)."""
 def ai_case(root, text, photo):
     """Noaniq holatda AI qarori: True — yangi holat, False — davom, None — AI ishlamadi (qoida qaror qiladi)."""
     s = Settings.load()
-    if not s.ai_enabled or engine.ai_quota_left(s) <= 0:
+    if not s.ai_enabled or engine.ai_quota_left(s) <= 0 or engine.ai_down():
         return None
     from zona.ai import service as ai
     from zona.ai.providers import AIError, deadline

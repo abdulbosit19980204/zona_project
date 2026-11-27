@@ -651,6 +651,24 @@ Qoidalar:
 - confidence: 0..1 — javob aynan shu savolga to'g'ri ekaniga ishonching."""
 
 
+_AI_DOWN = {"at": 0.0, "down": False}
+
+
+def ai_down():
+    """AI provayderlari hozir ishlamayaptimi (limit tugagan / balans yo'q): oxirgi 15 daqiqadagi support so'rovlarining
+    so'nggi 8 tasi hammasi xato. Ikkinchi darajali AI chaqiruvlari (suhbat ajratish) shunda o'tkazib yuboriladi —
+    jonli xabar har safar 5 ta modelni sinab kutmasin. 60 s kesh."""
+    import time as _t
+    now = _t.time()
+    if now - _AI_DOWN["at"] < 60:
+        return _AI_DOWN["down"]
+    since = timezone.now() - timezone.timedelta(minutes=15)
+    last = list(AIUsage.objects.filter(task=AITaskConfig.SUPPORT, at__gte=since).order_by("-id")
+                .values_list("ok", flat=True)[:8])
+    _AI_DOWN.update(at=now, down=len(last) >= 8 and not any(last))
+    return _AI_DOWN["down"]
+
+
 def ai_quota_left(settings):
     since = timezone.now() - timezone.timedelta(days=1)
     used = AIUsage.objects.filter(task=AITaskConfig.SUPPORT, at__gte=since).count()

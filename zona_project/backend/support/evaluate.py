@@ -86,7 +86,9 @@ def judge(question, staff_answer, bot_answer):
     return str(data.get("verdict") or "wrong"), str(data.get("reason") or "")[:300]
 
 
-def run(days=30, limit=200, use_judge=True, out_path=None, progress=None):
+def run(days=30, limit=200, use_judge=True, out_path=None, progress=None, use_ai=False):
+    """use_ai=False — bot javobi faqat bilim bazasi/shablon/qoida bilan (fast, AI so'rovisiz); True — AI ham
+    (jonli botdagidek). Hakam (use_judge) har yuborilgan javobga bitta AI so'rovi. AI limiti jonli bot bilan umumiy!"""
     pairs = sample(days, limit)
     engine.EVAL_HOLDOUT.clear()
     engine.EVAL_HOLDOUT.update(q.pk for q, _r in pairs)
@@ -98,7 +100,7 @@ def run(days=30, limit=200, use_judge=True, out_path=None, progress=None):
             lang = engine.detect_lang(text or q.ocr_text)
             try:
                 d = engine.decide(text or q.ocr_text, lang, text=text, ocr=q.ocr_text or "", alert=q.alert_text or "",
-                                  live=False)
+                                  live=False, fast=not use_ai)
             except Exception as e:  # noqa: BLE001 — bitta savol xatosi butun baholashni to'xtatmasin
                 log.exception("eval decide %s", q.pk)
                 d, err = None, str(e)[:200]

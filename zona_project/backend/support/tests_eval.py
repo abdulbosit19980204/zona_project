@@ -62,3 +62,17 @@ class EvalTests(ControlsBase):
             self.assertEqual(engine.staff_examples("Klient agentda chiqmayapti", min_score=0), [])
         finally:
             engine.EVAL_HOLDOUT.clear()
+
+
+class AiDownTests(ControlsBase):
+    def test_circuit_breaker(self):
+        from zona.models import AIUsage
+        engine._AI_DOWN.update(at=0.0, down=False)
+        self.assertFalse(engine.ai_down())
+        for _ in range(8):
+            AIUsage.objects.create(task="support", provider="g", model="m", ok=False, error="429")
+        engine._AI_DOWN.update(at=0.0)
+        self.assertTrue(engine.ai_down())
+        AIUsage.objects.create(task="support", provider="g", model="m", ok=True)
+        engine._AI_DOWN.update(at=0.0)
+        self.assertFalse(engine.ai_down())

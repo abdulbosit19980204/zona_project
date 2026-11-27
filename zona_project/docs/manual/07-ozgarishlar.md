@@ -4,6 +4,9 @@
 
 ## 2026-11-28
 
+- **AI himoyasi:** `support_eval` endi standart holatda AI sarflamaydi (`--with-ai`, `--judge` — aniq ko'rsatilsa);
+  AI provayderlari ketma-ket xato bersa (limit/balans), suhbat-AI chaqirilmaydi. 27.11 kechasi bepul Gemini limiti
+  baholash tufayli tugagan — AI javoblari limit tiklanguncha to'xtagan.
 - **Suhbat: bitta savol = bitta holat.** «Assalomu alaykum, hali ham chiqmayapti» endi yangi savol emas — davom;
   shu klient/zakaz kodi — davom, boshqa kod — yangi savol; salom bilan boshlangan savol va izohli rasm noaniq bo'lsa —
   AI qaror qiladi (avval har doim yangi savol ochilardi).

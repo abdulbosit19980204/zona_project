@@ -122,8 +122,12 @@ Bot guruhda **admin** bo'lishi kerak (yoki BotFather'da privacy o'chiq) — aks 
   to'g'ri / qisman / xato; bot uzatgan savollarda mas'ul to'g'riligi. Baholanayotgan savolning o'z javobi AI'ga
   namuna sifatida berilmaydi. Natija: `/var/lib/foydali/eval/eval_YYYYMMDD_HHMM.md` (xulosa, xato va qisman javoblar
   jadvali) va `.json`. Maqsad: yuborilgan javoblarning ≥90% i to'g'ri, qamrov ≥80%. Buyruq:
-  `manage.py support_eval --days 30 --limit 200` (tez sinov: `--limit 20 --no-judge`). Har ishga tushirish AI
-  so'rovlari sarflaydi (har yuborilgan javobga bitta hakam so'rovi).
+  `manage.py support_eval --days 30 --limit 200` — **AI'siz** (bilim bazasi/shablon qamrovi va mas'ul to'g'riligi);
+  `--with-ai` (bot AI javobi) va `--judge` (AI-hakam) — **jonli bot bilan umumiy AI limitidan sarflaydi**: faqat pullik
+  provayder bilan va kichik `--limit 50` bilan. (27.11 da bepul Gemini kunlik limiti shu buyruq tufayli tugagan.)
+- **AI ishlamay qolsa:** oxirgi 15 daqiqada support AI so'rovlarining so'nggi 8 tasi xato bo'lsa, ikkinchi darajali AI
+  (suhbat ajratish) chaqirilmaydi — xabar kutmaydi; bot bilim bazasi/shablon bilan javob beradi, qolganini uzatadi.
+  Sabab ko'pincha — limit tugagan yoki balans yo'q: Sozlamalar → AI da provayderni tekshiring.
 - **Review navbatini yopish — faqat server buyrug'i bilan** (interfeysdan ommaviy amal qilmang: har amal ro'yxatni
   rasmlar bilan qayta yuklaydi va prod sekinlashadi). `manage.py support_close_review --dry-run` — sonlar va
   namunalar; keyin baza zaxirasi va `--dry-run` siz: mavzusi standartga mos «Standartga mos» yozuvlar standartga
