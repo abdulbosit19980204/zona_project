@@ -14,6 +14,9 @@
   support). Matnda ProTarget podklyucheniyesi, moderatsiya yoki vizit bo'lsa — Klient/Vizit'da qoladi. «Подключение»,
   «дукон» so'zlari ham Klient toifasini aniqlaydi. Sabab: baholashda odamga uzatilgan savollarning faqat 41% ida mas'ul
   to'g'ri edi, asosiy xato — shu savollar.
+  PRBC zayavkasining holati so'ralsa («Ожидает проверки», «Черновик», «Отклонена») — bu moderatsiya, Klient (Pro-target)
+  toifasida qoladi. «Программа секин / долго грузит / ilova ishlamayapti» endi Sinxronizatsiya toifasiga tushadi (avval
+  toifasiz qolardi va mas'ul belgilanmasdi).
 - **AI himoyasi:** `support_eval` endi standart holatda AI sarflamaydi (`--with-ai`, `--judge` — aniq ko'rsatilsa);
   AI provayderlari ketma-ket xato bersa (limit/balans), suhbat-AI chaqirilmaydi. 27.11 kechasi bepul Gemini limiti
   baholash tufayli tugagan — AI javoblari limit tiklanguncha to'xtagan.

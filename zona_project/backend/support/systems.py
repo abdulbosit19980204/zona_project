@@ -45,7 +45,9 @@ CAT_RX = [
               r"|доступ|dostup|ruxsat|рухсат|позывн|pozivn|позивн"),
     ("route", r"marshrut|маршрут"),
     ("report", r"hisobot|отчет|отчёт|plan\b|план\b|bajarilish"),
-    ("sync", r"sinxron|синхрон|almashinuv|обмен"),
+    ("sync", r"sinxron|синхрон|almashinuv|обмен"
+             r"|(програм|program|прилож|ilova|protarget|про ?таргет)\w*\W{0,3}.{0,30}"
+             r"(секин|sekin|медлен|долго|груз|ishlamay|не работ|завис|qotib|вылет)"),  # ilova sekin/ishlamaydi — Pro-target
     ("network", r"vpn|internet|интернет|aloqa|связ"),
 ]
 CAT_RX = [(k, re.compile(v, re.I)) for k, v in CAT_RX]
@@ -65,11 +67,13 @@ PRBC_OUTLET_RX = re.compile(
     r"(не могу|не получается) (добавить|создать|открыть) (нов\w+ )?(тт|точк|магазин|клиент)", re.I)
 # ProTarget konteksti — podklyuchenie/moderatsiya bo'lsa, bu PRBC emas
 PROTARGET_CTX = re.compile(r"подключ|podkl|padkl|patkl|модерац|moderat|vizit|визит|протаргет|pro.?target", re.I)
+# PRBC zayavkasi yuborilgan, holati so'ralmoqda (kutilmoqda / qoralama / rad etildi) — bu moderatsiya (Pro-target)
+REQUEST_STATUS = re.compile(r"ожидает провер|отклонен|черновик|на модерац|tasdiqlanmadi|tasdiq kutil", re.I)
 
 
 def prbc_outlet(blob):
     """Matn/skrinshot PRBC orqali yangi nuqta qo'shish haqidami (ProTarget podklyucheniyesi emas)."""
-    if not blob or not PRBC_OUTLET_RX.search(blob):
+    if not blob or not PRBC_OUTLET_RX.search(blob) or REQUEST_STATUS.search(blob):
         return False
     return bool(APP_RX["prbc"].search(blob)) or not PROTARGET_CTX.search(blob)
 

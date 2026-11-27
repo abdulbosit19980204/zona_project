@@ -16,7 +16,7 @@ class PrbcOutletCategoryTests(SimpleTestCase):
             self.assertEqual(systems.detect(text)["category"], "prbc_outlet", text)
 
     def test_prbc_screens(self):
-        for ocr in ["PRBC  Заявки на точки 47  Черновик  Ожидает проверки",
+        for ocr in ["PRBC  Заявки на точки  + Новая заявка  ИНН/ПИНФЛ",
                     "мини-приложение ПИНФЛ Этот ИНН/ПИНФЛ уже есть в 1C как контрагент",
                     "PRBC Созданав1С G'ULOMJONOV NIZOMIDDIN"]:
             self.assertEqual(systems.detect("", ocr)["category"], "prbc_outlet", ocr)
@@ -28,6 +28,16 @@ class PrbcOutletCategoryTests(SimpleTestCase):
                           ("Не могу сделать визит. Локация в программе указана неправильно", "visit"),
                           ("aksiya ishlamayapti", "promo")]:
             self.assertEqual(systems.detect(text)["category"], cat, text)
+
+    def test_prbc_request_status_is_moderation(self):
+        # zayavka "Ожидает проверки / Черновик / Отклонена" — ProTarget moderatsiyasi (Eldar javob bergan)
+        r = systems.detect("Buyam qo'shilmadimi", "PRBC Заявки на точки 47 Черновик Ожидает проверки Отклонена 1")
+        self.assertNotEqual(r["category"], "prbc_outlet")
+
+    def test_app_slow_is_sync(self):
+        for text in ["Sr.1 bukhara программа секин ишлаяпти куриб беринг", "приложение долго грузит",
+                     "Protarget ishlamayapti"]:
+            self.assertEqual(systems.detect(text)["category"], "sync", text)
 
     def test_category_listed(self):
         self.assertIn("prbc_outlet", systems.CATEGORIES)
