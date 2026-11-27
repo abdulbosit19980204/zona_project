@@ -4,6 +4,10 @@
 
 ## 2026-11-28
 
+- **Yon menyu:** yig'ilgan holatda guruhlar (Support / Vazifalar / Sozlamalar...) ingichka chiziq bilan ajratiladi;
+  belgi ustiga kelinsa nomi chiqadi.
+- **Tasdiqlash navbati:** filtrlar bitta qatorda (Claude belgisi — ixcham ro'yxat); kartadagi mas'ul — matn va
+  «o'zgartirish»; klaviatura bilan ishlash: ↓/↑, A — tasdiqlash, R — rad, S — standartga, E — tahrir.
 - **Sozlamalar tartibli:** guruhlar — ixcham jadval (bitta ekranga sig'adi); «Javob berish» — yig'iladigan bo'limlar va
   bitta «saqlanmagan o'zgarishlar» paneli (3 xil «Saqlash» o'rniga); toifa mas'uli yonida 30 kunlik savollar soni va kim
   haqiqatda javob bergani, mos kelmasa — ⚠.

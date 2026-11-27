@@ -134,11 +134,13 @@ function ModuleSection({ module, counts, down }: { module: NavModule; counts: Re
             initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.18 }} className={cn("overflow-hidden", !collapsed && "ml-3 border-l pl-2")}
           >
-            {module.groups.map((group) => {
+            {module.groups.map((group, gi) => {
               const items = group.items.filter((i) => !i.perm || (can && (i.perm === "admin" ? can.admin : can.edit)));
               if (!items.length) return null;
               return (
                 <div key={group.key} className="mb-1.5">
+                  {/* yig'ilgan menyuda guruhlar orasida ajratgich — 25 ta belgi bitta uzun qator bo'lib qolmasin */}
+                  {collapsed && gi > 0 && <div className="mx-auto mb-1.5 h-px w-6 bg-border" aria-hidden="true" />}
                   {!collapsed && (
                     <div className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
                       {t(`groups.${group.key}`)}

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
+import { cn } from "@/lib/utils";
 
 import { supportApi, type ClaudeKind, type Entry } from "./api";
 import { EntryBadge, EntryPicker, fmtDate, OwnerSelect, Segmented, useSupportMutation } from "./common";
@@ -63,20 +64,19 @@ function ReviewInner() {
   const items = useMemo(() => [...(page === 0 && !search && !cf ? edits.data ?? [] : []), ...(fresh.data?.results ?? [])]
     .sort((a, b) => Number(b.priority) - Number(a.priority)), [fresh.data, edits.data, page, search, cf]);
   const cc = counts.data ?? {};
-  const claudeBar = (cc.any ?? 0) > 0 && (
-    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] px-3 py-2">
-      <Sparkles className="size-4 text-violet-500" />
-      <span className="text-sm font-medium">{t("clTitle")}</span>
-      <Segmented size="sm" value={cf} onChange={(v) => { setCf(v); setPage(0); }} options={[
-        { value: "", label: t("dtAll") },
-        { value: "any", label: t("clAny"), count: cc.any },
-        { value: "same", label: t("cl_same"), count: cc.same ?? 0 },
-        { value: "general", label: t("cl_general"), count: cc.general ?? 0 },
-        { value: "status", label: t("cl_status"), count: cc.status ?? 0 },
-        { value: "handoff", label: t("cl_handoff"), count: cc.handoff ?? 0 },
-      ]} />
-      {cf && <span className="text-xs text-muted-foreground">{t(`clHint_${cf}` as SKey)}</span>}
-    </div>
+  const claudeSelect = (cc.any ?? 0) > 0 && (
+    <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Sparkles className="size-3.5 text-violet-500" />
+      <select className="h-9 rounded-md border bg-background px-2 text-sm text-foreground" value={cf} aria-label={t("clTitle")}
+        onChange={(e) => { setCf(e.target.value as typeof cf); setPage(0); }}>
+        <option value="">{t("clTitle")}: {t("dtAll")}</option>
+        <option value="any">{t("clAny")} ({cc.any})</option>
+        <option value="same">{t("cl_same")} ({cc.same ?? 0})</option>
+        <option value="general">{t("cl_general")} ({cc.general ?? 0})</option>
+        <option value="status">{t("cl_status")} ({cc.status ?? 0})</option>
+        <option value="handoff">{t("cl_handoff")} ({cc.handoff ?? 0})</option>
+      </select>
+    </label>
   );
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const edit = (id: number) => { setEditing(id); setOpen(true); };
@@ -86,6 +86,8 @@ function ReviewInner() {
         <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} className="h-9 pl-8" />
       </div>
+      {claudeSelect}
+      {cf && <span className="basis-full text-xs text-muted-foreground">{t(`clHint_${cf}` as SKey)}</span>}
       <span className="text-xs text-muted-foreground">
         {total ? `${page * PAGE + 1}–${Math.min(total, (page + 1) * PAGE)} / ${total}` : "0"}
         {fresh.isFetching && " …"}
@@ -116,7 +118,6 @@ function ReviewInner() {
       {view === "answers" && <BotAnswers t={t} />}
       {view === "dups" && <Duplicates t={t} />}
       {view === "recheck" && <Recheck t={t} onEdit={edit} />}
-      {(view === "queue" || view === "cards") && claudeBar}
       {(view === "queue" || view === "cards") && pager}
       {(view === "queue" || view === "cards") && (fresh.isLoading || edits.isLoading) && <Skeleton className="h-48" />}
       {(view === "queue" || view === "cards") && !fresh.isLoading && !edits.isLoading && items.length === 0 && <EmptyState icon={Check} title={t("queueEmpty")} />}
@@ -218,14 +219,19 @@ function ClaudeNote({ e, t }: { e: Entry; t: ST }) {
 function Owner({ e, t }: { e: Entry; t: ST }) {
   const can = useCan();
   const save = useSupportMutation((id: number | null) => supportApi.updateEntry(e.id, { responsible: id }), t("saved"));
+  const [picking, setPicking] = useState(false);
   const tg = e.responsible_tg ?? [];
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <span className="text-muted-foreground">{t("owner")}:</span>
-      {can.edit ? (
-        <OwnerSelect t={t} value={e.responsible} disabled={save.isPending} onChange={(id) => save.mutate(id)} className="h-7 text-xs" />
+      {can.edit && picking ? (
+        <OwnerSelect t={t} value={e.responsible} disabled={save.isPending}
+          onChange={(id) => save.mutate(id, { onSuccess: () => setPicking(false) })} className="h-7 text-xs" />
       ) : (
         <span className="font-medium">{e.responsible_name || t("ownerNone")}</span>
+      )}
+      {can.edit && !picking && (
+        <button type="button" className="text-xs text-primary hover:underline" onClick={() => setPicking(true)}>{t("ownerChange")}</button>
       )}
       {tg.length > 0 && <span className="text-xs text-primary">{tg.map((x) => "@" + x).join(" ")}</span>}
     </div>
@@ -239,6 +245,31 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
   const one = useSupportMutation((fn: () => Promise<unknown>) => fn(), t("saved"));
   const toggle = (id: number) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const all = sel.size === items.length;
+  // klaviatura: ↓/J — keyingi, ↑/K — oldingi, A — tasdiqlash, R — rad, S — standartga qo'shish, E — tahrir
+  const [active, setActive] = useState(0);
+  const cur = items[Math.min(active, items.length - 1)];
+  useEffect(() => {
+    if (!can.edit) return;
+    const onKey = (ev: KeyboardEvent) => {
+      const el = ev.target as HTMLElement | null;
+      if (ev.ctrlKey || ev.metaKey || ev.altKey || (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)))) return;
+      if (document.querySelector("[role=dialog]")) return;
+      const k = ev.key.toLowerCase();
+      const go = (d: number) => { ev.preventDefault(); setActive((i) => Math.max(0, Math.min(items.length - 1, i + d))); };
+      if (k === "arrowdown" || k === "j") go(1);
+      else if (k === "arrowup" || k === "k") go(-1);
+      else if (!cur || one.isPending) return;
+      else if (k === "a") { ev.preventDefault(); one.mutate(() => supportApi.approve(cur.id)); }
+      else if (k === "r") { ev.preventDefault(); one.mutate(() => supportApi.reject(cur.id)); }
+      else if (k === "s" && cur.claude_target) { ev.preventDefault(); one.mutate(() => supportApi.bulk([cur.id], "absorb")); }
+      else if (k === "e") { ev.preventDefault(); onEdit(cur.id); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [can.edit, cur, items.length, one, onEdit]);
+  useEffect(() => {
+    if (cur) document.getElementById(`rv-${cur.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [cur]);
 
   return (
     <div className="grid gap-3">
@@ -254,6 +285,7 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
           <Button size="sm" variant="outline" disabled={!sel.size || bulk.isPending} onClick={() => bulk.mutate("reject", { onSuccess: () => setSel(new Set()) })}>
             <X className="size-4" />{t("rejectSelected")}
           </Button>
+          <span className="ml-auto hidden text-[11px] text-muted-foreground lg:inline">{t("rvKeys")}</span>
           {items.some((e) => sel.has(e.id) && e.claude_target) && (
             <Button size="sm" variant="outline" className="border-violet-500/40 text-violet-600 dark:text-violet-400" disabled={bulk.isPending}
               onClick={() => bulk.mutate("absorb", { onSuccess: () => setSel(new Set()) })} title={t("clAbsorbHint")}>
@@ -263,7 +295,9 @@ function QueueView({ items, t, onEdit }: { items: Entry[]; t: ST; onEdit: (id: n
         </Card>
       )}
       {items.map((e) => (
-        <Card key={e.id} className={`gap-2 p-4 transition-colors ${sel.has(e.id) ? "border-primary/50 bg-primary/[0.03]" : ""}`}>
+        <Card key={e.id} id={`rv-${e.id}`} onClick={() => setActive(items.indexOf(e))}
+          className={cn("gap-2 p-4 transition-colors", sel.has(e.id) && "border-primary/50 bg-primary/[0.03]",
+            cur?.id === e.id && can.edit && "ring-2 ring-primary/40")}>
           <div className="flex items-start gap-3">
             {can.edit && <Checkbox className="mt-1" checked={sel.has(e.id)} onCheckedChange={() => toggle(e.id)} />}
             <div className="grid min-w-0 flex-1 gap-2">

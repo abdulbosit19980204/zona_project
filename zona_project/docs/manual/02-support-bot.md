@@ -8,7 +8,7 @@
 | Bo'lim | Nima uchun |
 |---|---|
 | **Guruh savollari** | Barcha savollar: bot javobi, kim javob berdi, holati (javob berildi / odamga uzatildi / hal bo'ldi). Raqam — javob kutayotgan savollar. Tepada **holat paneli** (7 kun): bot hal qilgan ulush — maqsad 80% chizig'i va o'tgan haftaga nisbatan o'zgarish; odamga uzatilganlar va kimga (toifa egasi bo'yicha; bosilsa ro'yxat shu filtrga o'tadi); xato / 👎 javoblar (→ Bot javoblari); tasdiq kutayotgan nomzodlar (→ Tasdiqlash navbati) |
-| **Tasdiqlash navbati** | Bilim bazasiga yangi javob nomzodlari va tahrirlar — tasdiqlanmaguncha bot ularni ishlatmaydi |
+| **Tasdiqlash navbati** | Bilim bazasiga yangi javob nomzodlari va tahrirlar — tasdiqlanmaguncha bot ularni ishlatmaydi. Filtrlar bitta qatorda (qidiruv, Claude belgisi, sahifalar). Mas'ul — matn, «o'zgartirish» bosilsa ro'yxat. **Klaviatura:** ↓/↑ (J/K) — keyingi/oldingi karta, A — tasdiqlash, R — rad etish, S — standartga qo'shish, E — tahrirlash |
 | **Bilim bazasi** | Barcha javoblar (oddiy savol-javob va standart holatlar/shablonlar) |
 | **Rasm turlari** | Skrinshot turlarini o'rgatish (masalan, ProTarget xato oynalari) |
 | **Tahlil** | Savollar statistikasi: guruhlar, toifalar, javob tezligi, bot ulushi. Xodimlar jadvalida umumiy akkaunt (@IT_StarGroup) javoblari asosiy operatoriga (Xusniddin) yoziladi; bot javoblari xodim hisobiga kirmaydi |
