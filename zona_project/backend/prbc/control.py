@@ -310,6 +310,8 @@ def _prbc_of_tg(user, conn):
     if op is not None:
         ids = _member_ids(op, conn)
         return ids[0] if ids else None
+    if is_external_user(user):
+        return None  # tashqi jamoa (Pro-target) a'zosi — PRBC vazifa ijrochisi bo'lmaydi
     if user is None or (user.username or "").lower() in GENERIC:
         return None
     pid = Person.objects.filter(tg_user=user, prbc_user__isnull=False).exclude(status=Person.LEFT) \
@@ -320,10 +322,19 @@ def _prbc_of_tg(user, conn):
     return ids[0] if ids else None
 
 
+def is_external_user(user):
+    """Telegram foydalanuvchi tashqi jamoadan (level EXT: Pro-target — Guzel, Eldar)."""
+    if user is None:
+        return False
+    if getattr(user, "contact_id", None) and user.contact.member_id:
+        return user.contact.member.level == "EXT"
+    return bool(getattr(user, "member_id", None) and user.member.level == "EXT")
+
+
 def _member_ids(m, conn):
     from .tasks import assignee_ids_for
-    if m is None:
-        return []
+    if m is None or getattr(m, "level", "") == "EXT":
+        return []  # tashqi jamoa (Pro-target) — PRBC vazifa ijrochisi / kuzatuvchisi bo'lmaydi
     names = [m.telegram] if getattr(m, "telegram", "") and not getattr(m, "is_team", False) else []
     if getattr(m, "is_team", False) and hasattr(m, "contacts"):
         from support.engine import team_telegrams

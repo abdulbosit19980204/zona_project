@@ -50,7 +50,12 @@ Tartib (birinchi topilgani):
 5. Shu guruhda **eng ko'p javob beradigan xodim** (oxirgi 30 kun).
 6. **Standart ijrochi** (sozlamada; hozir Xusniddin).
 
-- Umumiy **IT SUPPORT** akkaunti hech qachon ijrochi bo'lmaydi.
+- Umumiy **IT SUPPORT** akkaunti (@IT_StarGroup) o'zi ijrochi bo'lmaydi: «Asosiy operator» belgilangan bo'lsa
+  (hozir — Xusniddin), undan yozilgan javob uchun ijrochi — operator.
+- **Tashqi jamoa (Pro-target — Guzel, Eldar; daraja EXT) ga PRBC vazifa ochilmaydi.** Savolning asosiy mas'uli
+  (toifa mas'uli yoki bilim bazasidagi mas'ul) tashqi jamoa bo'lsa, vazifa umuman ochilmaydi — boshqa xodimga ham
+  «tushirilmaydi». Tashqi jamoa a'zosi javob yozgan bo'lsa ham ijrochi, kuzatuvchi yoki zaxira sifatida PRBC'ga
+  qo'shilmaydi; savol guruhda ular tomonidan hal qilinadi.
 - Standart ijrochiga tushgan vazifaga boshqa xodim javob yozsa, vazifa avtomatik o'sha xodimga o'tadi
   (PRBC'da izoh qoldiriladi). Qo'lda o'zgartirilgan ijrochiga tegilmaydi.
 - Telegram → PRBC moslash: xodim PRBC'dagi shaxsga bog'langan bo'lsa (1C xodimlari), sozlamadagi qo'lda moslash

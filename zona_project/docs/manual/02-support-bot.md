@@ -11,7 +11,7 @@
 | **Tasdiqlash navbati** | Bilim bazasiga yangi javob nomzodlari va tahrirlar — tasdiqlanmaguncha bot ularni ishlatmaydi |
 | **Bilim bazasi** | Barcha javoblar (oddiy savol-javob va standart holatlar/shablonlar) |
 | **Rasm turlari** | Skrinshot turlarini o'rgatish (masalan, ProTarget xato oynalari) |
-| **Tahlil** | Savollar statistikasi: guruhlar, toifalar, javob tezligi, bot ulushi |
+| **Tahlil** | Savollar statistikasi: guruhlar, toifalar, javob tezligi, bot ulushi. Xodimlar jadvalida umumiy akkaunt (@IT_StarGroup) javoblari asosiy operatoriga (Xusniddin) yoziladi; bot javoblari xodim hisobiga kirmaydi |
 | **Konstruktor** | Savollarni turli kesimda o'rganish |
 | **PRBC vazifalar** | Vazifalar nazorati, vazifalar, 1C xodimlari, jurnal — [PRBC qo'llanmasi](/docs/prbc) |
 | **Botlar va sozlamalar** | Botlar, guruhlar, AI, vazifalar va boshqa sozlamalar |

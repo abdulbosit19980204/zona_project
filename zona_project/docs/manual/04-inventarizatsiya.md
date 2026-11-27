@@ -46,8 +46,13 @@ ishlaydi (`/inventory`), boshqaruvchi — kompyuter ko'rinishida (`/inv`).
 
 - Filial xodimlari ro'yxati (import/eksport, shablon, kontaktlardan olish). Bo'shagan xodim PRBC orqali avtomatik
   nofaol bo'ladi.
-- **Tasdiqnoma:** xodimga havola yuboriladi — u o'ziga biriktirilgan qurilmalar ro'yxatini ochib, imzo bilan
-  tasdiqlaydi yoki e'tiroz yozadi. Qurilmalar keyin o'zgarsa — tasdiqnoma "eskirgan" bo'ladi.
+- **Tasdiqnoma:** xodim havolani ochib, o'ziga biriktirilgan qurilmalarni ko'radi va imzo bilan tasdiqlaydi yoki
+  e'tiroz yozadi. Qurilmalar keyin o'zgarsa — tasdiqnoma "eskirgan" bo'ladi.
+- **Havolani IT bo'limi yuboradi** (ichki tizim orqali), filial xodimi emas. Shuning uchun alohida "Tasdiqnomalar"
+  bo'limi menyuda yo'q. Filial xodimining vazifasi — qurilma egasining **telefoni va Telegramini** to'g'ri yozish.
+- Havolalar fayli: **Import / Eksport → "Tasdiqlash havolalari (Excel)"** (faqat boshqaruvchi). Qurilmasi bor har bir
+  xodimning havolasi, telefoni, Telegrami va holati; yo'q havolalar avval avtomatik yaratiladi.
+- Xodimlar ro'yxatida imzo holati (kutilmoqda / imzolangan / e'tiroz) va tasdiqnomani ko'rish qoladi.
 
 ## Filiallar, natijalar, eksport
 
@@ -55,3 +60,13 @@ ishlaydi (`/inventory`), boshqaruvchi — kompyuter ko'rinishida (`/inv`).
 - **Natijalar va analitika:** filiallar holati, sust filiallar, kunlik faollik, kim qancha ish qilgani — rahbarlarga.
 - **Import / Eksport:** CSV, Excel va asl shablon formatida; to'ldirilgan fayldan yuklash (maxsus maydonlar ham).
 - Interfeys ikki tilda (o'zbek / rus) — xodim o'zi tanlaydi.
+
+## Filial xodimlari uchun qo'llanmalar
+
+Tayyor fayllar (`D:\StarGroup\IT_inventarizatsiya\Qollanma\`), filiallarga yuborish uchun:
+
+- **PDF / HTML** — o'zbek va rus tilida, skrinshotlar bilan: filial xodimi uchun (kirish → qurilma qo'shish →
+  yakunlash) va qurilma egasi uchun (havolani ochish → tekshirish → imzo).
+- **Video** (`video\`) — telefon uchun vertikal, ovozli, ~2,5 daqiqa: `IT_inventarizatsiya_video_UZ.mp4`,
+  `IT_inventarizatsiya_video_RU.mp4`. Qayta yasash skriptlari `video\manba\` da.
+- Interfeys o'zgarsa — skrinshot va videoni qayta yasash kerak (demo bazada, prod bazaga tegilmaydi).

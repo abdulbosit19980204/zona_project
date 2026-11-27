@@ -4,6 +4,13 @@
 
 ## 2026-11-27
 
+- **PRBC vazifa to'g'riligi:** tashqi jamoa (Pro-target) mas'ul bo'lgan savolga vazifa ochilmaydi va boshqa xodimga
+  tushirilmaydi (avval birinchi a'zoga — @Guzel_Taipova ga yoki keyingi xodimga — Saidabrorga ochilardi); Pro-target
+  a'zolari ijrochi/kuzatuvchi bo'lmaydi. **Statistika:** Tahlil → xodimlar jadvalida @IT_StarGroup javoblari asosiy
+  operatorga (Xusniddin) yoziladi; Pro-target a'zolari alohida qatorda.
+- **Inventar: "Tasdiqnomalar" bo'limi olib tashlandi** (`/inv/acks` va mobil menyudagi tab). Havolani IT bo'limi
+  ichki tizim orqali yuboradi: Import / Eksport → "Tasdiqlash havolalari (Excel)". Filial xodimi faqat egasining
+  telefoni va Telegramini yozadi. Filial xodimlari uchun PDF va video qo'llanma (UZ/RU) tayyorlandi.
 - **Bot salomlashuv va mazmunsiz savollardan o'rganmaydi.** «Assalomu alaykum», «Нукус к3», «Тут тоже самое»,
   «@Guzel_Taipova», «Почему так ?» kabi savollar va «Готово», «отвязала, переподключите», «Tuzatildi ✅», «Bu
   so'rovni … bajaradi» kabi javoblar endi bilim bazasiga nomzod bo'lmaydi (standartga qo'shishda ham). Navbatni

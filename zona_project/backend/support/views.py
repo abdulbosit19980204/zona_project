@@ -1007,6 +1007,14 @@ def history_continue(request):
 
 
 # ====================================================================== tahlil: xodimlar javoblari va aniqlashtirishlar
+def _credit(u):
+    """Hisobotda kimga yoziladi: umumiy akkaunt (@IT_StarGroup) — asosiy operatoriga (Xusniddin), qolganlar — o'ziga."""
+    c = u.contact if u is not None and u.contact_id else None
+    if c is not None and c.operator_id:
+        return c.operator.name
+    return u.staff_name()
+
+
 @zona_api(["GET"], [CanView])
 def analytics(request):
     from collections import Counter, defaultdict
@@ -1030,8 +1038,8 @@ def analytics(request):
     per = defaultdict(lambda: {"answers": 0, "clarifications": 0, "times": [], "groups": set(), "questions": set(),
                                "days": set(), "topics": Counter(), "last": None, "user": None})
     for r in (msgs.filter(kind__in=[Message.STAFF, Message.CLARIFY], user__isnull=False)
-              .select_related("user__member", "user__contact", "question__entry", "group")):
-        name = r.user.staff_name()
+              .select_related("user__member", "user__contact__operator", "question__entry", "group")):
+        name = _credit(r.user)
         row = per[name]
         row["user"] = row["user"] or r.user
         row["groups"].add(r.group.title if r.group else "")
@@ -1053,9 +1061,10 @@ def analytics(request):
     total_answers = sum(r["answers"] for r in per.values()) + sum(panel.values()) or 1
     staff = []
     # bot taniydigan, lekin shu davrda hali javob yozmagan xodimlar ham ro'yxatda (0 bilan) — kim tanilgani ko'rinib tursin
-    for u in TgUser.objects.filter(Q(member__isnull=False) | Q(contact__isnull=False)).select_related("member", "contact"):
-        if u.staff_name() not in per and u.staff_name() not in panel:
-            per[u.staff_name()]["user"] = u
+    for u in TgUser.objects.filter(Q(member__isnull=False) | Q(contact__isnull=False)).select_related("member",
+                                                                                                     "contact__operator"):
+        if _credit(u) not in per and _credit(u) not in panel:
+            per[_credit(u)]["user"] = u
     for name in set(per) | set(panel):
         r = per[name]
         a = authored.get(name, Counter())
@@ -1077,10 +1086,12 @@ def analytics(request):
                   .values_list("pk", "resolution"))
     # reaksiya bilan qabul qilgan savollar (qisman javob) va hozir "jarayonda" turganlari
     reacts, working = Counter(), Counter()
-    for h in questions.filter(handler__isnull=False, stage="react").select_related("handler__member", "handler__contact"):
-        reacts[h.handler.staff_name()] += 1
-    for h in questions.filter(handler__isnull=False, resolution=Message.WORK).select_related("handler__member", "handler__contact"):
-        working[h.handler.staff_name()] += 1
+    for h in questions.filter(handler__isnull=False, stage="react").select_related("handler__member",
+                                                                                     "handler__contact__operator"):
+        reacts[_credit(h.handler)] += 1
+    for h in questions.filter(handler__isnull=False, resolution=Message.WORK).select_related(
+            "handler__member", "handler__contact__operator"):
+        working[_credit(h.handler)] += 1
     for row in staff:
         qids = per[row["name"]]["questions"]
         row["resolved"] = sum(1 for i in qids if res_of.get(i) == Message.YES)

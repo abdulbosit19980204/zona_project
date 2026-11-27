@@ -66,6 +66,14 @@ CODE_RE = re.compile(r"\bUZ-\d{6,}\b")
 ORDER_RE = re.compile(r"(?:№|N[o°]?\s?|zakaz\s*|заказ[:\s]*№?\s*)(\d{5,})", re.I)
 
 
+def is_external(d):
+    """Savolning asosiy mas'uli tashqi jamoami (level EXT: Pro-target) — toifa mas'uli yoki tanilgan yozuvning mas'uli."""
+    if getattr(d, "owner", False) and d.responsible:
+        return d.responsible[0].get("level") == "EXT"
+    e = d.entry
+    return bool(e is not None and e.responsible_id and e.responsible.level == "EXT")
+
+
 def decide_task(q, d, s=None):
     """(kerakmi, ijrochi, sabab). d — engine.Decision."""
     s = s or Settings.load()
@@ -76,6 +84,10 @@ def decide_task(q, d, s=None):
         # yoki nofaol guruh
         return False, "", ""
     e = d.entry
+    if is_external(d):
+        # tashqi jamoa (Pro-target, EXT) mas'ul — PRBC vazifasi umuman ochilmaydi va boshqa xodimga ham tushirilmaydi
+        # (egasining qoidasi, 2026-11-27)
+        return False, "", "ext"
     if e is not None and e.creates_task:
         m = e.responsible if e.responsible_id else None
         if getattr(d, "owner", False) and d.responsible:  # toifa mas'uli (masalan, aksiya — operator) ustun
@@ -101,6 +113,8 @@ def decide_task(q, d, s=None):
             return True, _tg_of(m, s), f"responsible:{m.name}"[:200]
     if every and d.needs_human:
         # odamga uzatilgan har savol — vazifa: mas'ul (IT bo'limida bo'lmasa ham) yoki standart ijrochi
+        if found and found[0].level == "EXT":
+            return False, "", "ext"  # birinchi mas'ul tashqi jamoa — boshqa xodimga tushirilmaydi
         m = next((x for x in found if x.level != "EXT"), None)
         return True, _tg_of(m, s), (f"escalated:{m.name}" if m else "escalated")[:200]
     return False, "", ""
