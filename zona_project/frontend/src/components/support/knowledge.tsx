@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 
 import { supportApi, type EntryStatus, type TestResult } from "./api";
-import { EntryBadge, fmtDate, SearchPicker, Segmented, stageLabel, useSupportMutation } from "./common";
+import { EntryBadge, fmtDate, SearchPicker, Segmented, stageLabel, useStepper, useSupportMutation } from "./common";
 import { EntryEditor } from "./entry-editor";
 import { smartFilter } from "./smart-search";
 import { useSt, type SKey, type ST } from "./i18n";
@@ -72,6 +72,7 @@ function KnowledgeInner() {
       ? (e: (typeof rows)[number]) => -(e.image_examples_count ?? 0) : (e: (typeof rows)[number]) => -new Date(e.updated_at).getTime();
     return [...rows].sort((a, b) => key(a) - key(b));
   }, [list.data, q, resp, zone, flags, sort]);
+  const [limit, sentinel] = useStepper(shown?.length ?? 0, `${status}|${kind}|${q}|${resp}|${zone}|${[...flags].join()}|${sort}`);
   const [selecting, setSelecting] = useState(false);
   const [sel, setSel] = useState<Set<number>>(new Set());
   const bulk = useSupportMutation((a: "kind_template" | "kind_faq" | "mode_auto" | "mode_on" | "mode_off") => supportApi.bulk([...sel], a),
@@ -148,7 +149,7 @@ function KnowledgeInner() {
         <>
           <p className="mb-2 text-xs text-muted-foreground">{t("kbCount", { n: shown.length })}</p>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {shown.map((e) => (
+            {shown.slice(0, limit).map((e) => (
               <button key={e.id} type="button" onClick={() => (selecting ? toggleSel(e.id) : edit(e.id))}
                 className={`group flex flex-col rounded-xl border bg-card text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${selecting && sel.has(e.id) ? "border-primary ring-2 ring-primary/30" : ""}`}>
                 <div className="flex flex-1 flex-col gap-2 p-4">
@@ -180,6 +181,7 @@ function KnowledgeInner() {
               </button>
             ))}
           </div>
+          {limit < shown.length && <div ref={sentinel} className="py-4 text-center text-xs text-muted-foreground">{t("kbCount", { n: `${limit} / ${shown.length}` })}</div>}
         </>
       )}
       <EntryEditor entryId={editing} open={open} onOpenChange={setOpen} />

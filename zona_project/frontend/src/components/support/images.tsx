@@ -161,6 +161,7 @@ function ScreenCard({ s, t, tags, options }: { s: ScreenTypeInfo; t: ST; tags: S
   const can = useCan();
   const [title, setTitle] = useState(s.title);
   const [more, setMore] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const save = useSupportMutation((body: { title?: string; tag?: string; entry?: number | null }) => supportApi.screenUpdate(s.id, body), t("saved"));
   const hide = useSupportMutation(() => supportApi.screenHide(s.id), t("imgHidden"));
   const inbox = `/support?${new URLSearchParams({ ex: "1", scope: "all", days: "3650", f_screen: s.title }).toString()}`;
@@ -181,9 +182,11 @@ function ScreenCard({ s, t, tags, options }: { s: ScreenTypeInfo; t: ST; tags: S
           </Link>
           {can.edit ? (
             <select className="ml-auto h-7 max-w-36 rounded-md border bg-background px-1.5 text-xs" value={s.tag}
-              onChange={(e) => save.mutate({ tag: e.target.value })} aria-label={t("dTags")}>
+              onChange={(e) => save.mutate({ tag: e.target.value })} aria-label={t("dTags")}
+              onFocus={() => setTagsOpen(true)} onPointerDown={() => setTagsOpen(true)}>
               <option value="">{t("imgNoTag")}</option>
-              {tags.map((x) => <option key={x.key} value={x.key}>{x.title}</option>)}
+              {/* 155 karta × 18 teg — variantlar faqat select ochilganda chiziladi */}
+              {(tagsOpen ? tags : tags.filter((x) => x.key === s.tag)).map((x) => <option key={x.key} value={x.key}>{x.title}</option>)}
             </select>
           ) : s.tag_title && <Badge variant="secondary" className="ml-auto font-normal">{s.tag_title}</Badge>}
         </div>

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, type LucideIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,23 @@ import { smartFilter } from "./smart-search";
 import type { SKey, ST } from "./i18n";
 
 export { fmtDate } from "@/components/qrdrive/common";
+
+/** Uzun ro'yxatni bosqichma-bosqich chizish: avval `step` ta, pastdagi belgi ko'ringanda yana `step` ta.
+ *  `reset` o'zgarsa (filtr, qidiruv) — boshidan. Qaytaradi: [ko'rsatiladigan son, pastdagi belgi uchun ref]. */
+export function useStepper(total: number, reset: unknown, step = 60) {
+  const [n, setN] = useState(step);
+  const [key, setKey] = useState(reset);
+  if (key !== reset) { setKey(reset); setN(step); }
+  const [el, setEl] = useState<Element | null>(null);
+  useEffect(() => {
+    if (!el || n >= total || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) setN((x) => x + step); },
+      { rootMargin: "600px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [el, n, total, step]);
+  return [Math.min(n, total), setEl] as const;
+}
 
 /** Mas'ulni tanlash (xodim yoki jamoa). Bo'sh — mas'ul belgilanmagan. */
 export function OwnerSelect({ value, onChange, t, disabled, className }: {

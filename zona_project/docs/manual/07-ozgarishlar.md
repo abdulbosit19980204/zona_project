@@ -4,6 +4,8 @@
 
 ## 2026-11-28
 
+- **Panel tezligi:** bilim bazasi yozuvlari 60 tadan ko'rsatiladi (pastga yetganda keyingilari o'zi yuklanadi — 400+ karta
+  birdan chizilmaydi); rasm turlari sahifasida teg ro'yxati faqat ochilganda to'ldiriladi.
 - **Rasmlar tezroq va kam joy:** bir xil rasm qayta o'qilmaydi (iz, OCR, qizil xato — oldingisidan); tanish ekran turida
   yetarli namuna bo'lsa yangi fayl serverga yozilmaydi (Telegram havolasi qoladi, PRBC vazifasiga baribir
   biriktiriladi). Panelda rasmlar faqat ko'ringanda va eskiz sifatida yuklanadi, asli — bosilganda; o'rgatilmagan
