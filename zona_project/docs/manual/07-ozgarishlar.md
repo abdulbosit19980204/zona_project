@@ -4,6 +4,10 @@
 
 ## 2026-11-27
 
+- **PRBC vazifalari sifati:** takror qoidasi «bitta holat — bitta vazifa» (agent + klient/zakaz/STIR + muammo): turli
+  klientlar — alohida vazifalar, shu klient haqida qayta yozilsa — izoh; «тоже самое» — ochiq vazifaga izoh. Mas'ul
+  topilmasa vazifa ochilmaydi. Sarlavha salom/«кушиб беринг» emas — keyingi mazmunli xabardan yoki skrinshot xatosidan.
+  @IT_StarGroup ijrochi bo'lmaydi (operatorga).
 - **Review navbati haftalik avtomatik yopiladi** — yakshanba 03:45 (`foydali-close-review.timer`, 7 kundan eski yozuvlar).
 - **Sozlamalar sahifasi tezlashdi:** «Javob berish» bo'limida raqamli maydondan chiqilganda (o'zgarmagan bo'lsa ham) saqlash
   va sahifaning qayta yaratilishi sikl hosil qilib, serverga to'xtovsiz so'rov yuborardi. Endi faqat qiymat o'zgarsa

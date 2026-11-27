@@ -97,3 +97,60 @@ class AnalyticsCreditTests(Base):
         self.assertEqual(rows["Xusniddin"]["answers"], 1)
         self.assertEqual((rows["Guzel Taipova"]["answers"], rows["Eldar"]["answers"]), (1, 1))
         self.assertTrue(xu.pk)
+
+
+class CaseDedupeTests(Base):
+    """Bitta holat = bitta agent + bitta obyekt (UZ-kod, zakaz, STIR) + bitta muammo: turli klient — alohida vazifa."""
+
+    def setUp(self):
+        super().setUp()
+        Settings.objects.update(task_mode="api")
+        self.agent = TgUser.objects.create(tg_id=900, username="agent1", name="Agent")
+        self.mid = 0
+
+    def ask(self, text, user=None):
+        self.mid += 1
+        q = Message.objects.create(bot=self.bot, chat_id=-1, message_id=self.mid, kind=Message.QUESTION, text=text,
+                                   user=user or self.agent, category="promo")
+        d = engine.apply_owner(engine.Decision("", None, 0, "", True, []), text)
+        return tasks.maybe_create(q, d)
+
+    def test_three_clients_three_tasks_same_client_one_task(self):
+        from .models import SupportTask
+        a = self.ask("UZ-00011111 klientga aksiya chiqmayapti")
+        b = self.ask("UZ-00022222 klientga aksiya chiqmayapti")
+        c = self.ask("UZ-00033333 klientga ham aksiya chiqmayapti")
+        self.assertEqual(len({a.pk, b.pk, c.pk}), 3)
+        again = self.ask("UZ-00011111 da hali ham aksiya yo'q, skidka chiqmadi")
+        self.assertEqual(again.pk, a.pk)
+        self.assertEqual(SupportTask.objects.count(), 3)
+        self.assertEqual(len(SupportTask.objects.get(pk=a.pk).duplicates), 1)
+
+    def test_continuation_goes_to_open_task(self):
+        a = self.ask("UZ-00044444 klientga aksiya skidka chiqmayapti")
+        t = self.ask("Тут тоже самое")
+        self.assertEqual(t.pk if t else None, a.pk)
+
+    def test_no_owner_no_task(self):
+        Settings.objects.update(category_owners=None)
+        q = Message.objects.create(bot=self.bot, chat_id=-1, message_id=99, kind=Message.QUESTION,
+                                   text="Ilovada noma'lum xato chiqyapti, ishlamayapti", user=self.agent)
+        d = engine.Decision("", None, 0, "", True, [])
+        self.assertEqual(tasks.decide_task(q, d), (False, "", "no-owner"))
+
+    def test_title_from_meaningful_message(self):
+        q = Message.objects.create(bot=self.bot, chat_id=-1, message_id=50, kind=Message.QUESTION, text="Добрый день",
+                                   user=self.agent)
+        Message.objects.create(bot=self.bot, chat_id=-1, message_id=51, kind=Message.INFO, question=q, user=self.agent,
+                               text="Klientga aksiya skidka chiqmayapti UZ-00055555")
+        title = tasks.problem_text(q, "Savol")
+        self.assertTrue(title.startswith("Klientga aksiya skidka chiqmayapti"), title)
+        q2 = Message.objects.create(bot=self.bot, chat_id=-1, message_id=52, kind=Message.QUESTION, text="Кушиб беринг",
+                                    user=self.agent, ocr_text="Торговая точка «Bahor» отправлена на модерацию")
+        self.assertNotIn("Кушиб", tasks.problem_text(q2, "Savol"))
+
+    def test_shared_account_assignee_is_operator(self):
+        self.assertEqual(tasks.operator_tg("@IT_StarGroup"), "ganiyevxusniddin")
+        self.assertEqual(tasks.operator_tg("StargroupSaid"), "StargroupSaid")
+        self.assertEqual(tasks.case_keys("uz-00012345 va zakaz 1234567, STIR 301234567"),
+                         {"UZ-00012345", "zakaz:1234567", "stir:301234567"})

@@ -191,8 +191,8 @@ class EscalationTests(Base):
         q = self.question("ProTarget'da klient chiqmayapti, nima qilay")
         d = Decision("", None, 0, "", True, [])
         need, assignee, reason = st_tasks.decide_task(q, d)
-        self.assertTrue(need)
-        self.assertEqual(reason, "escalated")
+        # mas'ul topilmasa ijrochisiz vazifa ochilmaydi (PM, 2026-11-27) — savol odam navbatida qoladi
+        self.assertEqual((need, reason), (False, "no-owner"))
         sv = Member.objects.create(name="Supervayzerlar", role="SV", is_team=True)
         d = Decision("", None, 0, "", True, [{"id": sv.id, "name": sv.name}])
         self.assertTrue(st_tasks.decide_task(q, d)[0])

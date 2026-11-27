@@ -24,8 +24,14 @@ Menyu: **Support bot → PRBC vazifalar** (Vazifalar nazorati, Vazifalar, 1C xod
    - guruhda **PRBC vazifa** o'chiq bo'lsa — VAZIFALAR (test guruhi);
    - **eski** (yangi guruhga yo'naltirilgan) yoki nofaol guruhda;
    - salomlashuv, suhbat, aniqlashtirish yoki takror xabar bo'lsa.
-4. **Bitta mavzu — bitta vazifa:** shu odam 24 soat ichida shu mavzuda yana so'rasa, yangi vazifa ochilmaydi —
-   savol mavjud vazifaga izoh bo'lib qo'shiladi.
+4. **Bitta holat — bitta vazifa.** Holat = bitta agent + bitta obyekt (nuqta/klient kodi UZ-…, zakaz raqami, STIR,
+   JShShIR) + bitta muammo. Shu odam 24 soat ichida **shu obyekt** haqida yana yozsa — yangi vazifa ochilmaydi, xabar
+   mavjud vazifaga izoh bo'ladi; **boshqa obyekt** (masalan, 3 xil klientga aksiya) — har biri alohida vazifa.
+   Mazmunsiz davom xabari («Тут тоже самое», «nma boldi») — oxirgi ochiq vazifaga izoh. Obyekt yozilmagan bo'lsa —
+   shu standart holat yoki o'xshash matn bo'yicha (avvalgidek). Bitta xabarda bir nechta klient — hozircha bitta vazifa.
+5. **Mas'ul topilmasa vazifa ochilmaydi** (ijrochisiz vazifa yo'q) — savol guruhda odam navbatida qoladi.
+6. **Sarlavha** — savolning birinchi mazmunli matni: «Добрый день», «Кушиб беринг» bo'lsa savol egasining keyingi
+   mazmunli xabari yoki skrinshotdagi asosiy xato; bo'lmasa tanilgan holat nomi.
 
 > Qoida: **ROP guruhlaridan vazifa ochiladi, VAZIFALAR'dan — yo'q.** Yangi guruh qo'shilsa, standart holatda vazifa
 > yoqiq bo'ladi — test guruhini o'chirib qo'ying (PRBC sozlamalari → Guruh → loyiha jadvali).

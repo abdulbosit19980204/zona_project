@@ -66,6 +66,16 @@ CODE_RE = re.compile(r"\bUZ-\d{6,}\b")
 ORDER_RE = re.compile(r"(?:№|N[o°]?\s?|zakaz\s*|заказ[:\s]*№?\s*)(\d{5,})", re.I)
 
 
+def operator_tg(username):
+    """@IT_StarGroup kabi umumiy akkaunt -> asosiy operatorining Telegram'i (Xusniddin); boshqalar — o'zgarmaydi."""
+    u = (username or "").lstrip("@")
+    if not u:
+        return u
+    from zona.models import TeamContact
+    c = TeamContact.objects.filter(telegram__iexact=u, operator__isnull=False).select_related("operator").first()
+    return c.operator.telegram.lstrip("@") if c is not None and c.operator.telegram else u
+
+
 def is_external(d):
     """Savolning asosiy mas'uli tashqi jamoami (level EXT: Pro-target) — toifa mas'uli yoki tanilgan yozuvning mas'uli."""
     if getattr(d, "owner", False) and d.responsible:
@@ -116,17 +126,58 @@ def decide_task(q, d, s=None):
         if found and found[0].level == "EXT":
             return False, "", "ext"  # birinchi mas'ul tashqi jamoa — boshqa xodimga tushirilmaydi
         m = next((x for x in found if x.level != "EXT"), None)
-        return True, _tg_of(m, s), (f"escalated:{m.name}" if m else "escalated")[:200]
+        if m is None:
+            return False, "", "no-owner"  # mas'ul topilmadi — ijrochisiz vazifa ochilmaydi, savol odam navbatida
+        return True, _tg_of(m, s), f"escalated:{m.name}"[:200]
     return False, "", ""
 
 
+STIR_RE = re.compile(r"(?:stir|инн|inn|стир)\s*[:№-]?\s*(\d{9})\b", re.I)
+PINFL_RE = re.compile(r"\b(\d{14})\b")
+
+
+def case_keys(text):
+    """Holat (case) obyekti: nuqta/klient kodi (UZ-…), zakaz raqami, STIR, JShShIR. Bitta holat = bitta agent + bitta
+    obyekt + bitta muammo turi (egasi, 2026-11-27): 10 ta klientga aksiya — 10 ta vazifa."""
+    t = text or ""
+    keys = {m.group(0).upper().strip() for m in re.finditer(r"\bUZ-\d{6,}\b", t, re.I)}
+    keys |= {"zakaz:" + m.group(1) for m in ORDER_RE.finditer(t)}
+    keys |= {"stir:" + m.group(1) for m in STIR_RE.finditer(t)}
+    keys |= {"pinfl:" + m.group(1) for m in PINFL_RE.finditer(t)}
+    return keys
+
+
+def _keys_of(m):
+    if m is None:
+        return set()
+    ks = case_keys(f"{m.text or ''} {m.ocr_text or ''}")
+    for i in Message.objects.filter(question=m, kind=Message.INFO).values_list("text", "ocr_text")[:10]:
+        ks |= case_keys(" ".join(x or "" for x in i))
+    return ks
+
+
 def _same_topic(q, d):
-    """Shu odamning 24 soat ichidagi shu mavzudagi vazifasi (bitta mavzu — bitta vazifa)."""
-    from .engine import similarity
+    """Shu odamning 24 soat ichidagi SHU HOLATI bo'yicha vazifasi (mavjud vazifaga izoh) yoki None (yangi vazifa).
+
+    - Ikkalasida obyekt kaliti (UZ-kod, zakaz, STIR) bor: kesishsa — bitta holat, farq qilsa — ALOHIDA vazifa.
+    - Yangi xabar mazmunsiz davom («тоже самое», «nma boldi», «shu») — oxirgi ochiq vazifaga izoh.
+    - Kalit yo'q: avvalgidek — shu yozuv (standart holat) yoki matn o'xshashligi ≥60."""
+    from .engine import learnable_question, similarity
     since = timezone.now() - timezone.timedelta(hours=DEDUPE_HOURS)
     qs = SupportTask.objects.filter(created_at__gte=since, message__user=q.user, message__chat_id=q.chat_id) \
-        .exclude(status=SupportTask.FAILED).select_related("message")
+        .exclude(status=SupportTask.FAILED).select_related("message").order_by("-created_at")
+    mine = _keys_of(q)
+    text = CMD_RE.sub("", q.text or "").strip()
     for t in qs[:20]:
+        theirs = _keys_of(t.message)
+        if mine and theirs:
+            if mine & theirs:
+                return t
+            continue  # boshqa klient / zakaz — alohida holat
+        if not mine and not q.photo_file_id and not learnable_question(text):
+            return t  # mazmunsiz davom xabari — oxirgi vazifaga izoh
+        if mine and not theirs:
+            continue  # yangi xabarda aniq obyekt bor, eskisida yo'q — alohida (AI aniqlashtiradi: 0e)
         if d.entry is not None and t.entry_id == d.entry.pk:
             return t
         if t.message and q.text and t.message.text and similarity(q.text, t.message.text) >= 60:
@@ -158,8 +209,18 @@ def build_text(q, title, assignee):
 def maybe_create(q, d, tg=None):
     """Javobdan keyin chaqiriladi (jonli rejim). remind — darhol eslatadi (tg — bot klienti); account — navbatga qo'yadi."""
     try:
+        from .engine import learnable_question
+        if q.user_id and not q.photo_file_id and not learnable_question(CMD_RE.sub("", q.text or "")):
+            # «Тут тоже самое», «nma boldi» — yangi holat emas: shu odamning ochiq vazifasiga izoh bo'ladi
+            prev = _same_topic(q, d)
+            if prev:
+                SupportTask.objects.filter(pk=prev.pk).update(duplicates=[*prev.duplicates, q.pk][-50:])
+                return prev
         need, assignee, reason = decide_task(q, d)
         if not need:
+            return None
+        assignee = operator_tg(assignee)  # umumiy akkaunt (@IT_StarGroup) — ijrochi uning asosiy operatori
+        if not assignee and Settings.load().task_mode != "api":
             return None
         if hasattr(q, "task"):
             return q.task
@@ -213,12 +274,26 @@ def strip_greeting(text):
 def problem_text(q, title, entry=None):
     """Vazifa sarlavhasi: aniq yozilgan savol matni; bo'lmasa — tanilgan holat nomi (xom OCR emas). Oxirida — kimdan,
     rasmda topilgan UZ-kod va zakaz raqami (ijrochi tez topishi uchun)."""
-    from .engine import substantive
+    from .engine import learnable_question
     text = strip_greeting(" ".join(CMD_RE.sub("", (q.text or "").strip()).split()))
-    if substantive(text):
+    if not learnable_question(text):
+        # «Добрый день», «Кушиб беринг», «Nma boldi» — sarlavha emas: savol egasining keyingi mazmunli xabari yoki
+        # skrinshotdagi asosiy xato
+        nxt = next((strip_greeting(" ".join((i.text or "").split())) for i in
+                    Message.objects.filter(question=q, kind=Message.INFO).order_by("id")[:5]
+                    if learnable_question(i.text or "")), "") if q.pk else ""
+        if nxt:
+            text = nxt
+        elif entry is not None:
+            text = ""  # tanilgan holat nomi (pastda) — xom OCR'dan ishonchli
+        else:
+            # skrinshotdagi qizil xato qatori (ocr.red_text) — asosiy xato; xom OCR sarlavha bo'lmaydi
+            main = " ".join((q.alert_text or "").split())
+            text = main if learnable_question(main) else ""
+    if text and learnable_question(text):
         body = text
     elif entry is not None:
-        body = entry.title + (f" — {text}" if text else "")
+        body = entry.title
     else:
         body = text or ("Rasmli savol" if q.photo_file_id else title)
     if len(body) > 160:
