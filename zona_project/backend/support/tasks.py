@@ -66,6 +66,14 @@ CODE_RE = re.compile(r"\bUZ-\d{6,}\b")
 ORDER_RE = re.compile(r"(?:№|N[o°]?\s?|zakaz\s*|заказ[:\s]*№?\s*)(\d{5,})", re.I)
 
 
+def _task_media(q):
+    """Vazifaga biriktiriladigan fayllar: serverdagi yoki Telegram'dan olinadigan (fayli diskka yozilmagan tanish
+    ekran — file_id bor)."""
+    from django.db.models import Q
+    return list(Media.objects.filter(message=q).filter(~Q(path="") | ~Q(tg_file_ids={}))
+                .values_list("id", flat=True)[:10])
+
+
 def operator_tg(username):
     """@IT_StarGroup kabi umumiy akkaunt -> asosiy operatorining Telegram'i (Xusniddin); boshqalar — o'zgarmaydi."""
     u = (username or "").lstrip("@")
@@ -232,7 +240,7 @@ def maybe_create(q, d, tg=None):
         s = Settings.load()
         if s.task_mode == "api":  # PRBC API orqali: navbatga yoziladi, prbc_worker bir necha soniyada yaratadi
             text, link = build_text(q, title, assignee)
-            media = list(Media.objects.filter(message=q).exclude(path="").values_list("id", flat=True)[:10])
+            media = _task_media(q)
             return SupportTask.objects.create(message=q, entry=d.entry, assignee=assignee, title=title, text=text,
                                               link=link, media_ids=media, reason=reason)
         if s.task_mode == "command":
@@ -243,7 +251,7 @@ def maybe_create(q, d, tg=None):
             return SupportTask.objects.create(message=q, entry=d.entry, title=title, reason=reason, status=SupportTask.SKIPPED,
                                               error="Ijrochi topilmadi: Sozlamalar → PRBC vazifalari → standart ijrochini kiriting.")
         text, link = build_text(q, title, assignee)
-        media = list(Media.objects.filter(message=q).exclude(path="").values_list("id", flat=True)[:10])
+        media = _task_media(q)
         return SupportTask.objects.create(message=q, entry=d.entry, assignee=assignee, title=title, text=text, link=link,
                                           media_ids=media, reason=reason)
     except Exception:  # noqa: BLE001 — vazifa xatosi javob berishni to'xtatmasin

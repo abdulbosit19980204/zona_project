@@ -47,12 +47,47 @@ def thumb_bytes(data, side=THUMB_SIDE):
         return None, ""
 
 
+def cached_thumb(m):
+    """Panel ro'yxati uchun eskiz (asl fayl o'zgarmaydi): media/thumbcache/<sha>.webp — bir marta yasaladi.
+    Qaytaradi: (bayt, mime) yoki (None, "")."""
+    from .runner import media_dir
+    folder = media_dir() / "thumbcache" / (m.sha256 or "xx")[:2]
+    for ext, mime in ((".webp", "image/webp"), (".jpg", "image/jpeg")):
+        p = folder / f"{m.sha256 or m.pk}{ext}"
+        if p.exists():
+            try:
+                return p.read_bytes(), mime
+            except OSError:
+                break
+    try:
+        data = Path(m.path).read_bytes()
+    except OSError:
+        return None, ""
+    small, mime = thumb_bytes(data, side=240)
+    if not small or len(small) >= len(data):
+        return data, m.mime or "image/jpeg"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{m.sha256 or m.pk}{'.webp' if mime == 'image/webp' else '.jpg'}").write_bytes(small)
+    except OSError:
+        pass
+    return small, mime
+
+
 def _unlink_if_unused(path, pk):
     if path and not Media.objects.filter(path=path).exclude(pk=pk).exists():
         try:
             Path(path).unlink(missing_ok=True)
         except OSError:
             pass
+        sha = Path(path).stem
+        if not Media.objects.filter(sha256=sha, slim=False).exclude(path="").exclude(pk=pk).exists():
+            from .runner import media_dir
+            for ext in (".webp", ".jpg"):  # panel eskizi keshi ham (asl fayl endi yo'q)
+                try:
+                    (media_dir() / "thumbcache" / sha[:2] / f"{sha}{ext}").unlink(missing_ok=True)
+                except OSError:
+                    pass
 
 
 def drop(m):

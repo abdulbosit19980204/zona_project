@@ -71,16 +71,40 @@ def store(data, kind="photo", name="", mime="", source="question", message=None)
     ext = Path(name).suffix.lower() if name and Path(name).suffix else (EXT.get(kind) or mimetypes.guess_extension(mime or "") or "")
     folder = media_dir() / "files" / sha[:2]
     path = folder / f"{sha}{ext}"
-    try:
-        folder.mkdir(parents=True, exist_ok=True)
-        if not path.exists():
-            path.write_bytes(data)
-    except OSError:
+    extra, prev = {}, None
+    if kind == Media.PHOTO:
+        # aynan shu rasm (sha256) avval kelgan — iz, OCR va ekran turi qayta hisoblanmaydi
+        prev = Media.objects.filter(sha256=sha, kind=Media.PHOTO).exclude(dhash="").order_by("-id").first()
+    if prev is not None:
+        feats = {"width": prev.width, "height": prev.height, "dhash": prev.dhash, "dhash_mid": prev.dhash_mid}
+        extra = {"ocr_text": prev.ocr_text, "screen_id": prev.screen_id}
+    else:
+        feats = features(data) if kind == Media.PHOTO else {}
+    write = True
+    if kind == Media.PHOTO and source in ("question", "live") and message is not None and feats.get("dhash"):
+        # tanish ekran turi va unda yetarli namuna fayli bor — yangi fayl diskka yozilmaydi (iz + OCR + Telegram
+        # file_id qoladi; asl rasm kerak bo'lsa — bot orqali Telegram'dan). Noyob / yangi ekranlar saqlanadi.
+        from . import screens, slim
+        tid = extra.get("screen_id") or screens.nearest(feats)[0]
+        if tid and Media.objects.filter(screen_id=tid).exclude(path="").count() >= slim.KEEP_PER_TYPE \
+                and not path.exists():
+            write, extra["screen_id"] = False, tid
+    if write:
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                path.write_bytes(data)
+        except OSError:
+            path = Path("")
+    else:
         path = Path("")
-    feats = features(data) if kind == Media.PHOTO else {}
-    return Media.objects.create(kind=kind, path=str(path) if str(path) not in ("", ".") else "", name=name[:200],
-                                mime=mime[:100] or (mimetypes.guess_type(name)[0] or "") if name else mime[:100],
-                                size=len(data), sha256=sha, source=source, message=message, **feats)
+        extra.update(slim=True, full_size=len(data))
+    m = Media.objects.create(kind=kind, path=str(path) if str(path) not in ("", ".") else "", name=name[:200],
+                             mime=mime[:100] or (mimetypes.guess_type(name)[0] or "") if name else mime[:100],
+                             size=len(data), sha256=sha, source=source, message=message, **feats,
+                             **{k: v for k, v in extra.items() if v not in (None, "")})
+    m.prev_alert = (prev.message.alert_text if prev is not None and prev.message_id else None)
+    return m
 
 
 def match(media_or_feats, threshold, include_unapproved=False):

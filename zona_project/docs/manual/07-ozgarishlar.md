@@ -4,6 +4,10 @@
 
 ## 2026-11-28
 
+- **Rasmlar tezroq va kam joy:** bir xil rasm qayta o'qilmaydi (iz, OCR, qizil xato — oldingisidan); tanish ekran turida
+  yetarli namuna bo'lsa yangi fayl serverga yozilmaydi (Telegram havolasi qoladi, PRBC vazifasiga baribir
+  biriktiriladi). Panelda rasmlar faqat ko'ringanda va eskiz sifatida yuklanadi, asli — bosilganda; o'rgatilmagan
+  savol rasmlari fayli 30 kun saqlanadi.
 - **Yangi toifa «PRBC: yangi nuqta».** PRBC orqali yangi nuqta qo'shish savollari («Заявки на точки», «ИНН/ПИНФЛ уже
   есть в 1С», «magazin dabavit qilolmayapmiz», «Tochka kushilmayabdi») endi «Klient / nuqta» (Pro-target) ga emas,
   alohida toifaga tushadi — mas'uli Sozlamalar → Javob berish → Toifa bo'yicha mas'ul (standart: Xusniddin, zaxira — IT

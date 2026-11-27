@@ -170,6 +170,14 @@ Bot guruhda **admin** bo'lishi kerak (yoki BotFather'da privacy o'chiq) — aks 
 | Rasmni avtomatik o'rgatish | yoqiq |
 | Asl rasmni saqlash / eskiz | 3 kun |
 | Bot javoblari skrinshotlari | 90 kun |
+| O'rgatilmagan savol rasmlari fayli (iz va OCR qoladi) | 30 kun (0 — doim) |
+
+**Rasmlar qanday saqlanadi.** Aynan shu rasm (fayl) avval kelgan bo'lsa — vizual iz, OCR matni va qizil xato qatori
+qayta hisoblanmaydi (oldingisidan olinadi, savolga javob tezroq). Yangi rasm tanish ekran turiga tushsa va shu turda
+6 ta namuna fayli allaqachon bo'lsa — fayl serverga yozilmaydi: iz, OCR va Telegram'dagi fayl havolasi qoladi; panelda
+«Telegram» havolasi, PRBC vazifasiga esa rasm Telegram'dan olinib biriktiriladi. Noyob va yangi ekranlar o'qitish uchun
+to'liq saqlanadi. **Panelda** rasmlar faqat ekranda ko'ringanda yuklanadi va ro'yxatda kichik eskiz (≈10 KB)
+ko'rsatiladi; asl nusxa faqat rasm bosilganda olinadi; ro'yxat yangilanganda rasmlar qayta yuklanmaydi (kesh).
 
 ### Savol yopilishi
 | Sozlama | Standart |

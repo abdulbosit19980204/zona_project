@@ -366,7 +366,8 @@ export const supportApi = {
     if (opts.source) fd.append("source", opts.source);
     return (await api.post<MediaInfo[]>(B + "media/upload/", fd, { headers: { "Content-Type": "multipart/form-data" } })).data;
   },
-  mediaBlob: async (id: number) => (await api.get<Blob>(`${B}media/${id}/file/`, { responseType: "blob" })).data,
+  mediaBlob: async (id: number, thumb = false) =>
+    (await api.get<Blob>(`${B}media/${id}/file/`, { params: thumb ? { thumb: 1 } : undefined, responseType: "blob" })).data,
   images: () => get<ImageTypes>("images/"),
   label: (ids: number[], entry: number | null) => post<{ done: number }>("images/label/", { ids, entry }),
   ignoreImages: (ids: number[], ignored = true) => post<{ done: number }>("images/ignore/", { ids, ignored }),

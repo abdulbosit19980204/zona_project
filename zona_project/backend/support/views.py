@@ -1547,12 +1547,22 @@ def media_file(request, pk):
             return resp
     if not m or not m.path:
         raise Http404
+    if request.query_params.get("thumb") == "1" and m.kind == Media.PHOTO and not m.slim:
+        # ro'yxatdagi kichik ko'rinish: asl fayl emas, eskiz (bir marta yasaladi va diskda keshlanadi)
+        from . import slim
+        data, mime = slim.cached_thumb(m)
+        if data:
+            resp = HttpResponse(data, content_type=mime)
+            resp["Cache-Control"] = "private, max-age=604800"
+            return resp
     try:
         fh = open(m.path, "rb")
     except OSError as e:
         raise Http404 from e
-    return FileResponse(fh, content_type=m.mime or ("image/jpeg" if m.kind == Media.PHOTO else "application/octet-stream"),
+    resp = FileResponse(fh, content_type=m.mime or ("image/jpeg" if m.kind == Media.PHOTO else "application/octet-stream"),
                         filename=m.name or None)
+    resp["Cache-Control"] = "private, max-age=604800"  # fayl sha256 nomli — mazmuni o'zgarmaydi
+    return resp
 
 
 @zona_api(["GET"], [CanView])

@@ -1364,6 +1364,10 @@ class Handler:
 
     def _alert(self, q, media):
         """Skrinshotdagi qizil yozuv (xato sababi) — alohida o'qiladi va savolga yoziladi."""
+        prev = getattr(media, "prev_alert", None)
+        if prev is not None:  # aynan shu rasm avval o'qilgan — qayta OCR qilinmaydi
+            q.alert_text = prev
+            return
         try:
             data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
         except OSError:
