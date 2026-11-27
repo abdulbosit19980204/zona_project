@@ -4,6 +4,16 @@
 
 ## 2026-11-27
 
+- **Bot amallari — har biri alohida ruxsat bilan.** Standart holatda bot «yangi tochka» muammosini faqat aniqlaydi va
+  javobda yozadi (nima yetishmaydi, nima kerak) — PRBC'da hech narsa o'zgarmaydi, savol mutaxassisga o'tadi. Panelda
+  amal yoqilsa (ruxsat, rol, guruh bo'limi, pozivnoy, ma'lumotnoma yangilash, arizani 1C ga qayta yuborish) — bot o'zi
+  bajaradi va javobda nima qilinganini (oldin → keyin) yozadi. Doimiy nazorat endi faqat hisobot.
+- **Pozivnoy to'liq yozilguncha so'raladi:** «sr1» kabi noto'liq javobga bot mos variantlarni ko'rsatib qayta so'raydi
+  (3 martagacha). **Bo'lim — guruhga qarab:** xodim savol yozilgan guruhga mos PRBC bo'limiga qo'shiladi.
+- **Sinab ko'rish va ortga qaytarish:** panelda xodim + savol + guruh bo'yicha bot javobini PRBC'ni o'zgartirmasdan
+  ko'rish; jurnalda har o'zgarishning oldingi/keyingi holati va «Ortga qaytarish» tugmasi.
+- **«Не удалось подключиться к серверу» / «Долго грузит и выдает ошибку»** — standart javob: «Перезайдите в
+  приложение», mas'ul — Guzel.
 - **«Yangi tochka qo'sha olmayapman» — bot o'zi hal qiladi.** Guruhda shu savol yoki «ни одно подключение к 1С»
   skrinshoti kelsa, bot xodimni PRBC'da tekshiradi: hisob faol, rol, asosiy bo'lim, «Integratsiyalar» ruxsati va 1C
   pozivnoy. Yetmaganini o'zi beradi, pozivnoyni xodimdan so'raydi va 1C ro'yxatidan topib biriktiradi, so'ng

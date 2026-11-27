@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 
 from django.utils import timezone
 
+from .actions import allowed
 from .client import Client, PrbcError, items_of
 
 log = logging.getLogger("prbc")
@@ -252,16 +253,27 @@ def find_reps(st, text, hint=""):
 
 
 # ------------------------------------------------------------------ yozish (har biri tekshiriladi va jurnalga yoziladi)
-def _log(source, u, action, ok, text, before=None, after=None, question=None):
+def _log(source, u, action, ok, text, before=None, after=None, question=None, reversible=False):
     from .models import AccessLog
     try:
-        AccessLog.objects.create(source=source, prbc_user=u.get("id") if u else None,
-                                 name=((u or {}).get("full_name") or "")[:200], action=action, ok=ok, text=text[:2000],
-                                 before=before or {}, after=after or {}, question=question)
+        return AccessLog.objects.create(source=source, prbc_user=u.get("id") if u else None,
+                                        name=((u or {}).get("full_name") or "")[:200], action=action, ok=ok,
+                                        text=text[:2000], before=before or {}, after=after or {}, question=question,
+                                        reversible=reversible)
     except Exception:  # noqa: BLE001 — jurnal yozilmasa ham ish to'xtamasin
         log.exception("AccessLog")
+        return None
 
 
+def asks_so_far(question):
+    """Shu savolda bot pozivnoyni necha marta so'radi (qayta so'rash chegarasi uchun)."""
+    if not question:
+        return 0
+    from .models import AccessLog
+    return AccessLog.objects.filter(question=question, action="ask").count()
+
+
+# ------------------------------------------------------------------ yozish: har biri {before, after} qaytaradi
 def grant_seat(st, uids):
     """«Integratsiyalar» moduli: Xodim darajasi (faqat ruxsati yo'q yoki Ko'ruvchi bo'lganlarga)."""
     uids = [i for i in uids if st.seats.get(i, "none") not in CREATE_LEVELS]
@@ -276,37 +288,93 @@ def grant_seat(st, uids):
     return done
 
 
-def add_role(st, u):
+def do_seat(st, u):
+    before = st.seats.get(u["id"], "none")
+    if not grant_seat(st, [u["id"]]):
+        raise PrbcError("PRBC darajani o'zgartirmadi")
+    return {"level": before}, {"level": st.seats.get(u["id"], "employee")}
+
+
+def detail(st, u):
+    if "_detail" not in u:
+        u["_detail"] = st.client.get(f"/auth/admin/users/{u['id']}/") or {}
+    return u["_detail"]
+
+
+def do_role(st, u):
+    before = list(u.get("role_codes") or [])
     st.client.post(f"/auth/admin/users/{u['id']}/roles/", {"role_code": "employee", "organization_id": st.org})
-    u["role_codes"] = list(u.get("role_codes") or []) + ["employee"]
+    u.pop("_detail", None)
+    ra = next((r for r in detail(st, u).get("role_assignments") or [] if r.get("role_code") == "employee"), {})
+    u["role_codes"] = before + ["employee"]
+    return {"roles": before}, {"role": "employee", "assignment_id": ra.get("id")}
 
 
-def fix_node(st, u, group_title=""):
-    """Asosiy bo'lim: bitta bo'limi bo'lsa — o'sha; umuman yo'q bo'lsa — guruh nomiga aniq teng bitta bo'lim. Qaytaradi: nom."""
-    d = st.client.get(f"/auth/admin/users/{u['id']}/")
-    rows = d.get("assignments") or []
-    if len(rows) == 1:
-        a = rows[0]
-        st.client.post(f"/auth/admin/users/{u['id']}/nodes/{a['id']}/primary/")
-        return a.get("hierarchy_node_name") or a.get("node_name") or a.get("name") or ""
-    if rows or not group_title:
-        return ""
+def group_node(st, group_title):
+    """Telegram guruh nomiga aniq mos (harf/belgi farqisiz) bitta faol PRBC bo'limi yoki None."""
+    if not group_title:
+        return None
     title = fold(group_title, spaces=False)
     same = [n for n in st.nodes if n.get("is_active", True) and fold(n.get("name"), spaces=False) == title]
-    if len(same) != 1:
-        return ""
-    st.client.post(f"/auth/admin/users/{u['id']}/nodes/", {"hierarchy_node_id": same[0]["id"], "is_primary": True})
-    return same[0].get("name") or ""
+    return same[0] if len(same) == 1 else None
+
+
+def node_plan(st, u, group_title):
+    """Bo'lim bo'yicha nima kerak: (amal, bo'lim nomi) — amal: add / primary / ""."""
+    rows = detail(st, u).get("assignments") or []
+    has_primary = bool(u.get("primary_node_id")) or any(a.get("is_primary") for a in rows)
+    node = group_node(st, group_title)
+    if node is not None:
+        mine = next((a for a in rows if a.get("hierarchy_node_id") == node["id"]), None)
+        if mine is None:
+            return "add", node, not has_primary
+        if not has_primary:
+            return "primary", mine, True
+        return "", None, False
+    if not has_primary and len(rows) == 1:
+        return "primary", rows[0], True
+    return "", None, False
+
+
+def do_node(st, u, plan):
+    kind, obj, primary = plan
+    rows = detail(st, u).get("assignments") or []
+    before = {"assignments": [{"id": a.get("id"), "node": a.get("hierarchy_node_name"), "primary": a.get("is_primary")}
+                              for a in rows]}
+    if kind == "add":
+        st.client.post(f"/auth/admin/users/{u['id']}/nodes/", {"hierarchy_node_id": obj["id"], "is_primary": primary})
+        u.pop("_detail", None)
+        new = next((a for a in detail(st, u).get("assignments") or [] if a.get("hierarchy_node_id") == obj["id"]), {})
+        name = obj.get("name") or ""
+        after = {"assignment_id": new.get("id"), "node_id": obj["id"], "node": name, "primary": primary}
+    else:
+        st.client.post(f"/auth/admin/users/{u['id']}/nodes/{obj['id']}/primary/")
+        name = obj.get("hierarchy_node_name") or ""
+        after = {"primary_of": obj["id"], "node": name}
+    if primary:
+        u["primary_node_id"], u["primary_node_name"] = obj.get("hierarchy_node_id") or obj.get("id"), name
+    return before, after
 
 
 class MappingConflict(PrbcError):
     pass
 
 
+def _mapping_path(st, code):
+    return f"/integrations/connections/{st.conns[code]['id']}/employee-mappings/"
+
+
+def _put_checked(st, path, pairs):
+    """To'liq ro'yxatni saqlaydi va natijani tekshiradi; farq bo'lsa — avvalgi ro'yxat qaytariladi."""
+    res = st.client.request("PUT", path, body={"rows": pairs})
+    got = {(r["employee_user_id"], r["external_guid"]) for r in (res or {}).get("rows") or []}
+    want = {(p["user_id"], p["external_guid"]) for p in pairs}
+    return got == want, got
+
+
 def add_mapping(st, code, u, rep):
     """Pozivnoy biriktirish: to'liq ro'yxat yangidan o'qiladi, bitta qator qo'shiladi, saqlangach qolganlari tekshiriladi."""
-    cid = st.conns[code]["id"]
-    path = f"/integrations/connections/{cid}/employee-mappings/"
+    path = _mapping_path(st, code)
     rows = st.client.get(path).get("rows") or []
     pairs = [{"user_id": r["employee_user_id"], "external_guid": r["external_guid"]} for r in rows]
     if any(p["user_id"] == u["id"] for p in pairs):
@@ -315,18 +383,85 @@ def add_mapping(st, code, u, rep):
     if other:
         raise MappingConflict(f"pozivnoy {other.get('employee_name') or other['employee_user_id']} ga biriktirilgan")
     new = {"user_id": u["id"], "external_guid": rep["guid"]}
-    res = st.client.request("PUT", path, body={"rows": pairs + [new]})
-    after = {(r["employee_user_id"], r["external_guid"]) for r in (res or {}).get("rows") or []}
-    expect = {(p["user_id"], p["external_guid"]) for p in pairs + [new]}
-    if after != expect:
+    ok, got = _put_checked(st, path, pairs + [new])
+    if not ok:
         try:  # kutilmagan natija — avvalgi ro'yxat qaytariladi
             st.client.request("PUT", path, body={"rows": pairs})
         except PrbcError:
             log.exception("PRBC pozivnoylar ro'yxatini qaytarib bo'lmadi")
-        raise PrbcError(f"pozivnoylar ro'yxati kutilganidek saqlanmadi ({len(after)} ≠ {len(expect)})")
+        raise PrbcError(f"pozivnoylar ro'yxati kutilganidek saqlanmadi ({len(got)} ≠ {len(pairs) + 1})")
     st.maps.setdefault(code, {})[u["id"]] = {"employee_user_id": u["id"], "external_guid": rep["guid"],
                                              "external_name": rep.get("name") or "", "employee_name": u.get("full_name")}
-    return len(pairs)
+    return ({"base": code, "mapped": None, "rows": len(pairs)},
+            {"base": code, "guid": rep["guid"], "name": rep.get("name") or "", "rows": len(pairs) + 1})
+
+
+def refresh_refs(st, code):
+    """1C ma'lumotnomalarini yangilash (savdo vakillari) — baza uchun soatiga bir marta."""
+    from django.core.cache import cache
+    key = f"prbc-refresh-refs-{code}"
+    if cache.get(key):
+        return False
+    cache.set(key, 1, 3600)
+    st.client.post(f"/integrations/connections/{st.conns[code]['id']}/refresh-refs/?groups=employees")
+    st._reps.pop(code, None)
+    return True
+
+
+# ------------------------------------------------------------------ ortga qaytarish (panel)
+def revert(entry, actor="", client=None):
+    """AccessLog yozuvidagi o'zgarishni qaytaradi; natija ham jurnalga yoziladi. Qaytaradi: (ok, matn)."""
+    if entry.action not in REVERSIBLE_ACTIONS or not entry.ok or not entry.reversible:
+        return False, "Bu yozuvni ortga qaytarib bo'lmaydi"
+    if entry.reverted_at:
+        return False, "Allaqachon qaytarilgan"
+    client = client or make_client()
+    if client is None:
+        return False, "PRBC ulanishi yoqilmagan"
+    st = State.load(client)
+    uid, a, b = entry.prbc_user, entry.after or {}, entry.before or {}
+    u = st.user(uid) or {"id": uid, "full_name": entry.name}
+    try:
+        if entry.action == "seat":
+            lvl = b.get("level") or "none"
+            client.post(f"/admin/organization-modules/{st.org}/integration-access/",
+                        {"level": lvl, "user_ids": [uid], "include_subtree": False})
+            text = f"«Integratsiyalar»: {a.get('level')} → {lvl}"
+        elif entry.action == "role":
+            if not a.get("assignment_id"):
+                return False, "Rol yozuvi id'si saqlanmagan"
+            client.post(f"/auth/admin/users/{uid}/roles/{a['assignment_id']}/remove/")
+            text = "Employee roli olib tashlandi"
+        elif entry.action == "node":
+            if not a.get("assignment_id"):
+                return False, "Asosiy bo'lim belgisini avtomatik qaytarib bo'lmaydi — PRBC'da qo'lda tanlang"
+            client.post(f"/auth/admin/users/{uid}/nodes/{a['assignment_id']}/remove/", {"confirm": True})
+            text = f"Bo'limdan chiqarildi: {a.get('node')}"
+        else:  # mapping
+            code = a.get("base")
+            if code not in st.conns:
+                return False, f"{code} bazasi topilmadi"
+            path = _mapping_path(st, code)
+            rows = client.get(path).get("rows") or []
+            pairs = [{"user_id": r["employee_user_id"], "external_guid": r["external_guid"]} for r in rows]
+            keep = [p for p in pairs if not (p["user_id"] == uid and p["external_guid"] == a.get("guid"))]
+            if len(keep) == len(pairs):
+                return False, "Bu pozivnoy allaqachon biriktirilmagan"
+            ok, _got = _put_checked(st, path, keep)
+            if not ok:
+                client.request("PUT", path, body={"rows": pairs})
+                return False, "PRBC ro'yxatni kutilganidek saqlamadi — o'zgarish bekor qilindi"
+            text = f"Pozivnoy olib tashlandi: {a.get('name')} ({code})"
+    except PrbcError as e:
+        _log("panel", u, "revert", False, f"{entry.action}: {e}", before=a, after=b)
+        return False, f"PRBC: {e}"
+    entry.reverted_at, entry.reverted_by = timezone.now(), actor[:150]
+    entry.save(update_fields=["reverted_at", "reverted_by"])
+    _log("panel", u, "revert", True, f"qaytarildi ({actor}): {text}", before=a, after=b, question=entry.question)
+    return True, text
+
+
+REVERSIBLE_ACTIONS = ("seat", "role", "node", "mapping")
 
 
 # ------------------------------------------------------------------ tekshirish
@@ -347,6 +482,27 @@ def issues(st, u):
     return [k for k, s, _v in checks(st, u) if s != "ok"]
 
 
+def suggest(st, reply, hint="", limit=8):
+    """Noto'liq pozivnoy («sr1») -> o'xshash bo'sh variantlar [(baza, vakil)] (javobdagi raqamli so'z nomning ichida)."""
+    toks = [t for t in fold(reply).split() if len(t) >= 2 and (re.search(r"\d", t) or len(t) >= 4)]
+    if not toks:
+        return []
+    out = []
+    for code in st.conns:
+        if hint and code != hint:
+            continue
+        try:
+            reps = st.reps(code)
+        except PrbcError:
+            continue
+        for r in reps:
+            name = fold(r.get("name"), spaces=False)
+            if all(t in name for t in toks) and not st.holder(code, r["guid"]):
+                out.append((code, r))
+    out.sort(key=lambda x: (len(x[1].get("name") or ""), x[1].get("name") or ""))
+    return out[: limit + 1]
+
+
 # ------------------------------------------------------------------ matnlar
 def _t(lang, uz, ru):
     return ru if lang == "ru" else uz
@@ -355,7 +511,7 @@ def _t(lang, uz, ru):
 LABEL = {
     "active": ("PRBC hisobi faol", "Аккаунт PRBC активен"),
     "role": ("Rol", "Роль"),
-    "node": ("Asosiy bo'lim", "Основной отдел"),
+    "node": ("Bo'lim", "Отдел"),
     "seat": ("«Integratsiyalar» ruxsati", "Доступ к модулю «Интеграции»"),
     "mapping": ("1C pozivnoy (savdo vakili)", "Позывной 1С (торговый представитель)"),
 }
@@ -363,11 +519,15 @@ LEVEL = {"employee": ("Xodim", "Сотрудник"), "viewer": ("Ko'ruvchi", "�
          "reviewer": ("Tekshiruvchi", "Проверяющий"), "none": ("yo'q", "нет")}
 
 
+def _lv(lang, v):
+    return _t(lang, *LEVEL[v]) if v in LEVEL else v
+
+
 def _line(lang, key, mark, value=""):
-    icon = {"ok": "✅", "fixed": "🔧", "bad": "❌", "warn": "⚠️"}[mark]
+    icon = {"ok": "✅", "fixed": "🔧", "bad": "❌", "warn": "⚠️", "plan": "🧪"}[mark]
     label = _t(lang, *LABEL[key])
     if key == "seat" and value in LEVEL:
-        value = _t(lang, *LEVEL[value])
+        value = _lv(lang, value)
     return f"{icon} {label}" + (f": {value}" if value else "")
 
 
@@ -380,13 +540,20 @@ REOPEN = ("👉 PRBC ilovasini yopib qayta oching — «Заявки на точ
           "Chiqmasa — shu xabarga javob yozing.",
           "👉 Закройте и заново откройте приложение PRBC — в «Заявках на точки» появятся выбор базы и кнопка «+». "
           "Если не появилась — ответьте на это сообщение.")
-ASK = ("❓ Pozivnoyingizni yozing — 1C dagi savdo vakili nomi (masalan: 2.3 Карши К-3). Bilmasangiz, supervayzeringizdan "
-       "so'rang. Shu xabarga javob qilib yozing.",
-       "❓ Напишите ваш позывной — название торгового представителя в 1С (например: 2.3 Карши К-3). Если не знаете — "
-       "спросите у супервайзера. Ответьте на это сообщение.")
-PICK = ("❓ Bir nechta mos pozivnoy topildi — qaysi biri sizniki? To'liq nomini yozing:",
-        "❓ Нашлось несколько подходящих позывных — какой ваш? Напишите полное название:")
+ASK = ("❓ Pozivnoyingizni to'liq yozing — 1C dagi savdo vakili nomi (masalan: 2.3 Карши К-3). Bilmasangiz, "
+       "supervayzeringizdan so'rang. Shu xabarga javob qilib yozing.",
+       "❓ Напишите ваш позывной полностью — название торгового представителя в 1С (например: 2.3 Карши К-3). Если не "
+       "знаете — спросите у супервайзера. Ответьте на это сообщение.")
+PICK = ("❓ Pozivnoy to'liq emas yoki bir nechtasiga mos keldi. Qaysi biri sizniki — to'liq nomini aynan yozing:",
+        "❓ Позывной неполный или подходит к нескольким. Какой ваш — напишите полное название точно:")
+TOO_MANY = ("❓ «{v}» ga juda ko'p pozivnoy mos keladi. Hudud va kodi bilan to'liq yozing (masalan: 2.3 Карши К-3).",
+            "❓ Под «{v}» подходит слишком много позывных. Напишите полностью, с регионом и кодом (например: 2.3 Карши К-3).")
+NOT_FOUND = ("❓ «{v}» 1C ro'yxatida topilmadi. Pozivnoyni aynan 1C dagidek to'liq yozing (masalan: 2.3 Карши К-3).",
+             "❓ «{v}» не найден в списке 1С. Напишите позывной полностью, точно как в 1С (например: 2.3 Карши К-3).")
 IT = ("IT mutaxassisi ko'rib chiqadi.", "Посмотрит IT-специалист.")
+OFF = ("avtomatik o'zgartirish o'chiq — mutaxassis bajaradi", "автоматическое изменение выключено — сделает специалист")
+TEST = ("🧪 Sinov: PRBC'da hech narsa o'zgarmadi.", "🧪 Тест: в PRBC ничего не изменено.")
+MAX_ASK = 3
 
 
 @dataclass
@@ -395,171 +562,222 @@ class Result:
     text: str
     note: str = ""
     fixed: list = field(default_factory=list)
+    planned: list = field(default_factory=list)  # ruxsat o'chiq yoki sinov: bajarilishi kerak bo'lgan amallar
 
 
 # ------------------------------------------------------------------ botdagi savol
 def handle(text, ocr="", tg_id=None, username="", group_title="", lang="uz", asked=False, question=None, client=None,
-           conn=None):
-    """Savol «yangi tochka qo'sha olmayapman» bo'lsa — tekshiradi, kerak bo'lsa to'g'rilaydi yoki pozivnoy so'raydi.
+           conn=None, dry=False, target=None, force=False):
+    """Savol «yangi tochka qo'sha olmayapman» bo'lsa — tekshiradi, ruxsat berilgan amallarni bajaradi, yetmagan
+    ma'lumotni (pozivnoy) so'raydi. Ruxsat berilmagan amal — faqat aniqlanadi va javobda yoziladi, savol mutaxassisga.
 
-    Qaytaradi: Result yoki None (savol bu turda emas, bot o'chiq, PRBC javob bermadi yoki hammasi joyida va ekran
-    yozuvi ko'rsatilmagan — oddiy javob oqimi davom etadi)."""
+    dry — panel sinovi: hech narsa yozilmaydi, bot nima qilishi ko'rsatiladi. target — PRBC user (panelda tanlangan).
+    Qaytaradi: Result yoki None (savol bu turda emas, bot o'chiq, PRBC javob bermadi yoki tugma shartlari joyida va
+    ekran yozuvi ko'rsatilmagan — oddiy javob oqimi davom etadi)."""
     from . import outlets
     conn = conn or connection()
     if conn is None or not getattr(conn, "access_bot", True):
         return None
     screen = screen_shown(text, ocr)
-    if not screen and not is_access_question(text, ocr):
-        return None
-    if not screen and outlets.find_ids(text):
-        return None  # aniq mijoz (STIR / 1C kodi) haqida — arizaning holati (outlets) javob beradi
+    if not force:
+        if not screen and not is_access_question(text, ocr):
+            return None
+        if not screen and outlets.find_ids(text):
+            return None  # aniq mijoz (STIR / 1C kodi) haqida — arizaning holati (outlets) javob beradi
     try:
         client = client or make_client(conn)
         st = State.load(client)
     except PrbcError as e:
         log.warning("PRBC ruxsat tekshiruvi: %s", e)
         return None
-    u = find_target(st, tg_id, username, text)
+    u = st.user(target) if target else find_target(st, tg_id, username, text)
     if u is None:
         msg = _t(lang, "🔎 PRBC'da Telegram hisobingizga bog'langan foydalanuvchi topilmadi — ruxsatlarni tekshirib "
                        "bo'lmadi. " + IT[0],
                  "🔎 В PRBC не найден пользователь, привязанный к вашему Telegram — проверить доступ не получилось. " + IT[1])
-        _log("bot", None, "escalate", False, f"PRBC foydalanuvchisi topilmadi (tg {tg_id}, @{username})", question=question)
+        if not dry:
+            _log("bot", None, "escalate", False, f"PRBC foydalanuvchisi topilmadi (tg {tg_id}, @{username})", question=question)
         return Result("escalate", msg, note="PRBC ruxsatlari: foydalanuvchi topilmadi")
-    return _run(st, u, text, lang, asked, screen, group_title, question, getattr(conn, "access_autofix", True))
+    return Run(st, u, conn, text, lang, asked, screen or force, group_title, question, dry).go()
 
 
-def _run(st, u, text, lang, asked, screen, group_title, question, autofix):  # noqa: C901 — ketma-ket shartlar
-    lines, fixed, problems, ask = [], [], [], ""
-    if not active(u):
-        lines.append(_line(lang, "active", "bad", u.get("status") or ""))
-        body = "\n".join([_head(lang, u), *lines, "",
-                          _t(lang, "Hisob PRBC'da faol emas — uni HR / IT faollashtiradi. " + IT[0],
-                             "Аккаунт в PRBC не активен — его активирует HR / IT. " + IT[1])])
-        _log("bot", u, "escalate", False, f"faol emas ({u.get('status')})", question=question)
-        return Result("escalate", body, note="PRBC ruxsatlari: hisob faol emas")
-    lines.append(_line(lang, "active", "ok"))
+class Run:
+    """Bitta savol bo'yicha tekshiruv: shartlar ketma-ket, har biri — joyida / bajarildi / kerak (ruxsat o'chiq)."""
 
-    def attempt(key, fn, value_ok):
-        """Bitta tuzatish: muvaffaqiyat — 🔧, xato — ❌ va IT'ga."""
-        try:
-            v = fn()
-            if v is False:
-                return False
-            fixed.append(key)
-            lines.append(_line(lang, key, "fixed", v if isinstance(v, str) and v else value_ok))
-            _log("bot", u, key, True, f"{key}: {v if isinstance(v, str) else value_ok}", question=question)
-            return True
-        except PrbcError as e:
-            problems.append(f"{key}: {e}")
-            lines.append(_line(lang, key, "bad", _t(lang, "berib bo'lmadi", "не удалось выдать")))
-            _log("bot", u, key, False, f"{key}: {e}", question=question)
-            return False
+    def __init__(self, st, u, conn, text, lang, asked, screen, group_title, question, dry):
+        self.st, self.u, self.conn, self.text, self.lang = st, u, conn, text, lang
+        self.asked, self.screen, self.group_title, self.question, self.dry = asked, screen, group_title, question, dry
+        self.lines, self.fixed, self.planned, self.problems, self.ask = [], [], [], [], ""
 
-    # rol
-    if u.get("role_codes"):
-        lines.append(_line(lang, "role", "ok", ", ".join(u["role_codes"])))
-    elif autofix:
-        attempt("role", lambda: add_role(st, u) or "Employee", "Employee")
-    else:
-        problems.append("role")
-        lines.append(_line(lang, "role", "bad", _t(lang, "yo'q", "нет")))
-    # bo'lim (tugmaga ta'sir qilmaydi — topilmasa ogohlantirish)
-    if u.get("primary_node_id"):
-        lines.append(_line(lang, "node", "ok", u.get("primary_node_name") or ""))
-    else:
-        done = False
-        if autofix:
+    def t(self, uz, ru):
+        return _t(self.lang, uz, ru)
+
+    def log(self, action, ok, text, **kw):
+        if not self.dry:
+            _log("bot", self.u, action, ok, text, question=self.question, **kw)
+
+    def can(self, key):
+        return not self.dry and allowed(self.conn, key)
+
+    def act(self, key, fn, did_uz, did_ru, need_uz, need_ru, blocking=True):
+        """Ruxsat bo'lsa — bajaradi (🔧 + nima qilindi), bo'lmasa — 🧪/❌ «kerak: …» (mutaxassisga)."""
+        if self.can(key):
             try:
-                name = fix_node(st, u, group_title)
-                if name:
-                    done = True
-                    fixed.append("node")
-                    lines.append(_line(lang, "node", "fixed", name))
-                    _log("bot", u, "node", True, f"asosiy bo'lim: {name}", question=question)
+                before, after = fn()
+                self.fixed.append(key)
+                self.lines.append(_line(self.lang, key, "fixed", self.t(did_uz, did_ru)))
+                self.log(key, True, did_uz, before=before, after=after, reversible=key in REVERSIBLE_ACTIONS)
+                return True
             except PrbcError as e:
-                _log("bot", u, "node", False, str(e), question=question)
-        if not done:
-            lines.append(_line(lang, "node", "warn", _t(lang, "yo'q (tugmaga ta'sir qilmaydi, IT biriktiradi)",
-                                                       "нет (на кнопку не влияет, IT назначит)")))
-            _log("bot", u, "node", False, "asosiy bo'lim yo'q — avtomatik aniqlab bo'lmadi", question=question)
-    # «Integratsiyalar» ruxsati
-    seat = st.seats.get(u["id"], "none")
-    if seat in CREATE_LEVELS:
-        lines.append(_line(lang, "seat", "ok", seat))
-    elif autofix:
-        attempt("seat", lambda: "employee" if grant_seat(st, [u["id"]]) else False, "employee")
-        if "seat" not in fixed and not any(p.startswith("seat") for p in problems):
-            problems.append("seat: PRBC darajani o'zgartirmadi")
-            lines.append(_line(lang, "seat", "bad", seat))
-    else:
-        problems.append("seat")
-        lines.append(_line(lang, "seat", "bad", seat))
-    # pozivnoy
-    code, row = st.mapping(u["id"])
-    if row:
-        lines.append(_line(lang, "mapping", "ok", f"{row.get('external_name')} ({code})"))
-    else:
-        hint = text_base(text) or _hint(u.get("primary_node_path"), u.get("primary_node_name"), group_title)
-        found = find_reps(st, text, hint)
+                self.problems.append(f"{key}: {e}")
+                self.lines.append(_line(self.lang, key, "bad", self.t(f"{need_uz} — PRBC xato berdi", f"{need_ru} — ошибка PRBC")))
+                self.log(key, False, f"{need_uz}: {e}")
+                return False
+        mark = "plan" if self.dry and allowed(self.conn, key) else ("bad" if blocking else "warn")
+        self.planned.append((key, need_uz))
+        tail = "" if mark == "plan" else f" ({self.t(*OFF)})"
+        self.lines.append(_line(self.lang, key, mark, self.t(f"kerak: {need_uz}", f"нужно: {need_ru}") + tail))
+        return False
+
+    def go(self):  # noqa: C901 — ketma-ket shartlar
+        st, u, lang = self.st, self.u, self.lang
+        if not active(u):
+            self.lines.append(_line(lang, "active", "bad", u.get("status") or ""))
+            body = "\n".join([_head(lang, u), *self.lines, "",
+                              self.t("Hisob PRBC'da faol emas — uni HR / IT faollashtiradi. " + IT[0],
+                                     "Аккаунт в PRBC не активен — его активирует HR / IT. " + IT[1])])
+            self.log("escalate", False, f"faol emas ({u.get('status')})")
+            return Result("escalate", body, note="PRBC ruxsatlari: hisob faol emas")
+        self.lines.append(_line(lang, "active", "ok"))
+        # rol
+        if u.get("role_codes"):
+            self.lines.append(_line(lang, "role", "ok", ", ".join(u["role_codes"])))
+        else:
+            self.act("role", lambda: do_role(st, u), "Employee berildi", "выдана Employee",
+                     "Employee roli", "роль Employee")
+        # bo'lim: guruhga mos bo'lim (tugmaga ta'sir qilmaydi — bloklamaydi)
+        try:
+            plan = node_plan(st, u, self.group_title)
+        except PrbcError as e:
+            plan = ("", None, False)
+            log.warning("PRBC bo'limlar (%s): %s", u.get("id"), e)
+        if plan[0]:
+            name = plan[1].get("name") or plan[1].get("hierarchy_node_name") or ""
+            star = self.t(" (asosiy)", " (основной)") if plan[2] else ""
+            if plan[0] == "add":
+                did = (f"{name} bo'limiga qo'shildi{star}", f"добавлен в отдел {name}{star}")
+                need = (f"{name} bo'limiga qo'shish{star}", f"добавить в отдел {name}{star}")
+            else:
+                did = (f"{name} asosiy bo'lim qilindi", f"{name} назначен основным отделом")
+                need = (f"{name} ni asosiy bo'lim qilish", f"сделать {name} основным отделом")
+            self.act("node", lambda: do_node(st, u, plan), *did, *need, blocking=False)
+        elif u.get("primary_node_id"):
+            self.lines.append(_line(lang, "node", "ok", u.get("primary_node_name") or ""))
+        else:
+            self.lines.append(_line(lang, "node", "warn", self.t("asosiy bo'lim yo'q (tugmaga ta'sir qilmaydi)",
+                                                                 "нет основного отдела (на кнопку не влияет)")))
+        # «Integratsiyalar» ruxsati
+        seat = st.seats.get(u["id"], "none")
+        if seat in CREATE_LEVELS:
+            self.lines.append(_line(lang, "seat", "ok", seat))
+        else:
+            self.act("seat", lambda: do_seat(st, u),
+                     f"{_lv('uz', seat)} → Xodim (berildi)", f"{_lv('ru', seat)} → Сотрудник (выдан)",
+                     f"{_lv('uz', seat)} → Xodim", f"{_lv('ru', seat)} → Сотрудник")
+        # pozivnoy
+        self.mapping()
+        return self.result()
+
+    def mapping(self):  # noqa: C901
+        st, u, lang = self.st, self.u, self.lang
+        code, row = st.mapping(u["id"])
+        if row:
+            self.lines.append(_line(lang, "mapping", "ok", f"{row.get('external_name')} ({code})"))
+            return
+        hint = text_base(self.text) or _hint(u.get("primary_node_path"), u.get("primary_node_name"), self.group_title)
+        found = find_reps(st, self.text, hint)
+        reply = (self.text or "").strip().splitlines()[-1] if self.asked else ""
+        if not found and self.asked and self.can("refresh_refs"):
+            for c in list(st.conns):  # yangi savdo vakili bo'lishi mumkin — ma'lumotnoma bir marta yangilanadi
+                try:
+                    if refresh_refs(st, c):
+                        self.log("refresh_refs", True, f"{c}: 1C ma'lumotnomalari yangilandi")
+                except PrbcError as e:
+                    self.log("refresh_refs", False, f"{c}: {e}")
+            found = find_reps(st, self.text, hint)
         free = [(c, r) for c, r in found if not st.holder(c, r["guid"])]
+        n_ask = asks_so_far(self.question)
         if len(found) == 1 and not free:
             c, r = found[0]
             h = st.holder(c, r["guid"])
-            problems.append(f"mapping: «{r.get('name')}» ({c}) {h.get('employee_name')} ga biriktirilgan")
-            lines.append(_line(lang, "mapping", "bad", _t(
-                lang, f"«{r.get('name')}» ({c}) boshqa xodimga biriktirilgan — {h.get('employee_name')}",
+            self.problems.append(f"mapping: «{r.get('name')}» ({c}) {h.get('employee_name')} ga biriktirilgan")
+            self.lines.append(_line(lang, "mapping", "bad", self.t(
+                f"«{r.get('name')}» ({c}) boshqa xodimga biriktirilgan — {h.get('employee_name')}",
                 f"«{r.get('name')}» ({c}) уже закреплён за другим сотрудником — {h.get('employee_name')}")))
-        elif len(free) == 1 and autofix:
+            return
+        if len(free) == 1:
             c, r = free[0]
-            try:
-                add_mapping(st, c, u, r)
-                fixed.append("mapping")
-                lines.append(_line(lang, "mapping", "fixed", f"{r.get('name')} ({c})"))
-                _log("bot", u, "mapping", True, f"pozivnoy: {r.get('name')} ({c})",
-                     after={"base": c, "guid": r["guid"], "name": r.get("name")}, question=question)
-            except PrbcError as e:
-                problems.append(f"mapping: {e}")
-                lines.append(_line(lang, "mapping", "bad", f"{r.get('name')} ({c}) — {e}"))
-                _log("bot", u, "mapping", False, f"{r.get('name')} ({c}): {e}", question=question)
-        elif len(free) == 1:
-            c, r = free[0]
-            problems.append(f"mapping: {r.get('name')} ({c}) — avtomatik tuzatish o'chiq")
-            lines.append(_line(lang, "mapping", "bad", _t(lang, f"yo'q (topildi: {r.get('name')}, {c})",
-                                                          f"нет (найден: {r.get('name')}, {c})")))
-        elif len(free) > 1 and not asked:
-            lines.append(_line(lang, "mapping", "bad", _t(lang, "yo'q", "нет")))
-            ask = _t(lang, *PICK) + "\n" + "\n".join(f"• {r.get('name')} ({c})" for c, r in free[:MAX_OPTIONS])
-        elif not asked:
-            lines.append(_line(lang, "mapping", "bad", _t(lang, "yo'q", "нет")))
-            ask = _t(lang, *ASK)
+            if not self.act("mapping", lambda: add_mapping(st, c, u, r),
+                            f"{r.get('name')} ({c} bazasi) biriktirildi", f"{r.get('name')} (база {c}) закреплён",
+                            f"{r.get('name')} ({c} bazasi) biriktirish", f"закрепить {r.get('name')} (база {c})"):
+                return
+            return
+        # aniq topilmadi: variantlar bilan qayta so'rash (MAX_ASK martagacha)
+        if len(free) > 1:
+            options = free
+        elif reply:
+            options = suggest(st, reply, hint)
         else:
-            what = ", ".join(f"{r.get('name')} ({c})" for c, r in free[:MAX_OPTIONS])
-            problems.append("mapping: " + (f"bir nechta mos: {what}" if free else "yozilgan pozivnoy 1C ro'yxatida topilmadi"))
-            lines.append(_line(lang, "mapping", "bad", _t(
-                lang, "yozgan pozivnoyingiz 1C ro'yxatida aniq topilmadi" if not free else f"aniq emas: {what}",
-                "указанный позывной не найден в списке 1С" if not free else f"неоднозначно: {what}")))
+            options = []
+        self.lines.append(_line(lang, "mapping", "bad", self.t("yo'q", "нет")))
+        if n_ask < MAX_ASK:
+            if options and len(options) <= 8:
+                self.ask = self.t(*PICK) + "\n" + "\n".join(f"• {r.get('name')} ({c})" for c, r in options)
+            elif options:
+                self.ask = self.t(*TOO_MANY).format(v=reply[:40])
+            elif reply:
+                self.ask = self.t(*NOT_FOUND).format(v=reply[:40])
+            else:
+                self.ask = self.t(*ASK)
+            return
+        what = ", ".join(f"{r.get('name')} ({c})" for c, r in options[:MAX_OPTIONS])
+        self.problems.append("mapping: " + (f"aniq emas: {what}" if options else "yozilgan pozivnoy 1C ro'yxatida topilmadi")
+                             + f" ({MAX_ASK} marta so'raldi)")
 
-    head = _head(lang, u)
-    if ask and not problems:
-        body = "\n".join([head, *lines, "", ask])
-        _log("bot", u, "ask", True, "pozivnoy so'raldi" + (f" (variantlar: {len(free)})" if free else ""), question=question)
-        return Result("ask", body, note="PRBC ruxsatlari: pozivnoy so'raldi", fixed=fixed)
-    if problems or ask:
-        body = "\n".join([head, *lines, "", _t(lang, *IT)])
-        note = "PRBC ruxsatlari: " + "; ".join(problems or ["pozivnoy kerak"])
-        _log("bot", u, "escalate", False, note, question=question)
-        return Result("escalate", body, note=note[:300], fixed=fixed)
-    if not screen and not any(k in ("seat", "mapping") for k in fixed):
-        # tugmaga ta'sir qiladigan narsa yo'q edi (rol/bo'lim tuzatilgan bo'lsa ham) va ekran yozuvi ko'rsatilmagan —
-        # savol boshqa narsa haqida bo'lishi mumkin («tochka qo'shdim, ProTarget'da chiqmayapti»): oddiy javob
-        _log("bot", u, "check", True, "tugma shartlari joyida" + (f"; to'g'rilandi: {', '.join(fixed)}" if fixed else "")
-             + " — oddiy javob", question=question)
-        return None
-    _log("bot", u, "check", True, "to'g'rilandi: " + ", ".join(fixed) if fixed else "hammasi joyida", question=question)
-    return Result("answer", "\n".join([head, *lines, "", _t(lang, *REOPEN)]),
-                  note="PRBC ruxsatlari: " + (("to'g'rilandi — " + ", ".join(fixed)) if fixed else "hammasi joyida"),
-                  fixed=fixed)
+    def result(self):
+        u, lang, head = self.u, self.lang, _head(self.lang, self.u)
+        blocking = [k for k, _n in self.planned if k in ("seat", "mapping", "role")]
+        test = ["", self.t(*TEST)] if self.dry else []
+        if self.ask and not self.problems:
+            body = "\n".join([head, *self.lines, "", self.ask, *test])
+            self.log("ask", True, "pozivnoy so'raldi: " + self.ask.splitlines()[0][:150])
+            return Result("ask", body, note="PRBC ruxsatlari: pozivnoy so'raldi", fixed=self.fixed, planned=self.planned)
+        if self.problems or blocking:
+            need = [n for k, n in self.planned if k in ("seat", "mapping", "role")]
+            parts = self.problems + ([f"kerak: {', '.join(need)}"] if need else [])
+            body = "\n".join([head, *self.lines, "", self.t(*IT), *test])
+            note = "PRBC ruxsatlari: " + "; ".join(parts)
+            self.log("escalate", False, note)
+            return Result("escalate", body, note=note[:300], fixed=self.fixed, planned=self.planned)
+        if not self.screen and not any(k in ("seat", "mapping") for k in self.fixed):
+            # tugmaga ta'sir qiladigan narsa yo'q edi va ekran yozuvi ko'rsatilmagan — savol boshqa narsa haqida
+            # bo'lishi mumkin («tochka qo'shdim, ProTarget'da chiqmayapti»): oddiy javob
+            self.log("check", True, "tugma shartlari joyida" + (f"; bajarildi: {', '.join(self.fixed)}" if self.fixed else "")
+                     + " — oddiy javob")
+            if not self.dry:
+                return None
+        self.log("check", True, "bajarildi: " + ", ".join(self.fixed) if self.fixed else "hammasi joyida")
+        return Result("answer", "\n".join([head, *self.lines, "", self.t(*REOPEN), *test]),
+                      note="PRBC ruxsatlari: " + (("bajarildi — " + ", ".join(self.fixed)) if self.fixed else "hammasi joyida"),
+                      fixed=self.fixed, planned=self.planned)
+
+
+def find_people(st, query):
+    q = (query or "").strip().lstrip("@")
+    fq = fold(q, spaces=False)
+    return [u for u in st.users if (q.isdigit() and u.get("id") == int(q))
+            or (u.get("telegram_username") or "").lower() == q.lower()
+            or (fq and len(fq) >= 3 and fq in fold(u.get("full_name"), spaces=False))][:10]
 
 
 def diagnose_text(query, lang="uz", client=None):
@@ -568,68 +786,39 @@ def diagnose_text(query, lang="uz", client=None):
     if client is None:
         return {"error": "PRBC ulanishi yoqilmagan"}
     st = State.load(client)
-    q = (query or "").strip().lstrip("@")
-    fq = fold(q, spaces=False)
-    found = [u for u in st.users if (q.isdigit() and u.get("id") == int(q))
-             or (u.get("telegram_username") or "").lower() == q.lower()
-             or (fq and len(fq) >= 3 and fq in fold(u.get("full_name"), spaces=False))][:10]
     out = []
-    for u in found:
+    for u in find_people(st, query):
         out.append({"id": u["id"], "name": u.get("full_name"), "position": u.get("position") or "",
                     "telegram": u.get("telegram_username") or "",
                     "checks": [{"key": k, "ok": s == "ok", "value": v} for k, s, v in checks(st, u)]})
     return {"items": out}
 
 
-# ------------------------------------------------------------------ doimiy nazorat (worker)
+def simulate(user_id, text="", group_title="", lang="uz", client=None, conn=None):
+    """Panel sinovi: bot shu xodimga shu savolda nima yozardi va nima qilardi — PRBC'da hech narsa o'zgarmaydi."""
+    conn = conn or connection()
+    r = handle(text or "yangi tochka qo'sha olmayapman", "", group_title=group_title, lang=lang, client=client,
+               conn=conn, dry=True, target=int(user_id), force=True, asked=bool(text and "\n" in text))
+    if r is None:
+        return {"kind": "none", "text": "Bot bu savolga aralashmaydi (odatdagi javob)", "planned": []}
+    from .actions import CATALOG
+    titles = {a["key"]: a["title"] for a in CATALOG}
+    return {"kind": r.kind, "text": r.text, "note": r.note,
+            "planned": [{"key": k, "title": titles.get(k, k), "need": n, "enabled": allowed(conn, k)} for k, n in r.planned]}
+
+
+# ------------------------------------------------------------------ doimiy nazorat (worker) — faqat hisobot
 def scan(conn=None, client=None, autofix=None):
-    """Barcha faol savdo vakillari: 4 shart. Yoqilgan bo'lsa — ruxsat, rol va (bitta bo'limli) asosiy bo'lim beriladi.
-    Pozivnoyni bot taxmin qilmaydi — ro'yxatda ko'rinadi, xodim so'raganda bot o'zidan so'raydi."""
+    """Barcha faol savdo vakillari: 4 shart — faqat hisobot, PRBC'da hech narsa o'zgarmaydi. O'zgarish faqat xodim
+    savol berganda va amal ruxsat etilganda (savoldan kelib chiqib)."""
     from .models import Connection
     conn = conn or Connection.get()
     client = client or make_client(conn)
-    autofix = conn.access_autofix if autofix is None else autofix
     st = State.load(client)
     tps = [u for u in st.users if is_tp(u)]
     act = [u for u in tps if active(u)]
-    writes = 0
-    fixed = {}
-    if autofix:
-        need = [u["id"] for u in act if st.seats.get(u["id"], "none") not in CREATE_LEVELS][:MAX_SCAN_FIXES]
-        if need:
-            before = {i: st.seats.get(i, "none") for i in need}
-            try:
-                done = grant_seat(st, need)
-                writes += len(done)
-                for i in done:
-                    fixed.setdefault(i, []).append("seat")
-                    _log("scan", st.user(i), "seat", True, f"«Integratsiyalar»: {before[i]} → employee",
-                         before={"level": before[i]}, after={"level": st.seats.get(i)})
-            except PrbcError as e:
-                _log("scan", None, "seat", False, f"{len(need)} xodimga ruxsat berib bo'lmadi: {e}")
-        for u in act:
-            if writes >= MAX_SCAN_FIXES:
-                break
-            if not u.get("role_codes"):
-                try:
-                    add_role(st, u)
-                    writes += 1
-                    fixed.setdefault(u["id"], []).append("role")
-                    _log("scan", u, "role", True, "rol: Employee")
-                except PrbcError as e:
-                    _log("scan", u, "role", False, str(e))
-            if not u.get("primary_node_id"):
-                try:
-                    name = fix_node(st, u)
-                    if name:
-                        writes += 1
-                        u["primary_node_id"], u["primary_node_name"] = -1, name
-                        fixed.setdefault(u["id"], []).append("node")
-                        _log("scan", u, "node", True, f"asosiy bo'lim: {name}")
-                except PrbcError as e:
-                    _log("scan", u, "node", False, str(e))
     rows, counts = [], {"tp": len(tps), "active": len(act), "ok": 0, "role": 0, "node": 0, "seat": 0, "mapping": 0,
-                        "fixed": sum(len(v) for v in fixed.values())}
+                        "fixed": 0}
     for u in act:
         bad = issues(st, u)
         for k in bad:
@@ -637,13 +826,13 @@ def scan(conn=None, client=None, autofix=None):
                 counts[k] += 1
         if not bad:
             counts["ok"] += 1
-        if bad or u["id"] in fixed:
+        else:
             rows.append({"id": u["id"], "name": u.get("full_name") or "", "position": u.get("position") or "",
                          "node": u.get("primary_node_name") or "", "telegram": u.get("telegram_username") or "",
-                         "issues": bad, "fixed": fixed.get(u["id"], [])})
+                         "issues": bad, "fixed": []})
     rows.sort(key=lambda r: (-len(r["issues"]), r["name"]))
     now = timezone.now()
-    report = {"at": now.isoformat(), "autofix": bool(autofix), "counts": counts, "rows": rows[:500]}
+    report = {"at": now.isoformat(), "autofix": False, "counts": counts, "rows": rows[:500]}
     Connection.objects.filter(pk=1).update(access_report=report, access_scan_at=now, access_scan_requested=False)
     return report
 

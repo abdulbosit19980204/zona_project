@@ -349,10 +349,57 @@ def card(found, lang="uz"):
     return text
 
 
+TRANSIENT = REASONS[3][0]  # 1C bazasi band / javob bermadi — qayta yuborish yordam beradi
+
+
+def resend_failed(found, client=None, conn=None, lang="uz", dry=False):
+    """«1C rad etdi» + vaqtinchalik sabab (baza band, javob yo'q) -> arizani qayta yuborish (amal «outlet_resend»).
+    Ruxsat o'chiq bo'lsa — faqat «kerak» qatori (mutaxassis bajaradi). Qaytaradi: javobga qo'shiladigan qatorlar."""
+    from .access import _log
+    from .actions import allowed
+    lines = []
+    for ident, res in found.items():
+        for row in res.get("requests") or []:
+            if row.get("status") != "failed" or row.get("can_send") is False:
+                continue
+            if not TRANSIENT.search(row.get("last_error") or ""):
+                continue
+            name = row.get("outlet_name") or row.get("counterparty_name") or ident
+            if dry or not allowed(conn, "outlet_resend"):
+                lines.append(_t(lang, f"🧪 «{name}»: arizani 1C ga qayta yuborish kerak (avtomatik o'chiq — mutaxassis bajaradi)",
+                                f"🧪 «{name}»: нужно отправить заявку в 1С повторно (автоматически выключено — сделает специалист)"))
+                continue
+            try:
+                if client is None:
+                    client = Client(conn)
+                    client.timeout = TIMEOUT
+                client.post(f"/integrations/outlet-requests/{row['id']}/send/")
+                with _lock:
+                    _cache.pop(ident, None)
+                _log("bot", None, "outlet_resend", True, f"«{name}» (ariza #{row['id']}) 1C ga qayta yuborildi",
+                     before={"status": "failed", "error": (row.get("last_error") or "")[:300]}, after={"sent": row["id"]})
+                lines.append(_t(lang, f"🔧 «{name}»: ariza 1C ga qayta yuborildi — natija bir necha daqiqada.",
+                                f"🔧 «{name}»: заявка повторно отправлена в 1С — результат через несколько минут."))
+            except PrbcError as e:
+                _log("bot", None, "outlet_resend", False, f"«{name}» (ariza #{row['id']}): {e}")
+                lines.append(_t(lang, f"❌ «{name}»: qayta yuborib bo'lmadi — mutaxassis ko'radi.",
+                                f"❌ «{name}»: не удалось отправить повторно — посмотрит специалист."))
+    return lines
+
+
 def status_for(text, lang="uz", client=None):
     """Matn/skrinshot matnidan identifikator topib, PRBC holati kartasini qaytaradi ("" — yo'q yoki o'chiq)."""
     ids = find_ids(text)
     if not ids:
         return "", []
     found = lookup(ids, client=client)
-    return card(found, lang), ids
+    text_out = card(found, lang)
+    if text_out:
+        try:
+            extra = resend_failed(found, client=client, conn=connection(), lang=lang)
+        except Exception:  # noqa: BLE001 — qo'shimcha amal: xatosi holat kartasini to'xtatmasin
+            log.exception("PRBC arizani qayta yuborish")
+            extra = []
+        if extra:
+            text_out += "\n\n" + "\n".join(extra)
+    return text_out, ids

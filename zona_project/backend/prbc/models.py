@@ -59,6 +59,7 @@ class Connection(models.Model):
     access_scan_at = models.DateTimeField(null=True, blank=True)
     access_scan_requested = models.BooleanField(default=False)
     access_report = models.JSONField(default=dict, blank=True)  # oxirgi tekshiruv: {at, counts, rows}
+    auto_actions = models.JSONField(default=dict, blank=True)  # prbc.actions: {amal: True} — yoqilmagani faqat aniqlanadi
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -191,6 +192,9 @@ class AccessLog(models.Model):
     before = models.JSONField(default=dict, blank=True)
     after = models.JSONField(default=dict, blank=True)
     question = models.IntegerField(null=True, blank=True)  # support Message id (bot savoli bo'lsa)
+    reversible = models.BooleanField(default=False)  # «Ortga qaytarish» mumkin (before/after yetarli)
+    reverted_at = models.DateTimeField(null=True, blank=True)
+    reverted_by = models.CharField(max_length=150, blank=True)
 
     class Meta:
         ordering = ["-at"]

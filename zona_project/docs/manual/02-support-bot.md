@@ -34,8 +34,9 @@ Bot eng arzon va eng aniq bosqichdan boshlaydi:
 Qo'shimcha:
 - **Mijoz holati (PRBC):** savol yoki skrinshotda STIR (9 raqam), JShShIR (14 raqam) yoki 1C kodi (UZ-…) bo'lsa,
   bot PRBC'dan mijoz arizasining jonli holatini o'qib javob boshiga qo'shadi. Batafsil — [PRBC](/docs/prbc#mijoz-holati-jonli-tekshiruv).
-- **Yangi tochka qo'sha olmayapman:** bot xodimning PRBC ruxsatlarini (faol hisob, rol, bo'lim, «Integratsiyalar»
-  ruxsati, 1C pozivnoy) tekshiradi, yetmaganini o'zi beradi, pozivnoyni xodimdan so'raydi va biriktiradi.
+- **Yangi tochka qo'sha olmayapman:** bot xodimning PRBC ruxsatlarini (faol hisob, rol, guruh bo'limi,
+  «Integratsiyalar» ruxsati, 1C pozivnoy) tekshiradi, pozivnoyni xodimdan to'liq yozguncha so'raydi. Standart holatda
+  faqat aniqlab javobda yozadi; panelda ruxsat berilgan amallarni o'zi bajaradi va nima qilganini yozadi.
   Batafsil — [PRBC → Yangi tochka ruxsatlari](/docs/prbc).
 - **Ma'lumot ekrani:** skrinshot "Торговая точка … отправлена на модерацию!" bo'lsa, ostidagi "Qo'shib bering, Navoiy
   SRZ" / "Tasdiqlab bering" kabi iltimos alohida savol hisoblanmaydi. Bot xodimga uzatmaydi, **moderatsiya standart

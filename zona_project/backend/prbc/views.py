@@ -596,33 +596,51 @@ def backfill(request):
 
 
 # ====================================================================== «yangi tochka» ruxsatlari (prbc.access)
-ACCESS_FIELDS = ("access_bot", "access_autofix", "access_scan_minutes")
+ACCESS_FIELDS = ("access_bot", "access_scan_minutes")
+
+
+def _log_row(x):
+    return {"id": x.id, "at": x.at, "source": x.source, "prbc_user": x.prbc_user, "name": x.name, "action": x.action,
+            "ok": x.ok, "text": x.text, "before": x.before, "after": x.after, "question": x.question,
+            "reversible": x.reversible and x.ok and not x.reverted_at, "reverted_at": x.reverted_at,
+            "reverted_by": x.reverted_by}
 
 
 def _access_payload(c):
+    from .actions import CATALOG, PLANNED
     from .models import AccessLog
-    logs = AccessLog.objects.all()[:150]
+    acts = c.auto_actions or {}
     return {**{f: getattr(c, f) for f in ACCESS_FIELDS}, "scan_at": c.access_scan_at,
             "scan_requested": c.access_scan_requested, "report": c.access_report or {},
             "ready": not not_ready(c),
-            "log": [{"id": x.id, "at": x.at, "source": x.source, "prbc_user": x.prbc_user, "name": x.name,
-                     "action": x.action, "ok": x.ok, "text": x.text} for x in logs]}
+            "actions": [{**a, "enabled": bool(acts.get(a["key"]))} for a in CATALOG], "planned": PLANNED,
+            "log": [_log_row(x) for x in AccessLog.objects.all()[:200]]}
 
 
 @zona_api(["GET", "PATCH"], ADMIN)
 def access_view(request):
-    """«Yangi tochka» ruxsatlari: sozlamalar, oxirgi nazorat hisoboti va bot jurnali."""
+    """«Yangi tochka» ruxsatlari: sozlamalar, avtomatik amallar ruxsati, oxirgi nazorat hisoboti va jurnal."""
+    from .actions import KEYS
     c = Connection.get()
     if request.method == "PATCH":
         d = request.data
-        changed = []
+        changed, fields = [], []
         for f in ACCESS_FIELDS:
             if f in d:
                 v = max(0, min(int(d[f] or 0), 1440)) if f == "access_scan_minutes" else bool(d[f])
                 setattr(c, f, v)
                 changed.append(f"{f}={v}")
+                fields.append(f)
+        if isinstance(d.get("auto_actions"), dict):
+            acts = dict(c.auto_actions or {})
+            for k, v in d["auto_actions"].items():
+                if k in KEYS and bool(acts.get(k)) != bool(v):
+                    acts[k] = bool(v)
+                    changed.append(f"{k}={'yoqildi' if v else 'o‘chirildi'}")
+            c.auto_actions = acts
+            fields.append("auto_actions")
         if changed:
-            c.save(update_fields=[*ACCESS_FIELDS, "updated_at"])
+            c.save(update_fields=[*fields, "updated_at"])
             Change.objects.create(kind=Change.UPDATED, actor=_actor(request),
                                   text="Yangi tochka ruxsatlari: " + ", ".join(changed))
     return Response(_access_payload(c))
@@ -630,9 +648,17 @@ def access_view(request):
 
 @zona_api(["POST"], ADMIN)
 def access_scan(request):
-    """Hozir tekshirish — worker bir necha soniyada bajaradi (sozlamaga ko'ra to'g'rilaydi)."""
+    """Hozir tekshirish — worker bir necha soniyada bajaradi (faqat hisobot, PRBC o'zgarmaydi)."""
     Connection.objects.filter(pk=1).update(access_scan_requested=True)
     return Response({"queued": True})
+
+
+def _ready_client():
+    from . import access
+    c = Connection.get()
+    if not_ready(c):
+        return None, Response({"detail": not_ready(c)}, status=status.HTTP_400_BAD_REQUEST)
+    return access.make_client(c), None
 
 
 @zona_api(["GET"], ADMIN)
@@ -642,10 +668,66 @@ def access_check(request):
     q = (request.query_params.get("q") or "").strip()[:100]
     if len(q) < 3:
         return Response({"detail": "Kamida 3 ta belgi: ism, @username yoki PRBC id."}, status=status.HTTP_400_BAD_REQUEST)
-    c = Connection.get()
-    if not_ready(c):
-        return Response({"detail": not_ready(c)}, status=status.HTTP_400_BAD_REQUEST)
+    client, err = _ready_client()
+    if err:
+        return err
     try:
-        return Response(access.diagnose_text(q, client=access.make_client(c)))
+        return Response(access.diagnose_text(q, client=client))
     except PrbcError as e:
         return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+@zona_api(["POST"], ADMIN)
+def access_simulate(request):
+    """Sinov: bot shu xodimga shu savolda nima yozardi va qaysi amallarni bajarardi — PRBC'da hech narsa o'zgarmaydi."""
+    from . import access
+    d = request.data
+    uid = str(d.get("user_id") or "")
+    if not uid.isdigit():
+        return Response({"detail": "Xodimni tanlang."}, status=status.HTTP_400_BAD_REQUEST)
+    client, err = _ready_client()
+    if err:
+        return err
+    try:
+        return Response(access.simulate(int(uid), str(d.get("text") or "")[:1000], str(d.get("group") or "")[:200],
+                                        "ru" if d.get("lang") == "ru" else "uz", client=client))
+    except PrbcError as e:
+        return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+@zona_api(["POST"], ADMIN)
+def access_revert(request, pk):
+    """Jurnaldagi o'zgarishni ortga qaytarish (ruxsat, rol, bo'lim, pozivnoy) — natija ham jurnalga yoziladi."""
+    from . import access
+    from .models import AccessLog
+    e = AccessLog.objects.filter(pk=pk).first()
+    if e is None:
+        return Response({"detail": "Yozuv topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+    client, err = _ready_client()
+    if err:
+        return err
+    ok, text = access.revert(e, actor=_actor(request), client=client)
+    if ok:
+        Change.objects.create(kind=Change.UPDATED, actor=_actor(request), text=f"Ortga qaytarildi: {e.name} — {text}")
+    return Response({"ok": ok, "detail": text}, status=status.HTTP_200_OK if ok else status.HTTP_400_BAD_REQUEST)
+
+
+@zona_api(["GET"], ADMIN)
+def access_groups(request):
+    """Telegram guruhlar va ularga mos PRBC bo'limi (guruh bo'limi amali shu jadval bo'yicha) — faqat o'qish."""
+    from support.models import Group
+
+    from . import access
+    client, err = _ready_client()
+    if err:
+        return err
+    try:
+        st = access.State.load(client)
+    except PrbcError as e:
+        return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+    out = []
+    for g in Group.objects.filter(is_active=True).order_by("title"):
+        n = access.group_node(st, g.title)
+        out.append({"id": g.id, "title": g.title, "node": n.get("name") if n else "", "node_id": n.get("id") if n else None,
+                    "base": access._hint(g.title)})
+    return Response(out)
