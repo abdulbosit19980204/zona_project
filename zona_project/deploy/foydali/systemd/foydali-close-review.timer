@@ -1,0 +1,9 @@
+[Unit]
+Description=Foydali — yakshanba 03:45 da review navbatini yopish (03:30 dagi kunlik zaxiradan keyin)
+
+[Timer]
+OnCalendar=Sun *-*-* 03:45:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

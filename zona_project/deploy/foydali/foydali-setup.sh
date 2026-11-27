@@ -173,6 +173,7 @@ for u in foydali-backend foydali-qrdrive-api foydali-qrdrive-worker foydali-qrdr
   systemctl enable "$u" >/dev/null 2>&1; systemctl restart "$u"
 done
 systemctl enable --now foydali-backup.timer >/dev/null 2>&1
+systemctl enable --now foydali-close-review.timer >/dev/null 2>&1
 
 step "Frontend: pm2 (foydali-frontend, 3020) — boshqa pm2 jarayonlariga tegilmaydi"
 if pm2 describe foydali-frontend >/dev/null 2>&1; then

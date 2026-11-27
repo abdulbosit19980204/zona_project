@@ -4,6 +4,10 @@
 
 ## 2026-11-27
 
+- **Review navbati haftalik avtomatik yopiladi** — yakshanba 03:45 (`foydali-close-review.timer`, 7 kundan eski yozuvlar).
+- **Sozlamalar sahifasi tezlashdi:** «Javob berish» bo'limida raqamli maydondan chiqilganda (o'zgarmagan bo'lsa ham) saqlash
+  va sahifaning qayta yaratilishi sikl hosil qilib, serverga to'xtovsiz so'rov yuborardi. Endi faqat qiymat o'zgarsa
+  bitta saqlash va bitta yangilash.
 - **Salomga javob bermaydi:** «Assalam aleykum», «Ассаламу алейкум», «Всем доброе утро», «Добрый день» endi savol
   hisoblanmaydi (avval bot ularga bilim bazasidagi parol yoki aksiya javobini qaytarardi, chunki bu so'zlar yozuvlarning
   savol ko'rinishlariga tushib qolgan edi). Bilim bazasidan bunday savol ko'rinishlari tozalandi (versiyada saqlangan).

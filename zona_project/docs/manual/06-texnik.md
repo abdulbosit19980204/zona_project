@@ -27,6 +27,7 @@ Telegram ◄──► foydali-support-bot (Support bot)        PRBC (prbc.uz) �
 | `foydali-qrdrive-api / worker / bot` | QR Drive |
 | `foydali-control` | Servislar markazi (`/control/`) — ishga tushirish, to'xtatish, loglar |
 | `foydali-backup.timer` | Har kuni 03:30 zaxira, 14 kun saqlanadi |
+| `foydali-close-review.timer` | Yakshanba 03:45 (zaxiradan keyin): `support_close_review --older-than 7` — 7 kundan eski review navbatini yopadi; rad etilgan id'lar `/var/lib/foydali/backups/review_rejected_ids_YYYYMMDD.txt`. Natija: `journalctl -u foydali-close-review` |
 
 Servis to'xtasa — panel chap pastidagi **Servislar markazi**dan qayta ishga tushiriladi.
 

@@ -9,6 +9,7 @@ Rad etilganlar o'chirilmaydi (status=rejected); id'lari --ids-file ga yoziladi. 
   Entry.objects.filter(pk__in=ids).update(status="new")
 """
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from support import review_close
 from support.models import Entry
@@ -21,7 +22,7 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true", help="Hech narsa o'zgartirmaydi, sonlar va namunalar")
         parser.add_argument("--older-than", type=int, default=0, help="Faqat N kundan eski yozuvlar (haftalik: 7)")
         parser.add_argument("--only-same", action="store_true", help="Faqat «Standartga mos» ni qo'shish, rad etmaslik")
-        parser.add_argument("--ids-file", default="/tmp/review_rejected_ids.txt")
+        parser.add_argument("--ids-file", default="/tmp/review_rejected_ids.txt", help="{date} -> YYYYMMDD")
         parser.add_argument("--samples", type=int, default=15)
         parser.add_argument("--by", default=review_close.BY)
 
@@ -40,6 +41,7 @@ class Command(BaseCommand):
             self.stdout.write("DRY: hech narsa o'zgarmadi")
             return
         absorbed, rejected = review_close.apply(p, o["by"])
+        o["ids_file"] = o["ids_file"].replace("{date}", timezone.localdate().strftime("%Y%m%d"))
         if p["reject"]:
             with open(o["ids_file"], "w", encoding="utf-8") as f:
                 f.write("\n".join(map(str, p["reject"])))

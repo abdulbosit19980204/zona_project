@@ -274,7 +274,9 @@ type Part = "answering" | "images" | "general";
 function SettingsForm({ t, part }: { t: ST; part: Part }) {
   const q = useQuery({ queryKey: ["support", "settings"], queryFn: supportApi.settings });
   if (!q.data) return <Skeleton className="h-64" />;
-  return <SettingsFields key={q.dataUpdatedAt} s={q.data} t={t} part={part} />;
+  // har refetch'da qayta yaratilmaydi (avval key={dataUpdatedAt} edi: saqlash -> refetch -> qayta yaratish -> fokusdagi
+  // maydon blur -> yana saqlash — /support/settings/ ga to'xtovsiz so'rovlar). Mahalliy holat — tahrir manbai.
+  return <SettingsFields key={part} s={q.data} t={t} part={part} />;
 }
 
 function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part }) {
@@ -289,6 +291,10 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
     return supportApi.saveSettings(body);
   }, t("saved"));
   const num = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value) || 0 });
+  // maydondan chiqilganda — faqat qiymat serverdagidan farq qilsa saqlanadi (bir martalik so'rov)
+  const blurSave = (k: keyof Form) => () => {
+    if (f[k] !== s[k as keyof SupportSettings] && !toggle.isPending) toggle.mutate({ [k]: f[k] } as Partial<Form>);
+  };
   const sw = (k: keyof Form, label: string, hint?: React.ReactNode) => (
     <SettingRow label={label} hint={hint}>
       <Switch checked={Boolean(f[k])} disabled={toggle.isPending}
@@ -359,27 +365,27 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {sw("review_button", t("t_reviewBtn"), t("t_reviewBtnHint"))}
           {field(t("t_keepDays"), t("t_keepDaysHint"),
             <Input type="number" min={0} max={3650} value={f.answer_keep_days} onChange={num("answer_keep_days")}
-              onBlur={() => toggle.mutate({ answer_keep_days: f.answer_keep_days })} />)}
+              onBlur={blurSave("answer_keep_days")} />)}
           {sw("confirm_resolution", t("t_confirm"), t("t_confirmHint"))}
           {f.confirm_resolution && field(t("t_confirmAfter"), undefined,
             <Input type="number" min={0} value={f.confirm_after} onChange={num("confirm_after")}
-              onBlur={() => toggle.mutate({ confirm_after: f.confirm_after })} />)}
+              onBlur={blurSave("confirm_after")} />)}
           {sw("react_accept", t("t_react"), t("t_reactHint"))}
           {f.confirm_resolution && field(t("t_askStaff"), t("t_askStaffHint"),
             <Input type="number" min={0} max={1440} value={f.ask_staff_after} onChange={num("ask_staff_after")}
-              onBlur={() => toggle.mutate({ ask_staff_after: f.ask_staff_after })} />)}
+              onBlur={blurSave("ask_staff_after")} />)}
           {f.confirm_resolution && field(t("t_reask"), t("t_reaskHint"),
             <Input type="number" min={0} max={2880} value={f.reask_after} onChange={num("reask_after")}
-              onBlur={() => toggle.mutate({ reask_after: f.reask_after })} />)}
+              onBlur={blurSave("reask_after")} />)}
           {f.confirm_resolution && field(t("t_remindMax"), t("t_remindMaxHint"),
             <Input type="number" min={1} max={10} value={f.remind_max} onChange={num("remind_max")}
-              onBlur={() => toggle.mutate({ remind_max: f.remind_max })} />)}
+              onBlur={blurSave("remind_max")} />)}
           {field(t("t_collapse"), t("t_collapseHint"),
             <Input type="number" min={0} max={1440} value={f.collapse_after} onChange={num("collapse_after")}
-              onBlur={() => toggle.mutate({ collapse_after: f.collapse_after })} />)}
+              onBlur={blurSave("collapse_after")} />)}
           {field(t("t_threadWindow"), t("t_threadWindowHint"),
             <Input type="number" min={0} max={240} value={f.thread_window} onChange={num("thread_window")}
-              onBlur={() => toggle.mutate({ thread_window: f.thread_window })} />)}
+              onBlur={blurSave("thread_window")} />)}
           <div className="grid gap-2 border-t py-3">
             <div>
               <div className="text-sm font-medium">{t("t_owners")}</div>
