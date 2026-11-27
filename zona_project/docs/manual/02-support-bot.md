@@ -151,7 +151,7 @@ Bot guruhda **admin** bo'lishi kerak (yoki BotFather'da privacy o'chiq) — aks 
 | Sekin javobda oraliq xabar | — | "ko'ryapman…" |
 | Javobni yig'ish | 3 daqiqa | O'qilgach, javob bir qatorga yig'iladi |
 | Toifa bo'yicha mas'ul | aksiya, to'lov, qoldiq → Saidabror; login → Xusniddin | Butun tizimda ustun; vazifa ijrochisi ham shundan. Xodim, jamoa a'zosi yoki butun jamoa (masalan Pro-target — Guzel va Eldar) tanlanadi. Har toifaga **zaxira mas'ul** ham qo'yiladi (javobda birga belgilanadi, PRBC'da kuzatuvchi) |
-| Toifa qanday aniqlanadi | — | Savol matnidagi so'zlar bo'yicha: masalan «ТТ», «точка», «tochka», «klient» → Klient; «доступ», «dostup», «ruxsat», «позывной», «pozivnoy», «parol», «login» → Kirish; «aksiya» → Aksiya. Birinchi mos kelgan toifa olinadi (Aksiya, To'lov, Zakaz, Klient… tartibida) |
+| Toifa qanday aniqlanadi | — | Savol matnidagi so'zlar bo'yicha. Avval **PRBC: yangi nuqta** tekshiriladi: PRBC orqali yangi nuqta qo'shish («Заявки на точки», «ИНН уже есть в 1С», «magazin dabavit qilolmayapman», «новая точка не добавляется») — bu IT support (Xusniddin) ishi; matnda ProTarget podklyucheniyesi/moderatsiya/vizit bo'lsa — bu toifa emas. Keyin: «ТТ», «точка», «tochka», «klient», «подключение» → Klient; «доступ», «dostup», «ruxsat», «позывной», «pozivnoy», «parol», «login» → Kirish; «aksiya» → Aksiya. Birinchi mos kelgan toifa olinadi (Aksiya, To'lov, Zakaz, Klient… tartibida) |
 
 ### Jonli rejim
 | Sozlama | Izoh |

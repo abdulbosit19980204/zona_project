@@ -9,8 +9,8 @@ import re
 
 APPS = ("prbc", "protarget", "1c", "telegram", "other")
 ORIGINS = ("1c", "prbc", "protarget", "telegram", "network", "user", "other")
-CATEGORIES = ("client", "order", "promo", "payment", "product", "stock", "visit", "login", "route", "report", "sync",
-              "network", "other")
+CATEGORIES = ("client", "prbc_outlet", "order", "promo", "payment", "product", "stock", "visit", "login", "route", "report",
+              "sync", "network", "other")
 
 APP_RX = {
     "prbc": re.compile(r"(?<!\w)(prbc|прбц|рвс\b|мини-приложени|mini.?app|savdo nuqtasi so.ro|so.rovni ochish|"
@@ -36,7 +36,8 @@ CAT_RX = [
     ("payment", r"perechisl|перечисл|безнал|нақд|naqd|to.lov|оплат|kassa|касс|chek|чек\b"),
     ("order", r"zakaz|заказ|buyurtma|корзин|savat"),
     ("client", r"klient|клиент|контрагент|торгов\w* точк|savdo nuqta|nuqta|outlet|stir|инн\b|magazin|магазин|do.kon"
-               r"|(?<!\w)(тт|tt|т\.т\.?)(?!\w)|точк|tochk"),
+               r"|(?<!\w)(тт|tt|т\.т\.?)(?!\w)|точк|tochk"
+               r"|подключ|podkl|padkl|patkl|дукон|dukon"),  # ProTarget podklyucheniyesi — Pro-target
     ("product", r"sku|tovar|товар|mahsulot|штрих|shtrix|артикул"),
     ("stock", r"ostatka|остат|qoldiq|склад|sklad"),
     ("visit", r"vizit|визит|tashrif|геотег|lokatsiya|локаци|joylashuv|координат"),
@@ -48,6 +49,29 @@ CAT_RX = [
     ("network", r"vpn|internet|интернет|aloqa|связ"),
 ]
 CAT_RX = [(k, re.compile(v, re.I)) for k, v in CAT_RX]
+
+# PRBC orqali YANGI nuqta qo'shish (zayavka, 1C da yaratish, rep-kod, dostup) — IT support (Xusniddin) hal qiladi;
+# ProTarget'dagi podklyuchenie / moderatsiya / vizit — Pro-target (client/visit). Guruhlardagi xodim javoblari bo'yicha
+# (eval 28.11): "Заявки на точки", "ИНН уже есть в 1С", "magazin dabavit qilolmayapmiz" — IT support javob bergan.
+PRBC_OUTLET_RX = re.compile(
+    r"заявк\w* на (точк|тт)|zayavk|созданав1с|создан\w* в 1[сc]|"
+    r"(инн|пинфл|stir|jshshir)\W{0,3}.{0,40}(уже есть|allaqachon|mavjud)|"
+    r"(нов\w+|yangi) (тт|tt|точк\w*|tochk\w*|nuqta\w*|магазин\w*|magazin\w*|klient\w*|клиент\w*|outlet)\W{0,3}.{0,30}"
+    r"(не (добав|созда|получ|могу|выход)|qo.?sh\w*|kush\w*|qosh\w*|qo.?shilmay|ochilmay|bo.lmay)|"
+    r"(тт|tt|точк\w*|tochk\w*|nuqta\w*|магазин\w*|magazin\w*|do.?kon\w*|dukon\w*|klient\w*|клиент\w*)\W{0,3}.{0,25}"
+    r"(не добавля|не созда|dabavit qil\w*may|qo.?sha ?olma|qo.?shilma|kushilma|koshaolma|qo.?shib bo.?lma|"
+    r"ochib bo.?lma|не могу добав|не получается добав|не могу открыть нов)|"
+    r"(dabavit|добавить)\W{0,3}.{0,15}(qilolmay|qila olmay|не могу|не получается)|"
+    r"(не могу|не получается) (добавить|создать|открыть) (нов\w+ )?(тт|точк|магазин|клиент)", re.I)
+# ProTarget konteksti — podklyuchenie/moderatsiya bo'lsa, bu PRBC emas
+PROTARGET_CTX = re.compile(r"подключ|podkl|padkl|patkl|модерац|moderat|vizit|визит|протаргет|pro.?target", re.I)
+
+
+def prbc_outlet(blob):
+    """Matn/skrinshot PRBC orqali yangi nuqta qo'shish haqidami (ProTarget podklyucheniyesi emas)."""
+    if not blob or not PRBC_OUTLET_RX.search(blob):
+        return False
+    return bool(APP_RX["prbc"].search(blob)) or not PROTARGET_CTX.search(blob)
 
 APP_LABEL = {"prbc": "PRBC", "protarget": "ProTarget", "1c": "1C", "telegram": "Telegram", "other": "Boshqa"}
 ORIGIN_LABEL = {**APP_LABEL, "network": "Tarmoq / server", "user": "Foydalanuvchi xatosi"}
@@ -81,7 +105,9 @@ def detect(text="", ocr="", entry_title=""):
             break
     if not origin and app:
         origin = app
-    cat = next((k for k, rx in CAT_RX if rx.search(" ".join(x for x in (entry_title, text) if x) or blob)), "")
+    cat = "prbc_outlet" if prbc_outlet(" ".join(x for x in (entry_title, text, ocr) if x)) else ""
+    if not cat:
+        cat = next((k for k, rx in CAT_RX if rx.search(" ".join(x for x in (entry_title, text) if x) or blob)), "")
     if not cat:
         cat = next((k for k, rx in CAT_RX if rx.search(blob)), "")
     return {"app": app, "origin": origin, "category": cat, "conf": conf}

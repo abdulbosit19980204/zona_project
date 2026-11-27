@@ -384,7 +384,7 @@ LABEL_SCHEMA = {
             "id": {"type": "integer"},
             "app": {"type": "string", "enum": ["prbc", "protarget", "1c", "telegram", "other", ""]},
             "origin": {"type": "string", "enum": ["1c", "prbc", "protarget", "telegram", "network", "user", "other", ""]},
-            "category": {"type": "string", "enum": ["client", "order", "promo", "payment", "product", "stock", "visit",
+            "category": {"type": "string", "enum": ["client", "prbc_outlet", "order", "promo", "payment", "product", "stock", "visit",
                                                     "login", "route", "report", "sync", "network", "other"]},
             "problem": {"type": "string"}, "solution": {"type": "string"},
             "train": {"type": "boolean"}, "reason": {"type": "string"},

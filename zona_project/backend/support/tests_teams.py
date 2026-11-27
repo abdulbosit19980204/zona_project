@@ -35,8 +35,8 @@ class Base(ControlsBase):
 
 class CategoryRuleTests(Base):
     def test_new_words(self):
-        for text, cat in [("ТТ не открывается", "client"), ("новая точка не добавляется", "client"),
-                          ("yangi tochka qo'sha olmayapman", "client"), ("т.т. закрыта", "client"),
+        for text, cat in [("ТТ не открывается", "client"), ("новая точка не добавляется", "prbc_outlet"),
+                          ("yangi tochka qo'sha olmayapman", "prbc_outlet"), ("т.т. закрыта", "client"),
                           ("доступ нет", "login"), ("dostup bering", "login"), ("pozivnoy biriktirilmagan", "login"),
                           ("позывной не найден", "login"), ("aksiya ishlamayapti", "promo"),
                           ("ostatka ko'rinmayapti", "stock")]:

@@ -4,6 +4,12 @@
 
 ## 2026-11-28
 
+- **Yangi toifa «PRBC: yangi nuqta».** PRBC orqali yangi nuqta qo'shish savollari («Заявки на точки», «ИНН/ПИНФЛ уже
+  есть в 1С», «magazin dabavit qilolmayapmiz», «Tochka kushilmayabdi») endi «Klient / nuqta» (Pro-target) ga emas,
+  alohida toifaga tushadi — mas'uli Sozlamalar → Javob berish → Toifa bo'yicha mas'ul (standart: Xusniddin, zaxira — IT
+  support). Matnda ProTarget podklyucheniyesi, moderatsiya yoki vizit bo'lsa — Klient/Vizit'da qoladi. «Подключение»,
+  «дукон» so'zlari ham Klient toifasini aniqlaydi. Sabab: baholashda odamga uzatilgan savollarning faqat 41% ida mas'ul
+  to'g'ri edi, asosiy xato — shu savollar.
 - **AI himoyasi:** `support_eval` endi standart holatda AI sarflamaydi (`--with-ai`, `--judge` — aniq ko'rsatilsa);
   AI provayderlari ketma-ket xato bersa (limit/balans), suhbat-AI chaqirilmaydi. 27.11 kechasi bepul Gemini limiti
   baholash tufayli tugagan — AI javoblari limit tiklanguncha to'xtagan.

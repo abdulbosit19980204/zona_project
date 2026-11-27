@@ -60,7 +60,7 @@ export interface EntrySource {
 export type Resolution = "" | "asked" | "yes" | "no" | "work";
 export const SYS_APPS = ["prbc", "protarget", "1c", "telegram", "other"] as const;
 export const SYS_ORIGINS = ["1c", "prbc", "protarget", "telegram", "network", "user", "other"] as const;
-export const SYS_CATEGORIES = ["client", "order", "promo", "payment", "product", "stock", "visit", "login", "route", "report",
+export const SYS_CATEGORIES = ["client", "prbc_outlet", "order", "promo", "payment", "product", "stock", "visit", "login", "route", "report",
   "sync", "network", "other"] as const;
 export type SysApp = (typeof SYS_APPS)[number] | "";
 export type SysOrigin = (typeof SYS_ORIGINS)[number] | "";
