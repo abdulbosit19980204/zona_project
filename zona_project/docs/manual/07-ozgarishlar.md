@@ -4,6 +4,9 @@
 
 ## 2026-11-28
 
+- **Suhbat: bitta savol = bitta holat.** «Assalomu alaykum, hali ham chiqmayapti» endi yangi savol emas — davom;
+  shu klient/zakaz kodi — davom, boshqa kod — yangi savol; salom bilan boshlangan savol va izohli rasm noaniq bo'lsa —
+  AI qaror qiladi (avval har doim yangi savol ochilardi).
 - **Bot aniqligini o'lchash:** yangi server buyrug'i `support_eval` — xodim javob bergan savollarga bot nima javob
   berardi va u to'g'rimi (AI-hakam), qamrov va mas'ul to'g'riligi; natija faylga. Hech kimga hech narsa yuborilmaydi.
 

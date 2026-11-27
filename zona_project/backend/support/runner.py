@@ -304,7 +304,8 @@ class Handler:
                 reply_other = True  # boshqa odamning savoliga reply — bu odamning o'z suhbati emas
             elif parent and parent.kind == Message.QUESTION and parent.user_id == user.pk:
                 root = conversation._root(parent)
-                act = conversation.action(root, text, photo) if root.status not in (Message.IGNORED, Message.CLOSED) else ""
+                act = conversation.action(root, text, photo, use_ai=not self.history) \
+                    if root.status not in (Message.IGNORED, Message.CLOSED) else ""
                 if act:  # o'z savoliga reply — o'sha suhbatning davomi
                     return self.on_followup(msg, group, user, text, photo, root, act, mode)
 
@@ -324,7 +325,7 @@ class Handler:
             root = conversation.open_root(self.bot, chat["id"], user, self.settings.thread_window,
                                            now=self.when(msg) if self.history else None)
             if root is not None:
-                act = conversation.action(root, text, photo)
+                act = conversation.action(root, text, photo, use_ai=not self.history)
                 if act:
                     return self.on_followup(msg, group, user, text, photo, root, act, mode)
         if loc:

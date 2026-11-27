@@ -184,6 +184,12 @@ Bot guruhda **admin** bo'lishi kerak (yoki BotFather'da privacy o'chiq) — aks 
 | Bitta suhbat oynasi | 15 daqiqa |
 | Bir vaqtda qayta ishlanadigan savollar | 10 |
 
+**Bitta savol = bitta holat.** Holat — bitta agent + bitta obyekt (klient/nuqta kodi UZ-…, zakaz raqami, STIR) + bitta
+muammo. Ochiq suhbat davomida yangi xabar: mazmunsiz («rasm», lokatsiya, «нету его») yoki «hali ham / до сих пор» —
+davom (salom bilan boshlansa ham); shu obyekt kodi — davom, boshqa kod — yangi savol; «yana bir savol» — yangi savol.
+Salom bilan boshlangan yangi savol va izohli rasm noaniq holat — bot AI bilan qaror qiladi (shu holatmi yoki
+yangisimi); AI ishlamasa — avvalgidek yangi savol. Tarix importida AI chaqirilmaydi.
+
 ### PRBC vazifalari (Support tomoni)
 | Sozlama | Izoh |
 |---|---|

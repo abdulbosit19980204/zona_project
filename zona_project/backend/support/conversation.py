@@ -66,24 +66,78 @@ def topic_entry(text):
     return e if e and score >= s.faq_threshold else None
 
 
-def new_topic(text, root, photo=False):
-    """Bu xabar yangi savolmi (True) yoki ochiq suhbatning davomi (False)."""
+def root_keys(root):
+    """Suhbat obyekti: savol, OCR va qo'shimchalaridagi UZ-kod, zakaz, STIR (support.tasks.case_keys)."""
+    from .tasks import _keys_of
+    return _keys_of(root)
+
+
+CASE_SCHEMA = {
+    "type": "object",
+    "properties": {"decision": {"type": "string", "enum": ["continue", "new_case"]},
+                   "reason": {"type": "string"}},
+    "required": ["decision", "reason"],
+    "additionalProperties": False,
+}
+CASE_SYSTEM = """Sen Telegram support guruhidagi suhbatlarni ajratuvchisan. Bir agentning ochiq savoli (suhbat) va
+uning yangi xabari beriladi. Qaror: "continue" — yangi xabar shu holat haqida (qo'shimcha, «hali ham», shu klient/zakaz,
+shu muammoning yana bir skrinshoti, salom bilan boshlangan bo'lsa ham shu holat); "new_case" — boshqa klient/nuqta, boshqa
+zakaz yoki boshqa muammo. Holat = bitta agent + bitta obyekt (klient/nuqta kodi, zakaz) + bitta muammo turi.
+Noaniq bo'lsa — "continue". Qisqa sabab (o'zbekcha)."""
+
+
+def ai_case(root, text, photo):
+    """Noaniq holatda AI qarori: True — yangi holat, False — davom, None — AI ishlamadi (qoida qaror qiladi)."""
+    s = Settings.load()
+    if not s.ai_enabled or engine.ai_quota_left(s) <= 0:
+        return None
+    from zona.ai import service as ai
+    from zona.ai.providers import AIError, deadline
+    from zona.models import AITaskConfig
+    msg = (f"OCHIQ SUHBAT:\n{context(root, limit=12)}\n\nYANGI XABAR"
+           f"{' (rasm bilan)' if photo else ''}:\n{(text or '')[:800]}")
+    try:
+        with deadline(8):
+            data, _meta = ai.run(AITaskConfig.SUPPORT, None, "suhbat: davommi", CASE_SYSTEM, msg, CASE_SCHEMA)
+    except (AIError, Exception):  # noqa: BLE001 — AI xatosi suhbatni to'xtatmasin
+        return None
+    return str(data.get("decision")) == "new_case"
+
+
+def new_topic(text, root, photo=False, use_ai=True):
+    """Bu xabar yangi holatmi (True) yoki ochiq suhbatning davomi (False).
+
+    Holat = bitta agent + bitta obyekt (UZ-kod, zakaz, STIR) + bitta muammo (egasi, 2026-11-27). Tez qoidalar:
+    mazmunsiz -> davom; «yana bir savol» -> yangi; obyekt kalitlari kesishsa -> davom, farq qilsa -> yangi;
+    «hali ham / до сих пор» -> davom. Salom bilan boshlangan yoki izohli rasm (avval doim yangi edi) — noaniq: AI
+    qaror qiladi, AI ishlamasa — avvalgi qoida."""
+    from .resolution import NOT_YET
+    from .tasks import case_keys, strip_greeting
     t = (text or "").strip()
     if not engine.substantive(t):
         return False  # lokatsiya, rasm, "hali ham", "нету его" — davom
-    if NEW_TOPIC.search(t) or GREET_START.match(t):
+    if NEW_TOPIC.search(t):
         return True
-    if photo:
-        return True  # aniq izohli yangi rasm — odatda alohida savol (bir nechta do'kon/agent bo'yicha ketma-ket)
+    mine, theirs = case_keys(t), root_keys(root)
+    if mine and theirs:
+        return not (mine & theirs)  # shu klient/zakaz — davom; boshqasi — yangi holat
+    rest = strip_greeting(t) if GREET_START.match(t) else t
+    if NOT_YET.search(rest) and not mine:
+        return False  # «Assalomu alaykum, hali ham chiqmayapti» — shu holatning davomi
+    if GREET_START.match(t) or photo:
+        verdict = ai_case(root, t, photo) if use_ai else None
+        if verdict is not None:
+            return verdict
+        return True  # AI'siz — avvalgi qoida: salom bilan aniq savol / izohli yangi rasm — yangi savol
     e = topic_entry(t)
     return e is not None and e.pk != root.entry_id and bool(root.entry_id or engine.substantive(root.text))
 
 
-def action(root, text, photo):
+def action(root, text, photo, use_ai=True):
     """Davom xabari bilan nima qilinadi: "" — davom emas (oddiy savol sifatida), yoki ATTACH/APPEND/ASK/REOPEN/REANSWER."""
     if not (text or "").strip() and not photo:
         return ""
-    if new_topic(text, root, bool(photo)):
+    if new_topic(text, root, bool(photo), use_ai=use_ai):
         return ""
     if root.status == Message.NEW:
         return ASK if root.stage == "ask" else APPEND
