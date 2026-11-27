@@ -4,6 +4,11 @@
 
 ## 2026-11-28
 
+- **Sozlamalar tartibli:** guruhlar — ixcham jadval (bitta ekranga sig'adi); «Javob berish» — yig'iladigan bo'limlar va
+  bitta «saqlanmagan o'zgarishlar» paneli (3 xil «Saqlash» o'rniga); toifa mas'uli yonida 30 kunlik savollar soni va kim
+  haqiqatda javob bergani, mos kelmasa — ⚠.
+- **Bosh sahifa — holat paneli:** «Guruh savollari» tepasida 4 ta karta: bot hal qilgan ulush (maqsad 80%, o'tgan
+  haftaga nisbatan ▲/▼), odamga uzatilganlar va kimga, xato/👎 javoblar, tasdiq kutayotganlar — har biri o'z sahifasiga.
 - **Panel tezligi:** bilim bazasi yozuvlari 60 tadan ko'rsatiladi (pastga yetganda keyingilari o'zi yuklanadi — 400+ karta
   birdan chizilmaydi); rasm turlari sahifasida teg ro'yxati faqat ochilganda to'ldiriladi.
 - **Rasmlar tezroq va kam joy:** bir xil rasm qayta o'qilmaydi (iz, OCR, qizil xato — oldingisidan); tanish ekran turida

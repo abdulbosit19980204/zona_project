@@ -26,6 +26,8 @@ const uz = {
   saveToKb: "Bilim bazasiga nomzod qilib saqlash", approveNow: "Darhol tasdiqlash", sent: "Javob guruhga yuborildi",
   useDraft: "Bot taklifini olish", closeQ: "Yopish", noGroupsYet: "Bot hali birorta guruhga qoʻshilmagan — «Botlar va sozlamalar» boʻlimiga qarang.",
   // statistika
+  kpiBotShare: "Bot hal qildi (7 kun)", kpiPp: "p.p. o'tgan haftaga", kpiTarget: "Maqsad: {n}%", kpiBotOf: "{bot} / {total} savol · maqsad {n}%", kpiWrong: "Xato / 👎 javoblar", kpiWrongHint: "Bot javoblari → tekshirish", kpiQueueHint: "Bilim bazasiga nomzodlar",
+  grpCol: "Guruh", grpMode: "Rejim", unsavedN: "{n} ta o'zgarish saqlanmagan", ownStat: "30 kun: {n} savol", ownMismatch: "Mas'ul javob bermagan — haqiqatda javob berganlar: {who}",
   kpiTotal: "Savollar (7 kun)", kpiBot: "Bot javob berdi", kpiHuman: "Odamga uzatildi", kpiQueue: "Tasdiq kutmoqda",
   botsState: "Botlar holati", botOk: "Ishlayapti", botNoAdmin: "Admin chat belgilanmagan: botga shaxsiy chatda /start yozing",
   // tasdiqlash
@@ -1115,6 +1117,8 @@ const ru: Record<SKey, string> = {
   staffAnswers: "Ответы сотрудников", answeredBy: "Ответил", writeAnswer: "Написать ответ", answerPlaceholder: "Текст ответа…",
   saveToKb: "Сохранить кандидатом в базу знаний", approveNow: "Сразу утвердить", sent: "Ответ отправлен в группу",
   useDraft: "Взять предложение бота", closeQ: "Закрыть", noGroupsYet: "Бот ещё не добавлен ни в одну группу — см. «Боты и настройки».",
+  kpiBotShare: "Решил бот (7 дней)", kpiPp: "п.п. к прошлой неделе", kpiTarget: "Цель: {n}%", kpiBotOf: "{bot} / {total} вопросов · цель {n}%", kpiWrong: "Ошибки / 👎", kpiWrongHint: "Ответы бота → проверка", kpiQueueHint: "Кандидаты в базу знаний",
+  grpCol: "Группа", grpMode: "Режим", unsavedN: "Не сохранено изменений: {n}", ownStat: "30 дней: {n} вопр.", ownMismatch: "Ответственный не отвечал — фактически отвечали: {who}",
   kpiTotal: "Вопросы (7 дней)", kpiBot: "Ответил бот", kpiHuman: "Передано человеку", kpiQueue: "Ждёт утверждения",
   botsState: "Состояние ботов", botOk: "Работает", botNoAdmin: "Админ-чат не задан: напишите боту /start в личке",
   reviewTitle: "Очередь на утверждение",
@@ -2199,6 +2203,8 @@ const en: Record<SKey, string> = {
   staffAnswers: "Staff answers", answeredBy: "Answered by", writeAnswer: "Write answer", answerPlaceholder: "Answer text…",
   saveToKb: "Save as knowledge-base candidate", approveNow: "Approve right away", sent: "Answer sent to the group",
   useDraft: "Use bot suggestion", closeQ: "Close", noGroupsYet: "The bot hasn't been added to any group yet — see “Bots & settings”.",
+  kpiBotShare: "Solved by bot (7 days)", kpiPp: "pp vs last week", kpiTarget: "Target: {n}%", kpiBotOf: "{bot} / {total} questions · target {n}%", kpiWrong: "Wrong / 👎 answers", kpiWrongHint: "Bot answers → review", kpiQueueHint: "Knowledge-base candidates",
+  grpCol: "Group", grpMode: "Mode", unsavedN: "{n} unsaved changes", ownStat: "30 days: {n} questions", ownMismatch: "Owner did not answer — actually answered by: {who}",
   kpiTotal: "Questions (7 days)", kpiBot: "Bot answered", kpiHuman: "Escalated", kpiQueue: "Awaiting approval",
   botsState: "Bots status", botOk: "Running", botNoAdmin: "No admin chat: send /start to the bot in private",
   reviewTitle: "Approval queue",

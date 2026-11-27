@@ -785,9 +785,25 @@ def stats(request):
     bots = [{"id": b.id, "name": b.name, "username": b.username, "enabled": b.enabled, "mode": b.mode,
              "last_ok_at": b.last_ok_at, "last_error": b.last_error, "admin_chat": bool(b.admin_chat_id)}
             for b in Bot.objects.all()]
+    # holat paneli (bosh sahifa): bot hal qilgan ulush va o'tgan davr bilan solishtirish, kimga uzatilgan, xato javoblar
+    bot_stages = ("template", "faq", "rule", "ai", "image", "prbc")
+    prev_qs = Message.objects.filter(kind=Message.QUESTION, created_at__gte=since - (end - since), created_at__lt=since)
+    from collections import Counter
+
+    from .engine import category_owner
+    owners, cat_owner = Counter(), {}
+    for cat, resp_name in qs.filter(status=Message.ESCALATED).values_list("category", "entry__responsible__name"):
+        if cat not in cat_owner:
+            o = category_owner(cat) if cat else None
+            cat_owner[cat] = getattr(o, "name", "") if o is not None else ""
+        owners[cat_owner[cat] or resp_name or "—"] += 1
+    panel = {"bot": qs.filter(stage__in=bot_stages).count(),
+             "prev_total": prev_qs.count(), "prev_bot": prev_qs.filter(stage__in=bot_stages).count(),
+             "escalated_by_owner": [{"name": n, "count": c} for n, c in owners.most_common(4)],
+             "wrong": qs.filter(review__in=["wrong", "check"]).count()}
     return Response({"total": qs.count(), "by_status": by_status, "by_stage": by_stage, "entries": entries,
                      "pending_edits": Entry.objects.filter(pending__isnull=False).count(),
-                     "top": top, "bots": bots, "modes": dict(MODES)})
+                     "top": top, "bots": bots, "modes": dict(MODES), "panel": panel})
 
 
 @zona_api(["GET", "POST"], [CanView])
@@ -1007,6 +1023,30 @@ def history_continue(request):
 
 
 # ====================================================================== tahlil: xodimlar javoblari va aniqlashtirishlar
+@zona_api(["GET"], [CanView])
+def category_stats(request):
+    """Toifa bo'yicha mas'ul jadvali uchun: oxirgi N kunda har toifada nechta savol va kim haqiqatda javob bergan
+    (xodim javoblari; umumiy akkaunt — operatoriga, jamoa a'zosi — jamoa nomi bilan ham)."""
+    from collections import Counter, defaultdict
+    days = max(1, min(int(request.query_params.get("days") or 30), 180))
+    since = timezone.now() - timezone.timedelta(days=days)
+    qs = Message.objects.filter(kind=Message.QUESTION, created_at__gte=since).exclude(category="")
+    total = Counter(qs.values_list("category", flat=True))
+    who, teams = defaultdict(Counter), defaultdict(set)
+    for cat, r in ((m.question.category, m) for m in Message.objects.filter(
+            kind=Message.STAFF, question__in=qs, user__isnull=False).select_related(
+            "question", "user__member__member_of", "user__contact__member", "user__contact__operator")):
+        name = _credit(r.user)
+        who[cat][name] += 1
+        u = r.user
+        if u.contact_id and u.contact.member_id:
+            teams[cat].add(u.contact.member.name)
+        if u.member_id and u.member.member_of_id:
+            teams[cat].add(u.member.member_of.name)
+    return Response({c: {"questions": total[c], "answered_by": [{"name": n, "count": k} for n, k in who[c].most_common(3)],
+                         "teams": sorted(teams[c])} for c in total})
+
+
 def _credit(u):
     """Hisobotda kimga yoziladi: umumiy akkaunt (@IT_StarGroup) — asosiy operatoriga (Xusniddin), qolganlar — o'ziga."""
     c = u.contact if u is not None and u.contact_id else None

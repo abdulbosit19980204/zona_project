@@ -76,3 +76,40 @@ class AiDownTests(ControlsBase):
         AIUsage.objects.create(task="support", provider="g", model="m", ok=True)
         engine._AI_DOWN.update(at=0.0)
         self.assertFalse(engine.ai_down())
+
+
+class StatusPanelTests(ControlsBase):
+    def test_stats_panel(self):
+        from django.utils import timezone
+        Settings.load()
+        dep = Department.objects.create(name="IT")
+        said = Member.objects.create(name="Saidabror", role="Op", department=dep, telegram="StargroupSaid")
+        s = Settings.load()
+        s.category_owners = {"promo": said.pk}
+        s.save()
+        mk = lambda i, **kw: Message.objects.create(bot=self.bot, chat_id=-1, message_id=i, kind=Message.QUESTION,  # noqa: E731
+                                                     text="savol", **kw)
+        mk(1, stage="faq", status=Message.ANSWERED)
+        mk(2, stage="template", status=Message.ANSWERED, review="wrong")
+        mk(3, status=Message.ESCALATED, category="promo")
+        mk(4, status=Message.ESCALATED, category="promo")
+        old = mk(5, stage="ai", status=Message.ANSWERED)
+        Message.objects.filter(pk=old.pk).update(created_at=timezone.now() - timezone.timedelta(days=10))
+        self.login("viewer")
+        p = self.call("get", "support/stats/?days=7").json()["panel"]
+        self.assertEqual((p["bot"], p["prev_total"], p["prev_bot"], p["wrong"]), (2, 1, 1, 1))
+        self.assertEqual(p["escalated_by_owner"], [{"name": "Saidabror", "count": 2}])
+
+    def test_category_stats(self):
+        from zona.models import TeamContact
+        dep = Department.objects.create(name="IT2")
+        pt = Member.objects.create(name="Pro-target", role="PT", department=dep, is_team=True, level="EXT")
+        g = TeamContact.objects.create(member=pt, name="Guzel Taipova", telegram="Guzel_Taipova")
+        gu = TgUser.objects.create(tg_id=5, username="Guzel_Taipova", name="Guzel", contact=g)
+        q = Message.objects.create(bot=self.bot, chat_id=-1, message_id=1, kind=Message.QUESTION, text="vizit", category="visit")
+        Message.objects.create(bot=self.bot, chat_id=-1, message_id=2, kind=Message.STAFF, question=q, user=gu, text="javob")
+        self.login("viewer")
+        r = self.call("get", "support/category-stats/?days=30").json()
+        self.assertEqual(r["visit"]["questions"], 1)
+        self.assertEqual(r["visit"]["answered_by"], [{"name": "Guzel Taipova", "count": 1}])
+        self.assertEqual(r["visit"]["teams"], ["Pro-target"])

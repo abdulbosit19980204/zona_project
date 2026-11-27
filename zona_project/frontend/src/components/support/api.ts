@@ -226,6 +226,8 @@ export interface SupportStats {
   entries: Partial<Record<EntryStatus, number>>; pending_edits: number;
   top: { id: number; title: string; uses: number; likes: number; dislikes: number }[];
   bots: { id: number; name: string; username: string; enabled: boolean; mode: Mode; last_ok_at: string | null; last_error: string; admin_chat: boolean }[];
+  /** Holat paneli: bot hal qilgan, o'tgan davr, kimga uzatilgan, xato javoblar. */
+  panel?: { bot: number; prev_total: number; prev_bot: number; escalated_by_owner: { name: string; count: number }[]; wrong: number };
 }
 export interface StaffRow {
   type: "member" | "contact"; id: number; name: string; role: string; level: string; telegram: string; phone: string;
@@ -292,6 +294,8 @@ export interface Owner { id: number; name: string; role: string; level: string; 
 
 export const supportApi = {
   stats: (days = 7) => get<SupportStats>("stats/", { days }),
+  categoryStats: (days = 30) => get<Record<string, { questions: number; answered_by: { name: string; count: number }[]; teams: string[] }>>(
+    "category-stats/", { days }),
   staff: () => get<StaffRow[]>("staff/"),
   owners: () => get<Owner[]>("owners/"),
   tags: () => get<SupportTag[]>("tags/"),

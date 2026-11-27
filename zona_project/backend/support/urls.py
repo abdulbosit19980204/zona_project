@@ -15,6 +15,7 @@ router.register("messages", views.MessageViewSet, basename="message")
 urlpatterns = [
     path("settings/", views.settings_view, name="settings"),
     path("stats/", views.stats, name="stats"),
+    path("category-stats/", views.category_stats, name="category-stats"),
     path("staff/", views.staff, name="staff"),
     path("owners/", views.owners, name="owners"),
     path("tags/", views.tags_list, name="tags"),

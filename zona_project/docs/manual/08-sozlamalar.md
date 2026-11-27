@@ -42,6 +42,10 @@ PRBC vazifalari, Xodimlar, Umumiy. Har o'zgarishdan keyin **Saqlash**.
 
 ### 1.2 Guruhlar
 
+**28.11 dan — ixcham jadval:** har guruh bitta qator — guruh (bot admini / oxirgi xabar), 7 kunlik savollar, rejim
+(ro'yxat), «Tahlilga» va «PRBC vazifa» kalitlari, «Eski guruh → qaysi guruhga yo'naltiriladi». Qator oxiridagi ⌄ tugmasi
+— yo'naltirish va havola tafsilotlari. (Quyidagi rasmlar avvalgi kartochka ko'rinishidan — mazmuni o'zgarmagan.)
+
 ![Guruhlar ro'yxati: har guruh — rejim, tahlil, PRBC vazifa, yo'naltirish](img/sup-guruhlar.jpg)
 
 Har guruh kartasi:
@@ -66,6 +70,12 @@ Bir nechta eski guruhni birdan yo'naltirish — sahifa tepasidagi blok:
 ![Eski guruhlarni yangi guruhga yo'naltirish](img/sup-yonaltirish.jpg)
 
 ### 1.3 Javob berish
+
+**28.11 dan — yig'iladigan bo'limlar:** Ish vaqti, Javob siyosati, Toifa bo'yicha mas'ul (ochiq), Guruhdagi javob,
+«Hal bo'ldimi?», O'rganish, Aniqlik va tezlik (bosilsa ochiladi). Kalitlar va bo'limdagi raqamlar (maydondan
+chiqqanda) darhol saqlanadi; qo'lda saqlanadiganlari o'zgarsa pastda bitta yopishqoq panel chiqadi: «N ta o'zgarish
+saqlanmagan — Saqlash / Bekor». **Toifa bo'yicha mas'ul** qatorida — oxirgi 30 kunda shu toifada nechta savol bo'lgani
+va kim haqiqatda javob bergani; tanlangan mas'ul ular orasida bo'lmasa — sariq ⚠ (mas'ulni tekshiring).
 
 ![Javob berish sozlamalari (to'liq)](img/sup-javob-berish.jpg)
 

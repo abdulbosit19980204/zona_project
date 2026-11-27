@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bot, History, Images, Link2, ListTodo, LogOut, MessageSquareText, Plus, Save, Search, Send, Settings2, ShieldCheck, Trash2, Users, Wifi, type LucideIcon } from "lucide-react";
+import { Bot, ChevronDown, History, Images, Link2, ListTodo, LogOut, MessageSquareText, Plus, Save, Search, Send, Settings2, ShieldCheck, Trash2, Users, Wifi, type LucideIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
@@ -199,39 +199,85 @@ function GroupsSection({ t }: { t: ST }) {
       )}
       {groups.isLoading && <Skeleton className="h-32" />}
       {groups.data && groups.data.length === 0 && <p className="text-sm text-muted-foreground">{t("empty")}</p>}
-      {groups.data?.map((g) => (
-        <Card key={g.id} className={cn("gap-3 p-4", !g.is_active && "opacity-60")}>
-          <div className="flex flex-wrap items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted"><Users className="size-4 text-muted-foreground" /></span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-medium">{g.title || g.chat_id}</div>
-              <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                {g.is_admin ? <span className="inline-flex items-center gap-0.5 text-success"><ShieldCheck className="size-3" />{t("botAdmin")}</span>
-                  : <span className="text-warning">{t("notAdmin")}</span>}
-                <span>· {g.bot_name}</span>
-                <span>· {t("q7")}: <b className="text-foreground">{g.questions_7d}</b></span>
-                {g.last_message_at && <span>· {fmtDate(g.last_message_at)}</span>}
-                {!g.in_analytics && <span className="text-warning">· {t("grpAnalyticsOff")}</span>}
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-xs" title={t("grpAnalyticsHint")}>
-              <Switch checked={g.in_analytics} disabled={upd.isPending} onCheckedChange={(v) => upd.mutate({ id: g.id, in_analytics: v })} />
-              {t("grpAnalytics")}
-            </label>
-            <label className="flex items-center gap-2 text-xs" title={t("grpTasksHint")}>
-              <Switch checked={g.creates_tasks && !g.redirect_to} disabled={upd.isPending || Boolean(g.redirect_to)}
-                onCheckedChange={(v) => upd.mutate({ id: g.id, creates_tasks: v })} />
-              {t("grpTasks")}
-            </label>
-            {g.mode === "inherit" && <div className="flex items-center gap-1.5 text-xs text-muted-foreground">{t("nowActs")}: <ModeBadge mode={g.effective_mode} t={t} /></div>}
-          </div>
-          <Segmented size="sm" value={g.mode} className="w-full sm:w-auto"
-            onChange={(v) => upd.mutate({ id: g.id, mode: v as SupportGroup["mode"] })}
-            options={(["inherit", ...MODES] as const).map((m) => ({ value: m, label: t(`mode_${m}`) }))} />
-          <RedirectRow g={g} list={list} t={t} onSave={(body) => upd.mutate({ id: g.id, ...body })} pending={upd.isPending} />
-        </Card>
-      ))}
+      {groups.data && groups.data.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border bg-card shadow-xs">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">{t("grpCol")}</th>
+                <th className="px-2 py-2 text-right font-medium">{t("q7")}</th>
+                <th className="px-2 py-2 font-medium">{t("grpMode")}</th>
+                <th className="px-2 py-2 text-center font-medium" title={t("grpAnalyticsHint")}>{t("grpAnalytics")}</th>
+                <th className="px-2 py-2 text-center font-medium" title={t("grpTasksHint")}>{t("grpTasks")}</th>
+                <th className="px-2 py-2 font-medium">{t("rdOld")}</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {groups.data.map((g) => <GroupRow key={g.id} g={g} list={list} t={t}
+                onSave={(body) => upd.mutate({ id: g.id, ...body })} pending={upd.isPending} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
+  );
+}
+
+/** Guruhlar jadvalining bitta qatori; havola va yo'naltirish tafsiloti — ochiladigan qatorda. */
+function GroupRow({ g, list, t, onSave, pending }: {
+  g: SupportGroup; list: SupportGroup[]; t: ST; onSave: (b: Partial<SupportGroup>) => void; pending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rdOpen, setRdOpen] = useState(false);
+  const targets = list.filter((x) => x.id !== g.id && !x.redirect_to);
+  return (
+    <>
+      <tr className={cn("border-b last:border-0", !g.is_active && "opacity-60")}>
+        <td className="max-w-64 px-3 py-2">
+          <div className="truncate font-medium" title={g.title}>{g.title || g.chat_id}</div>
+          <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+            {g.is_admin ? <span className="inline-flex items-center gap-0.5 text-success"><ShieldCheck className="size-3" />{t("botAdmin")}</span>
+              : <span className="text-warning">{t("notAdmin")}</span>}
+            {g.last_message_at && <span>· {fmtDate(g.last_message_at)}</span>}
+          </div>
+        </td>
+        <td className="px-2 py-2 text-right tabular-nums">{g.questions_7d}</td>
+        <td className="px-2 py-2">
+          <select className="h-8 rounded-md border bg-background px-1.5 text-xs" value={g.mode} disabled={pending}
+            aria-label={t("grpMode")} onChange={(e) => onSave({ mode: e.target.value as SupportGroup["mode"] })}>
+            {(["inherit", ...MODES] as const).map((m) => <option key={m} value={m}>{t(`mode_${m}`)}</option>)}
+          </select>
+          {g.mode === "inherit" && <div className="mt-0.5"><ModeBadge mode={g.effective_mode} t={t} /></div>}
+        </td>
+        <td className="px-2 py-2 text-center">
+          <Switch checked={g.in_analytics} disabled={pending} aria-label={t("grpAnalytics")}
+            onCheckedChange={(v) => onSave({ in_analytics: v })} />
+        </td>
+        <td className="px-2 py-2 text-center">
+          <Switch checked={g.creates_tasks && !g.redirect_to} disabled={pending || Boolean(g.redirect_to)} aria-label={t("grpTasks")}
+            onCheckedChange={(v) => onSave({ creates_tasks: v })} />
+        </td>
+        <td className="px-2 py-2">
+          <select className="h-8 w-full max-w-48 rounded-md border bg-background px-1.5 text-xs" value={g.redirect_to ?? ""} disabled={pending}
+            aria-label={t("rdOld")} onFocus={() => setRdOpen(true)} onPointerDown={() => setRdOpen(true)}
+            onChange={(e) => onSave({ redirect_to: e.target.value ? Number(e.target.value) : null })}>
+            <option value="">{t("rdNone")}</option>
+            {(rdOpen ? targets : targets.filter((x) => x.id === g.redirect_to)).map((x) => <option key={x.id} value={x.id}>{x.title || x.chat_id}</option>)}
+          </select>
+          {g.redirect_to && <div className="mt-0.5 text-[11px] text-warning">{t("rdActive", { n: g.redirect_count })}</div>}
+        </td>
+        <td className="px-1 py-2">
+          <Button size="icon" variant="ghost" className="size-7" aria-expanded={open} aria-label={t("rdLink")} title={t("rdLink")}
+            onClick={() => setOpen(!open)}><ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} /></Button>
+        </td>
+      </tr>
+      {open && (
+        <tr className="border-b bg-muted/20">
+          <td colSpan={7} className="px-3 py-2"><RedirectRow g={g} list={list} t={t} onSave={onSave} pending={pending} /></td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -304,11 +350,18 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
   const field = (label: string, hint: string | undefined, input: React.ReactNode) => (
     <SettingRow label={label} hint={hint}><div className="w-36 sm:w-44">{input}</div></SettingRow>
   );
-  const saveBtn = (
-    <Button className="mt-3" disabled={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => setHash("") })}>
-      <Save className="size-4" />{t("save")}
-    </Button>
-  );
+  // qo'lda saqlanadigan maydonlar (raqam/matn) — bitta yopishqoq panel: faqat o'zgarish bo'lsa ko'rinadi
+  const dirty = (Object.keys(f) as (keyof Form)[]).filter((k) => k !== "api_hash"
+    && JSON.stringify(f[k] ?? null) !== JSON.stringify(s[k as keyof SupportSettings] ?? null)).length + (hash ? 1 : 0);
+  const saveBar = dirty > 0 && !toggle.isPending ? (
+    <div className="sticky bottom-3 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-warning/40 bg-card/95 px-3 py-2 shadow-lg backdrop-blur">
+      <span className="flex-1 text-sm">{t("unsavedN", { n: dirty })}</span>
+      <Button size="sm" variant="ghost" onClick={() => { setF({ ...s }); setHash(""); }}>{t("cancel")}</Button>
+      <Button size="sm" disabled={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => setHash("") })}>
+        <Save className="size-4" />{t("save")}
+      </Button>
+    </div>
+  ) : null;
 
   if (part === "answering") {
     const days = new Set(String(f.work_days ?? "").split(",").filter(Boolean).map(Number));
@@ -318,12 +371,8 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
       setF({ ...f, work_days: [...next].sort().join(",") });
     };
     return (
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="gap-3 p-4 lg:col-span-2">
-          <div>
-            <div className="text-sm font-semibold">{t("workTitle")}</div>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t("workHint")}</p>
-          </div>
+      <div className="grid gap-3">
+        <Section title={t("workTitle")} hint={t("workHint")} open>
           <div className="flex flex-wrap items-end gap-3">
             <label className="grid gap-1 text-xs">{t("workFrom")}
               <Input type="number" min={0} max={23} value={f.work_from} onChange={num("work_from")} className="h-9 w-24" /></label>
@@ -339,22 +388,22 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
                 ))}
               </div>
             </div>
-            {saveBtn}
           </div>
-        </Card>
-        <Card className="gap-3 p-4 lg:col-span-2">
-          <div>
-            <div className="text-sm font-semibold">{t("polTitle")}</div>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t("polHint")}</p>
+        </Section>
+        <Section title={t("polTitle")} hint={t("polHint")} open>
+          <div className="grid gap-2">
+            <Segmented value={f.answer_policy ?? "all"} className="w-full sm:w-auto"
+              onChange={(v) => { setF({ ...f, answer_policy: v }); toggle.mutate({ answer_policy: v }); }}
+              options={(["standard", "kb", "all"] as const).map((v) => ({ value: v, label: t(`pol_${v}` as SKey) }))} />
+            <p className="rounded-lg bg-muted/50 p-2.5 text-xs leading-relaxed">{t(`pol_${f.answer_policy ?? "all"}_h` as SKey)}</p>
           </div>
-          <Segmented value={f.answer_policy ?? "all"} className="w-full sm:w-auto"
-            onChange={(v) => { setF({ ...f, answer_policy: v }); toggle.mutate({ answer_policy: v }); }}
-            options={(["standard", "kb", "all"] as const).map((v) => ({ value: v, label: t(`pol_${v}` as SKey) }))} />
-          <p className="rounded-lg bg-muted/50 p-2.5 text-xs leading-relaxed">{t(`pol_${f.answer_policy ?? "all"}_h` as SKey)}</p>
-        </Card>
-        <Card className="gap-0 p-4">
-          <div className="mb-1 text-sm font-semibold">{t("grpReply")}</div>
-          <p className="mb-2 text-xs text-muted-foreground">{t("behaviorHint")}</p>
+        </Section>
+        <Section title={t("t_owners")} hint={t("t_ownersHint")} open>
+          <CategoryOwners t={t} value={f.category_owners} backups={f.category_backups}
+            onSave={(v) => { setF({ ...f, category_owners: v }); toggle.mutate({ category_owners: v }); }}
+            onSaveBackup={(v) => { setF({ ...f, category_backups: v }); toggle.mutate({ category_backups: v }); }} />
+        </Section>
+        <Section title={t("grpReply")} hint={t("behaviorHint")}>
           {sw("mention_asker", t("t_mentionAsker"), t("t_mentionAskerHint"))}
           {sw("mention_supervisor", t("t_mentionSv"), t("t_mentionSvHint"))}
           {sw("mention_responsible", t("t_mention"))}
@@ -366,6 +415,16 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {field(t("t_keepDays"), t("t_keepDaysHint"),
             <Input type="number" min={0} max={3650} value={f.answer_keep_days} onChange={num("answer_keep_days")}
               onBlur={blurSave("answer_keep_days")} />)}
+          {sw("ask_first_prompt", t("t_askFirst"))}
+          {sw("contact_lookup", t("t_contacts"), t("t_contactsHint"))}
+          {field(t("t_collapse"), t("t_collapseHint"),
+            <Input type="number" min={0} max={1440} value={f.collapse_after} onChange={num("collapse_after")}
+              onBlur={blurSave("collapse_after")} />)}
+          {field(t("t_threadWindow"), t("t_threadWindowHint"),
+            <Input type="number" min={0} max={240} value={f.thread_window} onChange={num("thread_window")}
+              onBlur={blurSave("thread_window")} />)}
+        </Section>
+        <Section title={t("t_confirm")} hint={t("t_confirmHint")}>
           {sw("confirm_resolution", t("t_confirm"), t("t_confirmHint"))}
           {f.confirm_resolution && field(t("t_confirmAfter"), undefined,
             <Input type="number" min={0} value={f.confirm_after} onChange={num("confirm_after")}
@@ -380,27 +439,8 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {f.confirm_resolution && field(t("t_remindMax"), t("t_remindMaxHint"),
             <Input type="number" min={1} max={10} value={f.remind_max} onChange={num("remind_max")}
               onBlur={blurSave("remind_max")} />)}
-          {field(t("t_collapse"), t("t_collapseHint"),
-            <Input type="number" min={0} max={1440} value={f.collapse_after} onChange={num("collapse_after")}
-              onBlur={blurSave("collapse_after")} />)}
-          {field(t("t_threadWindow"), t("t_threadWindowHint"),
-            <Input type="number" min={0} max={240} value={f.thread_window} onChange={num("thread_window")}
-              onBlur={blurSave("thread_window")} />)}
-          <div className="grid gap-2 border-t py-3">
-            <div>
-              <div className="text-sm font-medium">{t("t_owners")}</div>
-              <p className="mt-0.5 text-xs text-muted-foreground">{t("t_ownersHint")}</p>
-            </div>
-            <CategoryOwners t={t} value={f.category_owners} backups={f.category_backups}
-              onSave={(v) => { setF({ ...f, category_owners: v }); toggle.mutate({ category_owners: v }); }}
-              onSaveBackup={(v) => { setF({ ...f, category_backups: v }); toggle.mutate({ category_backups: v }); }} />
-          </div>
-          {sw("ask_first_prompt", t("t_askFirst"))}
-          {sw("contact_lookup", t("t_contacts"), t("t_contactsHint"))}
-        </Card>
-        <Card className="gap-0 p-4">
-          <div className="mb-1 text-sm font-semibold">{t("grpLearn")}</div>
-          <p className="mb-2 text-xs text-muted-foreground">{t("grpLearnHint")}</p>
+        </Section>
+        <Section title={t("grpLearn")} hint={t("grpLearnHint")}>
           {sw("self_learning", t("t_selfLearn"), t("t_selfLearnHint"))}
           {sw("answer_variety", t("t_variety"), t("t_varietyHint"))}
           {sw("progress_messages", t("t_progress"), t("t_progressHint"))}
@@ -413,9 +453,8 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {sw("learn_clarifications", t("t_clarify"), t("t_clarifyHint"))}
           {sw("notify_candidates", t("t_candidates"))}
           {sw("drafts_to_admin", t("t_drafts"))}
-        </Card>
-        <Card className="gap-0 p-4 lg:col-span-2">
-          <div className="mb-1 text-sm font-semibold">{t("grpPrecision")}</div>
+        </Section>
+        <Section title={t("grpPrecision")}>
           {sw("ai_primary", t("t_aiPrimary"), t("t_aiPrimaryHint"))}
           {field(t("aiPrimaryBelow"), t("aiPrimaryBelowHint"), <Input type="number" value={f.ai_primary_below} onChange={num("ai_primary_below")} />)}
           {field(t("faqTh"), t("faqThHint"), <Input type="number" value={f.faq_threshold} onChange={num("faq_threshold")} />)}
@@ -424,13 +463,14 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {field(t("ruleTh"), undefined, <Input type="number" value={f.route_threshold} onChange={num("route_threshold")} />)}
           {field(t("workers"), t("workersHint"), <Input type="number" min={1} max={24} value={f.workers} onChange={num("workers")} />)}
           {field(t("signature"), undefined, <Input value={f.signature} onChange={(e) => setF({ ...f, signature: e.target.value })} />)}
-          <div>{saveBtn}</div>
-        </Card>
+        </Section>
+        {saveBar}
       </div>
     );
   }
   if (part === "images") {
     return (
+      <div className="grid gap-3">
       <Card className="gap-0 p-4">
         {sw("image_match", t("imgMatch"), t("imgMatchHint"))}
         {sw("image_autolabel", t("imgAuto"), t("imgAutoHint"))}
@@ -438,8 +478,9 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
         {field(t("imgThreshold"), t("imgThresholdHint"), <Input type="number" min={2} max={20} value={f.image_threshold} onChange={num("image_threshold")} />)}
         {field(t("mediaDays"), t("mediaDaysHint"), <Input type="number" value={f.media_days} onChange={num("media_days")} />)}
         {field(t("mediaFullDays"), t("mediaFullDaysHint"), <Input type="number" min={1} max={60} value={f.media_full_days} onChange={num("media_full_days")} />)}
-        <div>{saveBtn}</div>
       </Card>
+      {saveBar}
+      </div>
     );
   }
   return (
@@ -450,7 +491,6 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
         {sw("ai_enabled", t("ai"), !s.ai_ready ? <span className="text-warning">{t("aiNotReady")}</span> : undefined)}
         {field(t("aiLimit"), t("aiLeft", { n: s.ai_quota_left }), <Input type="number" value={f.ai_daily_limit} onChange={num("ai_daily_limit")} />)}
         {field(t("aiMin"), undefined, <Input type="number" value={f.ai_min_confidence} onChange={num("ai_min_confidence")} />)}
-        <div>{saveBtn}</div>
       </Card>
       <Card className="gap-0 p-4">
         <div className="mb-1 text-sm font-semibold">Telegram API</div>
@@ -459,9 +499,25 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
         <FormRow label={t("apiHash")} hint={s.has_api_hash ? s.api_hash : undefined} className="mt-3">
           <Input value={hash} onChange={(e) => setHash(e.target.value)} type="password" autoComplete="off" placeholder={s.api_hash || ""} />
         </FormRow>
-        <div>{saveBtn}</div>
       </Card>
+      <div className="lg:col-span-2">{saveBar}</div>
     </div>
+  );
+}
+
+/** Yig'iladigan sozlamalar bo'limi (akkordeon): sarlavha, qisqa izoh. */
+function Section({ title, hint, open, children }: { title: string; hint?: string; open?: boolean; children: React.ReactNode }) {
+  return (
+    <details open={open} className="group rounded-xl border bg-card shadow-xs">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">{title}</span>
+          {hint && <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span>}
+        </span>
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t px-4 pb-3 pt-1">{children}</div>
+    </details>
   );
 }
 
@@ -580,7 +636,15 @@ function CategoryOwners({ t, value, backups, onSave, onSaveBackup }: {
   onSave: (v: Record<string, number | string>) => void; onSaveBackup: (v: Record<string, number | string>) => void;
 }) {
   const staff = useQuery({ queryKey: ["support", "staff"], queryFn: supportApi.staff, staleTime: 60_000 });
+  const cstats = useQuery({ queryKey: ["support", "category-stats"], queryFn: () => supportApi.categoryStats(30), staleTime: 5 * 60_000 });
   const members = (staff.data ?? []).filter((r) => r.type === "member");
+  // tanlangan mas'ul nomi (xodim, jamoa a'zosi yoki butun jamoa) — haqiqatda javob berganlar bilan solishtirish uchun
+  const ownerName = (v: number | string | undefined) => {
+    if (v == null) return "";
+    const rows = staff.data ?? [];
+    if (typeof v === "string") return rows.find((r) => r.type === "contact" && `c:${r.id}` === v)?.name ?? "";
+    return rows.find((r) => r.type === "member" && r.id === v)?.name ?? rows.find((r) => r.team_id === v)?.team ?? "";
+  };
   // jamoa: kontaktlari (Ulug'bek...) va jamoaga qo'shilgan yakka xodimlar (Kamoliddin, Timur)
   const teams = new Map<string, StaffRow[]>();
   for (const r of staff.data ?? []) {
@@ -626,7 +690,7 @@ function CategoryOwners({ t, value, backups, onSave, onSaveBackup }: {
       </div>
       {SYS_CATEGORIES.map((c) => (
         <div key={c} className="grid grid-cols-[minmax(96px,140px)_minmax(0,1fr)] items-center gap-2 text-sm sm:grid-cols-[minmax(96px,140px)_minmax(0,1fr)_minmax(0,1fr)]">
-          <span className={cn("leading-tight", cur[c] ? "font-medium" : "text-muted-foreground")}>{t(`cat_${c}` as SKey)}</span>
+          <CatLabel t={t} label={t(`cat_${c}` as SKey)} set={cur[c] != null} owner={ownerName(cur[c])} stat={cstats.data?.[c]} />
           <select aria-label={`${t(`cat_${c}` as SKey)} — ${t("ownerMain")}`} className={sel}
             value={cur[c] != null ? String(cur[c]) : ""} onChange={(e) => put(cur, c, e.target.value, onSave)}>
             <option value="">{t("ownerDefault")}</option>
@@ -642,6 +706,28 @@ function CategoryOwners({ t, value, backups, onSave, onSaveBackup }: {
       ))}
       <p className="text-xs text-muted-foreground">{t("ownerBackupHint")}</p>
     </div>
+  );
+}
+
+/** Toifa nomi + oxirgi 30 kunda savollar soni va kim haqiqatda javob bergan; mas'ul mos kelmasa — sariq belgi. */
+function CatLabel({ t, label, set, owner, stat }: {
+  t: ST; label: string; set: boolean; owner: string;
+  stat?: { questions: number; answered_by: { name: string; count: number }[]; teams: string[] };
+}) {
+  const top = stat?.answered_by ?? [];
+  const names = [...top.map((x) => x.name), ...(stat?.teams ?? [])].map((x) => x.toLowerCase());
+  const mismatch = set && !!owner && top.length > 0 && !names.includes(owner.toLowerCase());
+  return (
+    <span className="grid leading-tight">
+      <span className={cn(set ? "font-medium" : "text-muted-foreground", mismatch && "text-warning")}>
+        {mismatch && <span aria-hidden>⚠ </span>}{label}
+      </span>
+      {stat && (
+        <span className="truncate text-[11px] text-muted-foreground" title={mismatch ? t("ownMismatch", { who: top.map((x) => x.name).join(", ") }) : undefined}>
+          {t("ownStat", { n: stat.questions })}{top.length > 0 && ` · ${top.slice(0, 2).map((x) => `${x.name.split(" ")[0]} ${x.count}`).join(", ")}`}
+        </span>
+      )}
+    </span>
   );
 }
 

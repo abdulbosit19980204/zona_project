@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCan } from "@/hooks/use-org";
 import { cn } from "@/lib/utils";
 
-import { supportApi, SYS_APPS, SYS_CATEGORIES, SYS_ORIGINS, type MsgStatus, type Resolution, type SupportMessage } from "./api";
+import { supportApi, SYS_APPS, SYS_CATEGORIES, SYS_ORIGINS, type MsgStatus, type Resolution, type SupportMessage, type SupportStats } from "./api";
 import { fmtDate, Initials, MsgBadge, stageLabel, useSupportMutation } from "./common";
 import { dimLabel } from "./explore";
 import { useSt, type SKey, type ST } from "./i18n";
@@ -48,6 +48,57 @@ const DRILL_LABEL: Record<string, SKey> = {
   total: "anQuestions", yes: "r_yes", no: "r_no", work: "r_work", asked: "r_asked", unknown: "r_", bot: "kpiBot",
   staff: "kpiStaff", unanswered: "anUnanswered", open: "anOpenNow",
 };
+
+const BOT_TARGET = 80;  // egasining maqsadi: L1 savollarning ≥80% ini bot o'zi yopadi
+
+/** Bosh sahifa holat paneli: bot hal qilgan ulush (maqsad 80%, o'tgan haftaga nisbatan), kimga uzatilgan,
+ *  xato javoblar va tasdiq navbati — har biri o'z sahifasiga havola. */
+function StatusPanel({ t, total, bot, panel, escalated, queue, onEscalated }: {
+  t: ST; total?: number; bot: number; panel?: SupportStats["panel"]; escalated: number; queue: number; onEscalated: () => void;
+}) {
+  const pct = total ? Math.round((100 * bot) / total) : 0;
+  const prevPct = panel?.prev_total ? Math.round((100 * panel.prev_bot) / panel.prev_total) : null;
+  const delta = prevPct == null ? null : pct - prevPct;
+  const card = "flex min-w-0 flex-col gap-1 rounded-xl border bg-card px-3 py-2 shadow-xs";
+  return (
+    <div className="mb-3 grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className={card}>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><Bot className="size-3.5 text-success" />{t("kpiBotShare")}</span>
+        <span className="flex items-baseline gap-2">
+          <b className={cn("text-2xl tabular-nums", pct >= BOT_TARGET ? "text-success" : "text-foreground")}>{total ? `${pct}%` : "—"}</b>
+          {delta != null && delta !== 0 && (
+            <span className={cn("text-xs tabular-nums", delta > 0 ? "text-success" : "text-destructive")}>
+              {delta > 0 ? "▲" : "▼"} {Math.abs(delta)} {t("kpiPp")}
+            </span>
+          )}
+        </span>
+        <div className="relative h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+          aria-label={t("kpiBotShare")}>
+          <div className="h-full rounded-full bg-success" style={{ width: `${Math.min(100, pct)}%` }} />
+          <div className="absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `${BOT_TARGET}%` }} title={t("kpiTarget", { n: BOT_TARGET })} />
+        </div>
+        <span className="text-[11px] text-muted-foreground">{t("kpiBotOf", { bot, total: total ?? 0, n: BOT_TARGET })}</span>
+      </div>
+      <button type="button" onClick={onEscalated} className={cn(card, "text-left hover:border-primary/40")}>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><UserRound className="size-3.5 text-warning" />{t("kpiHuman")}</span>
+        <b className="text-2xl tabular-nums">{escalated}</b>
+        <span className="truncate text-[11px] text-muted-foreground">
+          {(panel?.escalated_by_owner ?? []).slice(0, 3).map((o) => `${o.name} ${o.count}`).join(" · ") || "—"}
+        </span>
+      </button>
+      <Link href="/support/review?view=answers" className={cn(card, "hover:border-primary/40")}>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><ThumbsDown className="size-3.5 text-destructive" />{t("kpiWrong")}</span>
+        <b className={cn("text-2xl tabular-nums", (panel?.wrong ?? 0) > 0 && "text-destructive")}>{panel?.wrong ?? 0}</b>
+        <span className="text-[11px] text-muted-foreground">{t("kpiWrongHint")}</span>
+      </Link>
+      <Link href="/support/review" className={cn(card, "hover:border-primary/40")}>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><CheckCheck className="size-3.5" />{t("kpiQueue")}</span>
+        <b className="text-2xl tabular-nums">{queue}</b>
+        <span className="text-[11px] text-muted-foreground">{t("kpiQueueHint")}</span>
+      </Link>
+    </div>
+  );
+}
 
 export function SupportInbox() {
   return <Suspense><InboxInner /></Suspense>;
@@ -115,16 +166,8 @@ function InboxInner() {
 
   return (
     <SupportShell title={t("inboxTitle")} description={t("inboxDesc2")} fill>
-      <div className="mb-2 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><Inbox className="size-3.5 text-primary" />{t("kpiTotal")}:
-          <b className="tabular-nums text-foreground">{s?.total ?? "—"}</b></span>
-        <span className="inline-flex items-center gap-1.5"><Bot className="size-3.5 text-success" />{t("kpiBot")}:
-          <b className="tabular-nums text-foreground">{botClosed}</b>{s?.total ? ` (${Math.round((100 * botClosed) / s.total)}%)` : ""}</span>
-        <span className="inline-flex items-center gap-1.5"><UserRound className="size-3.5 text-warning" />{t("kpiHuman")}:
-          <b className="tabular-nums text-foreground">{bs.escalated ?? 0}</b></span>
-        <Link href="/support/review" className="inline-flex items-center gap-1.5 hover:text-foreground hover:underline">
-          <CheckCheck className="size-3.5" />{t("kpiQueue")}: <b className="tabular-nums text-foreground">{queue}</b></Link>
-      </div>
+      <StatusPanel t={t} total={s?.total} bot={s?.panel?.bot ?? botClosed} panel={s?.panel} escalated={bs.escalated ?? 0} queue={queue}
+        onEscalated={() => setFilter("escalated")} />
 
       <div className="grid min-h-[560px] flex-1 overflow-hidden rounded-xl border bg-card shadow-xs lg:grid-cols-[minmax(300px,360px)_1fr] 2xl:grid-cols-[360px_1fr_300px]">
         {/* ro'yxat */}
