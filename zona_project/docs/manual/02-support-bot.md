@@ -108,6 +108,9 @@ Bot guruhda **admin** bo'lishi kerak (yoki BotFather'da privacy o'chiq) — aks 
 - Javob ostidagi **"⚠️ Xato javob"** tugmasi (xodimlar uchun) — noto'g'ri javob guruhda yashiriladi va tasdiqlash
   navbatiga tushadi.
 - Rasm turlari xodim javobi va ishonchli moslikdan avtomatik o'rgatiladi.
+- **Faqat salom — savol emas.** «Assalam aleykum», «Ассаламу алейкум», «Всем доброе утро», «Добрый день, коллеги»
+  (imlo xatolari bilan ham) bot uchun savol emas: javob berilmaydi, mutaxassisga uzatilmaydi, bilim bazasidan javob
+  tanlanmaydi. Salomdan keyin savol yozilsa («Assalom aleykum, aksiya chiqmayapti») — odatdagidek javob beriladi.
 - **Nimadan o'rganmaydi (filtr).** Savol: salomlashuv va mazmunsiz xabarlar — «Assalomu alaykum», «Нукус к3» (faqat
   hudud/kod), «Тут тоже самое», «@Guzel_Taipova», «Почему так ?» (mijoz nomi, kod, @murojaat olib tashlangach
   kamida 2 ta mazmunli so'z qolishi kerak). Javob: aniq holatga yozilgan qisqa «bajarildi» («Готово», «отвязала,

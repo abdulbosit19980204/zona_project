@@ -91,3 +91,20 @@ class CloseReviewTests(ControlsBase):
         from support import review_close
         Entry.objects.create(kind=Entry.FAQ, title="Nuqtani ulab bering", answer="z", status=Entry.NEW)
         self.assertEqual(review_close.plan(reject_rest=False)["reject"], [])
+
+
+class GreetingOnlyTests(ControlsBase):
+    def test_greeting_variants_are_not_questions_and_get_no_kb_answer(self):
+        Entry.objects.create(kind=Entry.FAQ, title="ProTarget: kira olmayapman / parol kerak",
+                             questions=["parol kerak", "Assalam aleykum", "Всем доброе утро"], answer="Parol...",
+                             status=Entry.APPROVED)
+        for t in ["Assalam aleykum", "Ассаламу алейкум", "Всем доброе утро", "Добрый день, коллеги!"]:
+            self.assertTrue(engine.greeting_only(t), t)
+            self.assertFalse(engine.is_question(t), t)
+            d = engine.decide(t, engine.detect_lang(t))
+            self.assertIsNone(d.entry, t)
+            self.assertEqual(d.text, "")
+        for t in ["Assalom aleykum, aksiya chiqmayapti", "Добрый день, заказ не проходит", "Kun bo'yi zakaz o'tmayapti"]:
+            self.assertFalse(engine.greeting_only(t), t)
+            self.assertTrue(engine.is_question(t), t)
+        self.assertEqual(engine.decide("parol kerak", "uz").entry.title, "ProTarget: kira olmayapman / parol kerak")

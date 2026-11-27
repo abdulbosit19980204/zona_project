@@ -80,7 +80,22 @@ def is_question(text, has_photo=False, forwarded=False):
         return False
     if len(words) <= 3 and all(w.replace("ʻ", "'").replace("’", "'") in GREETING for w in words):
         return False
+    if greeting_only(t):
+        return False  # «Assalam aleykum», «Всем доброе утро», «Добрый день» — salom, savol emas
     return True
+
+
+_GREET_PREFIX = ("assal", "asal", "aleyk", "alayk", "alek", "salom", "salam", "zdrav", "dobr", "utr", "den", "dnya",
+                 "vecher", "privet", "vsem", "hammag", "xayrl", "hayrl", "kun", "tong", "yaxshimi", "qalay", "rahmat",
+                 "raxmat", "spasib", "kollegi", "kolleg", "dostlar", "do'stlar")
+
+
+def greeting_only(text):
+    """Xabar faqat salomlashuvdan iborat (kirill/lotin, imlo xatolari bilan): «Assalam aleykum», «Ассаламу алейкум»,
+    «Всем доброе утро», «Добрый день, коллеги». @murojaat va tinish belgilari hisobga olinmaydi."""
+    t = re.sub(r"@\w+", " ", text or "")
+    words = [w for w in toks(t) if not w.isdigit()]
+    return bool(words) and len(words) <= 6 and all(w.startswith(_GREET_PREFIX) or w in GREETING for w in words)
 
 
 CLARIFY_WORDS = re.compile(
@@ -900,6 +915,9 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
     settings = Settings.load()
     if text is None:
         text = raw
+    if not (ocr or "").strip() and not images and not image and greeting_only(text):
+        # faqat salom — bilim bazasidan javob tanlanmaydi (salom savol ko'rinishiga o'xshab qolmasin)
+        return Decision("", None, 0, "", True, [], note="faqat salomlashuv — savol emas")
     ocr = fix_homoglyphs(ocr)  # saqlangan eski OCR'da ham: "отправлена Ha модерацию"
     strong_text = substantive(text)
     imgs = list(images or ([(image[0], image[1], 0)] if image and image[0] is not None else []))
@@ -1134,7 +1152,7 @@ def learnable_question(text):
     salomlashuv/«тоже самое»/«почему так» dan tashqari kamida 2 ta mazmunli so'z qolishi kerak."""
     from .dedupe import generic_phrase
     g = generic_phrase(text or "")
-    if not g:
+    if not g or greeting_only(g):
         return False
     if not _LEARN_STOP:
         _LEARN_STOP.update(toks(LEARN_STOP_TEXT))

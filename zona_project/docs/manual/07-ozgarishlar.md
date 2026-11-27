@@ -4,6 +4,9 @@
 
 ## 2026-11-27
 
+- **Salomga javob bermaydi:** «Assalam aleykum», «Ассаламу алейкум», «Всем доброе утро», «Добрый день» endi savol
+  hisoblanmaydi (avval bot ularga bilim bazasidagi parol yoki aksiya javobini qaytarardi, chunki bu so'zlar yozuvlarning
+  savol ko'rinishlariga tushib qolgan edi). Bilim bazasidan bunday savol ko'rinishlari tozalandi (versiyada saqlangan).
 - **PRBC vazifa to'g'riligi:** tashqi jamoa (Pro-target) mas'ul bo'lgan savolga vazifa ochilmaydi va boshqa xodimga
   tushirilmaydi (avval birinchi a'zoga — @Guzel_Taipova ga yoki keyingi xodimga — Saidabrorga ochilardi); Pro-target
   a'zolari ijrochi/kuzatuvchi bo'lmaydi. **Statistika:** Tahlil → xodimlar jadvalida @IT_StarGroup javoblari asosiy
