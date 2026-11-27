@@ -316,7 +316,9 @@
       "telegram": "Telegram",
       "location": "Joylashuv",
       "created": "Xodim qoʻshildi",
-      "deleteConfirm": "Oʻchirilsinmi? {count} ta vazifa masʼulsiz qoladi."
+      "deleteConfirm": "Oʻchirilsinmi? {count} ta vazifa masʼulsiz qoladi.",
+      "memberOf": "Jamoa a'zosi",
+      "memberOfHint": "Shu jamoa ishini bajaradi: jamoa mas'ul bo'lgan savolda belgilanadi, hisobotda jamoa ostida, yuklamada jamoa ulushi qo'shiladi."
     },
     "dept": {
       "new": "Yangi boʻlim",
@@ -1109,7 +1111,11 @@
     "remove": "Olib tashlash",
     "added": "Aʼzo qoʻshildi",
     "removed": "Aʼzo olib tashlandi",
-    "linked": "Telegram bogʻlangan"
+    "linked": "Telegram bogʻlangan",
+    "operator": "Asosiy operator",
+    "operatorNone": "— asosiy operator yo'q —",
+    "operatorSaved": "Asosiy operator saqlandi",
+    "operatorHint": "Umumiy akkaunt (masalan @IT_StarGroup): bu akkauntdan yozilgan javoblar yuklamada va PRBC vazifalarida shu xodimga yoziladi."
   },
   "aiHistory": {
     "title": "AI tahlillar",

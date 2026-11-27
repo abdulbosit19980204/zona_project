@@ -99,6 +99,10 @@ class Member(models.Model):
     manager = models.ForeignKey("self", verbose_name="Rahbar", null=True, blank=True,
                                 on_delete=models.SET_NULL, related_name="reports")
     is_team = models.BooleanField("Jamoa", default=False)
+    # yakka xodim jamoa ishini bajaradi (masalan, Kamoliddin va Timur — «Dasturchilar jamoasi»): jamoa mas'ul bo'lgan
+    # savolda ular ham belgilanadi, hisobotlarda jamoa ostida ko'rinadi, jamoa yuklamasidan ulush oladi
+    member_of = models.ForeignKey("self", verbose_name="Jamoa a'zosi", null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name="team_members", limit_choices_to={"is_team": True})
     trigger = models.CharField("Qaysi savol turi keladi", max_length=200, blank=True)
     does = models.TextField("Nima bilan shug'ullanadi", blank=True)
     excludes = models.TextField("Nima bilan shug'ullanmaydi", blank=True)
@@ -140,6 +144,9 @@ class TeamContact(models.Model):
     phone = models.CharField("Telefon", max_length=40, blank=True)
     telegram = models.CharField("Telegram", max_length=64, blank=True)
     telegram_id = models.BigIntegerField("Telegram ID", null=True, blank=True)
+    # umumiy akkaunt (@IT_StarGroup): undan yozilgan javoblar yuklamada va PRBC vazifalarida shu xodimga yoziladi
+    operator = models.ForeignKey(Member, verbose_name="Asosiy operator", null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name="+", limit_choices_to={"is_team": False})
     note = models.CharField("Izoh", max_length=255, blank=True)
     order = models.PositiveIntegerField("Tartib", default=0)
     updated_at = models.DateTimeField(auto_now=True)

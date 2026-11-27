@@ -32,6 +32,8 @@ export interface Member {
   department: number | null;
   team: number | null;
   manager: number | null;
+  /** Yakka xodim jamoa ishini bajaradi (masalan, Kamoliddin — «Dasturchilar jamoasi»). */
+  member_of?: number | null;
   is_team: boolean;
   trigger: string;
   does: string;
@@ -62,6 +64,8 @@ export interface TeamContact {
   phone: string;
   telegram: string;
   telegram_id: number | null;
+  /** Umumiy akkaunt (@IT_StarGroup): javoblari yuklamada va PRBC'da shu xodimga yoziladi. */
+  operator?: number | null;
   note: string;
   order: number;
 }

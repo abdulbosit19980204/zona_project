@@ -82,8 +82,13 @@ class TeamContactSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TeamContact
-        fields = ["id", "member", "name", "role", "phone", "telegram", "telegram_id", "note", "order"]
+        fields = ["id", "member", "name", "role", "phone", "telegram", "telegram_id", "operator", "note", "order"]
         read_only_fields = ["order", "telegram_id"]
+
+    def validate_operator(self, value):
+        if value is not None and value.is_team:
+            raise serializers.ValidationError("Asosiy operator — yakka xodim bo'lishi kerak.")
+        return value
 
     def validate_name(self, value):
         return _not_blank(value, "Ism bo'sh bo'lmasin.")
@@ -96,12 +101,15 @@ class MemberSerializer(I18nMixin, serializers.ModelSerializer):
     department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all(), allow_null=True, required=False)
     team = serializers.PrimaryKeyRelatedField(queryset=Team.objects.all(), allow_null=True, required=False)
     manager = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all(), allow_null=True, required=False)
+    member_of = serializers.PrimaryKeyRelatedField(queryset=Member.objects.filter(is_team=True), allow_null=True,
+                                                   required=False)
     # jamoa a'zolari (faqat aloqa uchun; hisobotlarda jamoa bitta bo'lib qoladi)
     contacts = TeamContactSerializer(many=True, read_only=True)
 
     class Meta:
         model = Member
-        fields = ["id", "name", "role", "department", "team", "manager", "is_team", "trigger", "does", "excludes",
+        fields = ["id", "name", "role", "department", "team", "manager", "member_of", "is_team", "trigger", "does",
+                  "excludes",
                   "level", "duties", "escalation", "capacity", "email", "phone", "telegram", "location", "order",
                   "contacts"]
         read_only_fields = ["order"]
@@ -130,6 +138,10 @@ class MemberSerializer(I18nMixin, serializers.ModelSerializer):
         return value.strip().lstrip("@")
 
     def validate(self, attrs):
+        group = attrs.get("member_of", getattr(self.instance, "member_of", None))
+        is_team = attrs.get("is_team", getattr(self.instance, "is_team", False))
+        if group is not None and (is_team or (self.instance and group.pk == self.instance.pk)):
+            raise serializers.ValidationError({"member_of": "Jamoa a'zosi faqat yakka xodim bo'ladi."})
         team = attrs.get("team")
         if team:
             # jamoa tanlansa, bo'lim jamoaning bo'limi bo'ladi

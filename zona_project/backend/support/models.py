@@ -90,6 +90,8 @@ class Settings(models.Model):
     history_night_to = models.PositiveSmallIntegerField("Tungi oyna tugashi (soat)", default=7, db_default=7)
     # toifa bo'yicha mas'ul — butun tizimda ustun: {"promo": <Member id>} (masalan, barcha aksiya savollari — operatorga)
     category_owners = models.JSONField("Toifa bo'yicha mas'ul", null=True, blank=True)
+    # zaxira mas'ul (aralash ishlar, masalan aksiya): javobda asosiy bilan birga belgilanadi, PRBC'da hamijrochi
+    category_backups = models.JSONField("Toifa bo'yicha zaxira mas'ul", null=True, blank=True)
     # --- bot javoblarini baholash ---
     answer_keep_days = models.PositiveIntegerField("Bot javoblari skrinshotlarini saqlash (kun)", default=90, db_default=90)
     answer_test_note = models.BooleanField("Javob tagida: avto-javob, test rejimi, fikringiz muhim", default=True,

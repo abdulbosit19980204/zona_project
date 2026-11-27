@@ -4,6 +4,15 @@
 
 ## 2026-11-27
 
+- **Toifa mas'uli — asosiy va zaxira.** Support sozlamalarida har toifaga ikkinchi ustun: zaxira mas'ul (aralash ishlar,
+  masalan aksiya). Javobda asosiy bilan birga belgilanadi, PRBC vazifasida kuzatuvchi.
+- **Dasturchilar jamoasi:** xodim kartochkasida yangi maydon «Jamoa a'zosi» — Kamoliddin va Timur «Dasturchilar
+  jamoasi»ga (Ulug'bek, Alisher bilan) qo'shiladi: jamoa mas'ul bo'lgan savolda belgilanadi, hisobotda jamoa
+  ostida, haftalik yuklamada jamoa ulushi.
+- **Umumiy akkauntning asosiy operatori:** jamoa a'zolari ro'yxatida «Asosiy operator» — @IT_StarGroup uchun
+  Xusniddin: bu akkauntdan yozilgan javoblar hisobotda va PRBC vazifalarida Xusniddinga yoziladi.
+- **Toifa qoidalari kengaydi:** «ТТ / точка / tochka» → Klient, «доступ / dostup / ruxsat / позывной / pozivnoy» →
+  Kirish.
 - **«Bu raqam boshqa PRBC akkauntiga bog'langan» — bot aniqlaydi va ruxsat bilan hal qiladi.** Guruhda shu xato
   (matn yoki skrinshot) kelsa, bot 1C dagi eski akkaunt va Telegram orqali ochilgan yangi akkauntni topadi, 7 ta
   xavfsizlik shartini tekshiradi va javobda yozadi. Panelda amallar yoqilsa: xodimdan raqamini bot shaxsiy chatida

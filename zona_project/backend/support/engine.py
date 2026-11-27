@@ -581,12 +581,21 @@ def rule_answer(raw, lang):
     return task, conf, resp
 
 
+def team_telegrams(m):
+    """Jamoa a'zolarining Telegram'lari: jamoa kontaktlari (Ulug'bek...) va jamoaga qo'shilgan yakka xodimlar
+    (Kamoliddin, Timur — «Jamoa a'zosi»)."""
+    tgs = [c.telegram.lstrip("@") for c in m.contacts.all() if c.telegram]
+    if m.pk:
+        tgs += [x.telegram.lstrip("@") for x in Member.objects.filter(member_of=m).exclude(telegram="").order_by("order", "id")]
+    return list(dict.fromkeys(tgs))
+
+
 def _person(m):
     """Mas'ul: jamoa bo'lsa — jamoa nomi va a'zolarining Telegram'lari (ish bo'linmaydi, kim bo'sh bo'lsa oladi)."""
-    tgs = [c.telegram.lstrip("@") for c in m.contacts.all() if c.telegram] if m.is_team else []
+    tgs = team_telegrams(m) if m.is_team else []
     if m.telegram:
         tgs.insert(0, m.telegram.lstrip("@"))
-    return {"id": m.id, "name": m.name, "role": m.role, "level": m.level, "telegram": tgs[:4], "is_team": m.is_team,
+    return {"id": m.id, "name": m.name, "role": m.role, "level": m.level, "telegram": tgs[:6], "is_team": m.is_team,
             "contact": getattr(m, "contact_id", None)}
 
 
@@ -824,14 +833,39 @@ def category_owner(category, settings=None):
     return owner_of((s.category_owners or {}).get(category or ""))
 
 
+def category_backup(category, settings=None):
+    """Toifaning zaxira mas'uli (Settings.category_backups) — asosiy bilan bir xil bo'lsa None."""
+    s = settings or Settings.load()
+    raw = (s.category_backups or {}).get(category or "")
+    if not raw or raw == (s.category_owners or {}).get(category or ""):
+        return None
+    return owner_of(raw)
+
+
+def owner_tags(resp, lang="uz", limit=3):
+    """Javobda belgilanadigan mas'ul(lar): «@asosiy» yoki «@asosiy · zaxira: @zaxira»."""
+    if not resp or not resp[0].get("telegram"):
+        return ""
+    out = " ".join("@" + t for t in resp[0]["telegram"][:limit])
+    b = resp[0].get("backup") or {}
+    extra = [t for t in (b.get("telegram") or [])[:limit] if t not in resp[0]["telegram"]]
+    if extra:
+        out += (" · запасной: " if lang == "ru" else " · zaxira: ") + " ".join("@" + t for t in extra)
+    return out
+
+
 def owner_line(text, ocr=""):
     """AI uchun: savol toifasining mas'uli bo'lsa — faqat u; agent zaxiradagi odamlarga yo'naltirilmaydi
     (mas'ul hal qila olmasa, o'zi keyingi navbatdagiga uzatadi)."""
     from .systems import detect
-    m = category_owner(detect(text or "", ocr or "")["category"])
+    cat = detect(text or "", ocr or "")["category"]
+    m = category_owner(cat)
     if m is None:
         return ""
     tg = f" (@{m.telegram.lstrip('@')})" if m.telegram else ""
+    b = category_backup(cat)
+    if b is not None:
+        tg += f" yoki zaxira — {b.name}" + (f" (@{b.telegram.lstrip('@')})" if b.telegram else "")
     return (f"BU SAVOLNING MAS'ULI — FAQAT {m.name}{tg}. Savol beruvchini boshqa odam yoki jamoaga (dasturchi, "
             f"supervayzer, Pro-target, zaxiradagi mas'ullar) YO'NALTIRMA va \"ular tekshiradi\" kabi bosqichlarni yozma: "
             f"{m.name} o'zi hal qiladi, hal qila olmasa — kerakli odamga o'zi uzatadi.")
@@ -846,7 +880,11 @@ def apply_owner(d, text, ocr=""):
     cat = detect(text or "", ocr or "", d.entry.title if d.entry is not None else "")["category"]
     m = category_owner(cat, s)
     if m is not None:
-        d.responsible, d.owner = [_person(m)], True
+        main = _person(m)
+        b = category_backup(cat, s)
+        if b is not None:
+            main["backup"] = _person(b)  # aralash ishlar (aksiya): zaxira mas'ul ham belgilanadi
+        d.responsible, d.owner = [main], True
     return d
 
 
@@ -1192,6 +1230,10 @@ def responsible_line(resp, lang):
         return ""
     r = resp[0]
     who = r["name"] + (" (" + ", ".join("@" + t for t in r["telegram"]) + ")" if r.get("telegram") else "")
+    b = r.get("backup")
+    if b:
+        who += ("; запасной: " if lang == "ru" else "; zaxira: ") + b["name"] + (
+            " (" + ", ".join("@" + t for t in b["telegram"]) + ")" if b.get("telegram") else "")
     return ("Ответственный: " if lang == "ru" else "Mas'ul: ") + who
 
 

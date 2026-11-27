@@ -75,7 +75,8 @@ def backfill(before):
 
 
 def staff_users():
-    return TgUser.objects.filter(Q(member__isnull=False) | Q(contact__isnull=False)).select_related("member", "contact")
+    return TgUser.objects.filter(Q(member__isnull=False) | Q(contact__isnull=False)).select_related(
+        "member", "member__member_of", "contact", "contact__member", "contact__operator")
 
 
 def _minutes(dt):
@@ -161,6 +162,43 @@ def _work(users, start, end):
     return out
 
 
+def team_of(u):
+    """Hisobotdagi jamoa: kontakt — o'z jamoasi; jamoaga qo'shilgan yakka xodim (Kamoliddin, Timur) — o'sha jamoa."""
+    if u.contact_id and u.contact.member_id:
+        return u.contact.member.name
+    if u.member_id and u.member.member_of_id:
+        return u.member.member_of.name
+    return ""
+
+
+SUM_KEYS = ("messages", "answers", "clarifications", "handoffs", "questions", "resolved", "unresolved", "reactions",
+            "working", "closed", "open_now", "active_days")
+
+
+def merge_operators(rows, users):
+    """Umumiy akkauntdan (@IT_StarGroup) yozilganlar — asosiy operatori (Xusniddin) qatoriga qo'shiladi."""
+    by_user = {u.pk: u for u in users}
+    op_row = {}
+    for r in rows:
+        u = by_user.get(r["id"])
+        if u is not None and u.member_id:
+            op_row.setdefault(u.member_id, r)
+    keep = []
+    for r in rows:
+        u = by_user.get(r["id"])
+        op = u.contact.operator_id if u is not None and u.contact_id else None
+        target = op_row.get(op) if op else None
+        if target is None or target is r:
+            keep.append(r)
+            continue
+        for k in SUM_KEYS:
+            target[k] = (target.get(k) or 0) + (r.get(k) or 0)
+        target.setdefault("via", []).append("@" + (r.get("username") or r.get("name") or ""))
+        if r.get("last_seen") and (not target.get("last_seen") or r["last_seen"] > target["last_seen"]):
+            target["last_seen"] = r["last_seen"]
+    return keep
+
+
 def board(start, end, info=None):
     """Barcha xodimlar: xabarlar, faol kunlar, ish vaqti (o'rtacha boshlash/tugatish), ish turlari, tezlik."""
     users = list(staff_users())
@@ -175,11 +213,12 @@ def board(start, end, info=None):
         lasts = [_minutes(d["last"]) for d in days.values()]
         spans = [(d["last"] - d["first"]).total_seconds() / 3600 for d in days.values()]
         out.append({"id": u.pk, "name": u.staff_name(), "username": u.username,
-                    "team": u.contact.member.name if u.contact_id and u.contact.member_id else "",
+                    "team": team_of(u),
                     "messages": sum(d["count"] for d in days.values()), "active_days": len(days),
                     "start": _hm(median(firsts)) if firsts else None, "end": _hm(median(lasts)) if lasts else None,
                     "span_h": round(sum(spans) / len(spans), 1) if spans else 0,
                     "last_seen": u.last_msg_at, **work[u.pk]})
+    out = merge_operators(out, users)
     out.sort(key=lambda x: -(x["messages"] + x["answers"]))
     return {**(info or {}), "staff": out,
             "totals": {"staff": sum(1 for x in out if x["messages"] or x["answers"]),

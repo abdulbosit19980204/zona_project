@@ -295,10 +295,21 @@ def control_summary(conn=None):
 GENERIC = {"it_stargroup"}  # umumiy akkauntlar — ular javob yozsa ham aniq ijrochi emas
 
 
+def operator_of(user):
+    """Umumiy akkaunt (@IT_StarGroup) -> uning asosiy operatori (Member) yoki None."""
+    c = getattr(user, "contact", None) if user is not None and getattr(user, "contact_id", None) else None
+    return c.operator if c is not None and c.operator_id else None
+
+
 def _prbc_of_tg(user, conn):
-    """Telegram foydalanuvchi -> PRBC user id (bog'langan shaxs, qo'lda moslash, zona xodimi)."""
+    """Telegram foydalanuvchi -> PRBC user id (bog'langan shaxs, qo'lda moslash, zona xodimi). Umumiy akkauntdan
+    yozilgan javob — uning asosiy operatoriga (sozlamada belgilangan bo'lsa)."""
     from .models import Person
     from .tasks import assignee_ids_for
+    op = operator_of(user)
+    if op is not None:
+        ids = _member_ids(op, conn)
+        return ids[0] if ids else None
     if user is None or (user.username or "").lower() in GENERIC:
         return None
     pid = Person.objects.filter(tg_user=user, prbc_user__isnull=False).exclude(status=Person.LEFT) \
@@ -315,7 +326,8 @@ def _member_ids(m, conn):
         return []
     names = [m.telegram] if getattr(m, "telegram", "") and not getattr(m, "is_team", False) else []
     if getattr(m, "is_team", False) and hasattr(m, "contacts"):
-        names += [c.telegram for c in m.contacts.exclude(telegram="").order_by("order", "id")]
+        from support.engine import team_telegrams
+        names += team_telegrams(m)  # kontaktlar va jamoaga qo'shilgan yakka xodimlar
     for n in names:
         if (n or "").lstrip("@").lower() in GENERIC:
             continue
@@ -374,6 +386,15 @@ def pick_assignees(conn, st, q):
             return [pid], f"guruhda ko'p javob beradi ({q.group.title})"
     ids = [int(x) for x in conn.task_default_assignees or []]
     return ids, "standart ijrochi"
+
+
+def backup_ids(conn, q):
+    """Toifaning zaxira mas'uli (Support sozlamasi) -> PRBC id'lar: vazifada kuzatuvchi bo'ladi."""
+    if q is None or not q.category:
+        return []
+    from support.engine import category_backup
+    b = category_backup(q.category)
+    return _member_ids(b, conn) if b is not None else []
 
 
 def reassign(conn, client, t, new_id, note=""):

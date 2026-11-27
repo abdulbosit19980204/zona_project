@@ -7,7 +7,7 @@ import { useState } from "react";
 import { ContactLinks } from "@/components/common/contacts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useCan, useOrgMutation } from "@/hooks/use-org";
+import { useCan, useModel, useOrgMutation } from "@/hooks/use-org";
 import { orgApi } from "@/lib/api/endpoints";
 import type { Member, TeamContact } from "@/lib/api/types";
 
@@ -29,6 +29,12 @@ export function TeamContacts({ member }: { member: Member }) {
     t("added"),
   );
   const remove = useOrgMutation((id: number) => orgApi.teamContacts.remove(id), t("removed"));
+  const setOperator = useOrgMutation(
+    ({ id, operator }: { id: number; operator: number | null }) => orgApi.teamContacts.update(id, { operator }),
+    t("operatorSaved"),
+  );
+  const model = useModel();
+  const people = model.memberOrder.filter((m) => !m.is_team);
 
   return (
     <div className="grid gap-2 rounded-xl border p-3">
@@ -42,6 +48,17 @@ export function TeamContacts({ member }: { member: Member }) {
             <ContactLinks contact={{ phone: c.phone, telegram: c.telegram, email: "" }} />
           </div>
           {c.telegram_id && <span className="text-[11px] text-success">{t("linked")}</span>}
+          {can.edit ? (
+            <select aria-label={t("operator")} title={t("operatorHint")} disabled={setOperator.isPending}
+              className="h-7 max-w-[180px] truncate rounded-md border bg-background px-1.5 text-xs"
+              value={c.operator != null ? String(c.operator) : ""}
+              onChange={(e) => setOperator.mutate({ id: c.id, operator: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">{t("operatorNone")}</option>
+              {people.map((m) => <option key={m.id} value={m.id}>{t("operator")}: {m.name}</option>)}
+            </select>
+          ) : c.operator != null && (
+            <span className="text-[11px] text-muted-foreground">{t("operator")}: {model.member.get(c.operator)?.name}</span>
+          )}
           {can.edit && (
             <Button type="button" size="icon" variant="ghost" aria-label={t("remove")} disabled={remove.isPending}
               onClick={() => remove.mutate(c.id)}>

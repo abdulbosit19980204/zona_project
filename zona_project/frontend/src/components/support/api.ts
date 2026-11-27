@@ -113,7 +113,7 @@ export interface SupportSettings {
   task_mode: "command" | "remind" | "account" | "api"; task_remind_group: boolean; task_remind_dm: boolean; merge_window: number;
   self_learning: boolean; auto_approve_level: "off" | "lead" | "l2" | "all"; answer_variety: boolean; progress_messages: boolean;
   answer_policy: "standard" | "kb" | "all";
-  confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number; category_owners: Record<string, number | string> | null; answer_keep_days: number; answer_test_note: boolean; review_button: boolean;
+  confirm_resolution: boolean; confirm_after: number; thanks_reaction: boolean; thread_window: number; category_owners: Record<string, number | string> | null; category_backups: Record<string, number | string> | null; answer_keep_days: number; answer_test_note: boolean; review_button: boolean;
   react_accept: boolean; ask_staff_after: number; reask_after: number; remind_max: number;
   collapse_after: number; media_full_days: number; work_from: number; work_to: number; work_days: string;
 }

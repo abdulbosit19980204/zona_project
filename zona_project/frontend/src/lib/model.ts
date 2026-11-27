@@ -52,6 +52,8 @@ export interface TimeLoad {
   member: Member;
   ownerMin: number;
   backupMin: number;
+  /** Jamoa a'zosi (member_of) — jamoa yuklamasidan ulushi, daqiqa. */
+  teamMin: number;
   hours: number;
   capacity: number;
   util: number;
@@ -243,7 +245,7 @@ export function buildModel(state: OrgState): Model {
   // vaqt yuklamasi
   const timeLoad = new Map<number, TimeLoad>();
   for (const m of state.members) {
-    timeLoad.set(m.id, { member: m, ownerMin: 0, backupMin: 0, hours: 0, capacity: m.capacity || 40, util: 0, status: "ok", zones: new Map(), tasks: [] });
+    timeLoad.set(m.id, { member: m, ownerMin: 0, backupMin: 0, teamMin: 0, hours: 0, capacity: m.capacity || 40, util: 0, status: "ok", zones: new Map(), tasks: [] });
   }
   for (const t of state.tasks) {
     const w = weekMinutes(t);
@@ -259,8 +261,19 @@ export function buildModel(state: OrgState): Model {
       if (b) b.backupMin += w * (i === 0 ? FALLBACK_SHARE[0] : FALLBACK_SHARE[1]);
     });
   }
+  // jamoaga qo'shilgan yakka xodim (Dasturchilar: Kamoliddin, Timur) — jamoa yuklamasidan teng ulush
+  // (jamoa kontaktlari + a'zolari soniga bo'linadi); jamoaning o'z qatori o'zgarmaydi (backend timeload bilan bir xil)
+  const teamShare = new Map<number, number>();
   for (const v of timeLoad.values()) {
-    v.hours = (v.ownerMin + v.backupMin) / 60;
+    const tid = v.member.member_of;
+    const team = tid ? timeLoad.get(tid) : undefined;
+    if (!tid || !team) continue;
+    const heads = (team.member.contacts?.length ?? 0) + state.members.filter((m) => m.member_of === tid).length;
+    teamShare.set(v.member.id, team.ownerMin / Math.max(heads, 1));
+  }
+  for (const v of timeLoad.values()) {
+    v.teamMin = teamShare.get(v.member.id) ?? 0;
+    v.hours = (v.ownerMin + v.backupMin + v.teamMin) / 60;
     v.util = v.hours / Math.max(v.capacity, 0.1);
     v.status = v.util > OVERLOAD ? "over" : v.util > BUSY ? "busy" : "ok";
   }

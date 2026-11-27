@@ -52,8 +52,13 @@ def _tg_of(m, s):
         return m.telegram.lstrip("@")
     if s.task_default_assignee:
         return s.task_default_assignee.lstrip("@")
-    c = m.contacts.exclude(telegram="").order_by("order", "id").first()
-    return c.telegram.lstrip("@") if c else ""
+    c = m.contacts.exclude(telegram="").select_related("operator").order_by("order", "id").first()
+    if c is not None and c.operator_id and c.operator.telegram:
+        return c.operator.telegram.lstrip("@")  # umumiy akkaunt — uning asosiy operatori
+    if c is not None:
+        return c.telegram.lstrip("@")
+    x = Member.objects.filter(member_of=m).exclude(telegram="").order_by("order", "id").first()
+    return x.telegram.lstrip("@") if x else ""
 
 
 CMD_RE = re.compile(r"^/\w+(@\w+)?\s*(@\w+\s*)*")

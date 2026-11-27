@@ -316,7 +316,9 @@
       "telegram": "Telegram",
       "location": "Location",
       "created": "Employee added",
-      "deleteConfirm": "Delete? {count, plural, one {# task} other {# tasks}} will be left unassigned."
+      "deleteConfirm": "Delete? {count, plural, one {# task} other {# tasks}} will be left unassigned.",
+      "memberOf": "Team member of",
+      "memberOfHint": "Does this team's work: tagged on the team's questions, shown under the team in reports, gets a share of the team load."
     },
     "dept": {
       "new": "New department",
@@ -1109,7 +1111,11 @@
     "remove": "Remove",
     "added": "Member added",
     "removed": "Member removed",
-    "linked": "Telegram linked"
+    "linked": "Telegram linked",
+    "operator": "Main operator",
+    "operatorNone": "— no main operator —",
+    "operatorSaved": "Main operator saved",
+    "operatorHint": "Shared account (e.g. @IT_StarGroup): answers from it are credited to this person in workload and PRBC tasks."
   },
   "aiHistory": {
     "title": "AI analyses",

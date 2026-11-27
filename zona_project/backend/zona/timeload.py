@@ -3,7 +3,7 @@
 Formula (frontend lib/model.ts dagi bilan bir xil):
     haftalik daqiqa = bir martalik vaqt × haftasiga soni
     asosiy mas'ul — 100%, 1-zaxira — 15%, keyingi zaxiralar — 5% (asosiy mas'ul bo'lmaganda yoki
-    yordam kerak bo'lganda ular ham vaqt sarflaydi)
+    yordam kerak bo'lganda ular ham vaqt sarflaydi); jamoaga qo'shilgan yakka xodim — jamoa yuklamasidan teng ulush
     bandlik = (mas'ul + zaxira soatlari) / haftalik sig'im
 """
 import re
@@ -91,9 +91,24 @@ def member_load(tasks=None, members=None):
             if f.member_id in out:
                 share = FALLBACK_SHARE[0] if i == 0 else FALLBACK_SHARE[1]
                 out[f.member_id]["backup_min"] += w * share
+    # jamoaga qo'shilgan yakka xodim (Dasturchilar: Kamoliddin, Timur) — jamoa yuklamasidan teng ulush
+    # (jamoa kontaktlari va a'zolari soniga bo'linadi); jamoaning o'z qatori o'zgarmaydi
+    from .models import TeamContact
+    heads = {}
+    for v in out.values():
+        v["team_min"] = 0.0
+    for v in out.values():
+        m = v["member"]
+        team = out.get(m.member_of_id) if getattr(m, "member_of_id", None) else None
+        if team is None:
+            continue
+        if m.member_of_id not in heads:
+            heads[m.member_of_id] = (TeamContact.objects.filter(member_id=m.member_of_id).count()
+                                     + sum(1 for x in out.values() if getattr(x["member"], "member_of_id", None) == m.member_of_id))
+        v["team_min"] = team["owner_min"] / max(heads[m.member_of_id], 1)
     for v in out.values():
         cap = max(v["member"].capacity or 0, 0.1)
-        v["total_h"] = (v["owner_min"] + v["backup_min"]) / 60
+        v["total_h"] = (v["owner_min"] + v["backup_min"] + v["team_min"]) / 60
         v["util"] = v["total_h"] / cap
         v["status"] = "over" if v["util"] > OVERLOAD else "busy" if v["util"] > BUSY else "ok"
     return out

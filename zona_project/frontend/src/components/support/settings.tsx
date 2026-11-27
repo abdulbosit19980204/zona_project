@@ -385,7 +385,9 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
               <div className="text-sm font-medium">{t("t_owners")}</div>
               <p className="mt-0.5 text-xs text-muted-foreground">{t("t_ownersHint")}</p>
             </div>
-            <CategoryOwners t={t} value={f.category_owners} onSave={(v) => { setF({ ...f, category_owners: v }); toggle.mutate({ category_owners: v }); }} />
+            <CategoryOwners t={t} value={f.category_owners} backups={f.category_backups}
+              onSave={(v) => { setF({ ...f, category_owners: v }); toggle.mutate({ category_owners: v }); }}
+              onSaveBackup={(v) => { setF({ ...f, category_backups: v }); toggle.mutate({ category_backups: v }); }} />
           </div>
           {sw("ask_first_prompt", t("t_askFirst"))}
           {sw("contact_lookup", t("t_contacts"), t("t_contactsHint"))}
@@ -567,46 +569,72 @@ function StaffSection({ t }: { t: ST }) {
 /** Toifa bo'yicha mas'ul — butun tizimda ustun (masalan, barcha aksiya savollari — operatorga). Bo'sh — odatdagi mas'ul. */
 /** Toifa mas'uli: xodimlar va jamoa a'zolari (Pro-target, supervayzerlar...) — jamoa bo'yicha guruhlangan ro'yxat.
  *  Qiymat: xodim — id, jamoa a'zosi — "c:<id>". */
-function CategoryOwners({ t, value, onSave }: {
-  t: ST; value: Record<string, number | string> | null; onSave: (v: Record<string, number | string>) => void;
+function CategoryOwners({ t, value, backups, onSave, onSaveBackup }: {
+  t: ST; value: Record<string, number | string> | null; backups: Record<string, number | string> | null;
+  onSave: (v: Record<string, number | string>) => void; onSaveBackup: (v: Record<string, number | string>) => void;
 }) {
   const staff = useQuery({ queryKey: ["support", "staff"], queryFn: supportApi.staff, staleTime: 60_000 });
   const members = (staff.data ?? []).filter((r) => r.type === "member");
-  const teams = new Map<string, typeof members>();
+  // jamoa: kontaktlari (Ulug'bek...) va jamoaga qo'shilgan yakka xodimlar (Kamoliddin, Timur)
+  const teams = new Map<string, StaffRow[]>();
   for (const r of staff.data ?? []) {
-    if (r.type === "contact") teams.set(r.team || "—", [...(teams.get(r.team || "—") ?? []), r]);
+    if (r.type === "contact" || r.team_id != null) teams.set(r.team || "—", [...(teams.get(r.team || "—") ?? []), r]);
   }
   const cur = value ?? {};
-  const set = (cat: string, v: string) => {
-    const next = { ...cur };
+  const bak = backups ?? {};
+  const put = (src: Record<string, number | string>, cat: string, v: string, save: (x: Record<string, number | string>) => void) => {
+    const next = { ...src };
     if (v) next[cat] = v.startsWith("c:") ? v : Number(v); else delete next[cat];
-    onSave(next);
+    save(next);
   };
-  return (
-    <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-x-6">
-      {SYS_CATEGORIES.map((c) => (
-        <label key={c} className="grid grid-cols-[minmax(96px,140px)_minmax(0,1fr)] items-center gap-2 text-sm">
-          <span className={cn("leading-tight", cur[c] ? "font-medium" : "text-muted-foreground")}>{t(`cat_${c}` as SKey)}</span>
-          <select className="h-8 w-full min-w-0 truncate rounded-md border bg-background px-2 text-sm" value={cur[c] != null ? String(cur[c]) : ""}
-            onChange={(e) => set(c, e.target.value)}>
-            <option value="">{t("ownerDefault")}</option>
-            <optgroup label={t("ownerStaff")}>
-              {members.map((m) => <option key={`m${m.id}`} value={m.id}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>)}
-            </optgroup>
-            {[...teams.entries()].map(([team, list]) => (
-              <optgroup key={team} label={team}>
-                {list[0]?.team_id != null && (
-                  /* butun jamoa — barcha a'zolari belgilanadi (masalan Pro-target: Guzel va Eldar) */
-                  <option key={`t${list[0].team_id}`} value={list[0].team_id}>
-                    {t("ownerTeam")}: {team} ({list.map((m) => m.name.split(" ")[0]).join(", ")})
-                  </option>
-                )}
-                {list.map((m) => <option key={`c${m.id}`} value={`c:${m.id}`}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>)}
-              </optgroup>
+  const options = (
+    <>
+      <optgroup label={t("ownerStaff")}>
+        {members.map((m) => <option key={`m${m.id}`} value={m.id}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>)}
+      </optgroup>
+      {[...teams.entries()].map(([team, list]) => {
+        const tid = list.find((m) => m.team_id != null)?.team_id;
+        return (
+          <optgroup key={team} label={team}>
+            {tid != null && (
+              /* butun jamoa — barcha a'zolari belgilanadi (masalan Pro-target: Guzel va Eldar) */
+              <option key={`t${tid}`} value={tid}>
+                {t("ownerTeam")}: {team} ({list.map((m) => m.name.split(" ")[0]).join(", ")})
+              </option>
+            )}
+            {list.filter((m) => m.type === "contact").map((m) => (
+              <option key={`c${m.id}`} value={`c:${m.id}`}>{m.name}{m.role ? ` — ${m.role}` : ""}</option>
             ))}
+          </optgroup>
+        );
+      })}
+    </>
+  );
+  const sel = "h-8 w-full min-w-0 truncate rounded-md border bg-background px-2 text-sm";
+  return (
+    <div className="grid gap-2">
+      <div className="hidden grid-cols-[minmax(96px,140px)_minmax(0,1fr)_minmax(0,1fr)] gap-2 text-xs text-muted-foreground sm:grid">
+        <span />
+        <span>{t("ownerMain")}</span>
+        <span>{t("ownerBackup")}</span>
+      </div>
+      {SYS_CATEGORIES.map((c) => (
+        <div key={c} className="grid grid-cols-[minmax(96px,140px)_minmax(0,1fr)] items-center gap-2 text-sm sm:grid-cols-[minmax(96px,140px)_minmax(0,1fr)_minmax(0,1fr)]">
+          <span className={cn("leading-tight", cur[c] ? "font-medium" : "text-muted-foreground")}>{t(`cat_${c}` as SKey)}</span>
+          <select aria-label={`${t(`cat_${c}` as SKey)} — ${t("ownerMain")}`} className={sel}
+            value={cur[c] != null ? String(cur[c]) : ""} onChange={(e) => put(cur, c, e.target.value, onSave)}>
+            <option value="">{t("ownerDefault")}</option>
+            {options}
           </select>
-        </label>
+          <select aria-label={`${t(`cat_${c}` as SKey)} — ${t("ownerBackup")}`} disabled={cur[c] == null}
+            className={cn(sel, "col-start-2 sm:col-start-auto")}
+            value={bak[c] != null ? String(bak[c]) : ""} onChange={(e) => put(bak, c, e.target.value, onSaveBackup)}>
+            <option value="">{t("ownerNoBackup")}</option>
+            {options}
+          </select>
+        </div>
       ))}
+      <p className="text-xs text-muted-foreground">{t("ownerBackupHint")}</p>
     </div>
   );
 }

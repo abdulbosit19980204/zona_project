@@ -124,7 +124,8 @@ Bot guruhda **admin** bo'lishi kerak (yoki BotFather'da privacy o'chiq) — aks 
 | Javoblarni har safar biroz boshqacha yozish | — | Standart holatlarga ta'sir qilmaydi |
 | Sekin javobda oraliq xabar | — | "ko'ryapman…" |
 | Javobni yig'ish | 3 daqiqa | O'qilgach, javob bir qatorga yig'iladi |
-| Toifa bo'yicha mas'ul | aksiya, to'lov, qoldiq → Saidabror; login → Xusniddin | Butun tizimda ustun; vazifa ijrochisi ham shundan. Xodim, jamoa a'zosi yoki butun jamoa (masalan Pro-target — Guzel va Eldar) tanlanadi |
+| Toifa bo'yicha mas'ul | aksiya, to'lov, qoldiq → Saidabror; login → Xusniddin | Butun tizimda ustun; vazifa ijrochisi ham shundan. Xodim, jamoa a'zosi yoki butun jamoa (masalan Pro-target — Guzel va Eldar) tanlanadi. Har toifaga **zaxira mas'ul** ham qo'yiladi (javobda birga belgilanadi, PRBC'da kuzatuvchi) |
+| Toifa qanday aniqlanadi | — | Savol matnidagi so'zlar bo'yicha: masalan «ТТ», «точка», «tochka», «klient» → Klient; «доступ», «dostup», «ruxsat», «позывной», «pozivnoy», «parol», «login» → Kirish; «aksiya» → Aksiya. Birinchi mos kelgan toifa olinadi (Aksiya, To'lov, Zakaz, Klient… tartibida) |
 
 ### Jonli rejim
 | Sozlama | Izoh |

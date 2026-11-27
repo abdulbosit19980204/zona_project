@@ -1006,7 +1006,7 @@ class Handler:
             q.save()
             ack = ("Ваш вопрос принят — ответит специалист 🙌" if q.lang == "ru" else "Savolingiz qabul qilindi — mutaxassis javob beradi 🙌")
             if settings.mention_responsible and d.responsible and d.responsible[0].get("telegram"):
-                ack += " " + " ".join("@" + t for t in d.responsible[0]["telegram"][:3])
+                ack += " " + engine.owner_tags(d.responsible, q.lang)
             if settings.escalation_ack:
                 kb = review.ack_buttons(q, settings)
                 sent = (self._pg().finish(engine.html.escape(ack), kb)
@@ -1063,7 +1063,7 @@ class Handler:
         if settings.escalation_ack or d.live:
             ack = ("Ваш вопрос принят." if q.lang == "ru" else "Savolingiz qabul qilindi.")
             if settings.mention_responsible and d.responsible and d.responsible[0].get("telegram"):
-                tags = " ".join("@" + t for t in d.responsible[0]["telegram"][:3])
+                tags = engine.owner_tags(d.responsible, q.lang)
                 ack += (" Ответит: " if q.lang == "ru" else " Javob beradi: ") + tags
             if d.live:  # PRBC'dagi tekshiruv natijasi (nima topildi, nima qilindi) — xodim ham ko'radi
                 ack = d.live + "\n\n" + ack

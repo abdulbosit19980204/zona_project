@@ -81,7 +81,10 @@ Sahifa yuqoridan pastga (standart qiymatlar — [Support bot bobi](/docs/support
    Kirish va boshqalar. **PRBC vazifa ijrochisi ham shundan aniqlanadi** (aksiya, to'lov, qoldiq → Saidabror;
    login → Xusniddin). Mas'ul — bitta xodim, jamoaning bitta a'zosi yoki **butun jamoa** (har jamoa ro'yxati boshida
    «Butun jamoa: Pro-target (Guzel, Eldar)»): butun jamoa tanlansa, javobda va vazifada uning barcha a'zolari
-   belgilanadi.
+   belgilanadi. Jamoaga qo'shilgan yakka xodimlar (masalan, Dasturchilar — Kamoliddin, Timur) ham shu ro'yxatda.
+   Har toifada ikkinchi ustun — **zaxira mas'ul** (aralash ishlar uchun, masalan aksiya): javobda asosiy bilan birga
+   belgilanadi («Javob beradi: @asosiy · zaxira: @zaxira»), PRBC vazifasida kuzatuvchi bo'ladi. Standart — zaxirasiz;
+   asosiy tanlanmagan toifada zaxira tanlab bo'lmaydi.
 5. **O'rganish** (o'ng ustun) — o'z-o'zini o'qitish, javoblarni har safar boshqacha yozish, oraliq xabar, xodim
    tuzatishi darhol qo'llanadigan daraja, xodim javoblaridan o'rganish, admin chatiga nomzodlar va soya javoblari.
 6. **Aniqlik va tezlik** — AI asosiy javob beradi va chegarasi (95%), bazadan javob chegarasi (72%), takroriy rasmlar

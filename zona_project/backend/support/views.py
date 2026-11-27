@@ -46,7 +46,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
                    "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction",
-                   "thread_window", "category_owners", "answer_keep_days", "answer_test_note", "review_button",
+                   "thread_window", "category_owners", "category_backups", "answer_keep_days", "answer_test_note", "review_button",
                    "react_accept", "ask_staff_after", "reask_after", "remind_max", "collapse_after",
                    "media_full_days", "work_from", "work_to", "work_days"]
 
@@ -79,15 +79,16 @@ def settings_view(request):
             s.api_hash_enc = encrypt(str(data["api_hash"]).strip())
         if data.get("api_hash") == "" and data.get("clear_api_hash"):
             s.api_hash_enc = ""
-        if "category_owners" in data:  # {"promo": member_id} — faqat ma'lum toifalar va mavjud xodimlar
-            from zona.models import Member
+        for fld in ("category_owners", "category_backups"):  # {"promo": member_id | "c:34"} — asosiy va zaxira
+            if fld not in data:
+                continue
+            from zona.models import Member, TeamContact
 
             from .systems import CATEGORIES
-            raw = data.get("category_owners") or {}
+            raw = data.get(fld) or {}
             if not isinstance(raw, dict):
-                return Response({"detail": "category_owners: {toifa: xodim id}"}, status=400)
-            from zona.models import TeamContact
-            # qiymat: xodim id (12) yoki jamoa a'zosi "c:34"
+                return Response({"detail": f"{fld}: {{toifa: xodim id}}"}, status=400)
+            # qiymat: xodim yoki jamoa id (12) yoki jamoa a'zosi "c:34"
             clean = {k: (int(v) if str(v).isdigit() else str(v)) for k, v in raw.items()
                      if k in CATEGORIES and (str(v).isdigit() or (str(v).startswith("c:") and str(v)[2:].isdigit()))}
             mids = {v for v in clean.values() if isinstance(v, int)}
@@ -95,7 +96,7 @@ def settings_view(request):
             if (Member.objects.filter(pk__in=mids).count() != len(mids)
                     or TeamContact.objects.filter(pk__in=cids).count() != len(cids)):
                 return Response({"detail": "Xodim topilmadi"}, status=400)
-            s.category_owners = clean or None
+            setattr(s, fld, clean or None)
         s.full_clean()
         s.save()
     return Response(_settings_payload(s))
@@ -832,8 +833,14 @@ def staff(request):
             "phone": m.phone, "team": ""} for m in Member.objects.filter(is_team=False).exclude(telegram="")]
     out += [{"type": "contact", "id": c.id, "name": c.name, "role": c.role or c.member.role, "level": c.member.level,
              "telegram": c.telegram, "phone": c.phone, "team": c.member.name, "team_id": c.member_id,
-             "linked": bool(c.telegram_id)}
-            for c in TeamContact.objects.select_related("member")]
+             "linked": bool(c.telegram_id), "operator": c.operator.name if c.operator_id else ""}
+            for c in TeamContact.objects.select_related("member", "operator")]
+    # jamoaga qo'shilgan yakka xodimlar (Kamoliddin, Timur — Dasturchilar): jamoa ro'yxatida ham ko'rinadi
+    for row in out:
+        if row["type"] == "member":
+            m = Member.objects.filter(pk=row["id"]).select_related("member_of").first()
+            if m and m.member_of_id:
+                row["team"], row["team_id"] = m.member_of.name, m.member_of_id
     return Response(out)
 
 

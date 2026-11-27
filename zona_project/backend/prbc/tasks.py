@@ -403,7 +403,12 @@ def process_support_queue(conn=None, client=None, limit=10):
         body += f"\n\n👤 Ijrochi tanlandi: {why}."
         body += (f"\n\n⏱ Muddat: {timezone.localtime(due):%d.%m %H:%M} gacha (me'yor — {conn.sla_minutes} daqiqa). "
                  "Savol guruhda hal bo'lsa, vazifa avtomatik yopiladi.")
+        from .control import backup_ids
+        extra = [x for x in backup_ids(conn, q) if x not in ids]  # toifa zaxira mas'uli — kuzatuvchi
+        if extra:
+            body += "\n👥 Zaxira mas'ul kuzatuvchi sifatida qo'shildi."
         kw = dict(title=title, description=body, assignee_ids=ids, actor="support-bot", support_task=st, conn=conn,
+                  watcher_ids=[*(conn.task_watchers or []), *extra] if extra else None,
                   client=client, priority=conn.task_priority, start_at=start.isoformat(), due_at=due.isoformat(),
                   estimated_minutes=conn.sla_minutes)
         project = project_for(conn, q)

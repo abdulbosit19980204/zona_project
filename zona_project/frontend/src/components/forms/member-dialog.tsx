@@ -22,6 +22,7 @@ const schema = z.object({
   department: z.string(),
   team: z.string(),
   manager: z.string(),
+  member_of: z.string(),
   is_team: z.boolean(),
   phone: z.string().max(40),
   telegram: z.string().max(64),
@@ -54,7 +55,7 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
     form.reset({
       name: member?.name ?? "", role: member?.role ?? "",
       department: fromId(member ? member.department : presetDepartment), team: fromId(member?.team), manager: fromId(member?.manager),
-      is_team: member?.is_team ?? false, phone: member?.phone ?? "", telegram: member?.telegram ?? "", email: member?.email ?? "",
+      member_of: fromId(member?.member_of), is_team: member?.is_team ?? false, phone: member?.phone ?? "", telegram: member?.telegram ?? "", email: member?.email ?? "",
       location: member?.location ?? "", trigger: member?.trigger ?? "", does: member?.does ?? "", excludes: member?.excludes ?? "",
       level: member?.level || NONE, duties: (member?.duties ?? []).join(String.fromCharCode(10)), escalation: member?.escalation ?? "",
       capacity: member?.capacity ?? 40,
@@ -65,6 +66,7 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
     (v: Values) => {
       const body = {
         ...v, department: toId(v.department), team: toId(v.team), manager: toId(v.manager),
+        member_of: v.is_team ? null : toId(v.member_of),
         level: (v.level === NONE ? "" : v.level) as Member["level"],
         duties: v.duties.split(String.fromCharCode(10)).map((x) => x.trim()).filter(Boolean),
         capacity: Number(v.capacity),
@@ -75,6 +77,9 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
   );
   const remove = useOrgMutation(() => orgApi.members.remove(member!.id), t("common.deleted"));
   const managers = memberOptions(model, t("common.none")).filter((o) => o.value !== String(member?.id));
+  const isTeam = useWatch({ control: form.control, name: "is_team" });
+  const teamsOf = [{ value: NONE, label: t("common.none") },
+    ...model.memberOrder.filter((m) => m.is_team && m.id !== member?.id).map((m) => ({ value: String(m.id), label: m.name }))];
 
   return (
     <FormDialog
@@ -104,6 +109,10 @@ export function MemberDialog({ open, onOpenChange, member, presetDepartment }: {
       </Row>
       <TextField control={form.control} name="email" label="Email" type="email" />
       <CheckboxField control={form.control} name="is_team" label={t("forms.member.isTeam")} />
+      {!isTeam && (
+        <SelectField control={form.control} name="member_of" label={t("forms.member.memberOf")} options={teamsOf}
+          description={t("forms.member.memberOfHint")} />
+      )}
       {member?.is_team && <TeamContacts member={model.member.get(member.id) ?? member} />}
       <Row>
         <SelectField

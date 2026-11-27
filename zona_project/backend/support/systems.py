@@ -35,11 +35,13 @@ CAT_RX = [
     ("promo", r"aksiya|акци|skidka|скидк|bonus|бонус|promo"),
     ("payment", r"perechisl|перечисл|безнал|нақд|naqd|to.lov|оплат|kassa|касс|chek|чек\b"),
     ("order", r"zakaz|заказ|buyurtma|корзин|savat"),
-    ("client", r"klient|клиент|контрагент|торговая точка|savdo nuqta|nuqta|outlet|stir|инн\b|magazin|магазин|do.kon"),
+    ("client", r"klient|клиент|контрагент|торгов\w* точк|savdo nuqta|nuqta|outlet|stir|инн\b|magazin|магазин|do.kon"
+               r"|(?<!\w)(тт|tt|т\.т\.?)(?!\w)|точк|tochk"),
     ("product", r"sku|tovar|товар|mahsulot|штрих|shtrix|артикул"),
     ("stock", r"ostatka|остат|qoldiq|склад|sklad"),
     ("visit", r"vizit|визит|tashrif|геотег|lokatsiya|локаци|joylashuv|координат"),
-    ("login", r"kirish|login|логин|парол|parol|akkaunt|аккаунт|account|inactive|rol\b|роль"),
+    ("login", r"kirish|login|логин|парол|parol|akkaunt|аккаунт|account|inactive|rol\b|роль"
+              r"|доступ|dostup|ruxsat|рухсат|позывн|pozivn|позивн"),
     ("route", r"marshrut|маршрут"),
     ("report", r"hisobot|отчет|отчёт|plan\b|план\b|bajarilish"),
     ("sync", r"sinxron|синхрон|almashinuv|обмен"),
