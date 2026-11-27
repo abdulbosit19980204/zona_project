@@ -4,6 +4,12 @@
 
 ## 2026-11-27
 
+- **«Bu raqam boshqa PRBC akkauntiga bog'langan» — bot aniqlaydi va ruxsat bilan hal qiladi.** Guruhda shu xato
+  (matn yoki skrinshot) kelsa, bot 1C dagi eski akkaunt va Telegram orqali ochilgan yangi akkauntni topadi, 7 ta
+  xavfsizlik shartini tekshiradi va javobda yozadi. Panelda amallar yoqilsa: xodimdan raqamini bot shaxsiy chatida
+  tugma orqali so'raydi (faqat o'z kontakti), 1C xodimini eski akkauntdan uzib yangisiga bog'laydi, eski akkauntdagi
+  raqamni bo'shatadi (buzmaydi); xato bo'lsa hammasini qaytaradi. Har amal jurnalda, ortga qaytariladi. Standart —
+  amallar o'chiq. Panelda bitta odamni tekshirish, sinov rejimi va ikki akkauntli xodimlar ro'yxati.
 - **Toifa mas'uli — butun jamoa:** Support sozlamalarida har jamoa ro'yxati boshida «Butun jamoa» varianti (masalan
   Pro-target — Guzel va Eldar); tanlansa javobda va vazifada jamoaning barcha a'zolari belgilanadi. Oldin backend
   qabul qilardi, lekin sozlamada tanlab bo'lmasdi.

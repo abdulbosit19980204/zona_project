@@ -59,6 +59,31 @@ CATALOG = [
      "does": "«Marshrutimga qo'shish» so'rovi 1C da xato bergan va sababi 1C bazasi band / javob bermagani bo'lsa — "
              "so'rovni qayta navbatga qo'yadi. Ma'lumot xatosida qayta yubormaydi.",
      "api": "POST /integrations/route-attachments/{id}/requeue/"},
+    # --- «Bu raqam boshqa PRBC akkauntiga bog'langan» (prbc.binding): uchala asosiy amal birga yoqilganda ishlaydi
+    {"key": "bind_unlink_old", "group": "binding", "reversible": True,
+     "title": "1C xodimini eski akkauntdan uzish",
+     "does": "G1–G7 shartlari bajarilganda 1C xodimini eski (1C, «Kutilmoqda», Telegramsiz) akkauntdan uzadi — /staff "
+             "dagi «Bog'lanishni uzish». Ortga qaytarishda qayta bog'lanadi.",
+     "api": "POST /hr/persons/{id}/unlink/"},
+    {"key": "bind_free_phone", "group": "binding", "reversible": True,
+     "title": "Eski akkauntdagi raqamni bo'shatish",
+     "does": "Eski akkauntning Kirish telefoni maydonini tozalaydi (raqam buzilmaydi; eski qiymat jurnalda saqlanadi). "
+             "PRBC bo'sh qiymatni qabul qilmasa — hammasi ortga qaytariladi, mutaxassisga o'tadi.",
+     "api": "PATCH /auth/admin/users/{id}/profile/ {phone: \"\"}"},
+    {"key": "bind_link_new", "group": "binding", "reversible": True,
+     "title": "1C xodimini yangi (Telegram'li) akkauntga bog'lash",
+     "does": "1C xodimini xodim Telegram orqali kirgan akkauntga bog'laydi — 1C ma'lumotlari (lavozim, bo'lim) shu "
+             "akkauntga o'tadi. Ortga qaytarishda uziladi.",
+     "api": "POST /hr/persons/{id}/link/ {employee}"},
+    {"key": "bind_set_phone", "group": "binding", "reversible": True,
+     "title": "Yangi akkauntga raqamni yozish (ixtiyoriy)",
+     "does": "Xodim bot tugmasi orqali tasdiqlagan raqamni yangi akkauntning Kirish telefoniga yozadi. O'chiq bo'lsa — "
+             "xodimga «PRBC botida raqamni qayta yuboring» deyiladi.",
+     "api": "PATCH /auth/admin/users/{id}/profile/ {phone}"},
+    {"key": "bind_archive_old", "group": "binding", "reversible": True,
+     "title": "Bo'sh eski akkauntni bloklash (ixtiyoriy)",
+     "does": "Bog'lashdan keyin bo'sh qolgan eski akkauntni bloklaydi (o'chirmaydi). Ortga qaytarishda qayta yoqiladi.",
+     "api": "POST /auth/admin/users/{id}/active/ {is_active: false}"},
 ]
 
 # keyingi bosqich: API bor, lekin bot savoldan hali bajarmaydi. Hisobni tasdiqlash (pending -> approve) bu yerda YO'Q:

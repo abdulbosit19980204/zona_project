@@ -23,6 +23,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
+import { type BindReport, PrbcBinding } from "./prbc-binding";
+
 type Key = "active" | "role" | "node" | "seat" | "mapping";
 interface Row { id: number; name: string; position: string; node: string; telegram: string; issues: Key[]; fixed: Key[] }
 interface Report {
@@ -38,6 +40,7 @@ interface Planned { key: string; title: string; does: string; api: string }
 interface AccessData {
   access_bot: boolean; access_scan_minutes: number; scan_at: string | null; scan_requested: boolean;
   report: Report; ready: boolean; log: LogRow[]; actions: Action[]; planned: Planned[];
+  bind_bot: boolean; bind_strict_name: boolean; bind_report: BindReport;
 }
 interface CheckItem { id: number; name: string; position: string; telegram: string; checks: { key: Key; ok: boolean; value: string }[] }
 interface GroupRow { id: number; title: string; node: string; node_id: number | null; base: string }
@@ -114,7 +117,7 @@ export function PrbcAccess() {
           <div className="flex items-center gap-2 font-semibold"><Wrench className="size-4" />{t("actionsTitle")}</div>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("actionsHint")}</p>
         </div>
-        {(["outlet", "module", "request"] as const).map((g) => (
+        {(["outlet", "module", "request", "binding"] as const).map((g) => (
           <div key={g} className="space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(`grp_${g}`)}</div>
             {d.actions.filter((a) => a.group === g).map((a) => (
@@ -147,6 +150,9 @@ export function PrbcAccess() {
       </Card>
 
       <Simulator ready={d.ready} />
+
+      <PrbcBinding ready={d.ready} bot={d.bind_bot} strict={d.bind_strict_name} report={d.bind_report || {}}
+        onSave={(v) => save.mutate(v)} />
 
       <div className="text-sm text-muted-foreground">{t("lastScan")}: {dt(rep.at)} · {t("checkOnly")}</div>
       {rep.error && (

@@ -29,7 +29,7 @@ class FakeClient:
         self.sent, self.callbacks, self.edited = [], [], []
 
     def send(self, chat_id, text, reply_to=None, buttons=None, html=True, **kw):
-        self.sent.append({"chat": chat_id, "text": text, "reply_to": reply_to, "buttons": buttons})
+        self.sent.append({"chat": chat_id, "text": text, "reply_to": reply_to, "buttons": buttons, "markup": kw.get("markup")})
         return {"message_id": 1000 + len(self.sent)}
 
     def answer_callback(self, cid, text="", alert=False):

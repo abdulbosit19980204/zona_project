@@ -160,6 +160,10 @@ class Handler:
         sender = msg["from"]
         user = engine.identify(sender["id"], sender.get("username", ""), _full_name(sender))
         text = (msg.get("text") or "").strip()
+        if msg.get("contact") or text.startswith("/start"):
+            r = self.on_bind_private(msg, user, text)  # «raqam boshqa PRBC akkauntiga bog'langan» — raqamni tasdiqlash
+            if r is not None or msg.get("contact"):
+                return r
         if text.startswith("/id"):
             return self._safe_send(msg["chat"]["id"], f"Chat ID: <code>{msg['chat']['id']}</code>")
         if text.startswith("/kontakt") or text.startswith("/contact") or (
@@ -800,11 +804,18 @@ class Handler:
         """«Yangi tochka qo'sha olmayapman»: bot PRBC'da xodimning 4 shartini tekshiradi va to'g'rilaydi (prbc.access).
         Qaytaradi: None — bu savol emas / o'chiq (oddiy oqim); "asked" — pozivnoy so'raldi; yoki yangi Decision."""
         try:
-            from prbc import access
+            from prbc import access, binding
             u = q.user
-            r = access.handle(q.text or "", q.ocr_text or "", tg_id=u.tg_id if u else None, username=u.username if u else "",
-                              group_title=q.group.title if q.group_id else "", lang=q.lang, asked=q.stage == "ask",
-                              question=q.pk)
+            r = binding.handle(q.text or "", q.ocr_text or "", tg_id=u.tg_id if u else None,
+                               username=u.username if u else "", name=(u.real_name or u.name) if u else "",
+                               lang=q.lang, question=q.pk)
+            if r is not None and r.kind == "contact":
+                return self._bind_ask(q, r)
+            if r is None:
+                r = access.handle(q.text or "", q.ocr_text or "", tg_id=u.tg_id if u else None,
+                                  username=u.username if u else "",
+                                  group_title=q.group.title if q.group_id else "", lang=q.lang, asked=q.stage == "ask",
+                                  question=q.pk)
             if r is None:  # «PRBC'da vazifalar ko'rinmayapti», «PRBC chat ochilmayapti» — modul ruxsati (prbc.modules)
                 from prbc import modules
                 r = modules.handle(q.text or "", q.ocr_text or "", tg_id=u.tg_id if u else None,
@@ -826,6 +837,97 @@ class Handler:
         if r.kind == "escalate":
             return engine.Decision("prbc", None, 100, r.text, True, list(d.responsible), note=r.note, live=r.text)
         return engine.Decision("prbc", None, 100, r.text, False, [], note=r.note)
+
+    # ---------------------------------------------------------------- «raqam boshqa akkauntga bog'langan» (prbc.binding)
+    BIND_START = "bind"
+
+    def _bind_ask(self, q, r):
+        """Raqamni tasdiqlash kerak: guruhda — botning shaxsiy chatiga o'tish tugmasi; u yerda request_contact."""
+        body = engine.to_html(r.text)
+        head = engine.mention_html(q.user) + ", " if self.settings.mention_asker and q.user else ""
+        kb = None
+        if self.bot.username:
+            label = "📱 Отправить номер" if q.lang == "ru" else "📱 Raqamni yuborish"
+            kb = [[{"text": label, "url": f"https://t.me/{self.bot.username.lstrip('@')}?start={self.BIND_START}{q.pk}"}]]
+        else:
+            body += engine.html.escape("\n\n" + ("Напишите боту в личные сообщения: /start" if q.lang == "ru"
+                                                   else "Botga shaxsiy chatda /start deb yozing."))
+        sent = self._pg().finish(head + body, kb) or self._safe_send(q.chat_id, head + body, reply_to=q.message_id,
+                                                                     buttons=kb)
+        q.stage, q.status, q.answer_text = "bind", Message.NEW, r.text
+        if sent:
+            q.bot_reply_id = sent.get("message_id")
+        q.save()
+        return "asked"
+
+    def _bind_open(self, tg_id, qid=None):
+        """Shu xodimning raqam kutayotgan savoli (3 kun ichida)."""
+        qs = Message.objects.filter(bot=self.bot, kind=Message.QUESTION, stage="bind", status=Message.NEW,
+                                    user__tg_id=tg_id, created_at__gte=timezone.now() - timezone.timedelta(days=3))
+        if qid:
+            qs = qs.filter(pk=qid)
+        return qs.select_related("user", "group").order_by("-created_at").first()
+
+    @staticmethod
+    def _contact_kb(lang):
+        label = "📱 Отправить номер" if lang == "ru" else "📱 Raqamni yuborish"
+        return {"keyboard": [[{"text": label, "request_contact": True}]], "resize_keyboard": True,
+                "one_time_keyboard": True}
+
+    def on_bind_private(self, msg, user, text):
+        """Shaxsiy chat: «/start bind<id>» -> raqam tugmasi; kontakt -> G1 (o'z raqami) va savol qayta ishlanadi."""
+        from prbc import binding
+        chat_id = msg["chat"]["id"]
+        contact = msg.get("contact")
+        if not contact:
+            arg = text.split(" ", 1)[1].strip() if " " in text else ""
+            rest = arg[len(self.BIND_START):]
+            q = self._bind_open(user.tg_id, int(rest) if rest.isdigit() else None)
+            if q is None:
+                return None
+            ask = ("📱 Нажмите кнопку ниже — бот получит ваш номер из Telegram (вводить не нужно). Только свой номер."
+                   if q.lang == "ru" else "📱 Pastdagi tugmani bosing — bot raqamingizni Telegram'dan oladi (yozish shart "
+                                          "emas). Faqat o'zingizning raqamingiz.")
+            return self._send_markup(chat_id, ask, self._contact_kb(q.lang))
+        q = self._bind_open(user.tg_id)
+        if q is None:
+            return self._send_markup(chat_id, "Ochiq so'rov topilmadi — savolingizni guruhda yozing.",
+                                     {"remove_keyboard": True})
+        ok = binding.record_contact(q.pk, user.tg_id, contact, name=user.real_name or user.name)
+        if not ok:
+            _v, bad = binding.verified_phone(q.pk)
+            if bad < binding.MAX_ASK:
+                again = ("⚠️ Это не ваш контакт. Нажмите кнопку «📱 Отправить номер» — только свой номер."
+                         if q.lang == "ru" else "⚠️ Bu sizning kontaktingiz emas. «📱 Raqamni yuborish» tugmasini bosing — "
+                                                "faqat o'zingizning raqamingiz.")
+                return self._send_markup(chat_id, again, self._contact_kb(q.lang))
+        if ok:
+            done = ("✅ Номер получен, проверяю в PRBC — ответ будет в группе." if q.lang == "ru"
+                    else "✅ Raqam qabul qilindi, PRBC'da tekshiryapman — javob guruhda bo'ladi.")
+        else:
+            done = "Посмотрит специалист." if q.lang == "ru" else "Mutaxassis ko'rib chiqadi."
+        self._send_markup(chat_id, done, {"remove_keyboard": True})
+        self._bg("_bind_continue", q.pk, chat_id)
+        return q
+
+    def _bind_continue(self, qid, chat_id):
+        """Raqam keldi (yoki urinishlar tugadi): savol guruhda qayta ishlanadi, natija shaxsiy chatga ham."""
+        q = Message.objects.select_related("user", "group").get(pk=qid)
+        if q.group is None:
+            return None
+        q.stage = ""
+        self.process_question(q, q.group.effective_mode(), skip_ask=True)
+        q.refresh_from_db()
+        if q.answer_text and q.stage != "bind":
+            self._safe_send(chat_id, engine.to_html(q.answer_text))
+        return q
+
+    def _send_markup(self, chat_id, text, markup):
+        try:
+            return self.tg.send(chat_id, engine.html.escape(text), markup=markup)
+        except TelegramError as e:
+            log.warning("send failed: %s", e)
+            return None
 
     def _duplicate_of(self, q, d):
         """Shu xodim qisqa vaqt ichida (album_window) shu savolni yuborgan va javob olgan/uzatilgan bo'lsa — takror."""

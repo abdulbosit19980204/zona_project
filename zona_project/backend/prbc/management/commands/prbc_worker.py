@@ -23,6 +23,11 @@ TICK, TASK_EVERY, PUSH_EVERY = 10, 120, 30
 def scan_access():
     """Ruxsatlar nazorati; xato bo'lsa ham vaqt yoziladi (har 10 soniyada qayta urinmasin), sababi hisobotda."""
     try:
+        from prbc import binding
+        binding.scan()  # «raqam band»: A/B juftliklari — faqat hisobot
+    except Exception:  # noqa: BLE001
+        log.exception("PRBC bog'lash nazorati")
+    try:
         access.scan()
     except Exception as e:  # noqa: BLE001
         log.exception("PRBC ruxsatlar nazorati")

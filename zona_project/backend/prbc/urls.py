@@ -32,4 +32,6 @@ urlpatterns = [
     path("access/simulate/", views.access_simulate, name="access-simulate"),
     path("access/groups/", views.access_groups, name="access-groups"),
     path("access/log/<int:pk>/revert/", views.access_revert, name="access-revert"),
+    path("access/bind/check/", views.bind_check, name="bind-check"),
+    path("access/bind/simulate/", views.bind_simulate, name="bind-simulate"),
 ]

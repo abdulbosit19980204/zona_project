@@ -596,7 +596,7 @@ def backfill(request):
 
 
 # ====================================================================== «yangi tochka» ruxsatlari (prbc.access)
-ACCESS_FIELDS = ("access_bot", "access_scan_minutes")
+ACCESS_FIELDS = ("access_bot", "access_scan_minutes", "bind_bot", "bind_strict_name")
 
 
 def _log_row(x):
@@ -612,6 +612,7 @@ def _access_payload(c):
     acts = c.auto_actions or {}
     return {**{f: getattr(c, f) for f in ACCESS_FIELDS}, "scan_at": c.access_scan_at,
             "scan_requested": c.access_scan_requested, "report": c.access_report or {},
+            "bind_report": c.bind_report or {},
             "ready": not not_ready(c),
             "actions": [{**a, "enabled": bool(acts.get(a["key"]))} for a in CATALOG], "planned": PLANNED,
             "log": [_log_row(x) for x in AccessLog.objects.all()[:200]]}
@@ -692,6 +693,43 @@ def access_simulate(request):
         return Response(access.simulate(int(uid), str(d.get("text") or "")[:1000], str(d.get("group") or "")[:200],
                                         "ru" if d.get("lang") == "ru" else "uz", client=client,
                                         mod=d.get("mod") if d.get("mod") in ("task", "chat") else "outlet"))
+    except PrbcError as e:
+        return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+@zona_api(["GET"], ADMIN)
+def bind_check(request):
+    """«Raqam boshqa akkauntga bog'langan»: bitta odam (F.I.Sh. yoki telefon) — A/B juftligi va G2–G7. Faqat o'qish."""
+    from . import binding
+    q = (request.query_params.get("q") or "").strip()[:100]
+    if len(q) < 3:
+        return Response({"detail": "Kamida 3 ta belgi: F.I.Sh., telefon yoki PRBC id."}, status=status.HTTP_400_BAD_REQUEST)
+    client, err = _ready_client()
+    if err:
+        return err
+    try:
+        return Response(binding.check_one(q, client=client))
+    except PrbcError as e:
+        return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+@zona_api(["POST"], ADMIN)
+def bind_simulate(request):
+    """Sinov: «raqam band» savoliga bot nima yozardi va nima qilardi — PRBC'da hech narsa o'zgarmaydi."""
+    from . import binding
+    d = request.data
+    tg = str(d.get("tg_id") or "").strip()
+    query = str(d.get("query") or "").strip()[:100]
+    if not tg.isdigit() and len(query) < 3:
+        return Response({"detail": "Telegram ID yoki yangi akkaunt egasining F.I.Sh. ni kiriting."},
+                        status=status.HTTP_400_BAD_REQUEST)
+    client, err = _ready_client()
+    if err:
+        return err
+    try:
+        return Response(binding.simulate(query, phone=str(d.get("phone") or "")[:30],
+                                         tg_id=int(tg) if tg.isdigit() else None,
+                                         lang="ru" if d.get("lang") == "ru" else "uz", client=client, conn=Connection.get()))
     except PrbcError as e:
         return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
 

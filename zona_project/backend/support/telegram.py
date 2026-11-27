@@ -89,8 +89,9 @@ class Client:
                                                             "my_chat_member"]},
                          timeout=timeout + 5, retries=0)
 
-    def send(self, chat_id, text, reply_to=None, buttons=None, html=True, timeout=None, retries=2):
-        """timeout/retries — oraliq xabar uchun qisqa (tarmoq sekin bo'lsa javobni kutib qolmaydi)."""
+    def send(self, chat_id, text, reply_to=None, buttons=None, html=True, timeout=None, retries=2, markup=None):
+        """timeout/retries — oraliq xabar uchun qisqa (tarmoq sekin bo'lsa javobni kutib qolmaydi).
+        markup — boshqa klaviatura (masalan, shaxsiy chatda «📱 Raqamni yuborish» request_contact tugmasi)."""
         self._throttle(chat_id)
         params = {"chat_id": chat_id, "text": text[:4096], "disable_web_page_preview": True,
                   "parse_mode": "HTML" if html else None}
@@ -98,6 +99,8 @@ class Client:
             params["reply_parameters"] = {"message_id": int(reply_to), "allow_sending_without_reply": True}
         if buttons:
             params["reply_markup"] = {"inline_keyboard": buttons}
+        elif markup:
+            params["reply_markup"] = markup
         return self.call("sendMessage", params, timeout=timeout, retries=retries)
 
     def edit_buttons(self, chat_id, message_id, buttons=None):

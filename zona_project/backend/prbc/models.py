@@ -60,6 +60,10 @@ class Connection(models.Model):
     access_scan_requested = models.BooleanField(default=False)
     access_report = models.JSONField(default=dict, blank=True)  # oxirgi tekshiruv: {at, counts, rows}
     auto_actions = models.JSONField(default=dict, blank=True)  # prbc.actions: {amal: True} — yoqilmagani faqat aniqlanadi
+    # «raqam boshqa PRBC akkauntiga bog'langan» (prbc.binding): bot savolni aniqlaydi; ism tekshiruvi qat'iy (G7)
+    bind_bot = models.BooleanField(default=True)
+    bind_strict_name = models.BooleanField(default=True)
+    bind_report = models.JSONField(default=dict, blank=True)  # nazorat: A (1C, Telegramsiz) + B (tg_, 1C siz) juftliklari
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

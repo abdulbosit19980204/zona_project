@@ -251,6 +251,76 @@ qaytariladi. `food_copy` (test baza) ishlatilmaydi.
 | Guruh → PRBC bo'limi | qaysi guruh qaysi bo'limga mos (guruh bo'limi amali shu bo'yicha) |
 | Jurnal | har tekshiruv va o'zgarish, «Ortga qaytarish» tugmasi |
 
+## Raqam boshqa akkauntga bog'langan (Telegram bog'lash)
+
+**Belgi.** Xodim PRBC botida (yoki ilovadagi «Complete your profile» ekranida) «📱 Поделиться номером» ni bosadi va
+oladi: *«⚠️ Этот номер привязан к другой учётной записи PRBC. Обратитесь к администратору.»* / *«This number belongs
+to another PRBC account»* — va shu skrinshot yoki matnni support guruhiga yozadi.
+
+**Sabab.** Xodim 1C ga kiritilgach PRBC Kadrlar moduli unga akkaunt ochadi (**A**: login `hr_…`, belgisi 1C,
+«Kutilmoqda», Telegram bog'lanmagan, Kirish telefoni — 1C dagi raqam). Xodim keyin PRBC botiga o'zi kirsa — PRBC
+yangi bo'sh akkaunt ochadi (**B**: login `tg_<telegram id>`). B ga raqam yozilmoqchi bo'lganda u A da band bo'ladi.
+
+**Bot nima qiladi.**
+1. Savolni taniydi (rus / ingliz / o'zbek matn yoki skrinshot). Bu savol «yangi tochka» savolidan oldin tekshiriladi.
+2. B ni savol bergan xodimning Telegram ID si bo'yicha, A ni raqam (bo'lmasa F.I.Sh.) bo'yicha topadi, A ga
+   bog'langan 1C xodimini `/hr/persons/` dan oladi.
+3. Xavfsizlik shartlarini tekshiradi — **hammasi** bajarilsagina o'zgartiradi:
+
+| # | Shart | Bajarilmasa |
+|---|---|---|
+| G1 | Raqam — xodimning o'zi (bot shaxsiy chatida «📱 Raqamni yuborish» tugmasi orqali o'z kontaktini yuborgan) | qayta so'raydi (3 martagacha), keyin mutaxassisga |
+| G2 | A da Telegram bog'lanmagan | mutaxassisga |
+| G3 | A — 1C dan kelgan va «Kutilmoqda» (ishlatilmagan) | mutaxassisga |
+| G4 | A ga bog'langan 1C xodimi ishlaydi (bo'shatilmagan) | mutaxassisga — raqam boshqa odamga o'tgan bo'lishi mumkin |
+| G5 | B bo'sh: 1C ga bog'lanmagan, 30 kundan yangi, faqat Employee roli | mutaxassisga |
+| G6 | Raqam bo'yicha faqat bitta akkaunt | mutaxassisga |
+| G7 | A va B dagi ism bir odamniki (sozlamada o'chirsa bo'ladi) | mutaxassisga |
+
+4. Amallar yoqilgan bo'lsa (pastda), tartib bilan bajaradi va har qadamdan keyin PRBC'dan qayta o'qib tekshiradi:
+   1C xodimini A dan uzish → A dagi Kirish telefonini **bo'shatish** (raqam buzilmaydi, eski qiymat jurnalda) → 1C
+   xodimini B ga bog'lash → (ixtiyoriy) B ga raqamni yozish → (ixtiyoriy) bo'sh A ni bloklash. Biror qadam xato
+   bersa — qilinganlari teskari tartibda qaytariladi, yarim holat qolmaydi, savol mutaxassisga o'tadi.
+5. Javob guruhda (va bot shaxsiy chatida): «Akkauntingiz 1C ma'lumotlaringiz bilan bog'landi ✅ PRBC ilovasini to'liq
+   yopib qayta oching» va nima qilingani. B ga raqam yozish o'chiq bo'lsa — «PRBC botida «📱 Поделиться номером» ni
+   qayta bosing».
+
+**Standart holat.** Hamma amallar **o'chiq**: bot A/B ni topadi, G2–G7 natijasini va admin nima qilishi kerakligini
+yozadi, savol mutaxassisga o'tadi (kartochkada F.I.Sh., Telegram ID, raqam, A va B havolalari). Raqam so'ralmaydi —
+xodimni ortiqcha bezovta qilmaslik uchun raqam faqat uchala asosiy amal yoqilganda so'raladi.
+
+**Raqam qanday olinadi.** Guruhdagi javobda «📱 Raqamni yuborish» tugmasi bor — u bot shaxsiy chatini ochadi, u yerda
+Telegram'ning «raqamni yuborish» tugmasi chiqadi (raqam Telegram'dan o'zi olinadi). Boshqa odamning kontakti
+(forward) qabul qilinmaydi. Skrinshotdagi raqam faqat qidirish uchun — tasdiqlangan hisoblanmaydi.
+
+### Amallar (panel → Yangi tochka ruxsatlari → «Raqam boshqa PRBC akkauntiga bog'langan»)
+
+| Amal | Nima qiladi | Ortga qaytarish |
+|---|---|---|
+| 1C xodimini eski akkauntdan uzish | `/staff` dagi «Bog'lanishni uzish» | qayta bog'lanadi |
+| Eski akkauntdagi raqamni bo'shatish | Kirish telefoni tozalanadi | eski raqam qaytariladi |
+| 1C xodimini yangi akkauntga bog'lash | 1C ma'lumotlari B ga o'tadi | uziladi |
+| Yangi akkauntga raqamni yozish (ixtiyoriy) | tasdiqlangan raqam B ga | eski qiymat |
+| Bo'sh eski akkauntni bloklash (ixtiyoriy) | A bloklanadi (o'chirilmaydi) | qayta yoqiladi |
+
+Asosiy uchta amal **birga** yoqilgandagina bot o'zgartiradi (bittasi o'chiq bo'lsa — faqat aniqlaydi). Ortga
+qaytarishni teskari tartibda bajaring: avval «yangi akkauntga bog'lash», keyin «raqam», keyin «uzish».
+
+**Sozlamalar:** «Bot shu savolni tekshiradi» (standart yoqiq — o'chirilsa odatdagi javob), «Ism tekshiruvi qat'iy (G7)»
+(standart yoqiq).
+
+**Panelda:** *Bitta odamni tekshirish* (F.I.Sh. / telefon / PRBC id → A, B va G2–G7), *Sinov rejimi* (Telegram ID yoki
+F.I.Sh. + raqam → bot javobi va amallar, PRBC o'zgarmaydi), *Nazorat* — bir xil F.I.Sh. li «1C, Kutilmoqda,
+Telegramsiz» va «tg_, 1C siz» akkauntlar ro'yxati (har nazoratda, faqat hisobot).
+
+**Admin qo'lda (bot to'xtasa):** `prbc.uz/staff` → xodim → «Bog'lanishni uzish» (A dan) → `settings?tab=users` da A
+ning Kirish telefonini tozalash → 1C xodimini B akkauntga bog'lash → xodim botda raqamni qayta yuboradi. Raqamni
+«yarmini o'chirib» buzmang.
+
+**Tekshirilmagan.** Amallar real PRBC'da hali sinalmagan (endpointlar prbc.uz sahifasi va API sxemasidan olingan).
+Birinchi marta yoqishdan oldin «Sinov rejimi» da bitta xodimni tekshiring va jurnalni kuzating; ayniqsa PRBC Kirish
+telefonini bo'sh qiymatga o'zgartirishga ruxsat beradimi — bermasa bot hammasini qaytaradi va mutaxassisga o'tadi.
+
 ## Sozlamalar
 
 PRBC sozlamalari sahifasi:
@@ -283,5 +353,6 @@ PRBC sozlamalari sahifasi:
 | Ijrochi noto'g'ri | Toifa mas'ulini (Support sozlamasi) yoki guruh ijrochisini (jadval) to'g'rilang |
 | Status o'zgarmadi | PRBC rad etgan bo'lishi mumkin — nazoratda ⚠ sababi |
 | Bot «yangi tochka» savoliga tekshiruv yozmadi | Panelda kalit o'chiq / PRBC javob bermadi (bot odatdagidek javob beradi) / xodimning Telegram'i PRBC'ga bog'lanmagan — bot «foydalanuvchi topilmadi» deb mutaxassisga uzatadi |
+| «Raqam boshqa akkauntga bog'langan» — bot hal qilmadi | Javobda ❌ bo'lgan shart (G1–G7) sababi; amallar o'chiq bo'lsa — admin qo'lda (yuqoridagi bo'lim). Jurnalda xato bo'lsa — o'zgarishlar avtomatik qaytarilgan |
 | Pozivnoy biriktirilmadi | Jurnalda sababi: boshqa xodimda (supervayzer bilan aniqlang), 1C ro'yxatida yo'q (Integratsiyalar → «Ma'lumotnomalarni yangilash», bo'lmasa 1C mas'uli) |
 | PRBC "Request was throttled" | PRBC so'rovlarni vaqtincha cheklagan — tizim keyingi aylanishda qayta uradi |

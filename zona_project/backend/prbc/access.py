@@ -411,6 +411,9 @@ def refresh_refs(st, code):
 # ------------------------------------------------------------------ ortga qaytarish (panel)
 def revert(entry, actor="", client=None):
     """AccessLog yozuvidagi o'zgarishni qaytaradi; natija ham jurnalga yoziladi. Qaytaradi: (ok, matn)."""
+    if entry.action.startswith("bind_"):
+        from . import binding
+        return binding.revert(entry, actor, client)
     if entry.action not in REVERSIBLE_ACTIONS or not entry.ok or not entry.reversible:
         return False, "Bu yozuvni ortga qaytarib bo'lmaydi"
     if entry.reverted_at:
@@ -584,6 +587,9 @@ def handle(text, ocr="", tg_id=None, username="", group_title="", lang="uz", ask
         return None
     screen = screen_shown(text, ocr)
     if not force:
+        from .binding import is_binding_question
+        if is_binding_question(text, ocr):
+            return None  # «raqam boshqa akkauntga bog'langan» — prbc.binding hal qiladi
         if not screen and not is_access_question(text, ocr):
             return None
         if not screen and outlets.find_ids(text):

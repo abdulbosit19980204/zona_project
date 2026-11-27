@@ -72,6 +72,10 @@ def handle(text, ocr="", tg_id=None, username="", lang="uz", question=None, clie
     conn = conn or connection()
     if conn is None or not getattr(conn, "access_bot", True):
         return None
+    if not mod:
+        from .binding import is_binding_question
+        if is_binding_question(text, ocr):
+            return None  # «raqam boshqa akkauntga bog'langan» — prbc.binding
     mod = mod or which(text, ocr)
     if not mod:
         return None

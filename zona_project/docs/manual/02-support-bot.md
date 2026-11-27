@@ -38,6 +38,10 @@ Qo'shimcha:
   «Integratsiyalar» ruxsati, 1C pozivnoy) tekshiradi, pozivnoyni xodimdan to'liq yozguncha so'raydi. Standart holatda
   faqat aniqlab javobda yozadi; panelda ruxsat berilgan amallarni o'zi bajaradi va nima qilganini yozadi.
   Batafsil — [PRBC → Yangi tochka ruxsatlari](/docs/prbc).
+- **«Этот номер привязан к другой учётной записи PRBC» (raqam band):** bot ikki akkauntni (1C dagi eski va Telegram
+  orqali ochilgan yangi) topadi, xavfsizlik shartlarini tekshiradi; panelda ruxsat berilgan bo'lsa xodimdan raqamini
+  bot shaxsiy chatida tugma orqali so'raydi va 1C xodimini yangi akkauntga ko'chiradi. Standart holatda faqat aniqlab
+  mutaxassisga yozadi. Batafsil — [PRBC → Raqam boshqa akkauntga bog'langan](/docs/prbc).
 - **Ma'lumot ekrani:** skrinshot "Торговая точка … отправлена на модерацию!" bo'lsa, ostidagi "Qo'shib bering, Navoiy
   SRZ" / "Tasdiqlab bering" kabi iltimos alohida savol hisoblanmaydi. Bot xodimga uzatmaydi, **moderatsiya standart
   javobini** beradi: nuqtani Pro-target tasdiqlaydi va u o'zi qo'shiladi. Matn bilim bazasidagi boshqa savolga aniq mos
