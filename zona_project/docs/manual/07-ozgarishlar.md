@@ -2,6 +2,16 @@
 
 > Tizimga kiritilgan o'zgarishlar — eng yangisi tepada. Har deploy bilan shu yerga yoziladi.
 
+## 2026-11-27
+
+- **«Yangi tochka qo'sha olmayapman» — bot o'zi hal qiladi.** Guruhda shu savol yoki «ни одно подключение к 1С»
+  skrinshoti kelsa, bot xodimni PRBC'da tekshiradi: hisob faol, rol, asosiy bo'lim, «Integratsiyalar» ruxsati va 1C
+  pozivnoy. Yetmaganini o'zi beradi, pozivnoyni xodimdan so'raydi va 1C ro'yxatidan topib biriktiradi, so'ng
+  «ilovani yopib qayta oching» deydi. Hal qilib bo'lmasa — topganini yozib mutaxassisga uzatadi.
+- **Doimiy nazorat:** PRBC worker har soatda barcha savdo vakillarini tekshiradi, ruxsat / rol / bo'limni o'zi beradi.
+  Yangi sahifa **Yangi tochka ruxsatlari** (`/prbc/access`): kamchiligi bor xodimlar, bitta xodimni tekshirish,
+  jurnal, sozlamalar.
+
 ## 2026-11-26
 
 - **Moderatsiya skrinshoti + "qo'shib bering"** endi xodimga uzatilmaydi. "Торговая точка … отправлена на

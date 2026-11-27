@@ -158,6 +158,60 @@ Sahifa har 15 soniyada yangilanadi; menyudagi raqam — ochiq vazifalar soni.
 - PRBC sozlamalarida kalit bilan o'chiriladi; **"Mijoz holatini tekshirish"** oynasida STIR yozib bot javobini oldindan
   ko'rish mumkin.
 
+## Yangi tochka ruxsatlari (bot o'zi tuzatadi)
+
+Belgi: savdo vakili PRBC ilovasida **«Заявки на точки»**ni ochadi va «Заявок пока нет. Для вашей организации ещё не
+включено ни одно подключение к 1С» yozuvini ko'radi, **«+» tugmasi yo'q**. Bu yozuv chalg'itadi: bazalar yoniq,
+muammo xodimning sozlamalarida.
+
+PRBC «+» tugmasini quyidagilar bajarilganda ko'rsatadi:
+
+| # | Shart | PRBC'da qayerda | Bot nima qiladi |
+|---|---|---|---|
+| 1 | Hisob **faol** | Sozlamalar → Foydalanuvchilar | Faol emas bo'lsa tegmaydi — mutaxassisga (HR qarori) |
+| 2 | **Rol** (Employee) va **asosiy bo'lim** | xodim kartasi → Bo'lim va rollar | Rol yo'q — Employee beradi (butun tashkilot bo'yicha). Asosiy bo'lim yo'q — bitta bo'limi bo'lsa o'shani asosiy qiladi, umuman yo'q bo'lsa guruh nomiga teng bo'limni biriktiradi; aniqlab bo'lmasa ⚠️ (tugmaga ta'sir qilmaydi) |
+| 3 | **1C pozivnoy** (savdo vakili) kerakli bazada | Integratsiyalar → baza → Savdo vakillari | Xodimdan pozivnoyini so'raydi, 1C ro'yxatidan topib biriktiradi. Baza — pozivnoy topilgan baza (food / nonfood); ikkalasida bo'lsa — bo'lim (MDLZ, HEINZ → food; LOREAL, BIC, J&J, COSMOPROF → nonfood) yoki xodim yozgan «food» / «nonfood» |
+| 4 | **«Integratsiyalar» moduli ruxsati — Xodim** | Sozlamalar → Modullar → Integratsiyalar → Ruxsatlar | Ruxsat yo'q yoki Ko'ruvchi bo'lsa — Xodim beradi (Ko'ruvchi yarata olmaydi) |
+
+**Guruhda qanday ishlaydi:**
+
+1. Savol tanilganda bot ishga tushadi: «yangi tochka qo'sha olmayapman», «new client qo'shish ishlamayapti»,
+   «не могу добавить новую точку», «tochka qo'shish funksiyasi yo'q» yoki yuqoridagi skrinshot.
+2. Bot yozgan xodimni PRBC'da Telegram orqali topadi. Supervayzer boshqa xodim haqida yozib, uni **@username** bilan
+   belgilasa — o'sha savdo vakili tekshiriladi (IT xodimi belgilansa, u tekshirilmaydi).
+3. 4 shartni hammasini tekshiradi va yetmaganini beradi.
+4. Pozivnoy yo'q bo'lsa — guruhda so'raydi: *«Pozivnoyingizni yozing — 1C dagi savdo vakili nomi (masalan:
+   2.3 Карши К-3)»*. Xodim shu xabarga javob qiladi («2.3 Карши К-3», «Qarshi K3», lotin yoki kirill — farqi yo'q),
+   bot topib biriktiradi.
+5. Javob: har shart ✅ (joyida) / 🔧 (hozir to'g'rilandi) / ❌ (muammo) va *«PRBC ilovasini yopib qayta oching»*.
+6. Hal qilib bo'lmasa (faol emas, pozivnoy boshqa xodimda, 1C ro'yxatida yo'q, PRBC xato qaytardi) — bot topganini
+   yozadi va savol mutaxassisga o'tadi (PRBC vazifasi ham ochiladi).
+
+Ekran yozuvisiz savolda hamma shart joyida bo'lsa (masalan «tochka qo'shdim, ProTarget'da chiqmayapti») — bot
+odatdagidek javob beradi, bu tekshiruv xalaqit bermaydi. Savolda STIR / 1C kodi bo'lsa — ariza holati (yuqoridagi
+bo'lim) javob beradi.
+
+**Doimiy nazorat.** PRBC worker har **60 daqiqada** barcha faol savdo vakillarini tekshiradi va (yoqilgan bo'lsa)
+ruxsat, rol va asosiy bo'limni o'zi beradi. Pozivnoy taxmin qilinmaydi — ro'yxatda ko'rinadi, xodim yozganda bot
+o'zidan so'raydi.
+
+**Xavfsizlik.** Hech narsa o'chirilmaydi va pasaytirilmaydi (admin / tekshiruvchi darajasiga tegilmaydi). Pozivnoylar
+ro'yxati har gal PRBC'dan yangidan o'qiladi, bitta qator qo'shiladi va saqlangach qolganlari o'zgarmagani tekshiriladi;
+farq bo'lsa — avvalgi ro'yxat qaytariladi. Boshqa xodimga biriktirilgan pozivnoyga tegilmaydi. `food_copy` (test baza)
+ishlatilmaydi. Har amal jurnalga yoziladi.
+
+**Panel:** Support bot → **Yangi tochka ruxsatlari** (`/prbc/access`):
+
+| Qism | Nima |
+|---|---|
+| Bot savolda tekshiradi | yoqiq — o'chirilsa bot bu savollarga odatdagidek javob beradi |
+| Avtomatik to'g'rilash | yoqiq — o'chirilsa bot faqat tekshiradi va mutaxassisga uzatadi, PRBC o'zgarmaydi |
+| Nazorat oralig'i | 60 daqiqa; 0 — o'chiq. «Hozir tekshirish» — bir necha soniyada |
+| Kartalar | faol savdo vakillari, hammasi joyida, pozivnoy yo'q, ruxsat yo'q, oxirgi nazoratda to'g'rilangan |
+| Kamchiligi bor xodimlar | nima yetishmaydi (qizil) va nima to'g'rilandi (yashil), shart bo'yicha filtr |
+| Bitta xodimni tekshirish | ism, @username yoki PRBC id — faqat o'qish |
+| Jurnal | har tekshiruv va o'zgarish: vaqt, manba (bot / nazorat), xodim, natija |
+
 ## Sozlamalar
 
 PRBC sozlamalari sahifasi:
@@ -189,4 +243,6 @@ PRBC sozlamalari sahifasi:
 | Vazifa ochilmadi | Guruhda vazifa o'chiq / eski guruh / savol aniq emas; Vazifalar nazoratida "vazifasiz savollar" bo'lsa — "Hammasiga vazifa ochish" |
 | Ijrochi noto'g'ri | Toifa mas'ulini (Support sozlamasi) yoki guruh ijrochisini (jadval) to'g'rilang |
 | Status o'zgarmadi | PRBC rad etgan bo'lishi mumkin — nazoratda ⚠ sababi |
+| Bot «yangi tochka» savoliga tekshiruv yozmadi | Panelda kalit o'chiq / PRBC javob bermadi (bot odatdagidek javob beradi) / xodimning Telegram'i PRBC'ga bog'lanmagan — bot «foydalanuvchi topilmadi» deb mutaxassisga uzatadi |
+| Pozivnoy biriktirilmadi | Jurnalda sababi: boshqa xodimda (supervayzer bilan aniqlang), 1C ro'yxatida yo'q (Integratsiyalar → «Ma'lumotnomalarni yangilash», bo'lmasa 1C mas'uli) |
 | PRBC "Request was throttled" | PRBC so'rovlarni vaqtincha cheklagan — tizim keyingi aylanishda qayta uradi |

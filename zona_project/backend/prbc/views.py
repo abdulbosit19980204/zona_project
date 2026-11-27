@@ -593,3 +593,59 @@ def backfill(request):
     if n and not dry:
         Change.objects.create(kind=Change.TASK, actor=_actor(request), text=f"{n} ta ochiq savolga vazifa navbatga qo'yildi")
     return Response({"count": n, "dry": dry})
+
+
+# ====================================================================== «yangi tochka» ruxsatlari (prbc.access)
+ACCESS_FIELDS = ("access_bot", "access_autofix", "access_scan_minutes")
+
+
+def _access_payload(c):
+    from .models import AccessLog
+    logs = AccessLog.objects.all()[:150]
+    return {**{f: getattr(c, f) for f in ACCESS_FIELDS}, "scan_at": c.access_scan_at,
+            "scan_requested": c.access_scan_requested, "report": c.access_report or {},
+            "ready": not not_ready(c),
+            "log": [{"id": x.id, "at": x.at, "source": x.source, "prbc_user": x.prbc_user, "name": x.name,
+                     "action": x.action, "ok": x.ok, "text": x.text} for x in logs]}
+
+
+@zona_api(["GET", "PATCH"], ADMIN)
+def access_view(request):
+    """«Yangi tochka» ruxsatlari: sozlamalar, oxirgi nazorat hisoboti va bot jurnali."""
+    c = Connection.get()
+    if request.method == "PATCH":
+        d = request.data
+        changed = []
+        for f in ACCESS_FIELDS:
+            if f in d:
+                v = max(0, min(int(d[f] or 0), 1440)) if f == "access_scan_minutes" else bool(d[f])
+                setattr(c, f, v)
+                changed.append(f"{f}={v}")
+        if changed:
+            c.save(update_fields=[*ACCESS_FIELDS, "updated_at"])
+            Change.objects.create(kind=Change.UPDATED, actor=_actor(request),
+                                  text="Yangi tochka ruxsatlari: " + ", ".join(changed))
+    return Response(_access_payload(c))
+
+
+@zona_api(["POST"], ADMIN)
+def access_scan(request):
+    """Hozir tekshirish — worker bir necha soniyada bajaradi (sozlamaga ko'ra to'g'rilaydi)."""
+    Connection.objects.filter(pk=1).update(access_scan_requested=True)
+    return Response({"queued": True})
+
+
+@zona_api(["GET"], ADMIN)
+def access_check(request):
+    """Bitta xodimni tekshirish (ism, @username yoki PRBC id) — faqat o'qish, PRBC'da hech narsa o'zgarmaydi."""
+    from . import access
+    q = (request.query_params.get("q") or "").strip()[:100]
+    if len(q) < 3:
+        return Response({"detail": "Kamida 3 ta belgi: ism, @username yoki PRBC id."}, status=status.HTTP_400_BAD_REQUEST)
+    c = Connection.get()
+    if not_ready(c):
+        return Response({"detail": not_ready(c)}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        return Response(access.diagnose_text(q, client=access.make_client(c)))
+    except PrbcError as e:
+        return Response({"detail": f"PRBC: {e}"}, status=status.HTTP_502_BAD_GATEWAY)

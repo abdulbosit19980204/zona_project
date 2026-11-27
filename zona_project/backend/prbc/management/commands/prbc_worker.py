@@ -9,14 +9,26 @@ import time
 
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
+from django.db.models import Q
 from django.utils import timezone
 
-from prbc import control, people, tasks
+from prbc import access, control, people, tasks
 from prbc.client import Client, PrbcError
 from prbc.models import Connection
 
 log = logging.getLogger("prbc")
 TICK, TASK_EVERY, PUSH_EVERY = 10, 120, 30
+
+
+def scan_access():
+    """Ruxsatlar nazorati; xato bo'lsa ham vaqt yoziladi (har 10 soniyada qayta urinmasin), sababi hisobotda."""
+    try:
+        access.scan()
+    except Exception as e:  # noqa: BLE001
+        log.exception("PRBC ruxsatlar nazorati")
+        rep = dict(Connection.get().access_report or {})
+        rep.update(error=str(e)[:500], error_at=timezone.now().isoformat())
+        Connection.objects.filter(pk=1).update(access_scan_at=timezone.now(), access_scan_requested=False, access_report=rep)
 
 
 class Command(BaseCommand):
@@ -52,6 +64,8 @@ class Command(BaseCommand):
                         client = Client(Connection.get())
                         control.push_status(client=client)  # savol hal bo'ldi -> Done, xodim javob yozdi -> In Progress
                         control.watch_overdue(client=client)  # muddati o'tgan -> izoh + shoshilinch
+                    if access.scan_due(conn):
+                        scan_access()  # «yangi tochka» ruxsatlari: barcha savdo vakillari (doimiy nazorat)
                     if time.time() - last_task >= TASK_EVERY or conn.sync_requested:
                         last_task = time.time()
                         tasks.poll(client=Client(Connection.get()))  # holat va "bajarildi" hisoboti
@@ -63,6 +77,6 @@ class Command(BaseCommand):
             except Exception:  # noqa: BLE001 — worker hech qachon yiqilmasin
                 log.exception("prbc worker tick failed")
             for _ in range(TICK):
-                if stop["flag"] or Connection.objects.filter(pk=1, sync_requested=True).exists():
+                if stop["flag"] or Connection.objects.filter(Q(sync_requested=True) | Q(access_scan_requested=True), pk=1).exists():
                     break
                 time.sleep(1)

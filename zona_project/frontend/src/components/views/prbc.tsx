@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
+import { PrbcAccess } from "./prbc-access";
 import { PrbcControl } from "./prbc-control";
 
 type Status = "active" | "leaving" | "left";
@@ -88,7 +89,7 @@ function useAction<V>(fn: (v: V) => Promise<unknown>, ok?: string) {
     onError: (e) => toast.error(errorMessage(e)) });
 }
 
-export type PrbcView = "control" | "tasks" | "people" | "log" | "settings";
+export type PrbcView = "control" | "tasks" | "people" | "access" | "log" | "settings";
 
 export function PrbcIntegration({ view = "control" }: { view?: PrbcView }) {
   const t = useTranslations("prbc");
@@ -110,7 +111,7 @@ export function PrbcIntegration({ view = "control" }: { view?: PrbcView }) {
           </Button>
         </div>} />
       <nav className="mb-5 flex flex-wrap gap-1.5 border-b pb-3">
-        {(["control", "tasks", "people", "log", "settings"] as PrbcView[]).map((v) => (
+        {(["control", "tasks", "people", "access", "log", "settings"] as PrbcView[]).map((v) => (
           <Link key={v} href={v === "control" ? "/prbc" : `/prbc/${v}`}
             className={cn("rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
               view === v ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground")}>
@@ -149,6 +150,7 @@ export function PrbcIntegration({ view = "control" }: { view?: PrbcView }) {
           <div className="mt-4"><PeopleTab /></div>
         </>
       )}
+      {view === "access" && <PrbcAccess />}
       {view === "log" && <LogTab runs={ov.data?.runs ?? []} />}
       {view === "settings" && (c ? <ConnTab conn={c} /> : <Skeleton className="h-96 rounded-xl" />)}
     </Page>

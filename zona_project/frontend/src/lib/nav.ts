@@ -107,6 +107,7 @@ export const SUPPORT_NAV: NavGroup[] = [
       { href: "/prbc", key: "prbcControl", icon: Gauge, perm: "admin" },
       { href: "/prbc/tasks", key: "prbcTasks", icon: ListChecks, perm: "admin" },
       { href: "/prbc/people", key: "prbcPeople", icon: UsersRound, perm: "admin" },
+      { href: "/prbc/access", key: "prbcAccess", icon: KeyRound, perm: "admin" },
       { href: "/prbc/log", key: "prbcLog", icon: ScrollText, perm: "admin" },
     ],
   },

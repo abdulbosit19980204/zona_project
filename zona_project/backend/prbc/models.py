@@ -52,6 +52,13 @@ class Connection(models.Model):
     last_error = models.TextField(blank=True)
     worker_beat = models.DateTimeField(null=True, blank=True)
     lifecycle_cursor = models.DateTimeField(null=True, blank=True)  # shu vaqtdan keyin o'zgargan vazifalar o'qiladi
+    # «Yangi tochka» ruxsatlari (prbc.access): bot savolda tekshiradi va to'g'rilaydi, worker doimiy nazorat qiladi
+    access_bot = models.BooleanField(default=True)  # "tochka qo'sha olmayapman" savolida bot o'zi tekshiradi
+    access_autofix = models.BooleanField(default=True)  # yetishmagan ruxsatni bot o'zi beradi (o'chiq — faqat tekshiruv)
+    access_scan_minutes = models.PositiveIntegerField(default=60)  # barcha savdo vakillarini tekshirish oralig'i; 0 — o'chiq
+    access_scan_at = models.DateTimeField(null=True, blank=True)
+    access_scan_requested = models.BooleanField(default=False)
+    access_report = models.JSONField(default=dict, blank=True)  # oxirgi tekshiruv: {at, counts, rows}
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -169,3 +176,22 @@ class Task(models.Model):
 
     class Meta:
         ordering = ["-prbc_updated_at", "-id"]
+
+
+class AccessLog(models.Model):
+    """«Yangi tochka» ruxsatlari bo'yicha har bir tekshiruv va o'zgarish: kim, nima, oldin/keyin (panel jurnali)."""
+    BOT, SCAN, PANEL = "bot", "scan", "panel"
+    at = models.DateTimeField(auto_now_add=True, db_index=True)
+    source = models.CharField(max_length=10, default=BOT)
+    prbc_user = models.IntegerField(null=True, blank=True)
+    name = models.CharField(max_length=200, blank=True)
+    action = models.CharField(max_length=30)  # check, seat, role, primary_node, node, mapping, escalate
+    ok = models.BooleanField(default=True)
+    text = models.TextField(blank=True)
+    before = models.JSONField(default=dict, blank=True)
+    after = models.JSONField(default=dict, blank=True)
+    question = models.IntegerField(null=True, blank=True)  # support Message id (bot savoli bo'lsa)
+
+    class Meta:
+        ordering = ["-at"]
+        verbose_name = "PRBC ruxsat jurnali"

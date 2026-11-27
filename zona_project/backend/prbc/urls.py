@@ -26,4 +26,7 @@ urlpatterns = [
     path("projects/", views.projects, name="projects"),
     path("group-projects/", views.group_projects, name="group-projects"),
     path("outlet-status/", views.outlet_status, name="outlet-status"),
+    path("access/", views.access_view, name="access"),
+    path("access/scan/", views.access_scan, name="access-scan"),
+    path("access/check/", views.access_check, name="access-check"),
 ]

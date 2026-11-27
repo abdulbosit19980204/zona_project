@@ -777,6 +777,12 @@ class Handler:
             self._autolabel(media, d)
         try:
             self._t_start = t_start
+            if mode == MODE_LIVE and not self.history:
+                acc = self._outlet_access(q, d)  # «yangi tochka qo'sha olmayapman» — PRBC ruxsatlari (prbc.access)
+                if acc == "asked":
+                    return q
+                if acc is not None:
+                    d = acc
             res = self._respond(q, d, mode, skip_ask)
             if getattr(self, "_t_reply", None):
                 marks["reply"] = int((self._t_reply - t_start) * 1000)  # qayta ishlash boshidan guruhga javob ketguncha
@@ -789,6 +795,33 @@ class Handler:
             if deferred_ocr and settings.ocr_enabled:
                 self._ocr(q, media)
                 Message.objects.filter(pk=q.pk).update(ocr_text=q.ocr_text, alert_text=q.alert_text)
+
+    def _outlet_access(self, q, d):
+        """«Yangi tochka qo'sha olmayapman»: bot PRBC'da xodimning 4 shartini tekshiradi va to'g'rilaydi (prbc.access).
+        Qaytaradi: None — bu savol emas / o'chiq (oddiy oqim); "asked" — pozivnoy so'raldi; yoki yangi Decision."""
+        try:
+            from prbc import access
+            u = q.user
+            r = access.handle(q.text or "", q.ocr_text or "", tg_id=u.tg_id if u else None, username=u.username if u else "",
+                              group_title=q.group.title if q.group_id else "", lang=q.lang, asked=q.stage == "ask",
+                              question=q.pk)
+        except Exception:  # noqa: BLE001 — tekshiruv qo'shimcha: xatosi javobni to'xtatmasin
+            log.exception("PRBC ruxsat tekshiruvi")
+            return None
+        if r is None:
+            return None
+        if r.kind == "ask":
+            body = engine.to_html(r.text)
+            head = engine.mention_html(q.user) + ", " if self.settings.mention_asker and q.user else ""
+            sent = self._pg().finish(head + body) or self._safe_send(q.chat_id, head + body, reply_to=q.message_id)
+            q.stage, q.status, q.answer_text = "ask", Message.NEW, r.text
+            if sent:
+                q.bot_reply_id = sent.get("message_id")
+            q.save()
+            return "asked"
+        if r.kind == "escalate":
+            return engine.Decision("prbc", None, 100, r.text, True, list(d.responsible), note=r.note, live=r.text)
+        return engine.Decision("prbc", None, 100, r.text, False, [], note=r.note)
 
     def _duplicate_of(self, q, d):
         """Shu xodim qisqa vaqt ichida (album_window) shu savolni yuborgan va javob olgan/uzatilgan bo'lsa — takror."""
@@ -921,11 +954,13 @@ class Handler:
         # odamga uzatilgan savol ochiq qolib ketmasin: vaqt o'tib mas'ul / xodimdan so'raladi, yechim chiqquncha
         resolution.track(q, handler=resolution.staff_users(member).exclude(username="").first() if member else None,
                          s=settings)
-        if settings.escalation_ack:
+        if settings.escalation_ack or d.live:
             ack = ("Ваш вопрос принят." if q.lang == "ru" else "Savolingiz qabul qilindi.")
             if settings.mention_responsible and d.responsible and d.responsible[0].get("telegram"):
                 tags = " ".join("@" + t for t in d.responsible[0]["telegram"][:3])
                 ack += (" Ответит: " if q.lang == "ru" else " Javob beradi: ") + tags
+            if d.live:  # PRBC'dagi tekshiruv natijasi (nima topildi, nima qilindi) — xodim ham ko'radi
+                ack = d.live + "\n\n" + ack
             kb = review.ack_buttons(q, settings)  # noto'g'ri mas'ul / yo'naltirish ham "⚠️ Xato javob" bilan belgilanadi
             sent = (self._pg().finish(engine.html.escape(ack), kb)
                     or self._safe_send(q.chat_id, engine.html.escape(ack), reply_to=q.message_id, buttons=kb))
