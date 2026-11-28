@@ -9,7 +9,7 @@ import re
 
 APPS = ("prbc", "protarget", "1c", "telegram", "other")
 ORIGINS = ("1c", "prbc", "protarget", "telegram", "network", "user", "other")
-CATEGORIES = ("client", "prbc_outlet", "order", "promo", "payment", "product", "stock", "visit", "login", "route", "report",
+CATEGORIES = ("client", "prbc_outlet", "delivery", "order", "promo", "payment", "product", "stock", "visit", "login", "route", "report",
               "sync", "network", "other")
 
 APP_RX = {
@@ -34,7 +34,9 @@ ORIGIN_RX = [
 CAT_RX = [
     ("promo", r"aksiya|акци|skidka|скидк|bonus|бонус|promo"),
     # «chek» faqat alohida so'z: korxona nomidagi «MAS'ULIYATI CHEKLANGAN JAMIYAT» to'lov emas (28.11 xato)
-    ("payment", r"perechisl|перечисл|безнал|нақд|naqd|to.lov|оплат|kassa|касс|(?<!\w)chek(?!\w)|(?<!\w)чек(?!\w)"),
+    ("payment", r"akt ?sver|акт ?свер|сверк|sverk|perechisl|перечисл|безнал|нақд|naqd|to.lov|оплат|kassa|касс|(?<!\w)chek(?!\w)|(?<!\w)чек(?!\w)"),
+    # yetkazib berish (dostavka marshruti, dostavshik) va akt sverka — Saidabror (KB #2371, #356; 28.11 vazifasiz qolgan)
+    ("delivery", r"dostav|достав|yetkazib ber|етказиб бер"),
     ("order", r"zakaz|заказ|buyurtma|корзин|savat"),
     ("client", r"klient|клиент|контрагент|торгов\w* точк|savdo nuqta|nuqta|outlet|stir|инн\b|magazin|магазин|do.kon"
                r"|(?<!\w)(тт|tt|т\.т\.?)(?!\w)|точк|tochk"

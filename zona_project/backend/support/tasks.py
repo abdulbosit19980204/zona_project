@@ -92,6 +92,28 @@ def is_external(d):
     return bool(e is not None and e.responsible_id and e.responsible.level == "EXT")
 
 
+MENTION_RE = re.compile(r"@([A-Za-z0-9_]{4,32})")
+
+
+def _mentioned_staff(q):
+    """Savol matnida @belgilangan ichki xodim (L1/L2/LEAD; tashqi jamoa — yo'q). Matnda belgidan boshqa mazmun bo'lishi shart."""
+    text = q.text or ""
+    names = MENTION_RE.findall(text)
+    if not names or not (MENTION_RE.sub("", text).strip() or (q.ocr_text or "").strip() or q.photo_file_id):
+        return None
+    from .models import TgUser
+    for n in names:
+        u = TgUser.objects.filter(username__iexact=n).select_related("member", "contact__member", "contact__operator").first()
+        m = None
+        if u is not None:
+            m = u.member or (u.contact.operator if u.contact_id and u.contact.operator_id else None)                 or (u.contact.member if u.contact_id else None)
+        if m is None:
+            m = Member.objects.filter(telegram__iexact=n).first()
+        if m is not None and m.level != "EXT" and not m.is_team:
+            return m
+    return None
+
+
 def decide_task(q, d, s=None):
     """(kerakmi, ijrochi, sabab). d — engine.Decision."""
     s = s or Settings.load()
@@ -122,10 +144,14 @@ def decide_task(q, d, s=None):
     handoff = q.stage == "handoff" or q.status == Message.ESCALATED
     solved = q.status == Message.ANSWERED and d.stage in ("template", "faq", "image", "prbc")
     owner_work = bool(getattr(d, "owner", False) and d.responsible) and not solved
+    who = None if solved else _mentioned_staff(q)
+    if who is not None:
+        # agent so'rovni to'g'ridan-to'g'ri xodimga yozgan (@StargroupSaid ...) — bu uning ishi (egasi 28.11)
+        return True, _tg_of(who, s), f"mention:{who.name}"[:200]
     if not (d.needs_human or d.stage == "rule" or handoff or owner_work):
         return False, "", ""
     from .engine import substantive
-    if e is None and not substantive(CMD_RE.sub("", q.text or "")):
+    if e is None and not substantive(CMD_RE.sub("", q.text or "")) and not substantive(q.ocr_text or ""):
         return False, "", ""  # aniq savol ham, tanilgan holat ham yo'q (salomlashuv, suhbat) — vazifa ochilmaydi
     ids = [r.get("id") for r in d.responsible or [] if r.get("id")]
     if e is not None and e.responsible_id and not getattr(d, "owner", False):

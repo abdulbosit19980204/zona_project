@@ -181,3 +181,22 @@ class OwnerWorkTaskTests(Base):
     def test_greeting_no_task(self):
         q = Message(kind=Message.QUESTION, text="salom", status=Message.ANSWERED)
         self.assertFalse(tasks.decide_task(q, engine.Decision("ai", None, 90, "x", False, []))[0])
+
+    def test_mention_of_staff_is_his_task(self):
+        q = Message(kind=Message.QUESTION, text="@StargroupSaid \nNamangan Sr 1 johnson", status=Message.ANSWERED)
+        self.assertEqual(tasks.decide_task(q, engine.Decision("ai", None, 90, "x", False, []))[:2], (True, "StargroupSaid"))
+
+    def test_mention_of_external_is_not_task(self):
+        q = Message(kind=Message.QUESTION, text="@Guzel_Taipova qarab bering", status=Message.ANSWERED)
+        self.assertFalse(tasks.decide_task(q, engine.Decision("ai", None, 90, "x", False, []))[0])
+
+    def test_delivery_and_akt_sverka_go_to_saidabror(self):
+        from . import systems
+        self.assertEqual(systems.detect("Dostavwik quwib bering aka")["category"], "delivery")
+        self.assertEqual(systems.detect("акт сверки нужен клиенту")["category"], "payment")
+        s = Settings.load()
+        s.category_owners = {**s.category_owners, "delivery": self.said.pk, "payment": self.said.pk}
+        s.save()
+        q = Message(kind=Message.QUESTION, text="Dostavwik quwib bering aka", status=Message.ANSWERED)
+        d = engine.apply_owner(engine.Decision("ai", None, 90, "x", False, []), q.text)
+        self.assertEqual(tasks.decide_task(q, d)[:2], (True, "StargroupSaid"))

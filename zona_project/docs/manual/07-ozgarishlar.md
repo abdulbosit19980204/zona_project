@@ -4,6 +4,10 @@
 
 ## 2026-11-28
 
+- **Yangi toifa «Yetkazib berish» (dostavka, dostavshik) va akt sverka → To'lov.** Ikkalasi Saidabror ishi: bot javob
+  bersa ham PRBC vazifa ochiladi. Sozlamalar → Toifa mas'ullari'da «Yetkazib berish» — Saidabror.
+- **Agent xodimni @belgilab yozsa (masalan «@StargroupSaid …») — vazifa o'sha xodimga** (Pro-target'dan tashqari; bot
+  standart javob bilan to'liq hal qilgan bo'lsa — yo'q). Faqat skrinshot yuborilgan savol ham vazifa bo'la oladi.
 - **PRBC vazifalari: mas'ulning ishi endi har doim vazifa bo'ladi.** Avval vazifa faqat savol odamga uzatilganda ochilardi;
   bot «Saidabror bajaradi» deb uzatganda (handoff), aksiya/to'lov so'roviga ko'rsatma berganda yoki agent bot javobidan
   keyin yana yozib savol qayta ochilganda — vazifa ochilmasdi (28.11 da shunday savollar vazifasiz qoldi). Endi toifa
