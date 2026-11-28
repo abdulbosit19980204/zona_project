@@ -28,8 +28,10 @@ Bot eng arzon va eng aniq bosqichdan boshlaydi:
 4. **Bilim bazasidan o'xshash savol** — savol ko'rinishlari bilan o'xshashlik chegarasidan (standart 72%) yuqori bo'lsa.
 4a. **Semantik qidiruv (AI'siz, yoqilgan bo'lsa)** — so'zlari mos kelmasa ham **ma'nosi** eng yaqin tasdiqlangan javob:
    serverning o'zidagi kichik ko'p tilli model (o'zbek lotin/kirill, rus), AI va internetga bog'liq emas. Indeks —
-   yozuvlarning sarlavhasi, savol ko'rinishlari va agent «hal bo'ldi» degan bot javoblarining savollari. O'xshashlik
-   sozlamadagi chegaradan past bo'lsa — javob bermaydi. Javob — bazadagi matn, aynan.
+   yozuvlarning sarlavhasi, savol ko'rinishlari va agent «hal bo'ldi» degan bot javoblarining savollari. Javob
+   beriladi faqat ikkala shart bajarilsa: o'xshashlik sozlamadagi chegaradan (tavsiya **94%**) yuqori **va** eng yaqin
+   yozuv ikkinchisidan aniq ajralib turadi (farq ≥ 0.02 — ikki standart orasida ikkilanilsa, javob yo'q, odamga
+   o'tadi). Javob — bazadagi matn, aynan. Tezligi: savolga ~45 ms.
 5. **AI** — bilim bazasidagi eng yaqin javoblar, xodimlarning o'xshash savollarga bergan javoblari va mas'ullar
    ro'yxatiga tayanib javob tuzadi. Ishonchi past bo'lsa — javob bermaydi.
 6. **Odamga uzatish** — hech biri ishonchli bo'lmasa: "qabul qilindi", mas'ul @ bilan belgilanadi va

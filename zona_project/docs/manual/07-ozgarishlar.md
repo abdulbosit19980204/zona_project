@@ -4,6 +4,12 @@
 
 ## 2026-11-28
 
+- **Semantik qidiruv aniqroq — «ikkilanish» qoidasi.** Model o'xshashliklari zich (aloqasiz savollar ham 0.90+), shuning
+  uchun faqat chegara yetmas edi: endi eng yaqin yozuv ikkinchisidan kamida 0.02 ga yuqori bo'lishi ham shart, aks holda
+  javob yo'q — savol odamga o'tadi. Sozlash (`support_semantic --tune`) endi «standarti yo'q savol»ni ham sinaydi
+  (ibora to'g'ri yozuvi yo'qdek qidiriladi — javob berilsa, xato). 374 ta haqiqiy iborada: chegara 94% + farq 0.02 →
+  qamrov 37%, aniqlik 99%, standarti yo'q savolga xato javob 3%. Tavsiya etilgan chegara — **94%**. Baholashda
+  savolning o'zi indeksda bo'lsa endi hisobga olinmaydi (avval o'zi bilan 1.00 o'xshashlik berib, natijani oshirardi).
 - **Skrinshot matni yana o'qiladi (OCR).** Ko'p uchraydigan ekran turidagi rasm diskka yozilmaydigan bo'lgach (joy
   tejash), bot shu rasmlarning matnini ham o'qimay qo'ygandi — 6 soatda 7 rasmdan 5 tasi «ko'r» qolgan. Endi fayl
   saqlanmasa ham rasm xotirada OCR va jonli PRBC tekshiruvidan o'tadi.
@@ -15,10 +21,6 @@
   rasm/video yuklansa, fayl ro'yxatga tushmay yo'qolardi: bot shu yozuvni ishlatganda (Ishlatildi +1) oyna qayta
   yaratilib, yuklangan fayl va yozilgan matn tushib qolardi; «Saqlash» esa eski ro'yxatni saqlardi. Endi oyna faqat
   boshqa yozuv ochilganda yangilanadi — yuklangan fayl saqlanguncha joyida turadi.
-- **To'lov toifasi xatosi tuzatildi.** «chek» so'zi korxona nomidagi «MAS'ULIYATI **CHEK**LANGAN JAMIYAT» ga ham mos kelib,
-  savol To'lov toifasiga (Saidabror) tushardi — endi faqat alohida «chek» / «чек» so'zi. Masalan PRBC «Торговая точка
-  уже есть в 1С» skrinshoti bilan kelgan savol noto'g'ri Saidabror'ga yo'naltirilgan edi. Shu holat uchun «PRBC → 1C:
-  klient 1C'da allaqachon bor» standartiga rus ekran matnining shartlari qo'shildi (javob videosi bilan, bot o'zi yuboradi).
 - **To'lov toifasi xatosi tuzatildi.** «chek» so'zi korxona nomidagi «MAS'ULIYATI **CHEK**LANGAN JAMIYAT» ga ham mos kelib,
   savol To'lov toifasiga (Saidabror) tushardi — endi faqat alohida «chek» / «чек» so'zi. Masalan PRBC «Торговая точка
   уже есть в 1С» skrinshoti bilan kelgan savol noto'g'ri Saidabror'ga yo'naltirilgan edi. Shu holat uchun «PRBC → 1C:

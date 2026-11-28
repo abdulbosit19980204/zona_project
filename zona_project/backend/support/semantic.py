@@ -24,28 +24,38 @@ FILES = {"model.onnx": "onnx/model_quantized.onnx", "tokenizer.json": "tokenizer
 MAX_LEN = 128
 THREADS = 2
 PREFIX = "query: "  # e5: ikkala tomon ham «query:» — simmetrik o'xshashlik
+# 1-o'rindagi yozuv 2-o'rindagidan kamida shuncha yuqori bo'lsin (e5 o'xshashliklari zich: aloqasiz matnlar ham 0.90+;
+# ikki yozuv orasida ikkilanilsa — javob berilmaydi). Prod sozlashi (2026-11-28, 374 ibora): 0.94 + 0.02 -> aniqlik 99%,
+# standarti yo'q savolga xato javob 3%.
+MARGIN = 0.02
 
 _lock = threading.Lock()
 _force = threading.local()
 
 
 class forced:
-    """Sozlashda: semantik bosqich sozlamada yoqilmagan bo'lsa ham shu chegara (%) bilan ishlaydi (shu oqimda)."""
+    """Sozlash/baholashda: semantik bosqich sozlamada yoqilmagan bo'lsa ham shu chegara (%) va farq bilan ishlaydi
+    (shu oqimda). Bunda savolning o'z matni indeksda bo'lsa hisobga olinmaydi (holdout — o'zi bilan solishtirmaslik)."""
 
-    def __init__(self, threshold):
-        self.th = threshold
+    def __init__(self, threshold, margin=None):
+        self.th, self.margin = threshold, margin
 
     def __enter__(self):
-        _force.th = self.th
+        _force.th, _force.margin = self.th, self.margin
         return self
 
     def __exit__(self, *exc):
-        _force.th = None
+        _force.th = _force.margin = None
         return False
 
 
 def forced_threshold():
     return getattr(_force, "th", None)
+
+
+def forced_margin():
+    m = getattr(_force, "margin", None)
+    return MARGIN if m is None else m
 _state = {"model": None, "override": None, "key": None, "rows": [], "mat": None, "vec_cache": {}}
 
 
@@ -258,9 +268,10 @@ def _scores(q):
         return [sum(a * b for a, b in zip(row, q)) for row in mat]
 
 
-def search(text, k=3, exclude=None, block=True):
+def search(text, k=3, exclude=None, block=True, exclude_entries=None):
     """-> [(yozuv id, o'xshashlik 0..1)] eng yaqinlari (har yozuvdan eng yuqori qatori). exclude — shu matnli
-    qatorlar hisobga olinmaydi (sozlashda: sinov iborasi indeksda bo'lsa, o'zi bilan solishtirmaslik uchun).
+    qatorlar hisobga olinmaydi (sozlashda: sinov iborasi indeksda bo'lsa, o'zi bilan solishtirmaslik uchun);
+    exclude_entries — shu yozuvlar umuman yo'qdek (sozlashda: «standarti yo'q savol»ni sinash).
     block=False (jonli bot): indeks tayyor bo'lmasa yoki eskirgan bo'lsa — fonda yangilanadi, hozircha bor indeks
     bilan (yo'q bo'lsa — bo'sh natija)."""
     t = clean(text)
@@ -277,8 +288,9 @@ def search(text, k=3, exclude=None, block=True):
     q = _embed([t])[0]
     best = {}
     ex = {x.lower() for x in (exclude or ())}
+    skip = set(exclude_entries or ())
     for (eid, rt), s in zip(rows, _scores(q)):
-        if ex and rt.lower() in ex:
+        if (ex and rt.lower() in ex) or eid in skip:
             continue
         if s > best.get(eid, -1):
             best[eid] = s
@@ -306,18 +318,43 @@ def labeled(limit=400):
     return out[:limit]
 
 
-def tune(pairs=None, thresholds=None):
-    """Har chegara uchun: aniqlik (to'g'ri / javob berilgan) va qamrov (javob berilgan / hammasi). Sinov iborasining
-    o'zi indeksda bo'lsa — chiqarib tashlanadi (holdout)."""
+def decide_top(top, threshold, margin):
+    """search(k=2) natijasidan: javob beriladigan yozuv (id, o'xshashlik, farq) yoki None. threshold — 0..1."""
+    if not top or top[0][1] < threshold:
+        return None
+    gap = top[0][1] - (top[1][1] if len(top) > 1 else 0.0)
+    if gap < margin:
+        return None
+    return top[0][0], top[0][1], gap
+
+
+def tune(pairs=None, thresholds=None, margins=None):
+    """Har (chegara, farq) uchun ikki sinov:
+    - javobi bor savol: ibora o'z matnisiz (holdout) qidiriladi — qamrov (javob berildi / hammasi) va aniqlik
+      (to'g'ri yozuv / javob berildi);
+    - standarti yo'q savol: o'sha ibora uning to'g'ri yozuvi umuman yo'qdek qidiriladi — javob berilsa, bu xato
+      (false_pos, %). mixed — ikkalasi teng aralashganda javoblarning to'g'ri ulushi (asosiy mezon, ≥90% kerak)."""
     pairs = pairs if pairs is not None else labeled()
-    res = []
+    pos, neg = [], []
     for text, eid in pairs:
-        top = search(text, k=1, exclude=[clean(text)])
-        res.append((top[0][1], top[0][0] == eid) if top else (0.0, False))
+        ct = clean(text)
+        pos.append((search(text, k=2, exclude=[ct]), eid))
+        neg.append(search(text, k=2, exclude=[ct], exclude_entries=[eid]))
     rows = []
-    for th in thresholds or [x / 100 for x in range(78, 97)]:
-        ans = [ok for s, ok in res if s >= th]
-        rows.append({"th": th, "answered": len(ans), "correct": sum(ans), "total": len(res),
-                     "precision": round(100 * sum(ans) / len(ans)) if ans else None,
-                     "coverage": round(100 * len(ans) / len(res)) if res else 0})
+    for th in thresholds or [x / 100 for x in range(88, 98)]:
+        for m in (margins if margins is not None else (0.0, 0.01, 0.02, 0.03)):
+            ans = [d[0] == eid for d, eid in ((decide_top(t, th, m), eid) for t, eid in pos) if d is not None]
+            fp = sum(1 for t in neg if decide_top(t, th, m) is not None)
+            n = len(pairs)
+            rows.append({"th": th, "margin": m, "answered": len(ans), "correct": sum(ans), "total": n,
+                         "precision": round(100 * sum(ans) / len(ans)) if ans else None,
+                         "coverage": round(100 * len(ans) / n) if n else 0,
+                         "false_pos": round(100 * fp / n) if n else 0,
+                         "mixed": round(100 * sum(ans) / (len(ans) + fp)) if (ans or fp) else None})
     return rows
+
+
+def best(rows, min_mixed=90):
+    """Aralash aniqlik ≥ min_mixed bo'lgan eng katta qamrovli (chegara, farq) — yoki None."""
+    ok = [r for r in rows if (r["mixed"] or 0) >= min_mixed and r["answered"]]
+    return max(ok, key=lambda r: (r["coverage"], r["mixed"], -r["th"])) if ok else None

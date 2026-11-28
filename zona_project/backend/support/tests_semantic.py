@@ -72,10 +72,35 @@ class SemanticTests(ControlsBase):
             d = engine.decide("skidkalar chiqmay qoldi klientda", "uz", live=False)
         self.assertEqual(d.entry, self.promo)
         rows = semantic.tune(pairs=[("skidkalar chiqmay qoldi", self.promo.pk), ("lokatsiyam uzoq", self.geo.pk)],
-                             thresholds=[0.3, 0.99])
+                             thresholds=[0.1, 0.99], margins=[0.0])
         self.assertEqual(rows[0]["total"], 2)
         self.assertEqual(rows[0]["correct"], 2)
+        self.assertEqual(rows[0]["false_pos"], 100)                # to'g'ri yozuv yo'qdek — qolgan yozuv xato javob
+        self.assertEqual(rows[0]["mixed"], 50)
         self.assertEqual(rows[1]["answered"], 0)
+        self.assertIsNone(semantic.best(rows))
+
+    def test_margin_between_two_close_entries(self):
+        semantic.ensure_index()
+        top = semantic.search("skidka chiqmayapti", k=2)
+        self.assertEqual(top[0][0], self.promo.pk)
+        self.assertEqual(semantic.decide_top(top, 0.1, 0.0)[0], self.promo.pk)
+        gap = top[0][1] - top[1][1]
+        self.assertIsNone(semantic.decide_top(top, 0.1, gap + 0.01))   # ikkilanish — javob yo'q
+        self.assertIsNone(semantic.decide_top(top, top[0][1] + 0.01, 0.0))
+        with semantic.forced(10, margin=gap + 0.01):
+            d = engine.decide("skidka chiqmayapti", "uz", live=False)
+        self.assertFalse(d is not None and "semantik" in (d.note or ""))
+
+    def test_forced_excludes_own_text(self):
+        """Baholashda savolning o'zi indeksda bo'lsa — o'zi bilan solishtirilmaydi (aks holda o'xshashlik 1.00)."""
+        Message.objects.create(bot=self.bot, chat_id=-1, message_id=5, kind=Message.QUESTION, entry=self.geo,
+                               text="Zakaz ketmay qoldi programma qotdi", resolution=Message.YES)
+        semantic.ensure_index()
+        self.assertGreater(semantic.search("Zakaz ketmay qoldi programma qotdi", k=1)[0][1], 0.99)
+        with semantic.forced(99, margin=0.0):
+            d = engine.decide("Zakaz ketmay qoldi programma qotdi", "uz", live=False)
+        self.assertFalse(d is not None and "semantik" in (d.note or ""))
 
     def test_unavailable_or_meaningless_is_skipped(self):
         Settings.objects.update(semantic_enabled=True, semantic_threshold=10)

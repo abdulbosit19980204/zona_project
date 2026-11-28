@@ -98,7 +98,8 @@ Sahifa yuqoridan pastga (standart qiymatlar — [Support bot bobi](/docs/support
 5. **O'rganish** (o'ng ustun) — o'z-o'zini o'qitish, javoblarni har safar boshqacha yozish, oraliq xabar, xodim
    tuzatishi darhol qo'llanadigan daraja, xodim javoblaridan o'rganish, admin chatiga nomzodlar va soya javoblari.
 6. **Aniqlik va tezlik** — AI asosiy javob beradi va chegarasi (95%), bazadan javob chegarasi (72%), takroriy rasmlar
-   oynasi (90 s), ketma-ket xabarlar (12 s), qoida chegarasi (60%), bir vaqtda savollar (10), javob imzosi.
+   oynasi (90 s), ketma-ket xabarlar (12 s), qoida chegarasi (60%), bir vaqtda savollar (10), javob imzosi;
+   **Semantik qidiruv (AI'siz)** kaliti (standart o'chiq) va chegarasi (tavsiya 94%) — [Support bot](/docs/support-bot), 4a.
 7. **Teglar (savol turlari)** — tahlil uchun toifalar: nomi va kalit so'zlar (vergul bilan; regex uchun `re:`).
 
 ### 1.4 Rasmlar

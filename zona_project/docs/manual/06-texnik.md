@@ -46,9 +46,12 @@ Servis to'xtasa — panel chap pastidagi **Servislar markazi**dan qayta ishga tu
 4. `foydali-setup.sh` (git pull, paketlar, migratsiya, frontend yig'ish, servislarni qayta ishga tushirish).
 5. Tekshiruv: sahifalar 200, servislar active, xatolar yo'q, **bio-lab.uz** ishlayapti.
 6. **Semantik qidiruv modeli** (bir marta): `manage.py support_semantic --download` (~120 MB,
-   `/var/lib/foydali/models/`), keyin `--build` (indeks), `--query "matn"` (sinov), `--tune` (chegara × aniqlik/qamrov),
-   `--eval 90` (AI'siz qamrov semantik bilan va usiz). Paketlar: `pip install .[semantic]` (onnxruntime, tokenizers,
-   numpy — torch kerak emas). Model 2 ta CPU oqimida ishlaydi (bio-lab bilan bir server).
+   `/var/lib/foydali/models/`), keyin `--build` (indeks), `--query "matn"` (sinov), `--tune` (chegara × farq:
+   qamrov, aniqlik va «standarti yo'q savol»ga xato javob ulushi; oxirida tavsiya), `--eval 94` (AI'siz qamrov semantik
+   bilan va usiz; savolning o'zi indeksda bo'lsa hisobga olinmaydi). Paketlar: `pip install .[semantic]` (onnxruntime,
+   tokenizers, numpy — torch kerak emas). Model 2 ta CPU oqimida ishlaydi (bio-lab bilan bir server).
+   O'lchov (2026-11-28): indeks 2125 qator — 35 s (keyin keshdan), savol ~45 ms (eng ko'pi 75 ms); xotira — model
+   yuklangan jarayonga ~+450 MB (shundan tokenizer ~280 MB); serverda bo'sh xotira ~7.9 GB.
 7. **Bot sinovi:** `manage.py support_smoke` — 3 ta asosiy savol (AI'siz, hech narsa yuborilmaydi): «lokatsiya uzoq
    deyapti» → geolokatsiya standarti, «aktiv vizit bor» → «User already has an active visit», «Assalomu alaykum» →
    javob yo'q. Biri o'tmasa — buyruq xato bilan tugaydi (chiqish kodi 1). Kengaytirilgan: `--standards 15` — eng ko'p

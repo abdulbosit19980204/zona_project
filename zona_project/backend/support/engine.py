@@ -1095,7 +1095,8 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
 
 def semantic_decision(qtext, lang, entries, settings, own):
     """AI'siz semantik qidiruv (support.semantic): FAQ o'xshashligi topmagan savolga eng yaqin tasdiqlangan yozuv,
-    o'xshashlik chegaradan (Settings.semantic_threshold, %) yuqori bo'lsa. Mazmunsiz savolga ishlatilmaydi."""
+    o'xshashlik chegaradan (Settings.semantic_threshold, %) yuqori va 2-o'rindagi yozuvdan aniq ajralib turgan
+    (semantic.MARGIN) bo'lsa. Mazmunsiz savolga ishlatilmaydi."""
     from . import semantic
     forced = semantic.forced_threshold()
     if (not forced and not getattr(settings, "semantic_enabled", False)) or not learnable_question(qtext or ""):
@@ -1103,20 +1104,21 @@ def semantic_decision(qtext, lang, entries, settings, own):
     if not semantic.available():
         return None
     threshold = forced or settings.semantic_threshold
-    try:
-        top = semantic.search(qtext, k=1, block=bool(forced))
+    try:  # baholashda (forced) savolning o'z matni indeksda bo'lsa — hisobga olinmaydi (holdout)
+        top = semantic.search(qtext, k=2, block=bool(forced), exclude=[semantic.clean(qtext)] if forced else None)
     except Exception:  # noqa: BLE001 — model xatosi javobni to'xtatmasin
         import logging
         logging.getLogger("support").exception("semantic search")
         return None
-    if not top or top[0][1] * 100 < threshold:
+    hit = semantic.decide_top(top, threshold / 100, semantic.forced_margin())
+    if hit is None:
         return None
-    eid, sim = top[0]
+    eid, sim, gap = hit
     e = next((x for x in entries if x.pk == eid and x.status == Entry.APPROVED), None)
     if e is None:
         return None
     return Decision("faq", e, round(sim * 100), render_answer(e, {}, lang), False, own(e), {}, False,
-                    note=f"semantik o'xshashlik {sim:.2f}")
+                    note=f"semantik o'xshashlik {sim:.2f} (farq {gap:.2f})")
 
 
 def followup(raw, lang, history, asker="", previous=""):
