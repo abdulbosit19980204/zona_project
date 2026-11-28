@@ -39,6 +39,14 @@ class PrbcOutletCategoryTests(SimpleTestCase):
                      "Protarget ishlamayapti"]:
             self.assertEqual(systems.detect(text)["category"], "sync", text)
 
+    def test_company_name_is_not_payment(self):
+        # «MAS'ULIYATI CHEKLANGAN JAMIYAT» — korxona shakli, «chek» emas (28.11: savol Saidabror'ga ketgan)
+        ocr = ("Торговая точка уже есть в 1C: 67\"ASSORTI DISCOUNT MARKET\" MAS'ULIYATI CHEKLANGAN JAMIYAT "
+               "DMS вернула существующую точку. Новая точка не создана.")
+        self.assertNotEqual(systems.detect("1C bosa nega Protargetda korinmayapti", ocr)["category"], "payment")
+        self.assertEqual(systems.detect("chek chiqmayapti")["category"], "payment")
+        self.assertEqual(systems.detect("Не выходит безнал")["category"], "payment")
+
     def test_category_listed(self):
         self.assertIn("prbc_outlet", systems.CATEGORIES)
         self.assertLessEqual(len("prbc_outlet"), 12)  # Message.category max_length

@@ -8,6 +8,10 @@
   savol To'lov toifasiga (Saidabror) tushardi — endi faqat alohida «chek» / «чек» so'zi. Masalan PRBC «Торговая точка
   уже есть в 1С» skrinshoti bilan kelgan savol noto'g'ri Saidabror'ga yo'naltirilgan edi. Shu holat uchun «PRBC → 1C:
   klient 1C'da allaqachon bor» standartiga rus ekran matnining shartlari qo'shildi (javob videosi bilan, bot o'zi yuboradi).
+- **To'lov toifasi xatosi tuzatildi.** «chek» so'zi korxona nomidagi «MAS'ULIYATI **CHEK**LANGAN JAMIYAT» ga ham mos kelib,
+  savol To'lov toifasiga (Saidabror) tushardi — endi faqat alohida «chek» / «чек» so'zi. Masalan PRBC «Торговая точка
+  уже есть в 1С» skrinshoti bilan kelgan savol noto'g'ri Saidabror'ga yo'naltirilgan edi. Shu holat uchun «PRBC → 1C:
+  klient 1C'da allaqachon bor» standartiga rus ekran matnining shartlari qo'shildi (javob videosi bilan, bot o'zi yuboradi).
 - **AI'siz semantik qidiruv (standart — o'chiq):** FAQ topilmagan savolga serverdagi kichik ko'p tilli model bilan
   ma'nosi eng yaqin tasdiqlangan javob; AI limiti va internetga bog'liq emas. Sozlamalar → Javob berish → «Aniqlik va
   tezlik»: «Semantik qidiruv» va chegara. Chegara belgilangan iboralar to'plamida aniqlik ≥90% bo'yicha tanlanadi.

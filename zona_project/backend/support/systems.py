@@ -33,7 +33,8 @@ ORIGIN_RX = [
 ]
 CAT_RX = [
     ("promo", r"aksiya|акци|skidka|скидк|bonus|бонус|promo"),
-    ("payment", r"perechisl|перечисл|безнал|нақд|naqd|to.lov|оплат|kassa|касс|chek|чек\b"),
+    # «chek» faqat alohida so'z: korxona nomidagi «MAS'ULIYATI CHEKLANGAN JAMIYAT» to'lov emas (28.11 xato)
+    ("payment", r"perechisl|перечисл|безнал|нақд|naqd|to.lov|оплат|kassa|касс|(?<!\w)chek(?!\w)|(?<!\w)чек(?!\w)"),
     ("order", r"zakaz|заказ|buyurtma|корзин|savat"),
     ("client", r"klient|клиент|контрагент|торгов\w* точк|savdo nuqta|nuqta|outlet|stir|инн\b|magazin|магазин|do.kon"
                r"|(?<!\w)(тт|tt|т\.т\.?)(?!\w)|точк|tochk"
