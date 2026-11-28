@@ -116,7 +116,13 @@ def decide_task(q, d, s=None):
     every = bool(getattr(s, "task_all_escalated", False))
     if not (deps or mems or every):
         return False, "", ""
-    if not (d.needs_human or d.stage == "rule"):
+    # mas'ulning ISHI: bot "X bajaradi" deb uzatgan (handoff) yoki savol qayta ochilgan (escalated), yoki toifa mas'uli
+    # (aksiya/to'lov — Saidabror, kirish/yangi nuqta — Xusniddin) bajaradigan so'rovga bot faqat ko'rsatma bergan.
+    # Bot o'zi to'liq hal qilgan standart javob (shablon/FAQ/ekran, PRBC holat kartasi) — vazifa emas (egasi 28.11)
+    handoff = q.stage == "handoff" or q.status == Message.ESCALATED
+    solved = q.status == Message.ANSWERED and d.stage in ("template", "faq", "image", "prbc")
+    owner_work = bool(getattr(d, "owner", False) and d.responsible) and not solved
+    if not (d.needs_human or d.stage == "rule" or handoff or owner_work):
         return False, "", ""
     from .engine import substantive
     if e is None and not substantive(CMD_RE.sub("", q.text or "")):
@@ -129,7 +135,7 @@ def decide_task(q, d, s=None):
     for m in found:
         if _member_matches(m, deps, mems):
             return True, _tg_of(m, s), f"responsible:{m.name}"[:200]
-    if every and d.needs_human:
+    if every and (d.needs_human or handoff or owner_work):
         # odamga uzatilgan har savol — vazifa: mas'ul (IT bo'limida bo'lmasa ham) yoki standart ijrochi
         if found and found[0].level == "EXT":
             return False, "", "ext"  # birinchi mas'ul tashqi jamoa — boshqa xodimga tushirilmaydi

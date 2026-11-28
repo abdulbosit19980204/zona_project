@@ -212,7 +212,7 @@ yangisimi); AI ishlamasa — avvalgidek yangi savol. Tarix importida AI chaqiril
 | Sozlama | Izoh |
 |---|---|
 | PRBC vazifalari yoqilgan, rejim | Rejim **api** — vazifani tizim o'zi PRBC API orqali ochadi |
-| Odamga uzatilgan har bir savolga vazifa | Yoqiq — bot javob bera olmagan har savol vazifa bo'ladi |
+| Odamga uzatilgan har bir savolga vazifa | Yoqiq — bot javob bera olmagan har savol vazifa bo'ladi ; shuningdek toifa mas'uli bajaradigan so'rov (bot uzatgan yoki ko'rsatma bergan, savol qayta ochilgan) ham vazifa — bot to'liq hal qilgan standart javobdan tashqari. Pro-target'ga vazifa ochilmaydi. Guruh jadvalidagi «Vazifa ochiladi» o'chiq guruhdan vazifa yo'q |
 | Vazifa yaratiladigan bo'limlar / xodimlar | Eski usul (mas'ul shu bo'limda bo'lsa) — hozir "har savolga" yoqiq |
 
 Qolgan vazifa sozlamalari — [PRBC sozlamalari](/docs/prbc#sozlamalar).

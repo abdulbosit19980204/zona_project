@@ -4,6 +4,12 @@
 
 ## 2026-11-28
 
+- **PRBC vazifalari: mas'ulning ishi endi har doim vazifa bo'ladi.** Avval vazifa faqat savol odamga uzatilganda ochilardi;
+  bot «Saidabror bajaradi» deb uzatganda (handoff), aksiya/to'lov so'roviga ko'rsatma berganda yoki agent bot javobidan
+  keyin yana yozib savol qayta ochilganda — vazifa ochilmasdi (28.11 da shunday savollar vazifasiz qoldi). Endi toifa
+  mas'uli (Saidabror: aksiya, to'lov, qoldiq, tovar; Xusniddin: kirish, PRBC yangi nuqta; Jahongir: tarmoq) bajaradigan har
+  so'rov — vazifa. Bot o'zi to'liq hal qilgan standart javob (shablon, ekran, PRBC holat kartasi) — vazifa emas.
+  Pro-target (tashqi jamoa) — hech qachon vazifa yo'q. Bir holat — bitta vazifa (takrorlar izohga qo'shiladi).
 - **Panel tezroq (savollar ro'yxati, Support sozlamalari).** Savollar ro'yxati (`messages/`, limit=300) har savol uchun
   vazifa, rasm yorlig'i va javob guruhini alohida so'ramaydi — so'rovlar soni qatorlar soniga bog'liq emas (avval
   300 qatorda ~330 qo'shimcha so'rov, ~1 s). Support sozlamalari sahifasi birinchi ochilishda ~0,8 s kutmaydi (Telegram

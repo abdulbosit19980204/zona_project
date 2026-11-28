@@ -154,3 +154,30 @@ class CaseDedupeTests(Base):
         self.assertEqual(tasks.operator_tg("StargroupSaid"), "StargroupSaid")
         self.assertEqual(tasks.case_keys("uz-00012345 va zakaz 1234567, STIR 301234567"),
                          {"UZ-00012345", "zakaz:1234567", "stir:301234567"})
+
+
+class OwnerWorkTaskTests(Base):
+    """28.11: bugungi savollarga vazifa ochilmagan — bot javob bergan/uzatgan bo'lsa ham mas'ulning ishi vazifa bo'ladi."""
+    def _d(self, text, stage="ai"):
+        d = engine.apply_owner(engine.Decision(stage, None, 90, "javob", False, []), text)
+        return d
+
+    def test_bot_answered_owner_request_opens_task(self):
+        q = Message(kind=Message.QUESTION, text="Здравствуйте скидку можно sr2 Urgench", status=Message.ANSWERED)
+        self.assertEqual(tasks.decide_task(q, self._d(q.text))[:2], (True, "StargroupSaid"))
+
+    def test_handoff_opens_task(self):
+        q = Message(kind=Message.QUESTION, text="aksiya qo'shib bering", status=Message.ESCALATED, stage="handoff")
+        self.assertEqual(tasks.decide_task(q, self._d(q.text))[:2], (True, "StargroupSaid"))
+
+    def test_standard_answer_solved_by_bot_no_task(self):
+        q = Message(kind=Message.QUESTION, text="aksiya qanday ko'rinadi", status=Message.ANSWERED)
+        self.assertFalse(tasks.decide_task(q, self._d(q.text, stage="template"))[0])
+
+    def test_ext_owner_still_no_task(self):
+        q = Message(kind=Message.QUESTION, text="vizit ochilmayapti", status=Message.ESCALATED, stage="handoff")
+        self.assertEqual(tasks.decide_task(q, self._d(q.text)), (False, "", "ext"))
+
+    def test_greeting_no_task(self):
+        q = Message(kind=Message.QUESTION, text="salom", status=Message.ANSWERED)
+        self.assertFalse(tasks.decide_task(q, engine.Decision("ai", None, 90, "x", False, []))[0])

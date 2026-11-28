@@ -625,10 +625,22 @@ class Handler:
         if photo:
             self._album_part(root, msg, "")  # fayl savolga biriktiriladi (panelda, tasdiqlashda va vazifada ko'rinadi)
         if act == conversation.REOPEN:
-            Message.objects.filter(pk=root.pk, status=Message.ANSWERED).update(status=Message.ESCALATED)
+            if Message.objects.filter(pk=root.pk, status=Message.ANSWERED).update(status=Message.ESCALATED) and mode == MODE_LIVE:
+                self._reopen_task(root.pk)  # bot javobi yetmadi — mas'ulga PRBC vazifasi (avval ochilmagan bo'lsa)
         elif act == conversation.REANSWER and mode == MODE_LIVE:
             self._bg("_reanswer", root.pk, info.pk)
         return info
+
+    def _reopen_task(self, root_id):
+        """Qayta ochilgan savol: AI'siz — yozuv va toifa mas'uli bo'yicha vazifa (decide_task qoidalari, EXT'ga yo'q)."""
+        try:
+            from . import tasks
+            root = Message.objects.select_related("group", "entry").get(pk=root_id)
+            d = engine.Decision("", root.entry, 0, "", True, [])
+            engine.apply_owner(d, root.text or "", root.ocr_text or "")
+            tasks.maybe_create(root, d, self.tg)
+        except Exception:  # noqa: BLE001 — vazifa xatosi suhbatni to'xtatmasin
+            log.exception("reopen task failed")
 
     def _reanswer(self, root_id, info_id):
         """Bot javobidan keyin odam davom etdi ("нету его, там только 400"): butun suhbat bilan AI qayta javob beradi.
