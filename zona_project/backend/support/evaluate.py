@@ -130,6 +130,7 @@ def run(days=30, limit=200, use_judge=True, out_path=None, progress=None, use_ai
                          "entry": d.entry.title[:120] if d is not None and d.entry else "",
                          "bot_answer": (d.text if d is not None else "")[:800], "sent": sent,
                          "owner": owner, "owner_ok": owner_ok, "verdict": verdict, "reason": reason, "error": err,
+                         "note": (d.note if d is not None else "")[:200],
                          "secs": round(time.monotonic() - t0, 1)})
             if progress:
                 progress(i, len(pairs), rows[-1])

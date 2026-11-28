@@ -26,6 +26,10 @@ Bot eng arzon va eng aniq bosqichdan boshlaydi:
    ustun (masalan, "Tasdiq kutilmoqda" "Request was throttled" bilan adashmaydi).
 3. **Qizil xato yozuvi** — skrinshotdagi qizil matn eng aniq belgi; javob shu bo'yicha.
 4. **Bilim bazasidan o'xshash savol** — savol ko'rinishlari bilan o'xshashlik chegarasidan (standart 72%) yuqori bo'lsa.
+4a. **Semantik qidiruv (AI'siz, yoqilgan bo'lsa)** — so'zlari mos kelmasa ham **ma'nosi** eng yaqin tasdiqlangan javob:
+   serverning o'zidagi kichik ko'p tilli model (o'zbek lotin/kirill, rus), AI va internetga bog'liq emas. Indeks —
+   yozuvlarning sarlavhasi, savol ko'rinishlari va agent «hal bo'ldi» degan bot javoblarining savollari. O'xshashlik
+   sozlamadagi chegaradan past bo'lsa — javob bermaydi. Javob — bazadagi matn, aynan.
 5. **AI** — bilim bazasidagi eng yaqin javoblar, xodimlarning o'xshash savollarga bergan javoblari va mas'ullar
    ro'yxatiga tayanib javob tuzadi. Ishonchi past bo'lsa — javob bermaydi.
 6. **Odamga uzatish** — hech biri ishonchli bo'lmasa: "qabul qilindi", mas'ul @ bilan belgilanadi va

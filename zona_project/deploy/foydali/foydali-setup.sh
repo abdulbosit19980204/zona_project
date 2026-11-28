@@ -145,7 +145,7 @@ fi
 step "Backend: Python muhiti"
 [[ -x "$SRC/.venv/bin/python" ]] || python3 -m venv "$SRC/.venv"
 "$SRC/.venv/bin/pip" install -q --upgrade pip wheel
-"$SRC/.venv/bin/pip" install -q -e "$SRC[ai,server,support]"
+"$SRC/.venv/bin/pip" install -q -e "$SRC[ai,server,support,semantic]"
 
 step "Backend: migratsiya va statik fayllar"
 manage() { bash -c "set -a; source $ETC/foydali.env; set +a; cd $SRC/backend && $*"; }

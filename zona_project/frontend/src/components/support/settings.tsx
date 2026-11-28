@@ -455,6 +455,10 @@ function SettingsFields({ s, t, part }: { s: SupportSettings; t: ST; part: Part 
           {sw("drafts_to_admin", t("t_drafts"))}
         </Section>
         <Section title={t("grpPrecision")}>
+          {sw("semantic_enabled", t("t_semantic"), t("t_semanticHint"))}
+          {f.semantic_enabled && field(t("t_semanticTh"), t("t_semanticThHint"),
+            <Input type="number" min={50} max={99} value={f.semantic_threshold} onChange={num("semantic_threshold")}
+              onBlur={blurSave("semantic_threshold")} />)}
           {sw("ai_primary", t("t_aiPrimary"), t("t_aiPrimaryHint"))}
           {field(t("aiPrimaryBelow"), t("aiPrimaryBelowHint"), <Input type="number" value={f.ai_primary_below} onChange={num("ai_primary_below")} />)}
           {field(t("faqTh"), t("faqThHint"), <Input type="number" value={f.faq_threshold} onChange={num("faq_threshold")} />)}

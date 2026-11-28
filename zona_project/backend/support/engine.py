@@ -1051,6 +1051,10 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
     ai_first = settings.ai_enabled and settings.ai_primary and not (faq_ok and score >= settings.ai_primary_below)
     if faq_ok and not ai_first:
         return Decision("faq", e, score, render_answer(e, {}, lang), False, own(e), {}, e.status != Entry.APPROVED)
+    if not faq_ok:
+        sd = semantic_decision(qtext, lang, entries, settings, own)
+        if sd is not None:
+            return sd
     if fast:
         return None
 
@@ -1087,6 +1091,32 @@ def _decide(raw, lang="uz", allow_unapproved=False, image=None, text=None, ocr="
         d.note = f"AI ishonchi past ({ai['confidence']}%): {ai['reason']}"
         d.text = ai["text"]  # admin uchun qoralama sifatida ko'rsatiladi
     return d
+
+
+def semantic_decision(qtext, lang, entries, settings, own):
+    """AI'siz semantik qidiruv (support.semantic): FAQ o'xshashligi topmagan savolga eng yaqin tasdiqlangan yozuv,
+    o'xshashlik chegaradan (Settings.semantic_threshold, %) yuqori bo'lsa. Mazmunsiz savolga ishlatilmaydi."""
+    from . import semantic
+    forced = semantic.forced_threshold()
+    if (not forced and not getattr(settings, "semantic_enabled", False)) or not learnable_question(qtext or ""):
+        return None
+    if not semantic.available():
+        return None
+    threshold = forced or settings.semantic_threshold
+    try:
+        top = semantic.search(qtext, k=1, block=bool(forced))
+    except Exception:  # noqa: BLE001 — model xatosi javobni to'xtatmasin
+        import logging
+        logging.getLogger("support").exception("semantic search")
+        return None
+    if not top or top[0][1] * 100 < threshold:
+        return None
+    eid, sim = top[0]
+    e = next((x for x in entries if x.pk == eid and x.status == Entry.APPROVED), None)
+    if e is None:
+        return None
+    return Decision("faq", e, round(sim * 100), render_answer(e, {}, lang), False, own(e), {}, False,
+                    note=f"semantik o'xshashlik {sim:.2f}")
 
 
 def followup(raw, lang, history, asker="", previous=""):

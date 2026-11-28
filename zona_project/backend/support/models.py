@@ -92,6 +92,9 @@ class Settings(models.Model):
     category_owners = models.JSONField("Toifa bo'yicha mas'ul", null=True, blank=True)
     # zaxira mas'ul (aralash ishlar, masalan aksiya): javobda asosiy bilan birga belgilanadi, PRBC'da hamijrochi
     category_backups = models.JSONField("Toifa bo'yicha zaxira mas'ul", null=True, blank=True)
+    # AI'siz semantik qidiruv (support.semantic): FAQ topilmasa — eng yaqin yozuv, o'xshashlik chegaradan yuqori bo'lsa
+    semantic_enabled = models.BooleanField("Semantik qidiruv (AI'siz)", default=False, db_default=False)
+    semantic_threshold = models.PositiveSmallIntegerField("Semantik qidiruv chegarasi (%)", default=90, db_default=90)
     # --- bot javoblarini baholash ---
     answer_keep_days = models.PositiveIntegerField("Bot javoblari skrinshotlarini saqlash (kun)", default=90, db_default=90)
     answer_test_note = models.BooleanField("Javob tagida: avto-javob, test rejimi, fikringiz muhim", default=True,

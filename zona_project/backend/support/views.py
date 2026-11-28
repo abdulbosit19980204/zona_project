@@ -46,7 +46,7 @@ SETTINGS_FIELDS = ["api_id", "ai_enabled", "ai_daily_limit", "ai_min_confidence"
                    "task_daily_limit", "task_gap", "task_attach", "task_mode", "task_remind_group", "task_remind_dm",
                    "merge_window", "self_learning", "auto_approve_level", "answer_variety",
                    "progress_messages", "answer_policy", "confirm_resolution", "confirm_after", "thanks_reaction",
-                   "thread_window", "category_owners", "category_backups", "answer_keep_days", "answer_test_note", "review_button",
+                   "thread_window", "category_owners", "category_backups", "semantic_enabled", "semantic_threshold", "answer_keep_days", "answer_test_note", "review_button",
                    "react_accept", "ask_staff_after", "reask_after", "remind_max", "collapse_after",
                    "media_full_days", "work_from", "work_to", "work_days"]
 

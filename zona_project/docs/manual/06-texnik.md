@@ -45,7 +45,11 @@ Servis to'xtasa — panel chap pastidagi **Servislar markazi**dan qayta ishga tu
 3. Serverda **bazaning zaxirasi** (`sqlite3 .backup`) + `integrity_check` = ok.
 4. `foydali-setup.sh` (git pull, paketlar, migratsiya, frontend yig'ish, servislarni qayta ishga tushirish).
 5. Tekshiruv: sahifalar 200, servislar active, xatolar yo'q, **bio-lab.uz** ishlayapti.
-6. **Bot sinovi:** `manage.py support_smoke` — 3 ta asosiy savol (AI'siz, hech narsa yuborilmaydi): «lokatsiya uzoq
+6. **Semantik qidiruv modeli** (bir marta): `manage.py support_semantic --download` (~120 MB,
+   `/var/lib/foydali/models/`), keyin `--build` (indeks), `--query "matn"` (sinov), `--tune` (chegara × aniqlik/qamrov),
+   `--eval 90` (AI'siz qamrov semantik bilan va usiz). Paketlar: `pip install .[semantic]` (onnxruntime, tokenizers,
+   numpy — torch kerak emas). Model 2 ta CPU oqimida ishlaydi (bio-lab bilan bir server).
+7. **Bot sinovi:** `manage.py support_smoke` — 3 ta asosiy savol (AI'siz, hech narsa yuborilmaydi): «lokatsiya uzoq
    deyapti» → geolokatsiya standarti, «aktiv vizit bor» → «User already has an active visit», «Assalomu alaykum» →
    javob yo'q. Biri o'tmasa — buyruq xato bilan tugaydi (chiqish kodi 1). Kengaytirilgan: `--standards 15` — eng ko'p
    ishlatiladigan 15 standart × 5 ta haqiqiy agent iborasi (Claude standartga qo'shgan savollar, bot o'shanda topa
