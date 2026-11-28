@@ -67,15 +67,29 @@ _NEW = re.compile(
 _NEG = re.compile(
     r"к[уо]ш\w*\s*(олм|булм|бол?м)|к[уо]шилм|к[уо]шолм|очилм|очолм|булм|чикм|\bйук\b|\bйок\b|ишлам"
     r"|не\s+мог|не\s+получ|\bнет\b|не\s+работ|не\s+активн|не\s+откр|не\s+показ|не\s+выход|не\s+доступ|недоступ"
-    r"|не\s+созда|не\s+добавл|функци|кнопк|тугма|рухсат|доступ|ни\s+одно")
+    r"|не\s+созда|не\s+добавл|не\s+отобр|функци|кнопк|тугма|рухсат|доступ|ни\s+одно")
+
+
+# PRBC ruxsatining aniq belgilari: «+» tugmasi, ruxsat/dostup, «Новый клиент» bo'limi
+_HARD = re.compile(r"кнопк|тугма|плюс|рухсат|доступ|доступ|ни\s+одно|функци|раздел")
+# Boshqa holat: nuqta allaqachon qo'shilgan / ProTarget'da ko'rinmayapti / aksiya / lokatsiya — bu ruxsat savoli emas
+# (sinov 28.11: «добавить килдим, подключенияда чикмаябди», «tochka qo'shdim, aksiya qo'shilmayapti» ruxsat deb tanilardi)
+_OTHER = re.compile(r"подключени|подклуч|падклуч|акци|аксия|скидк|локац|лакац|визит|протаргет|про\s+таргет|маршрут"
+                    r"|корин|курин|кўрин")
+_PAST = re.compile(r"к[уо]шд\w*|к[уо]шганд\w*|к[уо]шиг\w*|добавил\w*|создал\w*|подключил\w*|килдим")
 
 
 def is_access_question(text, ocr=""):
-    """Savol «yangi tochka qo'sha olmayapman» turidami: ekran yozuvi yoki matn (yangi tochka/mijoz + qo'sha olmayapman)."""
+    """Savol «yangi tochka qo'sha olmayapman» turidami: ekran yozuvi yoki matn (yangi tochka/mijoz + qo'sha olmayapman).
+    Nuqta qo'shilgan-u ko'rinmayotgan, aksiya yoki lokatsiya savollari — bu tur emas (aniq ruxsat belgisi bo'lmasa)."""
     if SCREEN.search(fold(ocr)) or SCREEN.search(fold(text)):
         return True
     f = fold(text)
-    return bool(_NEW.search(f) and _NEG.search(f))
+    if not (_NEW.search(f) and _NEG.search(f)):
+        return False
+    if _HARD.search(f):
+        return True
+    return not (_OTHER.search(f) or _PAST.search(f))
 
 
 def screen_shown(text, ocr=""):

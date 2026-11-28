@@ -179,6 +179,20 @@ class DetectTests(TestCase):
         self.assertTrue(access.is_access_question("", SCREEN))
         self.assertTrue(access.is_access_question("shu chiqyapti", SCREEN))
 
+    def test_real_group_questions(self):
+        """Sinov rejimi 28.11: guruhlardagi haqiqiy savollar."""
+        for t in ("E-Navoi SR1 не получается добавить точку", "Tochka kushilmayabdi kurib bering",
+                  "Опять не могу точку создать", "Здравствуйте, не выходит плюс чтобы добавить точку",
+                  "Karshi k1 KShKR Dastup bering tochka qusholmayapman",
+                  "Почему у меня не отображается раздел «Новый клиент»?"):
+            self.assertTrue(access.is_access_question(t), t)
+        # nuqta qo'shilgan-u ProTarget'da ko'rinmayapti / aksiya / lokatsiya — PRBC ruxsati emas
+        for t in ("Ассалому алайкум. Хозир шу дуконни добавить килдим подключенияда чикмаябди",
+                  "Assalom alaykum Karshi k3 yangi tochka qushdim aksiya qushilmayapti",
+                  "Shu tochkani qoshgandm Lekin korinmebdi Tekshirib berin Magazn yonida turib lokatsiya boyica",
+                  "Assalomu alaykum shu doʻkon qoʻshigʻim bor divotdi pragmada chiqmayapdi"):
+            self.assertFalse(access.is_access_question(t), t)
+
     def test_fold(self):
         self.assertEqual(access.fold("Qarshi K-3", spaces=False), access.fold("Карши К3", spaces=False))
         self.assertEqual(access.fold("qo'sha"), access.fold("қўша"))

@@ -4,6 +4,11 @@
 
 ## 2026-11-28
 
+- **PRBC «Yangi tochka» tekshiruvi aniqroq.** Bot «yangi tochka qo'sha olmayapman» savoliga PRBC ruxsatlarini tekshirib
+  javob beradi. Endi nuqtani allaqachon qo'shgan-u ProTarget'da ko'rmayotgan, aksiya yoki lokatsiya haqida yozgan agentga
+  bu javob berilmaydi («подключенияда чикмаябди», «tochka qo'shdim, aksiya qo'shilmayapti» — o'z standart javobiga
+  o'tadi); «+» tugmasi, dostup yoki «Новый клиент» bo'limi aniq aytilsa — tekshiruv ishlaydi. Sababi: avtomatik amallar
+  sinov rejimida 13 ta haqiqiy savoldan 4 tasi noto'g'ri tanilgan edi.
 - **Yon menyu:** yig'ilgan holatda guruhlar (Support / Vazifalar / Sozlamalar...) ingichka chiziq bilan ajratiladi;
   belgi ustiga kelinsa nomi chiqadi.
 - **Tasdiqlash navbati:** filtrlar bitta qatorda (Claude belgisi — ixcham ro'yxat); kartadagi mas'ul — matn va
