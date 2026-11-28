@@ -79,7 +79,9 @@ def _redis_db(n):
 
 if REDIS_URL:
     CHANNEL_LAYERS = {"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {
-        "hosts": [_redis_db(0)], "prefix": "foydali",
+        # socket_timeout > kutish (BZPOPMIN 5 s): redis-py 8 da standart 5 s — bir xil bo'lsa WebSocket har 5 s da
+        # «Timeout reading» bilan uziladi
+        "hosts": [{"address": _redis_db(0), "socket_timeout": 30, "socket_connect_timeout": 2}], "prefix": "foydali",
         "group_expiry": 7 * 86400,  # guruh a'zoligi ping'da yangilanadi (realtime.py); bu — yiqilgan ulanishlar uchun
     }}}
     CACHES = {"default": {"BACKEND": "zona.cache.SafeRedisCache", "LOCATION": _redis_db(1), "KEY_PREFIX": "foydali",

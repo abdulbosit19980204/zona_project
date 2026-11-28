@@ -8,7 +8,8 @@
   TCP yo'q, diskka yozmaydi) — worker'lar o'rtasida WebSocket xabarlari va kesh. Endi bitta og'ir so'rov (AI, rasm
   guruhlash) sahifadagi boshqa so'rovlarni kutdirmaydi. Bir vaqtda faqat bitta worker AI tarjima qiladi (takror AI
   chaqiruvi yo'q). Redis to'xtasa sayt ishlayveradi (kesh bo'sh deb hisoblanadi). Sozlash va orqaga qaytarish —
-  Texnik bo'lim → «Panel tezligi» (`ZONA_WEB_WORKERS`, `ZONA_REDIS_URL`).
+  Texnik bo'lim → «Panel tezligi» (`ZONA_WEB_WORKERS`, `ZONA_REDIS_URL`). Shu kuni tuzatildi: birinchi deploydan keyin
+  WebSocket (jonli yangilanish) har ~5 s da uzilib qayta ulanardi (Redis kutish vaqti = ulanish chegarasi) — endi uzilmaydi.
 - **Guruh savollari ro'yxati 100 tadan yuklanadi** (avval 300 ta: har 15 s ~0,9 s va ~650 KB — ochiq har tab backendni
   doimiy band qilardi). Pastda «Yana yuklash (+100)». Havola bilan ochilgan savol (`/support?q=…`, masalan PRBC
   vazifasidan) ro'yxatda bo'lmasa ham alohida yuklanib ochiladi (avval bo'sh oyna qolardi).

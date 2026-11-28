@@ -67,6 +67,22 @@ class TranslationLockTests(SimpleTestCase):
         self.assertEqual(translation.version()[0], 5)
 
 
+class RedisSettingsTests(SimpleTestCase):
+    def test_channel_socket_timeout_outlives_blocking_receive(self):
+        """redis-py 8 da socket_timeout standart 5 s = channels_redis BZPOPMIN kutishi — WebSocket har 5 s uzilardi."""
+        import sys
+        path = Path(settings.BASE_DIR) / "config" / "settings.py"
+        with mock.patch.dict(os.environ, {"ZONA_REDIS_URL": "unix:///run/x.sock"}), \
+                mock.patch.object(sys, "argv", ["manage.py", "runserver"]):
+            conf = runpy.run_path(str(path))
+        layer = conf["CHANNEL_LAYERS"]["default"]
+        self.assertEqual(layer["BACKEND"], "channels_redis.core.RedisChannelLayer")
+        host = layer["CONFIG"]["hosts"][0]
+        self.assertEqual(host["address"], "unix:///run/x.sock?db=0")
+        self.assertGreater(host["socket_timeout"], layer["CONFIG"].get("brpop_timeout", 5))
+        self.assertEqual(conf["CACHES"]["default"]["LOCATION"], "unix:///run/x.sock?db=1")
+
+
 class GunicornWorkersTests(SimpleTestCase):
     def workers(self, **env):
         clean = {k: v for k, v in os.environ.items() if k not in ("ZONA_REDIS_URL", "ZONA_WEB_WORKERS")}
