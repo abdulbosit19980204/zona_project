@@ -4,6 +4,10 @@
 
 ## 2026-11-28
 
+- **Bilim bazasi: javobga fayl qo'shish tuzatildi.** Yozuvni tahrirlash oynasida «Javob bilan yuboriladigan fayllar» ga
+  rasm/video yuklansa, fayl ro'yxatga tushmay yo'qolardi: bot shu yozuvni ishlatganda (Ishlatildi +1) oyna qayta
+  yaratilib, yuklangan fayl va yozilgan matn tushib qolardi; «Saqlash» esa eski ro'yxatni saqlardi. Endi oyna faqat
+  boshqa yozuv ochilganda yangilanadi — yuklangan fayl saqlanguncha joyida turadi.
 - **To'lov toifasi xatosi tuzatildi.** «chek» so'zi korxona nomidagi «MAS'ULIYATI **CHEK**LANGAN JAMIYAT» ga ham mos kelib,
   savol To'lov toifasiga (Saidabror) tushardi — endi faqat alohida «chek» / «чек» so'zi. Masalan PRBC «Торговая точка
   уже есть в 1С» skrinshoti bilan kelgan savol noto'g'ri Saidabror'ga yo'naltirilgan edi. Shu holat uchun «PRBC → 1C:

@@ -51,7 +51,9 @@ export function EntryEditor({ entryId, open, onOpenChange, preset }: {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full gap-0 p-0 sm:max-w-2xl">
         {ready && (
-          <EditorBody key={`${entryId ?? "new"}-${e?.updated_at ?? ""}`} e={e} onOpenChange={onOpenChange}
+          // kalit faqat yozuv raqami: bot yozuvni ishlatganda (uses++) updated_at o'zgaradi — oyna qayta yaratilsa yuklangan
+          // fayl va yozilgan matn yo'qolardi (28.11: javobga rasm qo'shib bo'lmagan)
+          <EditorBody key={entryId ?? "new"} e={e} onOpenChange={onOpenChange}
             initial={e ? toDraft(e) : { ...blank, ...preset }} />
         )}
       </SheetContent>
@@ -179,7 +181,7 @@ function EditorBody({ e, initial, onOpenChange }: { e?: Entry; initial: Draft; o
                 </div>
                 <Input type="file" multiple accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" disabled={upload.isPending}
                   onChange={(x) => { const list = Array.from(x.target.files ?? []); x.target.value = "";
-                    if (list.length) upload.mutate(list, { onSuccess: (r) => setFiles([...files, ...r].slice(0, 10)) }); }} />
+                    if (list.length) upload.mutate(list, { onSuccess: (r) => setFiles((prev) => [...prev, ...r].slice(0, 10)) }); }} />
               </div>
             </FormRow>
             {e ? (
