@@ -57,7 +57,7 @@ CAT_RX = [(k, re.compile(v, re.I)) for k, v in CAT_RX]
 # ProTarget'dagi podklyuchenie / moderatsiya / vizit — Pro-target (client/visit). Guruhlardagi xodim javoblari bo'yicha
 # (eval 28.11): "Заявки на точки", "ИНН уже есть в 1С", "magazin dabavit qilolmayapmiz" — IT support javob bergan.
 PRBC_OUTLET_RX = re.compile(
-    r"заявк\w* на (точк|тт)|zayavk|созданав1с|создан\w* в 1[сc]|"
+    r"заявк\w* на (точк|тт)|zayavk|"
     r"(инн|пинфл|stir|jshshir)\W{0,3}.{0,40}(уже есть|allaqachon|mavjud)|"
     r"(нов\w+|yangi) (тт|tt|точк\w*|tochk\w*|nuqta\w*|магазин\w*|magazin\w*|klient\w*|клиент\w*|outlet)\W{0,3}.{0,30}"
     r"(не (добав|созда|получ|могу|выход)|qo.?sh\w*|kush\w*|qosh\w*|qo.?shilmay|ochilmay|bo.lmay)|"
@@ -66,6 +66,8 @@ PRBC_OUTLET_RX = re.compile(
     r"ochib bo.?lma|не могу добав|не получается добав|не могу открыть нов)|"
     r"(dabavit|добавить)\W{0,3}.{0,15}(qilolmay|qila olmay|не могу|не получается)|"
     r"(не могу|не получается) (добавить|создать|открыть) (нов\w+ )?(тт|точк|магазин|клиент)", re.I)
+# «Создана в 1С» — muvaffaqiyat ekrani (nuqta qo'shilgan): bu yangi nuqta muammosi emas, jonli PRBC holati va
+# ProTarget (client) yo'li bo'yicha ketadi (28.11: UZ-00069329 Xusniddin'ga noto'g'ri ketgan)
 # ProTarget konteksti — podklyuchenie/moderatsiya bo'lsa, bu PRBC emas
 PROTARGET_CTX = re.compile(r"подключ|podkl|padkl|patkl|модерац|moderat|vizit|визит|протаргет|pro.?target", re.I)
 # PRBC zayavkasi yuborilgan, holati so'ralmoqda (kutilmoqda / qoralama / rad etildi) — bu moderatsiya (Pro-target)

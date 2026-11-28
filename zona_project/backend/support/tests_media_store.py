@@ -81,3 +81,22 @@ class StoreTests(ControlsBase):
         r2 = self.call("get", f"support/media/{m.pk}/file/")
         self.assertIn("max-age", r2["Cache-Control"])
         r2.close()  # fayl dastagi (Windows'da vaqtinchalik papka o'chirilsin)
+
+    def test_slim_photo_still_gets_ocr(self):
+        # 28.11 regressiya: diskka yozilmagan (slim) rasmda OCR bo'sh qolardi — bot skrinshot matnini ko'rmasdi
+        from .runner import Handler
+        from .telegram import Client
+        data = png()
+        q = self.q()
+        q.photo_file_id = "fid"
+        h = Handler(self.bot, mock.Mock(spec=Client))
+        h.tg.download.return_value = data
+        slim_media = Media(kind=Media.PHOTO, path="")
+        slim_media.save()
+        with mock.patch.object(vision, "store", return_value=slim_media):
+            m = h._fetch_media(q)
+        self.assertEqual(m.raw_bytes, data)
+        with mock.patch("support.runner.ocr.read_text", return_value="Торговая точка создана в 1С UZ-00069329") as rt:
+            h._ocr(q, m)
+        rt.assert_called_once_with(data)
+        self.assertIn("UZ-00069329", q.ocr_text)

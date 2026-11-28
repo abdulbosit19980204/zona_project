@@ -17,8 +17,7 @@ class PrbcOutletCategoryTests(SimpleTestCase):
 
     def test_prbc_screens(self):
         for ocr in ["PRBC  Заявки на точки  + Новая заявка  ИНН/ПИНФЛ",
-                    "мини-приложение ПИНФЛ Этот ИНН/ПИНФЛ уже есть в 1C как контрагент",
-                    "PRBC Созданав1С G'ULOMJONOV NIZOMIDDIN"]:
+                    "мини-приложение ПИНФЛ Этот ИНН/ПИНФЛ уже есть в 1C как контрагент"]:
             self.assertEqual(systems.detect("", ocr)["category"], "prbc_outlet", ocr)
 
     def test_protarget_stays_with_protarget(self):
@@ -28,6 +27,16 @@ class PrbcOutletCategoryTests(SimpleTestCase):
                           ("Не могу сделать визит. Локация в программе указана неправильно", "visit"),
                           ("aksiya ishlamayapti", "promo")]:
             self.assertEqual(systems.detect(text)["category"], cat, text)
+
+    def test_success_screen_is_not_new_outlet(self):
+        # «✅ Торговая точка создана в 1С … Код: UZ-00069329» + «Qoshvorila» — nuqta 1C/PRBC'da bor: Xusniddin emas,
+        # jonli PRBC holati va ProTarget (client) yo'li (28.11, xabar 28545)
+        for text, ocr in [("Qoshvorila", "PRBC ✅ Торговая точка создана в 1С Код: UZ-00069329 Маршрут"),
+                          ("", "PRBC Созданав1С G'ULOMJONOV NIZOMIDDIN")]:
+            r = systems.detect(text, ocr)
+            self.assertNotEqual(r["category"], "prbc_outlet", ocr)
+        self.assertEqual(systems.detect("Qoshvorila", "✅ Торговая точка создана в 1С Код: UZ-00069329")["category"],
+                         "client")
 
     def test_prbc_request_status_is_moderation(self):
         # zayavka "Ожидает проверки / Черновик / Отклонена" — ProTarget moderatsiyasi (Eldar javob bergan)

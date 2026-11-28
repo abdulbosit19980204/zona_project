@@ -1317,6 +1317,9 @@ class Handler:
                 q.error = f"Fayl olinmadi: {e}"[:300]
                 return None
         m = vision.store(data, kind=kind, name=name, mime=mime, source="history" if self.history else "question", message=q)
+        if not m.path and data:
+            # to'yingan ekran turi — fayl diskka yozilmaydi (slim); OCR/jonli PRBC tekshiruvi uchun baytlar shu obyektda
+            m.raw_bytes = data
         if file_id and not self.history:
             m.tg_file_ids = {str(self.bot.pk): file_id}
             Media.objects.filter(pk=m.pk).update(tg_file_ids=m.tg_file_ids)
@@ -1325,7 +1328,7 @@ class Handler:
 
     def _start_ocr(self, q, media):
         try:
-            data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
+            data = open(media.path, "rb").read() if media.path else (getattr(media, "raw_bytes", None) or self.photo_bytes.get(q.message_id))
         except OSError:
             data = self.photo_bytes.get(q.message_id)
         if not data:
@@ -1355,7 +1358,7 @@ class Handler:
             except Exception:  # noqa: BLE001 — fonda o'qilmadi: odatdagidek
                 pass
         try:
-            data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
+            data = open(media.path, "rb").read() if media.path else (getattr(media, "raw_bytes", None) or self.photo_bytes.get(q.message_id))
         except OSError:
             data = self.photo_bytes.get(q.message_id)
         with _OCR_SLOTS:  # OCR protsessorni ko'p yeydi — bir vaqtda cheklangan son (qolgan ishlar to'xtamaydi)
@@ -1369,7 +1372,7 @@ class Handler:
             q.alert_text = prev
             return
         try:
-            data = open(media.path, "rb").read() if media.path else self.photo_bytes.get(q.message_id)
+            data = open(media.path, "rb").read() if media.path else (getattr(media, "raw_bytes", None) or self.photo_bytes.get(q.message_id))
         except OSError:
             data = self.photo_bytes.get(q.message_id)
         if not data:

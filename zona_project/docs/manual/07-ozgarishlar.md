@@ -4,6 +4,13 @@
 
 ## 2026-11-28
 
+- **Skrinshot matni yana o'qiladi (OCR).** Ko'p uchraydigan ekran turidagi rasm diskka yozilmaydigan bo'lgach (joy
+  tejash), bot shu rasmlarning matnini ham o'qimay qo'ygandi — 6 soatda 7 rasmdan 5 tasi «ko'r» qolgan. Endi fayl
+  saqlanmasa ham rasm xotirada OCR va jonli PRBC tekshiruvidan o'tadi.
+- **«✅ Торговая точка создана в 1С» ekrani endi IT support'ga ketmaydi.** Bu muvaffaqiyat xabari — nuqta 1C va PRBC'da
+  bor. Bot ekrandagi 1C kodi (UZ-…) bo'yicha PRBC'dan jonli holatni o'qib javob beradi; hammasi joyida bo'lsa —
+  «qayta qo'shish shart emas, ProTarget'da sinxronizatsiya qiling, baribir ko'rinmasa ProTarget jamoasi ko'radi»
+  (toifa: klient → Pro-target).
 - **Bilim bazasi: javobga fayl qo'shish tuzatildi.** Yozuvni tahrirlash oynasida «Javob bilan yuboriladigan fayllar» ga
   rasm/video yuklansa, fayl ro'yxatga tushmay yo'qolardi: bot shu yozuvni ishlatganda (Ishlatildi +1) oyna qayta
   yaratilib, yuklangan fayl va yozilgan matn tushib qolardi; «Saqlash» esa eski ro'yxatni saqlardi. Endi oyna faqat

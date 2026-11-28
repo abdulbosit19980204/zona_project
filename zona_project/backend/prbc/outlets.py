@@ -300,8 +300,12 @@ def describe_request(row, lang="uz"):
             if key == "subdivision_state" and v in ("differs", "error") and notes.get("subdivision"):
                 lines.append(f"   1C: {str(notes['subdivision'])[:180]}")
         if st == "sent" and not todo:
-            todo.append(_t(lang, "Hammasi joyida — nuqta 1C da yaratilgan, marshrutda va ProTarget'ga yuborilgan.",
-                           "Всё в порядке — точка создана в 1С, в маршруте и отправлена в ProTarget."))
+            todo.append(_t(lang, "Hammasi joyida — nuqta 1C da yaratilgan, marshrutda va ProTarget'ga yuborilgan. "
+                                 "Qayta qo'shish shart emas: ProTarget'da sinxronizatsiya qiling; baribir ko'rinmasa — "
+                                 "ProTarget jamoasi (podklyucheniye/moderatsiya) ko'radi.",
+                           "Всё в порядке — точка создана в 1С, в маршруте и отправлена в ProTarget. Повторно добавлять "
+                           "не нужно: сделайте синхронизацию в ProTarget; если всё равно не видно — посмотрит команда "
+                           "ProTarget (подключение/модерация)."))
         if row.get("outcome_at"):
             lines.append(_t(lang, "1C natijasi olingan: ", "Результат 1С получен: ") + _date(row["outcome_at"]))
     return lines, todo
