@@ -4,6 +4,10 @@
 
 ## 2026-11-28
 
+- **PRBC vazifa ijrochisi: «guruhda ko'p javob beradigan xodim» yo'li olib tashlandi.** Savolga javob yozgan xodim,
+  mavzu mas'uli, toifa mas'uli va guruh ijrochisi bo'lmasa — standart ijrochi. Avval shu holatda guruhda eng faol xodim
+  tanlanardi va toifa egasi qoidasi chetlab o'tilardi (masalan TASK-3272 — ROP guruhidagi faol xodimga tushgan).
+  PRBC sozlamalari → Guruh jadvalida «Avto» endi «toifa mas'uli / standart ijrochi».
 - **Semantik qidiruv aniqroq — «ikkilanish» qoidasi.** Model o'xshashliklari zich (aloqasiz savollar ham 0.90+), shuning
   uchun faqat chegara yetmas edi: endi eng yaqin yozuv ikkinchisidan kamida 0.02 ga yuqori bo'lishi ham shart, aks holda
   javob yo'q — savol odamga o'tadi. Sozlash (`support_semantic --tune`) endi «standarti yo'q savol»ni ham sinaydi

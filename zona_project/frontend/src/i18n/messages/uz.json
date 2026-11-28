@@ -1373,7 +1373,7 @@
     "gpTasksHint": "Shu guruh savollaridan PRBC vazifa ochiladi (VAZIFALAR kabi test guruhlarida o'chiring)",
     "gpOwner": "Ijrochi",
     "gpOwnerAuto": "Avto: {name}",
-    "gpOwnerDefault": "Avto (standart ijrochi)",
+    "gpOwnerDefault": "Avto (toifa mas'uli / standart ijrochi)",
     "ctlByAssignee": "Xodimlar bo'yicha",
     "ctlByGroup": "Guruhlar bo'yicha",
     "ctl30days": "oxirgi 30 kun",

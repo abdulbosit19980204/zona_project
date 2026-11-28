@@ -487,7 +487,7 @@ def group_projects(request):
         pid = (c.group_projects or {}).get(str(g.pk))
         sug = tasks.suggest_project(g.title, c.projects or []) if not pid else None
         owner = (c.group_assignees or {}).get(str(g.pk))
-        auto = None if owner else ctl.group_answerer(g, c)
+        auto = None  # «guruhda ko'p javob beradigan» avto tanlov olib tashlangan (0n) — Avto = toifa mas'uli / standart
         rows.append({"id": g.pk, "title": g.title or str(g.chat_id), "questions": g.n, "project": pid,
                      "project_name": names.get(pid, f"#{pid}" if pid else ""),
                      "suggested": sug, "suggested_name": names.get(sug, "") if sug else "",

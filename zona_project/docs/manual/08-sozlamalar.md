@@ -193,8 +193,7 @@ Har qatorda:
   "eski guruh → …" yozuvi).
 - **PRBC loyiha** — vazifa qaysi loyihada ochiladi. Ko'k "taklif: …" — nomga qarab topilgan loyiha, bosilsa qo'yiladi;
   tepadagi **"Takliflarni qo'llash"** — hammasini birdan. **"Loyihalarni yangilash"** — PRBC'dan ro'yxatni qayta o'qish.
-- **Ijrochi** — *Avto* (javob yozgan → mavzu mas'uli → toifa mas'uli → guruhda ko'p javob beradigan → standart;
-  qavsda hozirgi avto tanlov) yoki aniq xodim.
+- **Ijrochi** — *Avto* (javob yozgan → mavzu mas'uli → toifa mas'uli → standart) yoki aniq xodim.
 
 ### 2.4 Mijoz holatini tekshirish
 

@@ -307,10 +307,9 @@ class OwnerTests(Base):
         st = SupportTask(message=q, assignee="")
         self.assertEqual(control.pick_assignees(self.conn, st, q), ([167], "standart ijrochi"))
         other = self.question("boshqa savol")
-        self.staff_reply(other, self.said_tg)  # Said shu guruhda javob beradi
-        self.staff_reply(other, self.it_tg)
-        self.staff_reply(other, self.it_tg)  # umumiy akkaunt — hisobga olinmaydi
-        self.assertEqual(control.pick_assignees(self.conn, st, q)[0], [51])
+        self.staff_reply(other, self.said_tg)  # Said shu guruhda boshqa savollarga ko'p javob beradi —
+        self.staff_reply(other, self.said_tg)  # bu ijrochi tanlashga ta'sir qilmaydi (0n: «activity fallback» yo'q)
+        self.assertEqual(control.pick_assignees(self.conn, st, q), ([167], "standart ijrochi"))
         Connection.objects.update(group_assignees={str(self.group.pk): 49})
         self.conn.refresh_from_db()
         self.assertEqual(control.pick_assignees(self.conn, st, q), ([49], "guruh ijrochisi (HEINZ ROP)"))

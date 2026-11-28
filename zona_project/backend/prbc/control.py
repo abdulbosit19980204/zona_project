@@ -348,25 +348,11 @@ def _member_ids(m, conn):
     return []
 
 
-def group_answerer(group, conn, days=30):
-    """Shu guruhda savollarga eng ko'p javob yozgan xodim (umumiy akkauntsiz) -> PRBC user id."""
-    import collections
-    from support.models import Message, TgUser
-    if group is None:
-        return None
-    since = timezone.now() - timedelta(days=days)
-    cnt = collections.Counter(Message.objects.filter(group=group, kind=Message.STAFF, created_at__gte=since,
-                                                     user__isnull=False).values_list("user_id", flat=True))
-    for uid, _n in cnt.most_common(6):
-        pid = _prbc_of_tg(TgUser.objects.filter(pk=uid).first(), conn)
-        if pid:
-            return pid
-    return None
-
-
 def pick_assignees(conn, st, q):
     """Vazifa kimga tegishli — (PRBC id'lar, sabab). Tartib: savolga javob yozgan xodim -> mavzu mas'uli (bilim bazasi)
-    -> toifa mas'uli (aksiya, to'lov, login...) -> guruh ijrochisi (sozlama) -> guruhda ko'p javob beradigan -> standart."""
+    -> toifa mas'uli (aksiya, to'lov, login...) -> guruh ijrochisi (sozlama) -> standart. «Guruhda ko'p javob beradigan
+    xodim» yo'li olib tashlandi (KOORDINATSIYA 0n, 2026-11-28): u toifa egasi qoidasini chetlab o'tib, savolni mavzuga
+    aloqasiz xodimga (masalan ROP guruhidagi faol xodimga) tushirardi."""
     from support.engine import category_owner
     from support.models import Message
     from .tasks import assignee_ids_for
@@ -392,9 +378,6 @@ def pick_assignees(conn, st, q):
         pid = (conn.group_assignees or {}).get(str(q.group_id))
         if str(pid or "").isdigit():
             return [int(pid)], f"guruh ijrochisi ({q.group.title})"
-        pid = group_answerer(q.group, conn)
-        if pid:
-            return [pid], f"guruhda ko'p javob beradi ({q.group.title})"
     ids = [int(x) for x in conn.task_default_assignees or []]
     return ids, "standart ijrochi"
 

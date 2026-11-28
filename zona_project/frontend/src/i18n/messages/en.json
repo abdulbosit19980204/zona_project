@@ -1373,7 +1373,7 @@
     "gpTasksHint": "Questions from this group open PRBC tasks (turn off for test groups like VAZIFALAR)",
     "gpOwner": "Assignee",
     "gpOwnerAuto": "Auto: {name}",
-    "gpOwnerDefault": "Auto (default assignee)",
+    "gpOwnerDefault": "Auto (category owner / default assignee)",
     "ctlByAssignee": "By assignee",
     "ctlByGroup": "By group",
     "ctl30days": "last 30 days",

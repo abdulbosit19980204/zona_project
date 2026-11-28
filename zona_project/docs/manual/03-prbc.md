@@ -53,8 +53,10 @@ Tartib (birinchi topilgani):
 3. **Toifa mas'uli** — Support sozlamasidagi "toifa bo'yicha mas'ul": aksiya, to'lov, qoldiq → **Saidabror**;
    login → **Xusniddin**.
 4. **Guruh ijrochisi** — PRBC sozlamalari → Guruh → loyiha jadvalida qo'lda tanlangan.
-5. Shu guruhda **eng ko'p javob beradigan xodim** (oxirgi 30 kun).
-6. **Standart ijrochi** (sozlamada; hozir Xusniddin).
+5. **Standart ijrochi** (sozlamada; hozir Xusniddin).
+
+«Guruhda eng ko'p javob beradigan xodim» yo'li **yo'q** (2026-11-28): u toifa egasi qoidasini chetlab o'tib, savolni
+mavzuga aloqasiz xodimga tushirardi. Ijrochi faqat yuqoridagi qoidalar bo'yicha.
 
 - Umumiy **IT SUPPORT** akkaunti (@IT_StarGroup) o'zi ijrochi bo'lmaydi: «Asosiy operator» belgilangan bo'lsa
   (hozir — Xusniddin), undan yozilgan javob uchun ijrochi — operator.
