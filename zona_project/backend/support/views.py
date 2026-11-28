@@ -3,7 +3,7 @@
 Rollar (zona Profile): viewer — ko'rish, savolga javob yozish, yangi javob taklif qilish;
 editor — javoblarni tasdiqlash/tahrirlash, shablonlar; admin — botlar va sozlamalar.
 """
-from django.db.models import Case, Count, Q, When
+from django.db.models import Case, Count, Prefetch, Q, When
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import action
@@ -636,10 +636,14 @@ class MessageViewSet(ZonaViewSet):
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
+        # Har qator uchun alohida so'rov bo'lmasin (0l: limit=300 da ~330 ta qo'shimcha so'rov — vazifa, rasm yorlig'i,
+        # javob guruhi): vazifa (teskari OneToOne), rasm yorliqlari va javoblarning guruh/xodimi oldindan olinadi.
+        media = Media.objects.select_related("label")
+        replies = (Message.objects.select_related("group", "user__member", "user__contact")
+                   .prefetch_related(Prefetch("media", queryset=media)))
         qs = (Message.objects.filter(kind=Message.QUESTION).exclude(stage="dup")
-              .select_related("group", "user__staff_person__project", "entry").prefetch_related("media", "ratings", "staff_replies__media",
-                                                                          "staff_replies__user__member",
-                                                                          "staff_replies__user__contact"))
+              .select_related("group", "user__staff_person__project", "entry", "task")
+              .prefetch_related(Prefetch("media", queryset=media), "ratings", Prefetch("staff_replies", queryset=replies)))
         p = self.request.query_params
         if p.get("status") and p["status"] != "all":
             qs = qs.filter(status__in=p["status"].split(","))

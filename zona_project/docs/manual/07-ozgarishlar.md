@@ -4,6 +4,11 @@
 
 ## 2026-11-28
 
+- **Panel tezroq (savollar ro'yxati, Support sozlamalari).** Savollar ro'yxati (`messages/`, limit=300) har savol uchun
+  vazifa, rasm yorlig'i va javob guruhini alohida so'ramaydi — so'rovlar soni qatorlar soniga bog'liq emas (avval
+  300 qatorda ~330 qo'shimcha so'rov, ~1 s). Support sozlamalari sahifasi birinchi ochilishda ~0,8 s kutmaydi (Telegram
+  tarix kutubxonasi faqat borligi tekshiriladi, yuklanmaydi). Sababi: panel bitta jarayonda ishlaydi — bitta sekin
+  so'rov sahifadagi qolgan so'rovlarni ham kutdiradi (review sahifasida 8–14 s kuzatilgan).
 - **PRBC vazifa ijrochisi: «guruhda ko'p javob beradigan xodim» yo'li olib tashlandi.** Savolga javob yozgan xodim,
   mavzu mas'uli, toifa mas'uli va guruh ijrochisi bo'lmasa — standart ijrochi. Avval shu holatda guruhda eng faol xodim
   tanlanardi va toifa egasi qoidasi chetlab o'tilardi (masalan TASK-3272 — ROP guruhidagi faol xodimga tushgan).

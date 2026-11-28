@@ -276,6 +276,45 @@ class ApiTests(Base):
         self.assertEqual(r.json()["api_hash"], "••••6789")
         self.assertEqual(Settings.load().api_id, "123")
 
+    def test_messages_list_query_count_does_not_grow_with_rows(self):
+        """0l: limit=300 ro'yxatda har savolga vazifa / rasm yorlig'i / javob guruhi uchun alohida so'rov bo'lmasin."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from .models import Group, Media, SupportTask, TgUser
+        bot = Bot.objects.create(name="S", token_enc=encrypt("1:x"))
+        g = Group.objects.create(bot=bot, chat_id=-100, title="ROP", username="rop")
+        staff = TgUser.objects.create(tg_id=7, name="Xodim")
+        label = Entry.objects.create(kind=Entry.FAQ, title="Ekran", answer="x", status=Entry.APPROVED)
+
+        def add(n):
+            for i in range(n):
+                k = Message.objects.count() + 1
+                q = Message.objects.create(bot=bot, group=g, chat_id=-100, message_id=100 + k, text=f"Savol {k}",
+                                           kind="question", status=Message.ESCALATED)
+                Media.objects.create(message=q, kind="photo", label=label, slim=True)
+                SupportTask.objects.create(message=q, title="t")
+                r = Message.objects.create(bot=bot, group=g, chat_id=-100, message_id=5000 + k, text="javob",
+                                           kind=Message.STAFF, question=q, user=staff)
+                Media.objects.create(message=r, kind="photo", label=label, slim=True)
+
+        self.login("viewer")
+
+        def count():
+            with CaptureQueriesContext(connection) as c:
+                r = self.call("get", "support/messages/?status=escalated&limit=300")
+            self.assertEqual(r.status_code, 200, r.content)
+            return len(c.captured_queries), r.json()
+        add(2)
+        few, rows = count()
+        self.assertEqual(rows[0]["task"]["status"], SupportTask.QUEUED)
+        self.assertEqual(rows[0]["media"][0]["label_title"], "Ekran")
+        self.assertTrue(rows[0]["staff_answers"][0]["media"][0]["link"].startswith("https://t.me/rop/"))
+        add(6)
+        many, rows = count()
+        self.assertEqual(len(rows), 8)
+        self.assertEqual(many, few)
+
     def test_panel_answer_sends_reply_and_creates_candidate(self):
         bot = Bot.objects.create(name="S", token_enc=encrypt("1:x"))
         q = Message.objects.create(bot=bot, chat_id=-100, message_id=5, text="Savol matni bu yerda", kind="question")

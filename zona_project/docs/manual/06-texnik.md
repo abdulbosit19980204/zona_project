@@ -31,6 +31,12 @@ Telegram ◄──► foydali-support-bot (Support bot)        PRBC (prbc.uz) �
 
 Servis to'xtasa — panel chap pastidagi **Servislar markazi**dan qayta ishga tushiriladi.
 
+**Panel tezligi.** `foydali-backend` — bitta jarayon (uvicorn worker; WebSocket xabarlari jarayon ichida). Python bir
+jarayonda so'rovlarni amalda navbat bilan hisoblaydi: sahifa 10 ta so'rov yuborsa, kutish ≈ ularning yig'indisi. Shuning
+uchun har API tez bo'lishi kerak: ro'yxatlarda har qator uchun alohida so'rov (N+1) bo'lmasin — testi bor
+(`support.tests.ApiTests.test_messages_list_query_count_does_not_grow_with_rows`). O'lchov (2026-11-28, yuklamasiz):
+10 parallel so'rov — tuzatishdan oldin ~2,4 s (eng sekini `messages/?limit=300` ~1 s).
+
 ## Fayllar
 
 - Kod: `/root/zona_project/zona_project` (servislar `foydali` foydalanuvchisi nomidan ishlaydi).

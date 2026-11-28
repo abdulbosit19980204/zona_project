@@ -37,10 +37,11 @@ class NeedPassword(Exception):
 
 
 def available():
+    """telethon o'rnatilganmi — import qilmasdan (import ~0.8 s; sozlamalar sahifasi har ochilishda kutmasin)."""
+    import importlib.util
     try:
-        import telethon  # noqa: F401
-        return True
-    except ImportError:
+        return importlib.util.find_spec("telethon") is not None
+    except (ImportError, ValueError):
         return False
 
 
