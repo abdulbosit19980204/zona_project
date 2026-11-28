@@ -9,6 +9,8 @@
   bu javob berilmaydi («подключенияда чикмаябди», «tochka qo'shdim, aksiya qo'shilmayapti» — o'z standart javobiga
   o'tadi); «+» tugmasi, dostup yoki «Новый клиент» bo'limi aniq aytilsa — tekshiruv ishlaydi. Sababi: avtomatik amallar
   sinov rejimida 13 ta haqiqiy savoldan 4 tasi noto'g'ri tanilgan edi.
+- **Deploydan keyingi bot sinovi — doimiy buyruq:** `support_smoke` (3 asosiy savol, PASS/FAIL) va `--standards 15`
+  (15 standart × 5 haqiqiy ibora, AI'siz qamrov). Texnik bob → deploy tartibi, 6-qadam.
 - **Yon menyu:** yig'ilgan holatda guruhlar (Support / Vazifalar / Sozlamalar...) ingichka chiziq bilan ajratiladi;
   belgi ustiga kelinsa nomi chiqadi.
 - **Tasdiqlash navbati:** filtrlar bitta qatorda (Claude belgisi — ixcham ro'yxat); kartadagi mas'ul — matn va
