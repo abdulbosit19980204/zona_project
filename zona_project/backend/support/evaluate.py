@@ -99,8 +99,13 @@ def run(days=30, limit=200, use_judge=True, out_path=None, progress=None, use_ai
             text = (q.text or "").strip()
             lang = engine.detect_lang(text or q.ocr_text)
             try:
-                d = engine.decide(text or q.ocr_text, lang, text=text, ocr=q.ocr_text or "", alert=q.alert_text or "",
-                                  live=False, fast=not use_ai)
+                if use_ai:
+                    d = engine.decide(text or q.ocr_text, lang, text=text, ocr=q.ocr_text or "",
+                                      alert=q.alert_text or "", live=False)
+                else:  # jonli botdagidek to'liq yo'l, faqat AI'siz (fast=True qamrovni kamaytirib ko'rsatardi)
+                    with engine.no_ai():
+                        d = engine.decide(text or q.ocr_text, lang, text=text, ocr=q.ocr_text or "",
+                                          alert=q.alert_text or "", live=False)
             except Exception as e:  # noqa: BLE001 — bitta savol xatosi butun baholashni to'xtatmasin
                 log.exception("eval decide %s", q.pk)
                 d, err = None, str(e)[:200]

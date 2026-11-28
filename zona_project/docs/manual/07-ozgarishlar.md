@@ -4,6 +4,9 @@
 
 ## 2026-11-28
 
+- **AI'siz sinov to'g'rilandi:** `support_smoke` va `support_eval` (AI'siz) endi jonli botdagidek to'liq yo'lni
+  (shablon, FAQ, qoida) tekshiradi, faqat AI chaqirilmaydi. Avval faqat «tez yo'l» tekshirilardi — FAQ pastroq
+  ishonch bilan topiladigan savollar «topilmadi» bo'lib, qamrov kam ko'rsatilardi.
 - **PRBC «Yangi tochka» tekshiruvi aniqroq.** Bot «yangi tochka qo'sha olmayapman» savoliga PRBC ruxsatlarini tekshirib
   javob beradi. Endi nuqtani allaqachon qo'shgan-u ProTarget'da ko'rmayotgan, aksiya yoki lokatsiya haqida yozgan agentga
   bu javob berilmaydi («подключенияда чикмаябди», «tochka qo'shdim, aksiya qo'shilmayapti» — o'z standart javobiga

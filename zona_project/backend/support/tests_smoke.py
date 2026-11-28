@@ -44,3 +44,17 @@ class SmokeTests(ControlsBase):
         out = io.StringIO()
         call_command("support_smoke", "--standards", "2", stdout=out)
         self.assertIn("Standartlar (AI'siz)", out.getvalue())
+
+    def test_no_ai_blocks_ai_calls(self):
+        from unittest import mock
+
+        from . import engine
+        from .models import Settings
+        Settings.load()
+        Settings.objects.update(ai_enabled=True)
+        with mock.patch("zona.ai.service.run", side_effect=AssertionError("AI chaqirildi")):
+            with engine.no_ai():
+                self.assertIsNone(engine.ai_answer("noma'lum savol bor", "uz", [], None, Settings.load()))
+                d = engine.decide("butunlay noma'lum yangi muammo chiqdi", "uz", live=False)
+        self.assertTrue(d is None or d.stage != "ai")
+        self.assertFalse(getattr(engine._NO_AI, "on", False))

@@ -18,9 +18,10 @@ SMOKE = [
 
 
 def _decide(text):
+    """Jonli botdagidek to'liq yo'l (shablon, FAQ, qoida), faqat AI'siz — AI limiti tugagandagi holat."""
     from . import engine
-    d = engine.decide(text, engine.detect_lang(text), text=text, live=False, fast=True)
-    return d
+    with engine.no_ai():
+        return engine.decide(text, engine.detect_lang(text), text=text, live=False)
 
 
 def run_smoke():

@@ -694,6 +694,22 @@ def people_text():
 AI_LIVE_SECONDS = 25
 
 
+_NO_AI = __import__("threading").local()
+
+
+class no_ai:
+    """AI'siz qaror (sinov va baholash): to'liq yo'l — shablon, FAQ, qoida — lekin AI chaqirilmaydi; AI limiti tugagan
+    jonli botdagi holat aynan shunday. `fast=True` dan farqi: FAQ/qoida pastroq ishonch bilan ham topiladi."""
+
+    def __enter__(self):
+        _NO_AI.on = True
+        return self
+
+    def __exit__(self, *exc):
+        _NO_AI.on = False
+        return False
+
+
 def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_entries=(), asker="", history="", alert=""):
     """AI javobi o'zimizning ma'lumotlarga tayanadi: bilim bazasidagi eng yaqin javoblar, rasmdan tanilgan ekranlar,
     xodimlarning o'xshash savollarga bergan haqiqiy javoblari (misol sifatida) va qoida."""
@@ -701,7 +717,7 @@ def ai_answer(raw, lang, context_entries, rule_task, settings, ocr="", image_ent
     from zona.ai import service as ai
     from zona.ai.providers import AIError
 
-    if not settings.ai_enabled or ai_quota_left(settings) <= 0:
+    if getattr(_NO_AI, "on", False) or not settings.ai_enabled or ai_quota_left(settings) <= 0:
         return None
     ctx, seen = [], set()
     for e in [*image_entries, *context_entries][:6]:
