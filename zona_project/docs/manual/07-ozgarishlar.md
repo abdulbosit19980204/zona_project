@@ -9,6 +9,9 @@
   guruhlash) sahifadagi boshqa so'rovlarni kutdirmaydi. Bir vaqtda faqat bitta worker AI tarjima qiladi (takror AI
   chaqiruvi yo'q). Redis to'xtasa sayt ishlayveradi (kesh bo'sh deb hisoblanadi). Sozlash va orqaga qaytarish —
   Texnik bo'lim → «Panel tezligi» (`ZONA_WEB_WORKERS`, `ZONA_REDIS_URL`).
+- **Guruh savollari ro'yxati 100 tadan yuklanadi** (avval 300 ta: har 15 s ~0,9 s va ~650 KB — ochiq har tab backendni
+  doimiy band qilardi). Pastda «Yana yuklash (+100)». Havola bilan ochilgan savol (`/support?q=…`, masalan PRBC
+  vazifasidan) ro'yxatda bo'lmasa ham alohida yuklanib ochiladi (avval bo'sh oyna qolardi).
 - **Semantik qidiruv prod'da yoqildi** — chegara 93%, farq 0.02 (Sozlamalar → Bot). O'lchov: savolga ~45 ms, bot
   xotirasi +~500 MB; AI'siz qamrov 41% → 41–44% (asosiy o'sish — yangi standartlar bilan).
 - **Yangi toifa «Yetkazib berish» (dostavka, dostavshik) va akt sverka → To'lov.** Ikkalasi Saidabror ishi: bot javob

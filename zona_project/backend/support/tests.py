@@ -314,6 +314,13 @@ class ApiTests(Base):
         many, rows = count()
         self.assertEqual(len(rows), 8)
         self.assertEqual(many, few)
+        # ro'yxatdan tashqari (havola ?q=) bitta savol alohida ochiladi — inbox 100 tadan yuklaydi
+        r = self.call("get", f"support/messages/{rows[-1]['id']}/")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["id"], rows[-1]["id"])
+        self.assertEqual(r.json()["task"]["status"], SupportTask.QUEUED)
+        r = self.call("get", "support/messages/?status=escalated&limit=3")
+        self.assertEqual(len(r.json()), 3)
 
     def test_panel_answer_sends_reply_and_creates_candidate(self):
         bot = Bot.objects.create(name="S", token_enc=encrypt("1:x"))

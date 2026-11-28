@@ -334,6 +334,7 @@ export const supportApi = {
   bulk: (ids: number[], action: "approve" | "reject" | "archive" | "review" | "kind_template" | "kind_faq" | "mode_auto" | "mode_on" | "mode_off" | "absorb") => post<{ done: number }>("entries/bulk/", { ids, action }),
   test: (text: string, all = true) => post<TestResult>("entries/test/", { text, all }),
   messages: (params: Record<string, string | number> = {}) => get<SupportMessage[]>("messages/", params),
+  message: (id: number) => get<SupportMessage>(`messages/${id}/`),
   answer: (id: number, text: string, save = true, approve = false) =>
     post<{ ok: boolean; entry: number | null }>(`messages/${id}/answer/`, { text, save, approve }),
   close: (id: number) => post<{ ok: boolean }>(`messages/${id}/close/`),

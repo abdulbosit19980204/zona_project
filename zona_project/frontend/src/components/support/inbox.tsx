@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, Bot, BookOpen, CheckCheck, CircleCheck, CircleX, ExternalLink, Hourglass, Image as ImageIcon, Inbox, Loader2, MessageSquareReply, Search, Send, SlidersHorizontal, Sparkles, Tag as TagIcon, ThumbsDown, ThumbsUp, UserRound, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -50,6 +50,7 @@ const DRILL_LABEL: Record<string, SKey> = {
 };
 
 const BOT_TARGET = 80;  // egasining maqsadi: L1 savollarning ≥80% ini bot o'zi yopadi
+const PAGE = 100;       // savollar ro'yxati bir martada shuncha yuklanadi
 
 /** Bosh sahifa holat paneli: bot hal qilgan ulush (maqsad 80%, o'tgan haftaga nisbatan), kimga uzatilgan,
  *  xato javoblar va tasdiq navbati — har biri o'z sahifasiga havola. */
@@ -145,18 +146,32 @@ function InboxInner() {
   const tagsQ = useQuery({ queryKey: ["support", "tags"], queryFn: supportApi.tags, staleTime: 5 * 60_000 });
   const tagTitle = useMemo(() => Object.fromEntries((tagsQ.data ?? []).map((x) => [x.key, x.title])), [tagsQ.data]);
   const stats = useQuery({ queryKey: ["support", "stats"], queryFn: () => supportApi.stats(7), refetchInterval: 30_000 });
+  // Ro'yxat 100 tadan yuklanadi (har 15 s yangilanadi — 300 ta ~0,9 s va ~650 KB edi); «Yana yuklash» +100.
+  // Filtr o'zgarsa yana 100 dan boshlanadi.
+  const pageKey = `${status}|${res}`;
+  const [more, setMore] = useState({ key: pageKey, n: PAGE });
+  const limit = more.key === pageKey ? more.n : PAGE;
   const list = useQuery({
-    queryKey: ["support", "messages", status, res, drill, exParams],
+    queryKey: ["support", "messages", status, res, drill, exParams, limit],
     queryFn: () => supportApi.messages(drill ? { ...drill, limit: 500 } : exParams
-      ?? { status, limit: 300, ...(res === "any" ? {} : { resolution: res }) }),
+      ?? { status, limit, ...(res === "any" ? {} : { resolution: res }) }),
     refetchInterval: 15_000,
+    placeholderData: keepPreviousData,
   });
+  const canMore = !drill && !exParams && (list.data?.length ?? 0) >= limit;
   const shown = useMemo(() => (list.data ? smartFilter(list.data, q,
     (m) => `${m.user_name} ${m.user_username} ${m.group_title} ${m.problem} ${m.text} ${m.ocr_text} ${m.entry_title}`) : undefined), [list.data, q]);
   const s = stats.data;
   const bs = s?.by_status ?? {};
   const botClosed = ["template", "faq", "rule", "ai", "image", "prbc"].reduce((n, k) => n + (s?.by_stage[k] ?? 0), 0);
-  const current = useMemo(() => shown?.find((m) => m.id === selected) ?? null, [shown, selected]);
+  const inList = useMemo(() => shown?.find((m) => m.id === selected) ?? null, [shown, selected]);
+  // havola (?q=) bilan ochilgan savol ro'yxatda bo'lmasa (eskiroq yoki boshqa holatda) — alohida yuklanadi
+  const one = useQuery({
+    queryKey: ["support", "message", selected],
+    queryFn: () => supportApi.message(selected as number),
+    enabled: !!selected && !!list.data && !inList,
+  });
+  const current = inList ?? (one.data && one.data.id === selected ? one.data : null);
   const queue = (s?.entries.new ?? 0) + (s?.entries.review ?? 0) + (s?.pending_edits ?? 0);
   const can = useCan();
   const bulk = useSupportMutation((v: { ids: number[]; value: "yes" | "no" }) => supportApi.resolveBulk(v.ids, v.value),
@@ -271,6 +286,14 @@ function InboxInner() {
               </button>
               </div>
             ))}
+            {canMore && (
+              <div className="p-3">
+                <Button variant="outline" size="sm" className="w-full" disabled={list.isFetching}
+                  onClick={() => setMore({ key: pageKey, n: limit + PAGE })}>
+                  {list.isFetching && <Loader2 className="size-4 animate-spin" />}{t("loadMore")}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
