@@ -133,9 +133,11 @@ _CACHE = {"key": None, "rows": []}
 
 def _examples():
     """O'rgatilgan rasmlar izlari xotirada (butun son sifatida) — har savolda bazadan qayta o'qilmaydi."""
-    from django.db.models import Count, Max
-    agg = Media.objects.filter(label__isnull=False).aggregate(n=Count("id"), m=Max("id"), e=Max("label__updated_at"))
-    key = (agg["n"], agg["m"], str(agg["e"]))
+    from django.db.models import Count, Max, Sum
+    # kalit bazadan: boshqa jarayonda (bot, boshqa backend worker) yorliq qo'yilsa/almashsa ham shu yerda yangilanadi
+    agg = Media.objects.filter(label__isnull=False).aggregate(n=Count("id"), m=Max("id"), e=Max("label__updated_at"),
+                                                              s=Sum("label_id"))
+    key = (agg["n"], agg["m"], str(agg["e"]), agg["s"])
     if _CACHE["key"] != key:
         _CACHE["rows"] = [(m.id, int(m.dhash, 16), int(m.dhash_mid or m.dhash, 16), m.label_id, m.label.status)
                           for m in Media.objects.filter(kind=Media.PHOTO, label__isnull=False).exclude(dhash="").select_related("label")]

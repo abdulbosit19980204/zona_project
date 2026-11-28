@@ -1,6 +1,7 @@
 [Unit]
 Description=Foydali — Support bot (Telegram guruhlaridagi savollarga avto-javob; botlar admin paneldan)
-After=network.target foydali-backend.service
+After=network.target foydali-backend.service foydali-redis.service
+Wants=foydali-redis.service
 
 [Service]
 User=foydali

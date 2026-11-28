@@ -10,6 +10,12 @@
    "health": "http://127.0.0.1:8020/api/auth/login/"
   },
   {
+   "name": "foydali-redis",
+   "label": "Masʼuliyat platformasi — Redis (WebSocket, kesh)",
+   "group": "Masʼuliyat platformasi",
+   "unit": "foydali-redis"
+  },
+  {
    "name": "foydali-qrdrive-api",
    "label": "QR Drive — API",
    "group": "QR Drive",

@@ -1,0 +1,24 @@
+[Unit]
+Description=Foydali — Redis (faqat unix socket, TCP yo'q): WebSocket kanal qatlami + umumiy kesh (backend worker'lari, bot)
+After=network.target
+# Faqat redis-server o'rnatilgan bo'lsa (foydali-setup.sh o'zi o'rnatadi); bo'lmasa backend 1 worker bilan ishlaydi
+ConditionPathExists=/usr/bin/redis-server
+
+[Service]
+User=foydali
+Group=foydali
+RuntimeDirectory=foydali-redis
+RuntimeDirectoryMode=0750
+WorkingDirectory=/var/lib/foydali
+# Diskka yozilmaydi (--save "" --appendonly no): ichida faqat vaqtinchalik ma'lumot (xabarlar, kesh, qulflar)
+ExecStart=/usr/bin/redis-server --port 0 --unixsocket /run/foydali-redis/redis.sock --unixsocketperm 700 \
+  --save "" --appendonly no --maxmemory 256mb --maxmemory-policy volatile-lru --databases 4 --daemonize no
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/foydali
+
+[Install]
+WantedBy=multi-user.target

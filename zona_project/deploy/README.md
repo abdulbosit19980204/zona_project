@@ -123,6 +123,6 @@ Rasmiy `api.telegram.org` botlarga 20 MB dan katta faylni bermaydi. Shuning uchu
 
 ## Eslatmalar
 
-- Backend **1 ta worker** bilan ishlaydi: WebSocket kanal qatlami (InMemory), fon tarjima oqimi va qidiruv keshi bitta jarayonda. Bu o'nlab foydalanuvchiga bemalol yetadi. Kengaytirish kerak bo'lsa — Redis channel layer + PostgreSQL.
+- Backend standart holatda **1 ta worker** bilan ishlaydi (WebSocket kanal qatlami InMemory). Bir nechta worker: Redis o'rnating va `ZONA_REDIS_URL` + `ZONA_WEB_WORKERS` ni env'ga yozing — kanal qatlami va kesh Redis'ga o'tadi, tarjima bir vaqtda bitta jarayonda (foydali'da `foydali-redis` servisi, `deploy/foydali/foydali-setup.sh`).
 - Server faqat 22, 80, 443 portlarini ochiq qoldirsin: `sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable`.
 - Bot API kaliti: `/etc/zona/zona.env` dagi `ZONA_BOT_API_KEY`.

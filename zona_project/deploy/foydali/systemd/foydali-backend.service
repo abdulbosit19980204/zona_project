@@ -1,6 +1,7 @@
 [Unit]
 Description=Foydali (foydali.xisobchim.uz) — Zona backend: Django + Channels, gunicorn/uvicorn, 127.0.0.1:8020
-After=network.target
+After=network.target foydali-redis.service
+Wants=foydali-redis.service
 
 [Service]
 User=foydali

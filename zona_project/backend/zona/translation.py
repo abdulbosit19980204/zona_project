@@ -11,10 +11,12 @@ WebSocket orqali {"type": "state"} yuboriladi — ular tuzilmani qayta yuklaydi.
 import json
 from pathlib import Path
 import logging
+import os
 import re
 import threading
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import close_old_connections, transaction
 from django.utils import timezone
 
@@ -146,6 +148,17 @@ def keep_source(obj, attrs, lang):
 # ------------------------------------------------------------------ fon jarayoni
 _lock = threading.Lock()
 _state = {"running": False, "again": False, "last_error": "", "last_run": None, "translated": 0, "version": 0}
+# Bir nechta backend jarayoni (gunicorn worker'lar) bo'lsa: bir vaqtda faqat bittasi tarjima qiladi (AI takror
+# chaqirilmasin), qidiruv indeksi versiyasi va holat — umumiy keshda (Redis). Lokalda kesh jarayon ichida.
+_RUN_KEY, _AGAIN_KEY, _VER_KEY, _INFO_KEY = ("zona:translate:run", "zona:translate:again",
+                                             "zona:translate:version", "zona:translate:info")
+_RUN_TTL = 1800  # jarayon o'lib qolsa qulf shuncha vaqtda o'zi ochiladi
+
+
+def _note(**kw):
+    """Holatni (oxirgi xato, vaqt, soni) jarayon ichida va umumiy keshda yangilaydi."""
+    _state.update(kw)
+    cache.set(_INFO_KEY, {k: _state[k] for k in ("last_error", "last_run", "translated")}, None)
 
 
 def enabled():
@@ -155,12 +168,16 @@ def enabled():
 
 def status():
     pending = sum(len(pending_fields(o)) for model in FIELDS for o in model.objects.all())
-    return {"enabled": enabled(), "running": _state["running"], "pending": pending,
-            "last_error": _state["last_error"], "last_run": _state["last_run"], "translated": _state["translated"]}
+    info = cache.get(_INFO_KEY) or {}
+    return {"enabled": enabled(), "running": _state["running"] or bool(cache.get(_RUN_KEY)), "pending": pending,
+            "last_error": info.get("last_error", _state["last_error"]),
+            "last_run": info.get("last_run", _state["last_run"]),
+            "translated": info.get("translated", _state["translated"])}
 
 
 def version():
-    return _state["version"]
+    """Tarjima qo'shilganda o'zgaradi (qidiruv indeksi shunga qarab yangilanadi) — barcha jarayonlar uchun bitta."""
+    return (cache.get(_VER_KEY) or 0, _state["version"])
 
 
 def schedule():
@@ -184,13 +201,23 @@ def start():
 def _worker():
     try:
         while True:
+            # «yana bir aylanish kerak» belgisi QULFDAN OLDIN qo'yiladi: qulf band bo'lsa, egasi uni ochgach
+            # belgini ko'radi va yana aylanadi — so'rov yo'qolmaydi
+            cache.set(_AGAIN_KEY, 1, _RUN_TTL)
+            if not cache.add(_RUN_KEY, os.getpid(), _RUN_TTL):
+                with _lock:
+                    _state["running"] = False
+                return  # boshqa backend jarayoni tarjima qilyapti
             try:
+                cache.delete(_AGAIN_KEY)
                 translate_pending()
             except Exception as e:  # noqa: BLE001 — fon oqimi hech qachon yiqilmasin
                 log.exception("Tarjima xatosi")
-                _state["last_error"] = str(e)[:300]
+                _note(last_error=str(e)[:300])
+            finally:
+                cache.delete(_RUN_KEY)
             with _lock:
-                if not _state["again"]:
+                if not _state["again"] and not cache.get(_AGAIN_KEY):
                     _state["running"] = False
                     return
                 _state["again"] = False
@@ -330,7 +357,7 @@ def translate_pending(user=None, use_ai=True):
             for field in pending_fields(obj):
                 work.append((model, obj.pk, field, _text(obj, field)))
     if not work:
-        _state["last_error"] = ""
+        _note(last_error="")
         return 0
     done = 0
     translated = _known([w[3] for w in work])
@@ -339,7 +366,6 @@ def translate_pending(user=None, use_ai=True):
     if rest and use_ai and enabled():
         more, error = translate_texts(rest, user)
         translated.update(more)
-    _state["last_error"] = error
     by_obj = {}
     for model, pk, field, text in work:
         if text in translated:
@@ -367,9 +393,13 @@ def translate_pending(user=None, use_ai=True):
             if changed:
                 data["src"] = src
                 model.objects.filter(pk=pk).update(i18n=data)
+    total = (cache.get(_INFO_KEY) or {}).get("translated", _state["translated"])
     if done:
         _state["version"] += 1
-        _state["translated"] += done
+        try:
+            cache.incr(_VER_KEY)
+        except ValueError:  # birinchi marta (yoki kesh qayta ishga tushgan)
+            cache.set(_VER_KEY, 1, None)
         broadcast("state", {"translated": done})
-    _state["last_run"] = timezone.now().isoformat()
+    _note(last_error=error, last_run=timezone.now().isoformat(), translated=total + done)
     return done

@@ -173,8 +173,8 @@ sudo bash /opt/zona-src/zona_project/deploy/install.sh <domen>         # serverd
 sudo bash /opt/zona/deploy/update.sh                                   # keyingi yangilashlar
 ```
 
-Backend bitta jarayonda ishlaydi (xotiradagi channel layer). Bir nechta jarayon kerak bo'lsa, `CHANNEL_LAYERS` ni
-Redis'ga o'tkazing (`channels-redis`).
+Backend standart holatda bitta jarayonda ishlaydi (xotiradagi channel layer). Bir nechta worker uchun `ZONA_REDIS_URL`
+(Redis) va `ZONA_WEB_WORKERS` ni bering — `CHANNEL_LAYERS` va kesh Redis'ga o'tadi (`deploy/gunicorn.conf.py`).
 
 ## Boshqa Django loyihaga ulash
 

@@ -69,6 +69,10 @@ class EventsConsumer(AsyncJsonWebsocketConsumer):
 
     async def receive_json(self, content, **kwargs):
         if content.get("type") == "ping":
+            try:  # Redis'da guruh a'zoligi muddatli — har ping'da yangilanadi (uzoq ochiq turgan panel ham xabar oladi)
+                await self.channel_layer.group_add(GROUP, self.channel_name)
+            except Exception:  # noqa: BLE001 — jonli yangilanish ixtiyoriy
+                pass
             await self.send_json({"type": "pong"})
 
     async def zona_message(self, message):

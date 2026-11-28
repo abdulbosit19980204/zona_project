@@ -25,7 +25,8 @@ dependencies = [
 [project.optional-dependencies]
 ai = ["anthropic>=2.8,<3"]                                        # Claude uchun rasmiy SDK
 server = ["daphne>=4.1", "whitenoise>=6.6",                      # ASGI server (HTTP + WebSocket)
-          "gunicorn>=23; sys_platform != 'win32'", "uvicorn[standard]>=0.30", "uvicorn-worker>=0.2"]  # Ubuntu: gunicorn + uvicorn
+          "gunicorn>=23; sys_platform != 'win32'", "uvicorn[standard]>=0.30", "uvicorn-worker>=0.2",  # Ubuntu: gunicorn + uvicorn
+          "channels-redis>=4.2", "redis>=5"]  # bir nechta backend worker'i: WebSocket + umumiy kesh (ZONA_REDIS_URL)
 support = ["telethon>=1.36,<2"]                                   # support bot: guruh tarixini o'qish (MTProto)
 semantic = ["onnxruntime>=1.18", "tokenizers>=0.19", "numpy>=1.26"]  # AI'siz semantik qidiruv (CPU, torch'siz)
 

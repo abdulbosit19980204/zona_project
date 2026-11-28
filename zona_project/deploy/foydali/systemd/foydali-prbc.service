@@ -1,6 +1,7 @@
 [Unit]
 Description=Foydali — PRBC worker (xodimlar sinxronlashi, ishdan bo'shaganlar, vazifalar API orqali)
-After=network.target foydali-backend.service
+After=network.target foydali-backend.service foydali-redis.service
+Wants=foydali-redis.service
 
 [Service]
 User=foydali

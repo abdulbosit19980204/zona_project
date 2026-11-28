@@ -1,6 +1,7 @@
 """Backend sozlamalari: Django + DRF + JWT + WebSocket (Channels) + SQLite.
 Interfeys — alohida Next.js ilova (../frontend), API ga /api/ orqali murojaat qiladi."""
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -66,8 +67,25 @@ ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-# Bitta jarayon uchun xotirada. Bir nechta server jarayoni bo'lsa Redis: channels_redis.core.RedisChannelLayer
-CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+# WebSocket kanal qatlami va kesh. ZONA_REDIS_URL bo'lsa (masalan unix:///run/foydali-redis/redis.sock) — Redis:
+# bir nechta backend worker'i (ZONA_WEB_WORKERS) va bot/PRBC jarayonlari xabar va keshni bo'lishadi.
+# Bo'lmasa (lokal, testlar) — jarayon xotirasida, bitta worker.
+REDIS_URL = "" if "test" in sys.argv[1:2] else os.environ.get("ZONA_REDIS_URL", "").strip()
+
+
+def _redis_db(n):
+    return f"{REDIS_URL}{'&' if '?' in REDIS_URL else '?'}db={n}"
+
+
+if REDIS_URL:
+    CHANNEL_LAYERS = {"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {
+        "hosts": [_redis_db(0)], "prefix": "foydali",
+        "group_expiry": 7 * 86400,  # guruh a'zoligi ping'da yangilanadi (realtime.py); bu — yiqilgan ulanishlar uchun
+    }}}
+    CACHES = {"default": {"BACKEND": "zona.cache.SafeRedisCache", "LOCATION": _redis_db(1), "KEY_PREFIX": "foydali",
+                          "OPTIONS": {"socket_timeout": 2, "socket_connect_timeout": 1}}}
+else:
+    CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",

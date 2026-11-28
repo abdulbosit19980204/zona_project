@@ -20,7 +20,8 @@ Telegram ◄──► foydali-support-bot (Support bot)        PRBC (prbc.uz) �
 
 | Servis | Vazifasi |
 |---|---|
-| `foydali-backend` | API va WebSocket |
+| `foydali-backend` | API va WebSocket (3 ta worker, Redis orqali) |
+| `foydali-redis` | Redis — faqat unix socket (`/run/foydali-redis/redis.sock`, TCP yo'q), diskka yozmaydi: WebSocket xabarlari va umumiy kesh |
 | `foydali-frontend` (pm2) | Panel |
 | `foydali-support-bot` | Telegram support boti |
 | `foydali-prbc` | PRBC worker: vazifalar, holat sinxroni, 1C xodimlari |
@@ -31,9 +32,18 @@ Telegram ◄──► foydali-support-bot (Support bot)        PRBC (prbc.uz) �
 
 Servis to'xtasa — panel chap pastidagi **Servislar markazi**dan qayta ishga tushiriladi.
 
-**Panel tezligi.** `foydali-backend` — bitta jarayon (uvicorn worker; WebSocket xabarlari jarayon ichida). Python bir
-jarayonda so'rovlarni amalda navbat bilan hisoblaydi: sahifa 10 ta so'rov yuborsa, kutish ≈ ularning yig'indisi. Shuning
-uchun har API tez bo'lishi kerak: ro'yxatlarda har qator uchun alohida so'rov (N+1) bo'lmasin — testi bor
+**Panel tezligi.** Bitta backend jarayoni so'rovlarni amalda navbat bilan hisoblaydi (Django'ning sinxron view'lari):
+sahifa 10 ta so'rov yuborsa, kutish ≈ ularning yig'indisi, bitta og'ir so'rov (AI, rasm guruhlash) esa qolganlarini
+kutdiradi. Shuning uchun `foydali-backend` **bir nechta worker** bilan ishlaydi (2026-11-28 dan 3 ta). Worker'lar
+o'rtasida WebSocket xabarlari va kesh (login urinishlari, tarjima qulfi, rasm guruhlari) `foydali-redis` orqali
+bo'lishiladi. Sozlash — `/etc/foydali/foydali.env`:
+- `ZONA_REDIS_URL=unix:///run/foydali-redis/redis.sock` — Redis manzili; bo'sh bo'lsa — Redis ishlatilmaydi va **har doim 1 worker**;
+- `ZONA_WEB_WORKERS=3` — worker soni (1–8). Har worker ~200–300 MB xotira oladi.
+
+O'zgartirgandan keyin: `systemctl restart foydali-backend`. Orqaga qaytarish (muammo bo'lsa): `ZONA_WEB_WORKERS=1` →
+restart — avvalgi holat (deploy bu qiymatni qayta yozmaydi). Redis to'xtasa sayt ishlayveradi: kesh «bo'sh» deb
+hisoblanadi, jonli yangilanishlar to'xtaydi (sahifa yangilansa ma'lumot to'g'ri), servis o'zi qayta turadi.
+Har API baribir tez bo'lishi kerak: ro'yxatlarda har qator uchun alohida so'rov (N+1) bo'lmasin — testi bor
 (`support.tests.ApiTests.test_messages_list_query_count_does_not_grow_with_rows`). O'lchov (2026-11-28, yuklamasiz):
 10 parallel so'rov — tuzatishdan oldin ~2,4 s (eng sekini `messages/?limit=300` ~1 s).
 

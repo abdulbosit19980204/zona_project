@@ -5,7 +5,8 @@ Zona va QR Drive bu serverda **bio-lab.uz** bilan birga ishlaydi. Boshqa saytlar
 
 | Qism | Qanday ishlaydi | Port |
 |---|---|---|
-| Backend (Django + WebSocket) | systemd `foydali-backend` (gunicorn + uvicorn) | 127.0.0.1:8020 |
+| Backend (Django + WebSocket) | systemd `foydali-backend` (gunicorn + uvicorn, `ZONA_WEB_WORKERS` ta worker) | 127.0.0.1:8020 |
+| Redis (WebSocket + kesh) | systemd `foydali-redis` — faqat unix socket `/run/foydali-redis/redis.sock` | — |
 | QR Drive API | systemd `foydali-qrdrive-api` | 127.0.0.1:8120 |
 | QR Drive worker / bot | systemd `foydali-qrdrive-worker`, `foydali-qrdrive-bot` | — |
 | Frontend (Next.js) | **pm2** `foydali-frontend` | 127.0.0.1:3020 |
