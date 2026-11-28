@@ -20,7 +20,7 @@ Telegram ◄──► foydali-support-bot (Support bot)        PRBC (prbc.uz) �
 
 | Servis | Vazifasi |
 |---|---|
-| `foydali-backend` | API va WebSocket (3 ta worker, Redis orqali) |
+| `foydali-backend` | API va WebSocket (5 ta worker, Redis orqali) |
 | `foydali-redis` | Redis — faqat unix socket (`/run/foydali-redis/redis.sock`, TCP yo'q), diskka yozmaydi: WebSocket xabarlari va umumiy kesh |
 | `foydali-frontend` (pm2) | Panel |
 | `foydali-support-bot` | Telegram support boti |
@@ -34,18 +34,30 @@ Servis to'xtasa — panel chap pastidagi **Servislar markazi**dan qayta ishga tu
 
 **Panel tezligi.** Bitta backend jarayoni so'rovlarni amalda navbat bilan hisoblaydi (Django'ning sinxron view'lari):
 sahifa 10 ta so'rov yuborsa, kutish ≈ ularning yig'indisi, bitta og'ir so'rov (AI, rasm guruhlash) esa qolganlarini
-kutdiradi. Shuning uchun `foydali-backend` **bir nechta worker** bilan ishlaydi (2026-11-28 dan 3 ta). Worker'lar
+kutdiradi. Shuning uchun `foydali-backend` **bir nechta worker** bilan ishlaydi (2026-11-28 dan 5 ta). Worker'lar
 o'rtasida WebSocket xabarlari va kesh (login urinishlari, tarjima qulfi, rasm guruhlari) `foydali-redis` orqali
 bo'lishiladi. Sozlash — `/etc/foydali/foydali.env`:
 - `ZONA_REDIS_URL=unix:///run/foydali-redis/redis.sock` — Redis manzili; bo'sh bo'lsa — Redis ishlatilmaydi va **har doim 1 worker**;
-- `ZONA_WEB_WORKERS=3` — worker soni (1–8). Har worker ~200–300 MB xotira oladi.
+- `ZONA_WEB_WORKERS=5` — worker soni (1–8). Har worker ~120–200 MB xotira oladi (5 ta — ~0,9 GB).
 
 O'zgartirgandan keyin: `systemctl restart foydali-backend`. Orqaga qaytarish (muammo bo'lsa): `ZONA_WEB_WORKERS=1` →
 restart — avvalgi holat (deploy bu qiymatni qayta yozmaydi). Redis to'xtasa sayt ishlayveradi: kesh «bo'sh» deb
 hisoblanadi, jonli yangilanishlar to'xtaydi (sahifa yangilansa ma'lumot to'g'ri), servis o'zi qayta turadi.
 Har API baribir tez bo'lishi kerak: ro'yxatlarda har qator uchun alohida so'rov (N+1) bo'lmasin — testi bor
-(`support.tests.ApiTests.test_messages_list_query_count_does_not_grow_with_rows`). O'lchov (2026-11-28, yuklamasiz):
-10 parallel so'rov — tuzatishdan oldin ~2,4 s (eng sekini `messages/?limit=300` ~1 s).
+(`support.tests.ApiTests.test_messages_list_query_count_does_not_grow_with_rows`).
+
+O'lchov (2026-11-28, prod, nginx orqali, review/inbox sahifasining 10 ta parallel so'rovi, 20 marta):
+
+| | so'rov p50 / p95 | sahifa (10 parallel) p50 / p95 |
+|---|---|---|
+| 1 worker | 869 / 2527 ms | 2322 / 3893 ms |
+| 3 worker | 434 / 1644 ms | 1056 / 2512 ms |
+| **5 worker** (hozirgi) | 314 / 1125 ms | 782 / 1297 ms |
+
+Nega 3 yetmadi: uvicorn worker'i band bo'lsa ham yangi ulanishni qabul qiladi — so'rovlar worker'larga tasodifiy
+taqsimlanadi, og'ir so'rovlar (`entries`, `category-stats`, `messages`) bitta worker'ga tushib qolishi mumkin. Qayta o'lchash:
+brauzerda (DevTools → Network, sahifani 20 marta ochib) yoki serverda shu 10 ta API'ni parallel so'rab (p95) —
+natijani shu jadvalga yozing. Sekinlashsa: avval N+1 (har qatorga so'rov), keyin worker soni.
 
 ## Fayllar
 

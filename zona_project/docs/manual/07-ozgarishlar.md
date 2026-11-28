@@ -4,11 +4,12 @@
 
 ## 2026-11-28
 
-- **Backend 3 ta worker bilan (panel parallel so'rovlarda kutmaydi).** Yangi servis `foydali-redis` (faqat unix socket,
+- **Backend 5 ta worker bilan (panel parallel so'rovlarda kutmaydi).** Yangi servis `foydali-redis` (faqat unix socket,
   TCP yo'q, diskka yozmaydi) — worker'lar o'rtasida WebSocket xabarlari va kesh. Endi bitta og'ir so'rov (AI, rasm
   guruhlash) sahifadagi boshqa so'rovlarni kutdirmaydi. Bir vaqtda faqat bitta worker AI tarjima qiladi (takror AI
   chaqiruvi yo'q). Redis to'xtasa sayt ishlayveradi (kesh bo'sh deb hisoblanadi). Sozlash va orqaga qaytarish —
-  Texnik bo'lim → «Panel tezligi» (`ZONA_WEB_WORKERS`, `ZONA_REDIS_URL`). Shu kuni tuzatildi: birinchi deploydan keyin
+  Texnik bo'lim → «Panel tezligi» (`ZONA_WEB_WORKERS`, `ZONA_REDIS_URL`). O'lchov (10 parallel so'rov, 20 marta):
+  so'rov p95 2,5 s → 1,1 s, sahifa p95 3,9 s → 1,3 s (3 worker bilan 2,5 s edi — shuning uchun 5). Shu kuni tuzatildi: birinchi deploydan keyin
   WebSocket (jonli yangilanish) har ~5 s da uzilib qayta ulanardi (Redis kutish vaqti = ulanish chegarasi) — endi uzilmaydi.
 - **Guruh savollari ro'yxati 100 tadan yuklanadi** (avval 300 ta: har 15 s ~0,9 s va ~650 KB — ochiq har tab backendni
   doimiy band qilardi). Pastda «Yana yuklash (+100)». Havola bilan ochilgan savol (`/support?q=…`, masalan PRBC

@@ -100,7 +100,7 @@ fi
 # Bir nechta backend worker'i (Redis bo'lsa). O'chirish: ZONA_WEB_WORKERS=1 (yoki ZONA_REDIS_URL= bo'sh) — qayta yozilmaydi
 if [[ -x /usr/bin/redis-server ]]; then
   grep -q '^ZONA_REDIS_URL=' "$ETC/foydali.env" || echo 'ZONA_REDIS_URL=unix:///run/foydali-redis/redis.sock' >> "$ETC/foydali.env"
-  grep -q '^ZONA_WEB_WORKERS=' "$ETC/foydali.env" || echo 'ZONA_WEB_WORKERS=3' >> "$ETC/foydali.env"
+  grep -q '^ZONA_WEB_WORKERS=' "$ETC/foydali.env" || echo 'ZONA_WEB_WORKERS=5' >> "$ETC/foydali.env"
 fi
 JWT=$(grep '^ZONA_JWT_SECRET=' "$ETC/foydali.env" | cut -d= -f2-)
 if [[ ! -f "$ETC/foydali-qrdrive.env" ]]; then
