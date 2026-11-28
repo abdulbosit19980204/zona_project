@@ -1307,6 +1307,18 @@ class Handler:
         # albom bo'laklari (album:<id>) asosiy rasmdan oldin saqlanib qolishi mumkin — ularni asosiy rasm deb olmaymiz
         existing = Media.objects.filter(message=q).exclude(name__startswith="album:").first()
         if existing:
+            if not existing.path and existing.kind == Media.PHOTO and not self.history:
+                # slim rasm (diskka yozilmagan) qayta ishlanmoqda — masalan izoh kutilib (defer) qaytilganda: OCR uchun
+                # baytlar xotirada yo'q, Telegram'dan qayta olinadi (aks holda savol «bo'sh» deb e'tiborsiz qolardi)
+                data = self.photo_bytes.get(q.message_id)
+                fid = q.photo_file_id or next(iter((existing.tg_file_ids or {}).values()), "")
+                if data is None and fid:
+                    try:
+                        data = self.tg.download(fid, max_bytes=8 * 1024 * 1024)
+                    except TelegramError:
+                        data = None
+                if data:
+                    existing.raw_bytes = data
             return existing
         file_id, kind, name, mime = getattr(self, "media_meta", None) or (q.photo_file_id, "photo", "", "")
         data = self.photo_bytes.get(q.message_id)

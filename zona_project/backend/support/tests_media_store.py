@@ -100,3 +100,20 @@ class StoreTests(ControlsBase):
             h._ocr(q, m)
         rt.assert_called_once_with(data)
         self.assertIn("UZ-00069329", q.ocr_text)
+
+    def test_slim_photo_after_defer_gets_ocr(self):
+        # izohsiz skrinshot: 3 s izoh kutiladi, qayta ishlashda Media bazadan olinadi (baytsiz) — OCR baribir o'qilsin
+        from .runner import Handler
+        from .telegram import Client
+        data = png()
+        q = self.q()
+        q.photo_file_id = "fid"
+        Media.objects.create(kind=Media.PHOTO, path="", message=q)
+        h = Handler(self.bot, mock.Mock(spec=Client))
+        h.tg.download.return_value = data
+        m = h._fetch_media(q)
+        h.tg.download.assert_called_once()
+        with mock.patch("support.runner.ocr.read_text", return_value="Торговая точка создана в 1С UZ-00069329") as rt:
+            h._ocr(q, m)
+        rt.assert_called_once_with(data)
+        self.assertIn("UZ-00069329", q.ocr_text)

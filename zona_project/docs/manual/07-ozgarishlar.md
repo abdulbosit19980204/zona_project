@@ -19,6 +19,9 @@
   (ibora to'g'ri yozuvi yo'qdek qidiriladi — javob berilsa, xato). 374 ta haqiqiy iborada: chegara 94% + farq 0.02 →
   qamrov 37%, aniqlik 99%, standarti yo'q savolga xato javob 3%. Tavsiya etilgan chegara — **94%**. Baholashda
   savolning o'zi indeksda bo'lsa endi hisobga olinmaydi (avval o'zi bilan 1.00 o'xshashlik berib, natijani oshirardi).
+- **Izohsiz skrinshot endi e'tiborsiz qolmaydi.** Agent faqat rasm yuborsa, bot izoh kelishini 3 soniya kutadi; qayta
+  ishlashda rasm bazadan olinardi, lekin diskda fayli yo'q (joy tejash) bo'lsa matni o'qilmay, savol «bo'sh» deb
+  o'chib ketardi («rasmni ko'ryapman» yozuvi chiqib yo'qolardi). Endi rasm Telegram'dan qayta olinib o'qiladi.
 - **Skrinshot matni yana o'qiladi (OCR).** Ko'p uchraydigan ekran turidagi rasm diskka yozilmaydigan bo'lgach (joy
   tejash), bot shu rasmlarning matnini ham o'qimay qo'ygandi — 6 soatda 7 rasmdan 5 tasi «ko'r» qolgan. Endi fayl
   saqlanmasa ham rasm xotirada OCR va jonli PRBC tekshiruvidan o'tadi.
